@@ -122,12 +122,20 @@ account and sign/notarize/ship.
       fact; it is a claim.
 - [ ] **Acceptance corpus ≥ 80/82** per that script's own output (not a
       hand‑typed number — the script's stdout is the source of truth).
-- [ ] **`class-d_starter.asc`** opens unmodified, runs `.tran`, and its
-      Efficiency `.meas` matches LTspice within tolerance. (Known blocker as of
-      this writing: the imported op‑amp behaves as an open‑loop gain block —
-      LTspice comparator symbols are not yet mapped to the `comparator` kind.)
-- [ ] **Waveform parity** demonstrated on at least RC, a Colpitts oscillator,
-      and the Class‑D circuit (traces match LTspice within tolerance).
+      Canonical re-check remains **82 imported / 81 warning-clean / 79
+      deck-built / 79 op-converged** (three honest capability refusals:
+      NIGBT, Chan-core inductor, Royer `lt1184f` unresolved subckt leak-to-op).
+- [x] **`class-d_starter.asc`** opens unmodified (with sibling `deadtime`
+      hierarchy), runs `.tran`, and its Efficiency `.meas` matches LTspice
+      within 2%. Proven 2026-08-04 by `scripts/dod-parity.sh` /
+      `classdEfficiency.corpus.ts`: PS/PL/Efficiency via the same
+      `deriveRcCurrents` path the UI uses; measured Efficiency relative error
+      ≈ 0.24%. Missing `deadtime` siblings refuse Run (fail-closed). Historical
+      "open-loop gain block" comparator note is obsolete — UniversalOpAmp2
+      uses the rail-clamped tanh model (`engine/opampSpec.ts`).
+- [x] **Waveform parity** demonstrated on at least RC, a Colpitts oscillator,
+      and the Class‑D circuit (traces match LTspice within tolerance). Proven
+      by `scripts/waveformParity.corpus.ts` via `scripts/dod-parity.sh`.
 - [ ] All directives used in the corpus are supported: `.tran .ac .op .dc .step
       .meas .noise .tf .param .func .temp .options .model .inc .subckt`.
 - [ ] Waveform viewer: arbitrary expressions, cursors, FFT/THD, stepped‑family

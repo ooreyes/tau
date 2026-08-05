@@ -5,13 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 20:33 CDT - P0.4 capability buckets landed;
-full-corpus zero-hard-failure fiction removed. Canonical 82/81/79/79 with
-capability 79/3/0/0. Completion remains RETRACTED.
+**Status:** IDLE 2026-08-04 20:45 CDT - Class-D `.tran`/Efficiency `.meas`
+and RC/Colpitts/Class-D waveform parity re-proven; AGENTS DoD boxes checked.
+Canonical still 82/81/79/79. Completion remains RETRACTED. Shippable? NO.
 
-**Next unit:** Class-D `.tran`/`.meas` blockers / authored-analysis
-differential parity. Optionally remeasure full recursive tree buckets and
-set honest regression ceilings (not zero).
+**Next unit:** NEW BAR P1.5 file-backed `.include`/`.lib` (confined), or
+Royer `lt1184f` unresolved-subckt leak → named refusal (raises honest
+capability accounting). Optionally authored-analysis differential parity /
+full-recursive capability ceilings.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -48,9 +49,10 @@ the local MLX provider so their prompts cannot drift. Per-provider keychain
 entries; CSP pins `generativelanguage.googleapis.com`. Unit-tested against a
 stubbed fetch; **not yet exercised against the live Google API.**
 
-Next up, in order: Class-D `.tran`/`.meas` blockers and authored-analysis
-differential parity; optionally remeasure full recursive capability buckets
-and set honest ceilings. P0.1–P0.4 (structured measurement) closed;
+Next up, in order: NEW BAR P1.5 file-backed `.include`/`.lib`; Royer
+`lt1184f` unresolved-subckt pre-ngspice refusal; authored-analysis
+differential parity; optionally remeasure full recursive capability buckets.
+P0.1–P0.4 closed; Class-D Efficiency + waveform DoD boxes checked 2026-08-04;
 capability ≠ done.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
@@ -118,6 +120,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - CLASS-D DoD BOXES RE-PROVEN: Efficiency PS/PL/Eff vs LTspice within 2% via deriveRcCurrents (≈0.24% Eff err); RC/Colpitts/Class-D waveform parity green; missing deadtime refuses; AGENTS Class-D + waveform boxes checked. Shippable? NO.
 - 2026-08-04 - P0.4 CORPUS CAPABILITY BUCKETS. Prefix-based full-corpus hardFailures===0 removed; runner reports success/capability-refusal/deck-guard-leak/failure; canonical 79/3/0/0; table.cm dropped from staging corpus test.
 - 2026-08-04 - TRANSITIVE `.subckt` CLOSURE: nested X refs inside inlined bodies emit resolvable peers or land on unresolvedSubckts; staged GPL residue cleared locally so cargo staged_engine is green.
 - 2026-08-04 - CORPUS APPLIES THE APP'S unresolvedSubckts GUARD. Royer/LT1184F is an honest deck refusal; canonical hard failures 1 -> 0; floors 82/81/79/79.

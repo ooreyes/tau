@@ -689,7 +689,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   stripped; `standardModelType` reports them `vdmos` so they emit 3-terminal.
   **NEXT:** more standard.mos parts as corpus files need them; browser
   TS-solver VDMOS; body-diode + thermal node.
-- 🟡 Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**
+- 🟡 Comparators / logic gates / digital (LTspice `A` devices) —
+  **Class-D's PWM stage does not need this path** (2026-08-04 re-measure):
+  `class-d_starter.asc` uses `OpAmps/UniversalOpAmp2`, which imports as
+  `opamp` and emits the rail-clamped tanh B-source; Efficiency + waveform
+  parity vs LTspice are green under `scripts/dod-parity.sh`. Missing sibling
+  `deadtime` still refuses Run. Remaining work here is LTspice `A`-device
+  gates / comparator-library symbols for other circuits, not the flagship.
   - ✅ **Dedicated `comparator` component kind landed** (`engine/comparatorSpec.ts`):
     a real open-loop comparator with **explicit output high/low levels + optional
     hysteresis** instead of the gain-1e6 op-amp model that saturates to ~1e7 V.

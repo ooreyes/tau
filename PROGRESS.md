@@ -9,6 +9,37 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 20:45 CDT**
+
+Unit: Class-D `.tran` / Efficiency `.meas` + waveform parity truth-pass.
+Historical open-loop op-amp blocker is obsolete (rail-clamped
+UniversalOpAmp2). Re-measured: Efficiency rel err ≈0.24%; PS/PL also
+within 2% via app `deriveRcCurrents` path; `dod-parity.sh` green;
+missing `deadtime` siblings refuse Run. AGENTS DoD Class-D + waveform
+boxes checked. Canonical still 82/81/79/79. Shippable? NO.
+
+What landed this unit:
+
+- `classdEfficiency.corpus.ts` now asserts PS/PL/Efficiency and derives
+  I(R1) through `deriveRcCurrents` (UI path), not a hard-coded V/8
+- `src/io/classdHierarchy.test.ts` locks sibling resolve vs fail-closed
+  refusal + rail-clamped B_U1 emission
+- AGENTS.md / FEATURE_PARITY.md / STATE.md honesty updates
+
+Next unit: NEW BAR P1.5 confined `.include`/`.lib`, or Royer `lt1184f`
+unresolved-subckt pre-ngspice refusal / authored-analysis differential.
+
+Previous completed unit:
+
+**Status: IN PROGRESS - 2026-08-04 20:35 CDT**
+
+Unit: Class-D `.tran` / Efficiency `.meas` blockers — find the real
+current blocker on unmodified `class-d_starter.asc`, land the smallest
+honest fix (or document exact refusal), with tests. No fabricated
+meas parity; no silent model substitution.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 20:33 CDT**
 
 Unit: P0.4 structured corpus capability buckets. Full-corpus
