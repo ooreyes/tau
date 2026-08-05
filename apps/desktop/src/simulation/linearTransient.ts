@@ -1,4 +1,4 @@
-import { isIndependentVoltageBranchKind, logicConstantVolts } from "../schematic/kindGroups";
+import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { formatEngineering, parseQuantity } from "./quantity";
@@ -139,11 +139,14 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
   "ccvs",
   "bsource",
   "switch",
+  "pushButton",
+  "spdt",
   "testpoint",
   "ground",
   "diode",
   "led",
   "zener",
+  "photodiode",
 ]);
 
 /** Newton iteration budget per timestep when junction diodes are present.
@@ -247,7 +250,7 @@ export async function runTransientAnalysis(
     if (!circuit.groundNetId) {
       return fail("No reference", "Add a ground symbol so node voltages have a reference.", circuit);
     }
-    if (!components.some((component) => ["vsource", "isource", "vac", "iac", "bsource", "logicConstant"].includes(component.kind))) {
+    if (!components.some((component) => ["vsource", "isource", "vac", "iac", "bsource", "logicConstant", "photodiode"].includes(component.kind))) {
       return fail("No source", "Add a voltage or current source to excite the circuit. This preview solver requires an explicit independent source.", circuit);
     }
 
@@ -469,7 +472,11 @@ export async function runTransientAnalysis(
           gainOf.set(id, parseQuantity(entry.component.value, "V/A"));
           break;
         case "switch":
-          if (entry.component.value.trim().toLowerCase().startsWith("closed")) closedSwitches.add(id);
+        case "pushButton":
+          if (isStaticContactClosed(entry.component.value)) closedSwitches.add(id);
+          break;
+        case "spdt":
+          // Handled in the stamp loop via throw position (not closedSwitches).
           break;
         case "bsource":
           behavioralTermsOf.set(id, resolveBehavioralTerms(bModels.get(id)!, entry.component.label, netByName));
@@ -654,10 +661,19 @@ export async function runTransientAnalysis(
             break;
           }
           case "switch":
+          case "pushButton":
             if (closedSwitches.has(entry.component.id)) {
               stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), 1e9);
             }
             break;
+          case "spdt": {
+            const com = netIndex(entry.pins.com, nodeIndex);
+            const thrown = isSpdtThrowToNo(entry.component.value)
+              ? netIndex(entry.pins.no, nodeIndex)
+              : netIndex(entry.pins.nc, nodeIndex);
+            stampConductance(matrix, com, thrown, 1e9);
+            break;
+          }
           case "testpoint":
           case "ground":
             break;
@@ -772,6 +788,9 @@ export async function runTransientAnalysis(
             const cathode = netIndex(entry.pins.k, nodeIndex);
             stampConductance(newtonMatrix, anode, cathode, conductance);
             stampCurrent(newtonRhs, anode, cathode, equivalent);
+            if (entry.component.kind === "photodiode") {
+              stampCurrent(newtonRhs, cathode, anode, photodiodePhotocurrentAmps(entry.component.value));
+            }
           }
           const attempt = solveLinearSystem(newtonMatrix, newtonRhs);
           let converged = true;
@@ -869,9 +888,15 @@ export async function runTransientAnalysis(
           }
           case "diode":
           case "led":
-          case "zener": {
+          case "zener":
+          case "photodiode": {
             const spec = diodeSpecs.get(id)!;
-            pushCurrent(id, ref, diodeCurrent(spec, voltageBetween(entry.pins.a, entry.pins.k, nodeIndex, solution)));
+            let amps = diodeCurrent(spec, voltageBetween(entry.pins.a, entry.pins.k, nodeIndex, solution));
+            if (entry.component.kind === "photodiode") {
+              // Net branch current anode→cathode = diode − Iph (Iph is K→A).
+              amps -= photodiodePhotocurrentAmps(entry.component.value);
+            }
+            pushCurrent(id, ref, amps);
             break;
           }
         }

@@ -15,7 +15,7 @@ import {
   type ParamScope,
 } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
-import { isCapacitorKind, logicConstantVolts } from "../schematic/kindGroups";
+import { isCapacitorKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction, MalformedPwlError, type SourceUnit, type SourceSpec } from "./sourceFunction";
@@ -348,7 +348,7 @@ export function buildSpiceDeck(
 
   const lines = ["Tau generated circuit", optionsLineFromDirectives(flatDirectives)];
   const usedKinds = new Set(components.map((component) => component.kind));
-  const needsModels = ["diode", "led", "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind))
+  const needsModels = ["diode", "led", "zener", "photodiode", "nmos", "pmos", "njf", "pjf", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind))
     || components.some((component) => component.kind === "switch" && !isLtspiceCurrentControlledSwitch(component));
   if (needsModels) lines.push(...DEFAULT_MODELS);
 
@@ -1487,6 +1487,18 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_LED")}`];
     case "zener":
       return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_ZENER")}`];
+    case "photodiode": {
+      // Value is photocurrent (A), not a .model name — never route it through
+      // deviceModel() or "100u" looks like an unresolved vendor diode.
+      const base = safeName(component.label || `D${index + 1}`);
+      const iph = formatEngineering(photodiodePhotocurrentAmps(component.value))
+        .replace(/\s+/g, "")
+        .replace(/µ/g, "u");
+      return [
+        `${name} ${node("a")} ${node("k")} TAU_DIODE`,
+        `I_${base}_ph ${node("k")} ${node("a")} ${iph}`,
+      ];
+    }
     case "nmos": {
       const mos = decodeParams("nmos", component.value);
       // Prefer a user `.model` named in the value; else the TAU starter.
@@ -1765,8 +1777,20 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
           : genericModel(named, "TAU_SW");
         return [`${name} ${node("a")} ${node("b")} ${control.positive} ${control.negative} ${model}`];
       }
-      const closed = component.value.trim().toLowerCase().startsWith("closed");
+      const closed = isStaticContactClosed(component.value);
       return [`R_${safeName(component.label || `S${index + 1}`)} ${node("a")} ${node("b")} ${closed ? "1m" : "1e12"}`];
+    }
+    case "pushButton": {
+      const closed = isStaticContactClosed(component.value);
+      return [`R_${safeName(component.label || `S${index + 1}`)} ${node("a")} ${node("b")} ${closed ? "1m" : "1e12"}`];
+    }
+    case "spdt": {
+      const base = safeName(component.label || `S${index + 1}`);
+      const toNo = isSpdtThrowToNo(component.value);
+      return [
+        `R_${base}_no ${node("com")} ${node("no")} ${toNo ? "1m" : "1e12"}`,
+        `R_${base}_nc ${node("com")} ${node("nc")} ${toNo ? "1e12" : "1m"}`,
+      ];
     }
     case "transformer": {
       const base = safeName(component.label || `T${index + 1}`);
@@ -2062,8 +2086,8 @@ function deckNode(value: string, role: string, analysis: string): string {
 const SPICE_PREFIX: Record<ComponentKind, string> = {
   resistor: "R", capacitor: "C", polarizedCapacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
   logicConstant: "V",
-  diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
-  potentiometer: "R", switch: "S", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
+  diode: "D", led: "D", zener: "D", photodiode: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
+  potentiometer: "R", switch: "S", pushButton: "S", spdt: "S", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
 };
 
 function componentSpicePrefix(component: SchematicComponent): string {

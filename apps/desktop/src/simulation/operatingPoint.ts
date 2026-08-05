@@ -17,7 +17,7 @@
  */
 
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
-import { isIndependentVoltageBranchKind, logicConstantVolts } from "../schematic/kindGroups";
+import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
@@ -117,11 +117,14 @@ const OP_SUPPORTED = new Set<ComponentKind>([
   "ccvs",
   "bsource",
   "switch",
+  "pushButton",
+  "spdt",
   "testpoint",
   "ground",
   "diode",
   "led",
   "zener",
+  "photodiode",
 ]);
 
 /** Tiny conductance added from every non-ground node to ground (SPICE gmin trick).
@@ -176,7 +179,7 @@ export function runOperatingPoint(
         circuit,
       );
     }
-    if (!components.some((c) => ["vsource", "isource", "vac", "iac", "bsource", "logicConstant"].includes(c.kind))) {
+    if (!components.some((c) => ["vsource", "isource", "vac", "iac", "bsource", "logicConstant", "photodiode"].includes(c.kind))) {
       return fail("Add a voltage or current source to excite the circuit.", circuit);
     }
 
@@ -463,16 +466,27 @@ export function runOperatingPoint(
         }
 
         case "switch":
-          if (entry.component.value.trim().toLowerCase().startsWith("closed")) {
+        case "pushButton":
+          if (isStaticContactClosed(entry.component.value)) {
             const a = nodeIdx(entry.pins["a"], nodeIndex);
             const b = nodeIdx(entry.pins["b"], nodeIndex);
             stampConductance(matrix, a, b, 1e9);
           }
           break;
 
+        case "spdt": {
+          const com = nodeIdx(entry.pins["com"], nodeIndex);
+          const thrown = isSpdtThrowToNo(entry.component.value)
+            ? nodeIdx(entry.pins["no"], nodeIndex)
+            : nodeIdx(entry.pins["nc"], nodeIndex);
+          stampConductance(matrix, com, thrown, 1e9);
+          break;
+        }
+
         case "diode":
         case "led":
         case "zener":
+        case "photodiode":
           // Nonlinear - stamped per Newton iteration below, not here.
           break;
 
@@ -518,6 +532,10 @@ export function runOperatingPoint(
           const cathode = nodeIdx(entry.pins["k"], nodeIndex);
           stampConductance(newtonMatrix, anode, cathode, conductance);
           stampCurrent(newtonRhs, anode, cathode, equivalent);
+          if (entry.component.kind === "photodiode") {
+            // Iph flows K→A (reverse photocurrent).
+            stampCurrent(newtonRhs, cathode, anode, photodiodePhotocurrentAmps(entry.component.value));
+          }
         }
         const attempt = solveLinearSystem(newtonMatrix, newtonRhs);
         let settled = true;

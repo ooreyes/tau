@@ -39,6 +39,7 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "diode",         section: "Semiconductors",    name: "Diode",           hotkey: "d", prefix: "D",   defaultValue: "D",     unit: "" },
   { kind: "led",           section: "Semiconductors",    name: "LED",             hotkey: "e", prefix: "D",   defaultValue: "LED",   unit: "" },
   { kind: "zener",         section: "Semiconductors",    name: "Zener",           hotkey: "z", prefix: "D",   defaultValue: "5V1",   unit: "" },
+  { kind: "photodiode",    section: "Semiconductors",    name: "Photodiode",      hotkey: "",  prefix: "D",   defaultValue: "100u",  unit: "A" },
   { kind: "nmos",          section: "Semiconductors",    name: "NMOS",            hotkey: "m", prefix: "M",   defaultValue: "NMOS W=10u L=1u",  unit: "" },
   { kind: "pmos",          section: "Semiconductors",    name: "PMOS",            hotkey: "p", prefix: "M",   defaultValue: "PMOS W=10u L=1u",  unit: "" },
   { kind: "njf",           section: "Semiconductors",    name: "N-JFET",          hotkey: "",  prefix: "J",   defaultValue: "NJF",   unit: "" },
@@ -67,6 +68,8 @@ export const CATALOG: CatalogEntry[] = [
   // selects the `space` frequency; 1V selects `mark`).
   { kind: "modulator",     section: "Analog",            name: "Modulator (VCO)", hotkey: "",  prefix: "A",   defaultValue: "mark=1K space=1K", unit: "" },
   { kind: "switch",        section: "Electromechanical", name: "Switch",          hotkey: "s", prefix: "S",   defaultValue: "open",  unit: "" },
+  { kind: "pushButton",    section: "Electromechanical", name: "Push Button",     hotkey: "",  prefix: "S",   defaultValue: "open",  unit: "" },
+  { kind: "spdt",          section: "Electromechanical", name: "SPDT",            hotkey: "",  prefix: "S",   defaultValue: "no",    unit: "" },
   { kind: "transformer",   section: "Electromechanical", name: "Transformer",     hotkey: "t", prefix: "T",   defaultValue: "1:1",   unit: "" },
   // unit is "" (not "Ω s"): the value is a "Td=50n Z0=50" key=value spec that
   // already self-describes each token - LTspice shows it as raw text, and a

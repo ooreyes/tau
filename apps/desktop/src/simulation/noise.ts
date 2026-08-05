@@ -31,7 +31,7 @@
  */
 
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
-import { isIndependentVoltageBranchKind } from "../schematic/kindGroups";
+import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed } from "../schematic/kindGroups";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
@@ -197,6 +197,8 @@ const NOISE_SUPPORTED = new Set<ComponentKind>([
   "logicConstant",
   "opamp",
   "switch",
+  "pushButton",
+  "spdt",
   "testpoint",
   "ground",
 ]);
@@ -487,10 +489,19 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
             break;
           }
           case "switch":
-            if (component.value.trim().toLowerCase().startsWith("closed")) {
+          case "pushButton":
+            if (isStaticContactClosed(component.value)) {
               stampCAdmittance(matrix, nodeIdx(pins["a"], nodeIndex), nodeIdx(pins["b"], nodeIndex), { re: 1e9, im: 0 });
             }
             break;
+          case "spdt": {
+            const com = nodeIdx(pins["com"], nodeIndex);
+            const thrown = isSpdtThrowToNo(component.value)
+              ? nodeIdx(pins["no"], nodeIndex)
+              : nodeIdx(pins["nc"], nodeIndex);
+            stampCAdmittance(matrix, com, thrown, { re: 1e9, im: 0 });
+            break;
+          }
           case "testpoint":
           case "ground":
             break;

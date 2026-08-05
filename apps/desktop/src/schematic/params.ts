@@ -44,6 +44,9 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
   // names stay unavailable until a parsed library-to-symbol mapping can affect
   // the generated deck instead of being silently ignored.
   switch: [{ key: "state", label: "State (open/closed)", unit: "" }],
+  pushButton: [{ key: "state", label: "State (open/pressed)", unit: "" }],
+  spdt: [{ key: "throw", label: "Throw (no/nc)", unit: "" }],
+  photodiode: [{ key: "iph", label: "Photocurrent", unit: "A" }],
   transformer: [{ key: "ratio", label: "Turns ratio", unit: "" }],
   comparator: [
     { key: "vhigh", label: "Output high", unit: "V" },

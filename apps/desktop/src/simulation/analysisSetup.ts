@@ -11,7 +11,7 @@ const SWEEPABLE_KINDS = new Set(["vsource", "isource", "vac", "iac"]);
 const CURRENT_PROBE_KINDS = new Set([
   "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource",
   "logicConstant", "diode", "led",
-  "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
+  "zener", "photodiode", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
 ]);
 
 export function sweepableSources(components: readonly SchematicComponent[]): SchematicComponent[] {

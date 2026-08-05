@@ -1,11 +1,18 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~09:40 CDT**
+**Status: DONE - 2026-08-05 ~09:45 CDT**
 
+<<<<<<< HEAD
 Unit: Educational **dimmer.asc** authored `.tran` + `.step Rdim` → differential
 **pass=103** (DIAC/TRIAC load-power; gate v(b) / Rdim≥200k deferred).
 Worktree `Tau-wt-diff-103` rebased over EveryCircuit/waveform tip. Left SoftDiode /
 PowerAmp / Staff EE / Settings / EveryCircuit fills alone. SHIPPABLE? **NO**
+=======
+Unit: EveryCircuit library — **push-button** + **SPDT** + **photodiode**
+(honest R / dual-R / D+Iph). Worktree `Tau-wt-ec-lib`. Not full EC parity.
+SHIPPABLE? **NO**
+
+>>>>>>> f6c7128 (auto: push-button + SPDT + photodiode palette (§EveryCircuit))
 
 **SHIPPABLE?** **NO**
 
@@ -67,6 +74,36 @@ PowerAmp / Staff EE / Settings / EveryCircuit fills alone. SHIPPABLE? **NO**
 SHIPPABLE? **NO**
 
 ---
+
+
+### 2026-08-05 — push-button + SPDT + photodiode (§EveryCircuit)
+
+**What I did**
+- Palette `pushButton`: SPST momentary; netlists as static contact `R` (1m pressed / 1T open), same honesty as static switch.
+- Palette `spdt`: COM/NO/NC; mutually exclusive dual-`R` throw (`no` default / `nc`).
+- Palette `photodiode`: silicon `D` + parallel photocurrent `Iph` (K→A); value is Iph (default 100u), never a fake vendor model name.
+- ASC lossy-carrier for push/SPDT; catalog/placement/netlist/OP tests.
+
+**Files**
+- `schematic/{types,catalog,pins,params,symbols,kindGroups,everyCircuitLibrary.test}.ts(x)`
+- `engine/spiceNetlist.ts`, `simulation/{diodeCompanion,operatingPoint,linearTransient,acSweep,noise,analysisSetup}.ts`
+- `io/{ascExport,cirImport}.ts`, `lib/assistantCircuitPlan.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + full suite; App.workspace flaky timeouts green on re-run (21/21).
+
+**Parity items**
+- §EveryCircuit: push-button + SPDT + photodiode landed. Remaining: bulb/motor/CT xfmr/relay/7seg/SR-T-JK/555/ADC-DAC/counter. SHIPPABLE? NO
+
+**Next step**
+- Relay (if honest coil+contact) or leave complex ICs refused; Staff EE / continue 41 stay off palette.
+
+SHIPPABLE? **NO**
+
+
+---
+
 
 ### 2026-08-05 — polarized cap + logic constant + cursor readout (§EveryCircuit)
 

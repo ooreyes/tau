@@ -51,6 +51,10 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "a", label: "A", x: -32, y: 0 },
     { id: "k", label: "K", x: 32, y: 0 },
   ],
+  photodiode: [
+    { id: "a", label: "A", x: -32, y: 0 },
+    { id: "k", label: "K", x: 32, y: 0 },
+  ],
   opamp: [
     { id: "in+", label: "+", x: -32, y: 16 },
     { id: "in-", label: "-", x: -32, y: -16 },
@@ -199,6 +203,17 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "b", label: "B", x: 32, y: 0 },
     { id: "cp", label: "NC+", x: -16, y: 32 },
     { id: "cn", label: "NC-", x: 16, y: 32 },
+  ],
+  // SPST momentary: same electrical path as a static switch, no control pins.
+  pushButton: [
+    { id: "a", label: "A", x: -32, y: 0 },
+    { id: "b", label: "B", x: 32, y: 0 },
+  ],
+  // SPDT: common + normally-open + normally-closed. Value selects throw.
+  spdt: [
+    { id: "com", label: "COM", x: -32, y: 0 },
+    { id: "no", label: "NO", x: 32, y: -16 },
+    { id: "nc", label: "NC", x: 32, y: 16 },
   ],
   transformer: [
     { id: "p1", label: "P1", x: -32, y: -16 },

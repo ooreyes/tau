@@ -201,6 +201,7 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     diode: "diode",
     zener: "zener",
     led: "led",
+    photodiode: "diode",
     npn: "npn",
     pnp: "pnp",
     // Tau exposes an explicit bulk terminal, so use LTspice's four-pin symbols;
@@ -304,7 +305,7 @@ export function isLossyCarrierWarning(warning: string): boolean {
 }
 
 export const LOSSY_CARRIER_KINDS: ReadonlySet<string> = new Set([
-  "comparator", "cccs", "ccvs", "switch", "subckt", "testpoint",
+  "comparator", "cccs", "ccvs", "switch", "pushButton", "spdt", "subckt", "testpoint",
 ]);
 
 /**
@@ -404,10 +405,14 @@ function componentToLtspiceSymbol(component: SchematicComponent): LtspiceCompone
     // resistor plus explicit Tau metadata. Tau restores the exact kind/value,
     // pins, drawing, and simulator behavior; LTspice can still open/netlist the
     // file instead of failing on an unknown symbol or malformed element.
-    const closedSwitch = component.kind === "switch" && component.value.trim().toLowerCase().startsWith("closed");
+    const closedContact = (component.kind === "switch" || component.kind === "pushButton")
+      && (component.value.trim().toLowerCase().startsWith("closed")
+        || component.value.trim().toLowerCase() === "pressed"
+        || component.value.trim().toLowerCase() === "on"
+        || component.value.trim().toLowerCase() === "1");
     return {
       type: "res",
-      value: closedSwitch ? "1m" : "1T",
+      value: closedContact ? "1m" : "1T",
       tauKind: component.kind,
       tauValue: component.value,
       carrierPrefix: "R",

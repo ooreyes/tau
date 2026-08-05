@@ -20,6 +20,7 @@ export type ComponentKind =
   | "diode"
   | "led"
   | "zener"
+  | "photodiode"
   | "opamp"
   | "comparator"
   | "digitalGate"
@@ -39,6 +40,8 @@ export type ComponentKind =
   | "pnp"
   | "potentiometer"
   | "switch"
+  | "pushButton"
+  | "spdt"
   | "transformer"
   | "tline"
   | "subckt"
@@ -49,9 +52,9 @@ export type ComponentKind =
 export const COMPONENT_KINDS = [
   "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource", "vac", "iac", "vpulse",
   "logicConstant",
-  "diode", "led", "zener", "opamp", "comparator", "digitalGate", "dflop", "sampleHold",
+  "diode", "led", "zener", "photodiode", "opamp", "comparator", "digitalGate", "dflop", "sampleHold",
   "modulator", "vcvs", "vccs", "cccs", "ccvs", "bsource", "nmos", "pmos", "njf", "pjf",
-  "npn", "pnp", "potentiometer", "switch", "transformer", "tline", "subckt", "testpoint",
+  "npn", "pnp", "potentiometer", "switch", "pushButton", "spdt", "transformer", "tline", "subckt", "testpoint",
   "ground",
 ] as const satisfies readonly ComponentKind[];
 

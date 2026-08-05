@@ -12,7 +12,7 @@
  *   - types from ../schematic/types
  */
 
-import { isIndependentVoltageBranchKind } from "../schematic/kindGroups";
+import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed } from "../schematic/kindGroups";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
@@ -233,6 +233,8 @@ const AC_SUPPORTED = new Set<ComponentKind>([
   "ccvs",
   "bsource",
   "switch",
+  "pushButton",
+  "spdt",
   "testpoint",
   "ground",
 ]);
@@ -690,7 +692,8 @@ export function runAcSweep(
           }
 
           case "switch":
-            if (component.value.trim().toLowerCase().startsWith("closed")) {
+          case "pushButton":
+            if (isStaticContactClosed(component.value)) {
               stampCAdmittance(
                 matrix,
                 nodeIdx(pins["a"], nodeIndex),
@@ -699,6 +702,15 @@ export function runAcSweep(
               );
             }
             break;
+
+          case "spdt": {
+            const com = nodeIdx(pins["com"], nodeIndex);
+            const thrown = isSpdtThrowToNo(component.value)
+              ? nodeIdx(pins["no"], nodeIndex)
+              : nodeIdx(pins["nc"], nodeIndex);
+            stampCAdmittance(matrix, com, thrown, { re: 1e9, im: 0 });
+            break;
+          }
 
           case "testpoint":
           case "ground":

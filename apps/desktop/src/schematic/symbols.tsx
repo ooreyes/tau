@@ -58,6 +58,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   diode: { minX: -13, minY: -15, maxX: 13, maxY: 15 },
   led: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   zener: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
+  photodiode: { minX: -13, minY: -20, maxX: 16, maxY: 15 },
   opamp: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
   comparator: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
   digitalGate: { minX: -24, minY: -38, maxX: 28, maxY: 40 },
@@ -77,6 +78,8 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   pnp: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
   potentiometer: { minX: -28, minY: -18, maxX: 28, maxY: 12 },
   switch: { minX: -18, minY: -20, maxX: 18, maxY: 20 },
+  pushButton: { minX: -14, minY: -18, maxX: 14, maxY: 14 },
+  spdt: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   transformer: { minX: -24, minY: -27, maxX: 24, maxY: 27 },
   tline: { minX: -20, minY: -16, maxX: 20, maxY: 16 },
   subckt: { minX: -24, minY: -20, maxX: 24, maxY: 20 },
@@ -99,6 +102,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   diode: { halfW: 14, halfH: 15 },
   led: { halfW: 18, halfH: 22 },
   zener: { halfW: 16, halfH: 18 },
+  photodiode: { halfW: 18, halfH: 22 },
   opamp: { halfW: 28, halfH: 28 },
   comparator: { halfW: 28, halfH: 28 },
   digitalGate: { halfW: 28, halfH: 40 },
@@ -118,6 +122,8 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   pnp: { halfW: 22, halfH: 20 },
   potentiometer: { halfW: 30, halfH: 18 },
   switch: { halfW: 14, halfH: 20 },
+  pushButton: { halfW: 14, halfH: 18 },
+  spdt: { halfW: 16, halfH: 22 },
   transformer: { halfW: 24, halfH: 27 },
   tline: { halfW: 20, halfH: 18 },
   subckt: { halfW: 26, halfH: 22 },
@@ -290,6 +296,21 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <path d="M 10 -14 V 14 M 10 -14 L 16 -18 M 10 14 L 4 18" />
           <line x1={10} y1={0} x2={32} y2={0} />
+        </>
+      );
+
+    case "photodiode":
+      return (
+        <>
+          <line x1={-32} y1={0} x2={-12} y2={0} />
+          <path d="M -12 -13 L 10 0 L -12 13 Z" />
+          <line x1={10} y1={-14} x2={10} y2={14} />
+          <line x1={10} y1={0} x2={32} y2={0} />
+          {/* Incoming light arrows (opposite of LED emission arrows). */}
+          <path d="M 25 -31 L 14 -20" />
+          <path d="M 14 -20 L 16 -28 M 14 -20 L 22 -22" />
+          <path d="M 16 -31 L 5 -20" />
+          <path d="M 5 -20 L 7 -28 M 5 -20 L 13 -22" />
         </>
       );
 
@@ -605,6 +626,33 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           <line x1={-16} y1={32} x2={-16} y2={16} />
           <line x1={16} y1={32} x2={16} y2={16} />
           <line x1={-16} y1={16} x2={16} y2={16} />
+        </>
+      );
+
+    case "pushButton":
+      return (
+        <>
+          <line x1={-32} y1={0} x2={-14} y2={0} />
+          <line x1={14} y1={0} x2={32} y2={0} />
+          <circle cx={-14} cy={0} r={3} />
+          <circle cx={14} cy={0} r={3} />
+          <line x1={-14} y1={-3} x2={-14} y2={-14} />
+          <line x1={14} y1={-3} x2={14} y2={-14} />
+          <line x1={-18} y1={-14} x2={18} y2={-14} />
+          <line x1={0} y1={-14} x2={0} y2={-22} />
+        </>
+      );
+
+    case "spdt":
+      return (
+        <>
+          <line x1={-32} y1={0} x2={-12} y2={0} />
+          <circle cx={-12} cy={0} r={3} />
+          <circle cx={12} cy={-16} r={3} />
+          <circle cx={12} cy={16} r={3} />
+          <line x1={12} y1={-16} x2={32} y2={-16} />
+          <line x1={12} y1={16} x2={32} y2={16} />
+          <line x1={-10} y1={-2} x2={10} y2={-14} />
         </>
       );
 

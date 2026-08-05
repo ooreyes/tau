@@ -42,7 +42,7 @@ const LABELED_FANOUT_THRESHOLD = 12;
 export const ASSISTANT_DIRECT_GENERATABLE_KINDS = [
   "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource",
   "logicConstant",
-  "diode", "led", "zener", "opamp", "vcvs", "vccs",
+  "diode", "led", "zener", "photodiode", "opamp", "vcvs", "vccs",
   "bsource", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
   "tline", "sampleHold", "modulator",
   "digitalGate", "dflop",
@@ -52,7 +52,7 @@ export const ASSISTANT_DIRECT_GENERATABLE_KINDS = [
  * LTspice symbol. The compiler lowers these macros into portable primitives
  * before layout/export, retaining every requested terminal electrically. */
 export const ASSISTANT_COMPOSITE_KINDS = [
-  "cccs", "ccvs", "comparator", "potentiometer", "switch", "transformer",
+  "cccs", "ccvs", "comparator", "potentiometer", "switch", "pushButton", "transformer",
 ] as const satisfies readonly ComponentKind[];
 
 export const ASSISTANT_GENERATABLE_KINDS = [
@@ -813,13 +813,14 @@ function lowerCompositePlan(plan: CircuitPlan): DirectCircuitPlan {
         mapPin(`${component.ref}.b`, `${lower}.b`);
         break;
       }
-      case "switch": {
+      case "switch":
+      case "pushButton": {
         const state = value.trim().toLowerCase();
-        if (!/^(?:open|off|0|closed|on|1)$/.test(state)) {
-          throw new Error(`${component.ref} switch value must be open or closed`);
+        if (!/^(?:open|off|0|closed|on|1|pressed)$/.test(state)) {
+          throw new Error(`${component.ref} ${component.kind} value must be open or closed`);
         }
         const resistor = uniqueRef(`R_${component.ref}`);
-        add(resistor, "resistor", /^(?:closed|on|1)$/.test(state) ? "1m" : "1e12");
+        add(resistor, "resistor", /^(?:closed|on|1|pressed)$/.test(state) ? "1m" : "1e12");
         mapPin(`${component.ref}.a`, `${resistor}.a`);
         mapPin(`${component.ref}.b`, `${resistor}.b`);
         break;
@@ -909,7 +910,7 @@ const ROW_PITCH = 144;
 // Two-pin passives Tau draws natively with left/right pins at rotation 0.
 // Rotation below uses Tau's native pin transform (NOT LTspice ASC banks).
 const ROTATABLE_TWO_PIN_KINDS = new Set<ComponentKind>([
-  "resistor", "capacitor", "polarizedCapacitor", "inductor", "diode", "led", "zener",
+  "resistor", "capacitor", "polarizedCapacitor", "inductor", "diode", "led", "zener", "photodiode",
 ]);
 
 /** net name → refs of every component on that net. */

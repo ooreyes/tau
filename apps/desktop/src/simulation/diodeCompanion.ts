@@ -25,7 +25,7 @@ export interface DiodeSpec {
   breakdown?: number;
 }
 
-export const DIODE_KINDS = new Set(["diode", "led", "zener"]);
+export const DIODE_KINDS = new Set(["diode", "led", "zener", "photodiode"]);
 
 /** `5V1` / `5.1` / `BZX55C5V1`-style breakdown ratings; null when unparseable. */
 export function parseZenerBreakdown(value: string): number | null {
@@ -38,13 +38,16 @@ export function parseZenerBreakdown(value: string): number | null {
 }
 
 /** Built-in default models, LTspice-flavored: silicon diode ≈0.7 V, LED ≈2.0 V
- *  at 10 mA, zener breaks down at its rated (or 5.1 V fallback) voltage. */
+ *  at 10 mA, zener breaks down at its rated (or 5.1 V fallback) voltage.
+ *  Photodiode uses the silicon junction; illumination is a parallel Iph. */
 export function diodeSpecFor(kind: string, value: string): DiodeSpec {
   switch (kind) {
     case "led":
       return { isat: 1e-16, emission: 2.4 };
     case "zener":
       return { isat: 1e-14, emission: 1, breakdown: parseZenerBreakdown(value) ?? 5.1 };
+    case "photodiode":
+      return { isat: 1e-14, emission: 1 };
     default:
       return { isat: 1e-14, emission: 1 };
   }
