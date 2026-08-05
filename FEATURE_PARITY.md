@@ -231,17 +231,19 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     fail-closed deck: missing named models block Run rather than promising a
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
-    `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0
+    `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1223 refuse=1318 silent=0
     hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%` (re-measured
-    2026-08-05 ~13:00 on tip ~992f594). TIP121/TIP127 Prefix-X + sibling
-    `.lib` (+2 exact vs 1220; PowerAmpLayout). PAsystem discrete aliases
+    2026-08-05 this session; AD8561 ambiguous-leaf → OpAmps plaintext `.lib`).
+    TIP121/TIP127 Prefix-X + sibling `.lib` (+2 exact vs 1220; PowerAmpLayout).
+    PAsystem discrete aliases
     (+1 HandsFree). Encrypted bare SYMBOL stay honest refuse.
     Harness skips encrypted-only leaves (no 33.4% denominator game). Never
-    silent substitution. **Wall triage refresh (2026-08-05):** no further
-    honest Tau-owned/sibling map cluster (Downloads/Docs sibling leftover=0;
+    silent substitution. **Wall triage refresh (2026-08-05):** AD8561
+    ambiguous-leaf climb landed (+1); no further honest Tau-owned/sibling
+    map cluster (Downloads/Docs sibling leftover=0;
     plaintext Application `.lib` twins already exact). Refuse path-family from
-    script stdout: Applications 1312 / FRA 5 / Educational 2;
-    no-equiv=1318 / other=1 (Chan). ≥95% blocked on Omar installing
+    script stdout: Applications 1311 / FRA 5 / Educational 2;
+    no-equiv=1317 / other=1 (Chan). ≥95% blocked on Omar installing
     **plaintext** ADI/LTC macromodels — see `NAMED-DEVICE-WALL.md` and
     `~/Desktop/TAU-NAMED-DEVICE-WALL.md`. DoD box stays ⬜. SHIPPABLE? NO.
     Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise

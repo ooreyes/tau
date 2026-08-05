@@ -223,7 +223,9 @@ fn decode_windows_1252(bytes: &[u8]) -> String {
 /// installed file lives at `sym/OpAmps/ADA4077-1.asy`. Prefer an exact relative
 /// join; when the request is a single-segment `sym/<leaf>.asy` that is missing,
 /// accept a **unique** basename hit under `sym/` (ambiguous leaves stay missing
-/// so Tau never attaches the wrong family's ModelFile).
+/// so Tau never attaches the wrong family's ModelFile — unless exactly one
+/// family names an on-disk plaintext ModelFile/SpiceModel, e.g. AD8561 OpAmps
+/// `.lib` over Comparators encrypted `.sub`).
 fn unique_sym_asy_leaf(root: &Path, leaf_asy: &str) -> Result<Option<PathBuf>, String> {
     let target = leaf_asy.to_ascii_lowercase();
     let sym_root = root.join("sym");
@@ -268,10 +270,131 @@ fn unique_sym_asy_leaf(root: &Path, leaf_asy: &str) -> Result<Option<PathBuf>, S
     }
     walk(&sym_root, &target, &mut hits, 0)?;
     if hits.len() == 1 {
-        Ok(Some(hits.remove(0)))
-    } else {
-        Ok(None)
+        return Ok(Some(hits.remove(0)));
     }
+    if hits.len() > 1 {
+        return Ok(disambiguate_asy_hits_by_plaintext_model(root, &hits));
+    }
+    Ok(None)
+}
+
+/// ModelFile / library-shaped SpiceModel from `.asy` text (authored path only).
+fn asy_model_file_attr(text: &str) -> Option<String> {
+    let mut model_file: Option<String> = None;
+    let mut spice_model: Option<String> = None;
+    for raw in text.lines() {
+        let line = raw.trim();
+        let Some(rest) = line
+            .get(8..)
+            .filter(|_| line.len() >= 8 && line[..8].eq_ignore_ascii_case("SYMATTR "))
+        else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        let Some((key, value)) = rest.split_once(char::is_whitespace) else {
+            continue;
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        if key.eq_ignore_ascii_case("ModelFile") {
+            model_file = Some(value.to_string());
+        } else if key.eq_ignore_ascii_case("SpiceModel") {
+            spice_model = Some(value.to_string());
+        }
+    }
+    if let Some(model_file) = model_file {
+        return Some(model_file);
+    }
+    let spice_model = spice_model?;
+    if spice_model
+        .rsplit('.')
+        .next()
+        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "lib" | "sub" | "mod"))
+    {
+        Some(spice_model)
+    } else {
+        None
+    }
+}
+
+fn is_encrypted_model_bytes(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+    let head_len = bytes.len().min(64);
+    if String::from_utf8_lossy(&bytes[..head_len]).contains("<Binary File>") {
+        return true;
+    }
+    if bytes.contains(&0) {
+        return true;
+    }
+    let suspicious = bytes
+        .iter()
+        .filter(|byte| **byte < 0x09 || (0x0e..0x20).contains(*byte))
+        .count();
+    suspicious * 100 > bytes.len()
+}
+
+/// Authored ModelFile path only (no same-stem twin expansion).
+fn authored_model_file_is_plaintext(root: &Path, relative_file: &str) -> bool {
+    let relative = Path::new(relative_file);
+    if !safe_relative_path(relative) {
+        return false;
+    }
+    for base in [root.join("sub"), root.to_path_buf()] {
+        let candidate = base.join(relative);
+        if !candidate.is_file() {
+            continue;
+        }
+        let Ok(bytes) = fs::read(&candidate) else {
+            continue;
+        };
+        return !is_encrypted_model_bytes(&bytes);
+    }
+    false
+}
+
+fn model_stem(relative_file: &str) -> String {
+    let normalized = relative_file.replace('\\', "/").to_ascii_lowercase();
+    for ext in [".lib", ".sub", ".mod"] {
+        if let Some(stem) = normalized.strip_suffix(ext) {
+            return stem.to_string();
+        }
+    }
+    normalized
+}
+
+fn disambiguate_asy_hits_by_plaintext_model(root: &Path, hits: &[PathBuf]) -> Option<PathBuf> {
+    let mut plaintext: Vec<(PathBuf, String)> = Vec::new();
+    for path in hits {
+        let Ok(bytes) = fs::read(path) else {
+            continue;
+        };
+        let text = match String::from_utf8(bytes.clone()) {
+            Ok(text) => text,
+            Err(error) => decode_windows_1252(error.as_bytes()),
+        };
+        let Some(model_file) = asy_model_file_attr(&text) else {
+            continue;
+        };
+        if !authored_model_file_is_plaintext(root, &model_file) {
+            continue;
+        }
+        plaintext.push((path.clone(), model_stem(&model_file)));
+    }
+    if plaintext.len() == 1 {
+        return Some(plaintext.remove(0).0);
+    }
+    if plaintext.len() > 1 {
+        let first_stem = plaintext[0].1.clone();
+        if plaintext.iter().all(|entry| entry.1 == first_stem) {
+            plaintext.sort_by(|a, b| a.0.cmp(&b.0));
+            return Some(plaintext.remove(0).0);
+        }
+    }
+    None
 }
 
 fn read_model_at(root: &Path, id: &str) -> Result<InstalledLtspiceModelText, String> {
@@ -388,6 +511,62 @@ mod tests {
         // Ambiguous leaf stays missing (never pick a family).
         fs::write(adc.join("ADA4077-1.asy"), "Version 4\nSYMATTR Prefix X\n").unwrap();
         assert!(read_model_at(temp.path(), "sym/ADA4077-1.asy")
+            .unwrap_err()
+            .contains("Could not access"));
+    }
+
+    #[test]
+    fn disambiguates_ambiguous_leaf_when_one_family_names_plaintext_model() {
+        let temp = tempfile::tempdir().unwrap();
+        let comparators = temp.path().join("sym/Comparators");
+        let opamps = temp.path().join("sym/OpAmps");
+        let sub = temp.path().join("sub");
+        fs::create_dir_all(&comparators).unwrap();
+        fs::create_dir_all(&opamps).unwrap();
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(
+            comparators.join("AD8561.asy"),
+            "Version 4\nSYMATTR Prefix X\nSYMATTR SpiceModel AD8561.sub\n",
+        )
+        .unwrap();
+        fs::write(
+            opamps.join("AD8561.asy"),
+            "Version 4\nSYMATTR Prefix X\nSYMATTR SpiceModel AD8561.lib\nPIN Q\n",
+        )
+        .unwrap();
+        fs::write(sub.join("AD8561.sub"), [0u8, 1, 2, 3]).unwrap();
+        fs::write(sub.join("AD8561.lib"), ".subckt AD8561 1 2\n.ends\n").unwrap();
+
+        let resolved = read_model_at(temp.path(), "sym/AD8561.asy").unwrap();
+        assert!(
+            resolved.text.contains("AD8561.lib"),
+            "expected OpAmps plaintext family, got {}",
+            resolved.text
+        );
+        assert!(resolved.text.contains("PIN Q"));
+    }
+
+    #[test]
+    fn still_refuses_ambiguous_leaf_when_every_family_is_encrypted() {
+        let temp = tempfile::tempdir().unwrap();
+        let opamps = temp.path().join("sym/OpAmps");
+        let adc = temp.path().join("sym/ADC");
+        let sub = temp.path().join("sub");
+        fs::create_dir_all(&opamps).unwrap();
+        fs::create_dir_all(&adc).unwrap();
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(
+            opamps.join("AD4858.asy"),
+            "Version 4\nSYMATTR Prefix X\nSYMATTR ModelFile AD4858.sub\n",
+        )
+        .unwrap();
+        fs::write(
+            adc.join("AD4858.asy"),
+            "Version 4\nSYMATTR Prefix X\nSYMATTR ModelFile AD4858.sub\n",
+        )
+        .unwrap();
+        fs::write(sub.join("AD4858.sub"), [0u8, 1, 2, 3]).unwrap();
+        assert!(read_model_at(temp.path(), "sym/AD4858.asy")
             .unwrap_err()
             .contains("Could not access"));
     }

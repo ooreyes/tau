@@ -1,14 +1,55 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:36 CDT**
+**Status: DONE - 2026-08-05 ~13:40 CDT**
 
-Unit: **Product gates — first-success learning path polish** — persist
-success-coach ack via `dismissedAt`; proof script claims closed box.
-Product-gates DoD ✅. SHIPPABLE? **NO**
+Unit: **Named-device AD8561 ambiguous-leaf exact map** — prefer OpAmps
+plaintext `AD8561.lib` over Comparators encrypted `.sub` when bare SYMBOL
+collides; never silent generic / never decrypt. Measured exact=1223 /
+refuse=1318 / 48.1%. DoD box stays ⬜. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — Named-device AD8561 ambiguous-leaf → exact=1223 (§DoD)
+
+**What I did**
+- Dug remaining plaintext refuse: sibling `.lib` leftovers still only
+  TIP121/TIP127 (already exact); aggregator SpiceModel parts already exact;
+  Educational refuse = FRA×5 + NIGBT + Chan only.
+- Found one honest climb: bare `SYMBOL AD8561` collides
+  Comparators/`AD8561.sub` (encrypted) vs OpAmps/`AD8561.lib` (plaintext).
+  Disambiguate by authored plaintext ModelFile/SpiceModel (TS + Rust);
+  encrypted-only collisions (`AD4858`, `AD8460`) and distinct plaintext
+  families still refuse.
+- Re-measured: exact=1223 refuse=1318 silent=0 hard-failure=0 exact-rate=48.1%.
+  Wall + desktop mirror updated. ≥95% still impossible without Omar
+  plaintext ADI/LTC install. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/io/ltspiceSymbolResolve.ts` (+ test)
+- `apps/desktop/src-tauri/src/ltspice_library.rs` (+ tests)
+- `NAMED-DEVICE-WALL.md`, `~/Desktop/TAU-NAMED-DEVICE-WALL.md`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `vitest run ltspiceSymbolResolve.test.ts` → 9/9
+- `CORPUS_MATCH=AD8561` recursive → exact=1
+- `NAMED_DEVICE_REFUSE_TRIAGE=1 scripts/named-device-fidelity.sh` →
+  exact=1223 refuse=1318 silent=0 hard-failure=0 exact-rate=48.1%
+- `cargo test ltspice_library` → 6 passed / 1 ignored
+- `pnpm -C apps/desktop typecheck` / `test` → 2945 passed / 8 skipped
+
+**Parity items**
+- Named-device 🟡 exact=1223 / 48.1%; DoD box unchecked. SHIPPABLE? NO
+
+**Next step**
+- Omar plaintext ADI/LTC macromodel install, or other open DoD boxes.
+  No further honest Tau-owned climb without silent substitution.
+
+SHIPPABLE? **NO**
 
 ---
 

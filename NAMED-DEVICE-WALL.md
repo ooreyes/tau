@@ -1,7 +1,7 @@
 # Tau named-device wall — exact-rate stuck at 48.1% (need ≥95%)
 
 **Date:** 2026-08-05  
-**Tip measured:** `992f594` (re-measured this session; rate unchanged since `d915373`)  
+**Tip measured:** `c489e4a` + AD8561 climb (commit on push)  
 **SHIPPABLE?** **NO** — DoD named-device box stays unchecked. Never claim ≥95% from this doc.
 
 This is the Omar-visible wall for the AGENTS.md named-device fidelity floor.
@@ -14,7 +14,7 @@ weaken Chan / NIGBT / FRA refusals to inflate the rate.
 
 ```
 NAMED-DEVICE: exact=2 refuse=4 silent=0
-NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1223 refuse=1318 silent=0
   hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
 (DoD ≥95% floor NOT met or not claimable: exact-rate=48.1% silent=0 hard-failure=0)
 ```
@@ -27,8 +27,8 @@ bash scripts/named-device-fidelity.sh
 NAMED_DEVICE_REFUSE_TRIAGE=1 bash scripts/named-device-fidelity.sh
 ```
 
-**Math:** ≥95% of 2541 unencrypted needs **≥2414 exact**. We have **1222**.
-Gap ≈ **1192**. Almost the entire `refuse=1319` bucket must become exact —
+**Math:** ≥95% of 2541 unencrypted needs **≥2414 exact**. We have **1223**.
+Gap ≈ **1191**. Almost the entire `refuse=1318` bucket must become exact —
 and that bucket is dominated by **encrypted Analog Devices / LTC vendor
 `.sub` bodies** already installed under LTspice, not by missing Tau maps.
 
@@ -37,25 +37,25 @@ and that bucket is dominated by **encrypted Analog Devices / LTC vendor
 ## Refuse triage (from `NAMED_DEVICE_REFUSE_TRIAGE=1` stdout)
 
 ```
-REFUSE TRIAGE (1319 files, 325 classes):
-  summary: no-electrically-equivalent=1318 other-refuse=1
+REFUSE TRIAGE (1318 files, 325 classes):
+  summary: no-electrically-equivalent=1317 other-refuse=1
   by path family:
-    1312× Applications
+    1311× Applications
     5× FRA
     2× Educational
 ```
 
 | Bucket | Count | What it is |
 | --- | ---: | --- |
-| **no-electrically-equivalent** | **1318** | Bare SYMBOL / Prefix-X whose installed `lib/sub/*.sub` is encrypted (`<Binary File>`) or LTspice-only (NIGBT). Includes Educational `IGBT.asc` (`misc\nigbt`). |
+| **no-electrically-equivalent** | **1317** | Bare SYMBOL / Prefix-X whose installed `lib/sub/*.sub` is encrypted (`<Binary File>`) or LTspice-only (NIGBT). Includes Educational `IGBT.asc` (`misc\nigbt`). |
 | **other-refuse** | **1** | Chan-core: `Educational/NonLinearTransformer.asc` (dedicated Chan refuse copy — keep). |
-| **Applications** | **1312** | Bulk wall: AD4000 / ADA4523-1 / ADM7150-* / ADP* / LTC* / … encrypted Applications examples. |
+| **Applications** | **1311** | Bulk wall: AD4000 / ADA4523-1 / ADM7150-* / ADP* / LTC* / … encrypted Applications examples. |
 | **FRA** | **5** | Encrypted FRA examples (`LT8609.sub`, `LTC3869.sub`, …) still counted as refuse (not denominator-excluded). |
 | **Educational** | **2** | `IGBT.asc` (NIGBT) + `NonLinearTransformer.asc` (Chan). |
 
 Top collapsed message classes (refdes → `REF`; still 325 raw classes because voltage/bit suffixes stay distinct):
 
-- **559×** `REF (REF)` — e.g. `Applications/AD4000.asc`, `AD4001.asc`
+- **558×** `REF (REF)` — e.g. `Applications/AD4000.asc`, `AD4001.asc`
 - **85×** `REF (REF-1)` — e.g. `ADA4523-1.asc`, `ADAQ7767-1.asc`
 - **49×** `REF (REF-2)` — e.g. `ADP1071-2.asc`, `ADP5138-2.asc`
 - then REF-3.3 / 2.5 / 1.8 / … regulator & ADC suffix families
@@ -70,19 +70,22 @@ Top collapsed message classes (refdes → `REF`; still 325 raw classes because v
 
 - Honest plaintext climbs already landed (standard libs, `ADI.lib` /
   `ADI1.lib` / `LTC.lib` twins, Educational PAsystem discrete aliases,
-  TIP121/TIP127 Prefix-X + sibling `.lib`).
+  TIP121/TIP127 Prefix-X + sibling `.lib`, AD8561 ambiguous-leaf →
+  OpAmps plaintext `.lib` over Comparators encrypted `.sub`).
 - Downloads + Documents sibling-`.lib` leftovers: **0** remaining climb
   candidates (only TIP121/TIP127 siblings remain on disk — already exact).
 - Spot-check: Applications parts that already have plaintext `lib/sub/*.lib`
   twins (`MAX44245`, `ADA4177`, `AD8237`, `LTC6252`, `LT1521`, `LT6658`, …)
   measure **exact** today — not refuse. No missing Tau map for those.
 - Remaining refuse mass is **encrypted bare SYMBOL** (Applications + FRA)
-  plus permanent Educational Chan / NIGBT.
+  plus permanent Educational Chan / NIGBT. Ambiguous encrypted-only leaves
+  (`AD4858`, `AD8460`) stay honest refuse.
 - Moving encrypted bare SYMBOL → `encrypted-excluded` would shrink the
   denominator and fake a higher exact-rate — **rejected** (CEO: no
   denominator games). Encrypted bare SYMBOL stays honest **refuse**.
-- **No honest Tau-owned / sibling exact-map cluster left** without silent
-  substitution or weakening Chan / NIGBT / FRA.
+- **No further honest Tau-owned / sibling exact-map cluster left** without
+  silent substitution or weakening Chan / NIGBT / FRA — Omar must install
+  plaintext ADI/LTC macromodels.
 
 ---
 
@@ -90,7 +93,7 @@ Top collapsed message classes (refdes → `REF`; still 325 raw classes because v
 
 | Class | What it is | Path to exact |
 | --- | --- | --- |
-| **Encrypted ADI/LTC Applications** (≈1312) | Installed `lib/sub/*.sub` is LTspice-encrypted; Prefix-X symbol has no electrically equivalent Tau model | Omar installs **plaintext** vendor `.lib`/`.sub` (same stem) into Tau Model libraries / LTspice `lib/sub` |
+| **Encrypted ADI/LTC Applications** (≈1311) | Installed `lib/sub/*.sub` is LTspice-encrypted; Prefix-X symbol has no electrically equivalent Tau model | Omar installs **plaintext** vendor `.lib`/`.sub` (same stem) into Tau Model libraries / LTspice `lib/sub` |
 | **NIGBT** | `Educational/IGBT.asc` — LTspice-only intrinsic | Permanent refuse (keep). Use `IGBTeq.asc` for parity work |
 | **Chan-core inductor** | `Educational/NonLinearTransformer.asc` | Permanent refuse (keep) |
 | **FRA encrypted** (5) | `FRA/fra_eg…` encrypted `LT8609.sub`, `LTC3869.sub`, … | Same as Applications: need plaintext twins |
@@ -169,7 +172,8 @@ claim the DoD box. Do **not** check the box from this wall doc.
 - Reclassifying encrypted bare SYMBOL → `encrypted-excluded` to juice %.
 - Weakening NIGBT / Chan / FRA refusals.
 - Hunting another Tau-owned exact-map cluster — Downloads/Docs sibling
-  climbs and plaintext Application twins are already exhausted / exact.
+  climbs, plaintext Application twins, and the AD8561 ambiguous-leaf climb
+  are exhausted / exact.
 
 ---
 
@@ -177,7 +181,8 @@ claim the DoD box. Do **not** check the box from this wall doc.
 
 - Unit proof: `NAMED-DEVICE: exact=2 refuse=4 silent=0`
 - Recursive plaintext climbs: standard.dio/bjt/mos/jft, ADI/LTC plaintext
-  twins, Educational PAsystem aliases, TIP121/TIP127 + sibling `.lib`
+  twins, Educational PAsystem aliases, TIP121/TIP127 + sibling `.lib`,
+  AD8561 OpAmps plaintext `.lib` (ambiguous Comparators/OpAmps leaf)
 - Integrity: `silent=0`, `hard-failure=0`
 
 ---

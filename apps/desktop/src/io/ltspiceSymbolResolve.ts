@@ -1,5 +1,7 @@
-import { existsSync, readdirSync } from "node:fs";
-import { basename, isAbsolute, join, normalize, relative, sep } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
+import { isEncryptedModelBytes } from "./corpusReport";
+import { ltspiceModelFileFromSymbolAttrs } from "./ltspiceModelFile";
 
 const installedAsyPathCache = new Map<string, string | null>();
 
@@ -53,15 +55,120 @@ function findAllAsyByBasename(root: string, leafName: string): string[] {
   return hits;
 }
 
+/** Pull ModelFile / library-shaped SpiceModel from raw `.asy` text. */
+function modelFileFromAsyBytes(bytes: Buffer): string | undefined {
+  const attrs: Record<string, string> = {};
+  for (const raw of bytes.toString("latin1").split(/\r?\n/)) {
+    const match = /^\s*SYMATTR\s+(\S+)\s+(.+)$/i.exec(raw);
+    if (!match) continue;
+    attrs[match[1]!] = match[2]!.trim();
+  }
+  return ltspiceModelFileFromSymbolAttrs(attrs);
+}
+
+/**
+ * True when the **authored** ModelFile/SpiceModel path (no same-stem twin
+ * expansion) exists as plaintext under the lib roots. Encrypted `.sub` with a
+ * plaintext `.lib` twin returns false — callers use that to prefer the asy
+ * that names the plaintext file (AD8561 OpAmps `.lib` over Comparators `.sub`).
+ */
+function authoredModelFileIsPlaintext(relativeFile: string, libRoots: readonly string[]): boolean {
+  const normalized = normalize(relativeFile.replace(/[\\/]+/g, sep));
+  if (
+    !normalized
+    || isAbsolute(normalized)
+    || normalized === ".."
+    || normalized.startsWith(`..${sep}`)
+  ) {
+    return false;
+  }
+  for (const root of libRoots) {
+    for (const base of [join(root, "sub"), root]) {
+      const path = join(base, normalized);
+      const rel = relative(base, path);
+      if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) {
+        continue;
+      }
+      try {
+        return !isEncryptedModelBytes(readFileSync(path));
+      } catch {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
+type BasenameHit = { abs: string; relKey: string; root: string };
+
+/**
+ * When several families share a bare leaf, prefer the single hit whose authored
+ * ModelFile/SpiceModel is plaintext on disk. Different plaintext families or
+ * encrypted-only collisions stay unresolved (never silent wrong-family attach).
+ */
+function disambiguateByPlaintextModelFile(
+  hits: readonly BasenameHit[],
+  uniqueRel: readonly string[],
+  libRoots: readonly string[],
+): BasenameHit | null {
+  const plaintext: BasenameHit[] = [];
+  const stems = new Set<string>();
+  for (const rel of uniqueRel) {
+    const hit = hits.find((entry) => entry.relKey === rel);
+    if (!hit) continue;
+    let bytes: Buffer;
+    try {
+      bytes = readFileSync(hit.abs);
+    } catch {
+      continue;
+    }
+    const modelFile = modelFileFromAsyBytes(bytes);
+    if (!modelFile || !authoredModelFileIsPlaintext(modelFile, libRoots)) continue;
+    plaintext.push(hit);
+    const stem = modelFile.replace(/\\/g, "/").toLowerCase().replace(/\.(lib|sub|mod)$/i, "");
+    stems.add(stem);
+  }
+  if (plaintext.length === 1) return plaintext[0]!;
+  if (plaintext.length > 1 && stems.size === 1) {
+    return [...plaintext].sort((a, b) => a.relKey.localeCompare(b.relKey))[0]!;
+  }
+  return null;
+}
+
+function defaultLibRootsFromSymRoots(symRoots: readonly string[]): string[] {
+  const roots: string[] = [];
+  for (const symRoot of symRoots) {
+    const parent = dirname(symRoot);
+    if (parent && !roots.includes(parent)) roots.push(parent);
+  }
+  return roots;
+}
+
+export type ResolveInstalledAsyOptions = {
+  /**
+   * Library roots used to probe authored ModelFile/SpiceModel plaintext when
+   * disambiguating bare-leaf collisions. Defaults to each sym root's parent
+   * (the LTspice `lib/` folder that contains `sym/` + `sub/`).
+   */
+  libRoots?: readonly string[];
+};
+
 /**
  * Resolve an installed LTspice `.asy` path under one or more `sym` roots.
  *
  * 1. Prefer the authored relative path (`OpAmps\AD711`).
- * 2. Else basename-search under each root. Return a hit only when the leaf
- *    name is **unique** across all roots — ambiguous leaves stay unresolved
- *    (honest refuse) rather than attaching the wrong family's ModelFile.
+ * 2. Else basename-search under each root. Return a hit when the leaf name is
+ *    **unique** across all roots.
+ * 3. Ambiguous leaves: if exactly one family names an on-disk **plaintext**
+ *    ModelFile/SpiceModel (authored path, not twin expansion), pick that hit
+ *    (AD8561 OpAmps `.lib` over Comparators encrypted `.sub`). Distinct
+ *    plaintext families and encrypted-only collisions stay unresolved.
  */
-export function resolveInstalledAsyPath(symRoots: string[], symbolType: string): string | null {
+export function resolveInstalledAsyPath(
+  symRoots: string[],
+  symbolType: string,
+  options: ResolveInstalledAsyOptions = {},
+): string | null {
   const relativeSymbol = normalizeSymbolType(symbolType);
   if (!relativeSymbol) return null;
 
@@ -87,8 +194,8 @@ export function resolveInstalledAsyPath(symRoots: string[], symbolType: string):
   // Uniqueness is by relative path under each sym root — the same
   // `OpAmps/ADA4077-1.asy` in a staged autobuilder tree and the live LTspice
   // lib is one identity (prefer the first root), not an ambiguous family
-  // collision. Distinct relatives (`ADC/X.asy` vs `Misc/X.asy`) still refuse.
-  type BasenameHit = { abs: string; relKey: string; root: string };
+  // collision. Distinct relatives (`ADC/X.asy` vs `Misc/X.asy`) still refuse
+  // unless plaintext-authored ModelFile disambiguation picks exactly one.
   const basenameHits: BasenameHit[] = [];
   for (const root of symRoots) {
     for (const abs of findAllAsyByBasename(root, leaf)) {
@@ -97,15 +204,22 @@ export function resolveInstalledAsyPath(symRoots: string[], symbolType: string):
     }
   }
   const uniqueRel = [...new Set(basenameHits.map((hit) => hit.relKey))];
+  let chosen: BasenameHit | undefined;
   if (uniqueRel.length === 1) {
-    const found = basenameHits.find((hit) => hit.relKey === uniqueRel[0])!.abs;
-    const foundRoot = basenameHits.find((hit) => hit.abs === found)!.root;
-    cacheResolvedPath([queryKey, leafKey], found);
-    const relativeKey = relative(foundRoot, found).replace(/\.asy$/i, "").toLowerCase();
+    chosen = basenameHits.find((hit) => hit.relKey === uniqueRel[0]);
+  } else if (uniqueRel.length > 1) {
+    const libRoots = options.libRoots?.length
+      ? options.libRoots
+      : defaultLibRootsFromSymRoots(symRoots);
+    chosen = disambiguateByPlaintextModelFile(basenameHits, uniqueRel, libRoots) ?? undefined;
+  }
+  if (chosen) {
+    cacheResolvedPath([queryKey, leafKey], chosen.abs);
+    const relativeKey = relative(chosen.root, chosen.abs).replace(/\.asy$/i, "").toLowerCase();
     if (relativeKey && relativeKey !== queryKey && relativeKey !== leafKey) {
-      cacheResolvedPath([relativeKey], found);
+      cacheResolvedPath([relativeKey], chosen.abs);
     }
-    return found;
+    return chosen.abs;
   }
 
   cacheResolvedPath([queryKey, leafKey], null);

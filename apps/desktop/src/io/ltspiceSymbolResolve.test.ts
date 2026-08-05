@@ -60,6 +60,73 @@ describe("ltspiceSymbolResolve", () => {
     expect(resolveInstalledAsyPath([root], "AD4000")).toBeNull();
   });
 
+  it("disambiguates ambiguous leaves when exactly one family names a plaintext ModelFile", () => {
+    // Live LTspice ships Comparators/AD8561.asy → AD8561.sub (encrypted) and
+    // OpAmps/AD8561.asy → AD8561.lib (plaintext). Prefer the plaintext-authored
+    // family; never pick via same-stem twin expansion of the encrypted .sub.
+    const lib = mkdtempSync(join(tmpdir(), "tau-ltspice-lib-"));
+    tempDir = lib;
+    const sym = join(lib, "sym");
+    const sub = join(lib, "sub");
+    mkdirSync(join(sym, "Comparators"), { recursive: true });
+    mkdirSync(join(sym, "OpAmps"), { recursive: true });
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(
+      join(sym, "Comparators", "AD8561.asy"),
+      "Version 4\nSYMATTR Prefix X\nSYMATTR SpiceModel AD8561.sub\n",
+    );
+    writeFileSync(
+      join(sym, "OpAmps", "AD8561.asy"),
+      "Version 4\nSYMATTR Prefix X\nSYMATTR SpiceModel AD8561.lib\n",
+    );
+    writeFileSync(join(sub, "AD8561.sub"), Buffer.from([0x00, 0x01, 0x02, 0x03]));
+    writeFileSync(join(sub, "AD8561.lib"), ".subckt AD8561 1 2 3 4 5 6 7 8\n.ends\n");
+    expect(resolveInstalledAsyPath([sym], "AD8561", { libRoots: [lib] })).toBe(
+      join(sym, "OpAmps", "AD8561.asy"),
+    );
+  });
+
+  it("still refuses ambiguous leaves when every family is encrypted-only", () => {
+    const lib = mkdtempSync(join(tmpdir(), "tau-ltspice-lib-"));
+    tempDir = lib;
+    const sym = join(lib, "sym");
+    const sub = join(lib, "sub");
+    mkdirSync(join(sym, "OpAmps"), { recursive: true });
+    mkdirSync(join(sym, "ADC"), { recursive: true });
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(
+      join(sym, "OpAmps", "AD4858.asy"),
+      "Version 4\nSYMATTR Prefix X\nSYMATTR ModelFile AD4858.sub\n",
+    );
+    writeFileSync(
+      join(sym, "ADC", "AD4858.asy"),
+      "Version 4\nSYMATTR Prefix X\nSYMATTR ModelFile AD4858.sub\n",
+    );
+    writeFileSync(join(sub, "AD4858.sub"), Buffer.from([0x00, 0x01, 0x02, 0x03]));
+    expect(resolveInstalledAsyPath([sym], "AD4858", { libRoots: [lib] })).toBeNull();
+  });
+
+  it("still refuses ambiguous leaves that name distinct plaintext libraries", () => {
+    const lib = mkdtempSync(join(tmpdir(), "tau-ltspice-lib-"));
+    tempDir = lib;
+    const sym = join(lib, "sym");
+    const sub = join(lib, "sub");
+    mkdirSync(join(sym, "OpAmps"), { recursive: true });
+    mkdirSync(join(sym, "ADC"), { recursive: true });
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(
+      join(sym, "OpAmps", "DUP.asy"),
+      "Version 4\nSYMATTR Prefix X\nSYMATTR SpiceModel A.lib\n",
+    );
+    writeFileSync(
+      join(sym, "ADC", "DUP.asy"),
+      "Version 4\nSYMATTR Prefix X\nSYMATTR SpiceModel B.lib\n",
+    );
+    writeFileSync(join(sub, "A.lib"), ".subckt A 1\n.ends\n");
+    writeFileSync(join(sub, "B.lib"), ".subckt B 1\n.ends\n");
+    expect(resolveInstalledAsyPath([sym], "DUP", { libRoots: [lib] })).toBeNull();
+  });
+
   it("treats the same relative path in two lib roots as one unique leaf", () => {
     // Autobuilder stages a TCC-safe copy beside the live LTspice lib; both
     // expose OpAmps/ADA4077-1.asy. Absolute-path uniqueness falsely refused.
