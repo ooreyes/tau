@@ -453,6 +453,10 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     // SPICE deck line is electrically correct; the full resonator model is carried
     // in the value string by componentValueFromAttrs.
     xtal: "capacitor",
+    // Educational/PAsystem 2-terminal capacitor cells (pin geometry from .asy).
+    smcap: "capacitor",
+    mylarcap: "capacitor",
+    coaxcap7: "capacitor",
     ind: "inductor",
     ind2: "inductor",
     l: "inductor",
@@ -474,13 +478,19 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     npn: "npn",
     npn3: "npn",
     npn4: "npn",
+    // Educational/PAsystem TO-92 cells whose leaf IS the model name (.asy Value;
+    // instance often has InstName only). Exact standard.bjt / authored .model.
+    "2n3904": "npn",
     pnp: "pnp",
     pnp3: "pnp",
+    "2n3906": "pnp",
     nmos: "nmos",
     nmos4: "nmos",
     pmos: "pmos",
     pmos4: "pmos",
     njf: "njf",
+    // HandsFreeLayout: sibling 2N5458.asy + authored `.model 2N5458 NJF(…)`.
+    "2n5458": "njf",
     pjf: "pjf",
     sw: "switch",
     csw: "switch",
@@ -933,6 +943,7 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     res: "res", res2: "res", r: "res",
     rn55upright: "rn55", uprightpowerresistor: "rn55",
     cap: "cap", cap2: "cap", c: "cap", polcap: "cap",
+    smcap: "cap", mylarcap: "cap", coaxcap7: "cap",
     ind: "ind", ind2: "ind", l: "ind",
     voltage: "voltage", battery: "voltage", signal: "voltage",
     current: "current",
@@ -940,11 +951,11 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     load2: "load2",
     diode: "diode", schottky: "schottky", zener: "zener", led: "led",
     varactor: "diode", smdiode: "smdiode",
-    npn: "npn", npn3: "npn", npn4: "npn",
-    pnp: "pnp", pnp3: "pnp", pnp4: "pnp",
+    npn: "npn", npn3: "npn", npn4: "npn", "2n3904": "npn",
+    pnp: "pnp", pnp3: "pnp", pnp4: "pnp", "2n3906": "pnp",
     nmos: "nmos", nmos4: "mos4",
     pmos: "pmos", pmos4: "mos4",
-    njf: "njf", pjf: "njf",
+    njf: "njf", pjf: "njf", "2n5458": "njf",
     sw: "sw", csw: "csw",
     tline: "tline", ltline: "tline",
     // Controlled sources: e/e2 = VCVS, g/g2 = VCCS. The `2` variants swap the
@@ -1031,7 +1042,8 @@ function buildPinOverride(
   kind: ComponentKind,
   symbolMetadata?: AsySymbol | null,
 ): PinOverride[] | null {
-  const metadataPins = kind === "subckt" && symbolMetadata?.pins.length
+  const metadataPins = symbolMetadata?.pins.length
+    && (kind === "subckt" || symbolMetadata.pins.length === getLocalPins(kind).length)
     ? symbolMetadata.pins.map((pin) => ({ name: pin.name, dx: pin.x, dy: pin.y }))
     : null;
   const key = ltPinKey(symbol.type);
@@ -1970,19 +1982,28 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     // NAME, not its value; prepend the leaf so parseDigitalGate sees it.
     // Model-backed X devices and behavioral varistors carry their parameters in
     // Value2/SpiceLine; subcktValueFromSymbol retains those instance params.
+    const authoredValue = componentValueFromAttrs(kind, symbol.attrs);
+    const semiconductorKinds = new Set<ComponentKind>([
+      "npn", "pnp", "njf", "pjf", "nmos", "pmos", "diode", "zener", "led",
+    ]);
+    // Model-named discrete cells (SYMBOL 2N3904 with InstName only): take the
+    // .asy Value or the leaf so the deck requests the exact model, not TAU_*.
+    const discreteModelValue = semiconductorKinds.has(kind) && !authoredValue.trim()
+      ? (symbolMetadata?.attrs.Value?.trim() || leaf)
+      : authoredValue;
     const value = tauKind
       ? (symbol.attrs.TauValue === "\"\"" ? "" : (symbol.attrs.TauValue ?? symbol.attrs.Value ?? ""))
       : leaf === "csw"
         ? currentSwitchValueFromAttrs(symbol.attrs)
         : kind === "digitalGate"
-          ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
+          ? `${leaf} ${authoredValue}`.trim()
           : kind === "subckt"
             ? subcktValueFromSymbol(leaf, symbol.attrs, symbolMetadata?.attrs)
             : kind === "isource" && (leaf === "load" || leaf === "load2")
               // Leaf name IS the dissipative flag; append so spiceNetlist sees
               // the same `… load` / `… load2` token a hand-netlisted I-source uses.
-              ? `${componentValueFromAttrs(kind, symbol.attrs)} ${leaf}`.trim()
-              : componentValueFromAttrs(kind, symbol.attrs);
+              ? `${authoredValue} ${leaf}`.trim()
+              : discreteModelValue;
     // A part Tau wrote under a carrier symbol keeps its slots in the Tau-only
     // field, since on the carrier their own names belong to another part. They
     // are read back with the `Value` they sat beside, so the exporter has the

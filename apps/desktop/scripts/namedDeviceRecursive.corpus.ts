@@ -291,7 +291,17 @@ function runFile(file: CorpusFile): { row: CorpusRow; encryptedDependent: boolea
     const text = decodeSchematicText(readFileSync(file.path));
     imported = importAsc(text, {
       resolveSubcircuit: siblingResolver(join(file.path, "..")),
-      resolveSymbolMetadata: installedSymbolMetadata,
+      resolveSymbolMetadata: (symbolType) => {
+        // Prefer sibling `.asy` beside the schematic (PAsystem/2N3904.asy, …)
+        // before the installed LTspice lib/sym roots.
+        const parentDir = join(file.path, "..");
+        const leaf = symbolType.replace(/\\/g, "/").split("/").pop() ?? symbolType;
+        const siblingPath = join(parentDir, `${leaf}.asy`);
+        if (existsSync(siblingPath)) {
+          return parseAsy(decodeSchematicText(readFileSync(siblingPath)));
+        }
+        return installedSymbolMetadata(symbolType);
+      },
     });
     row.imported = true;
     row.warnings = imported.warnings.length;

@@ -226,10 +226,11 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     fail-closed deck: missing named models block Run rather than promising a
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
-    `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1219 refuse=1322 silent=0
+    `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1220 refuse=1321 silent=0
     hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%` (tip 2026-08-05
-    ~04:05). OTA `±1e309` unbounded rails (+2 exact vs 47.9%; ADHV4702-1 /
-    LT6372-1). Encrypted bare SYMBOL stay honest refuse.
+    ~04:25). PAsystem discrete aliases + sibling `.asy` (+1 exact vs 1219;
+    HandsFreeLayout). OTA `±1e309` (+2 vs 47.9%). Encrypted bare SYMBOL stay
+    honest refuse.
     Harness skips encrypted-only leaves (no 33.4% denominator game). Never
     silent substitution. SHIPPABLE? NO.
     Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise

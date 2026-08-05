@@ -237,6 +237,13 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("Misc\\signal")).toBe("vsource");
     expect(ltspiceTypeToKind("RN55upright")).toBe("resistor");
     expect(ltspiceTypeToKind("UprightPowerResistor")).toBe("resistor");
+    // PAsystem model-named discrete cells + capacitor cells.
+    expect(ltspiceTypeToKind("2N3904")).toBe("npn");
+    expect(ltspiceTypeToKind("2N3906")).toBe("pnp");
+    expect(ltspiceTypeToKind("2N5458")).toBe("njf");
+    expect(ltspiceTypeToKind("SMcap")).toBe("capacitor");
+    expect(ltspiceTypeToKind("MylarCap")).toBe("capacitor");
+    expect(ltspiceTypeToKind("coaxCap7")).toBe("capacitor");
   });
 
   it("maps ordinary five-pin opamps but refuses verified multi-pin amplifiers", () => {

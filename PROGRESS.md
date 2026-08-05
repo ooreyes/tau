@@ -9,22 +9,58 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:20 CDT**
+**Status: DONE - 2026-08-05 04:25 CDT**
 
-Unit: Educational `BandGaps.asc` authored `.dc temp` → differential **pass=74**.
+Unit: Named-device PAsystem discrete aliases → exact **1220** (rate stdout 48.0%).
 ```
-SUMMARY pass=74 sibling=5 gap=0
-dc bandgaps … v(a..d) nRms≈0.046–0.058 @ rmsTol=0.06 maxTol=0.07
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1220 refuse=1321 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%
 ```
-Four BJT bandgap refs; tip Draft1 pass=73 → 74. Left Draft* / Staff EE
-named-device alone. Named-device 48.0%. SHIPPABLE? **NO**
+Maps 2N3904/2N3906/2N5458/SMcap/MylarCap/coaxCap7 + sibling `.asy` pins
+(+1 HandsFreeLayout vs 1219). PowerAmpLayout still TIP121/TIP127 refuse.
+Left BandGaps alone. Differential pass=74. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
-
 ---
+
+
+### 2026-08-05 — PAsystem discrete aliases → named-device exact=1220 (§DoD)
+
+**What I did**
+- Restored stashed WIP onto tip `6fc8ccc` (BandGaps pass=74). Resolved
+  PROGRESS conflict. Mapped Educational/PAsystem model-named discrete cells
+  (`2N3904`→npn, `2N3906`→pnp, `2N5458`→njf, `SMcap`/`MylarCap`/`coaxCap7`→
+  capacitor) with sibling `.asy` pin metadata + discrete model Value fallback.
+- HandsFreeLayout climbs refuse→exact (+1). PowerAmpLayout still refuses on
+  TIP121/TIP127 Prefix-X darlingtons — not faked. Draft5 AD823 `.tf` /
+  Draft9 LT1001 left alone.
+
+**Exact stdout**
+
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1220 refuse=1321 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%
+```
+
+**Files**
+- `apps/desktop/src/io/ascImport.ts` (+ test)
+- `apps/desktop/scripts/namedDeviceRecursive.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/named-device-fidelity.sh` → exact=1220
+
+**Parity items**
+- Named-device 🟡 exact **1220** / rate stdout **48.0%** (≥95% not met).
+  Differential pass=74. SHIPPABLE? NO
+
+**Next step**
+- TIP121/TIP127 sibling `.lib` subckt path for PowerAmpLayout; Continue 19
+  differential — leave BandGaps alone.
+
 
 ### 2026-08-05 — Educational BandGaps.asc DC-temp → pass=74 (§DoD)
 
