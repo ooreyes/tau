@@ -9,6 +9,25 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 21:51 CDT**
+
+Unit: P1.6 native `.step` temp — LTspice `tc=` → ngspice `tc1=`/`tc2=`;
+Rust expands emitted `.step` (stock ngspice has no `.step` card) into
+multi-run plots; temp eligible on the native path. No double-step.
+Shippable? NO.
+
+What landed this unit:
+
+- Resistor deck emit of `tc1=`/`tc2=` from LTspice `tc=`
+- `step_expand.rs`: parse/strip/expand `.step` temp/source/param
+- `canUseNativeStepPath` accepts temp; real-lib ignored proof
+- Tests: deck emit, eligibility, family labels, Rust unit + ignored smoke
+
+Next unit: AC/DC native step wiring into UI; authored-analysis
+differential parity; §10; named-device; unsigned release.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 21:30 CDT**
 
 Unit: P1.6 native `.step` param — unresolved `{X}` left in the deck +
@@ -26,6 +45,8 @@ What landed this unit:
 
 Next unit: P1.6 native `.step` temp and/or AC/DC native step;
 authored-analysis differential parity; §10; named-device; unsigned release.
+
+
 
 Previous completed unit:
 
@@ -2225,6 +2246,32 @@ needs Omar's Developer ID.
 - **Status:** DONE
 - **Last completed sub-step:** packaged Tau saved and reopened a disposable buck converter while preserving comments/directive positions, then bundled ngspice completed its 165,337-sample transient; all required gates and the 55-check advanced circuit corpus are green.
 - **Next candidates:** keep the remaining unsupported ASC drawing/window records explicit, and continue the acceptance-corpus path rather than widening the editor with lossy representations.
+
+
+## 2026-08-04 21:51 CDT — auto/ltspice-parity — native `.step` temp + Rust expander (P1.6)
+
+What I did:
+- Proved bundled/homebrew ngspice reject `.step` as unimplemented (prior
+  source/param emit was mock-only against real engine).
+- Translate LTspice resistor `tc=` → ngspice `tc1=`/`tc2=` so `.temp` moves R.
+- Rust `step_expand` strips emitted `.step` and multi-runs members; temp
+  proven on real libngspice (27°C→0.5 V, 77°C→0.4 V on tc1=0.01 divider).
+- Enable temp on `canUseNativeStepPath`; keep TS exclusive for unsupported
+  param brace shapes. No double-step.
+
+Files: `simulation/temperature.ts`, `engine/spiceNetlist.ts`,
+`simulation/nativeStepFamily.ts`, `engine/nativeSpice.ts`, `App.tsx`,
+`src-tauri/src/step_expand.rs`, `src-tauri/src/spice.rs`, docs.
+
+Tests: tsc clean; vitest 2601 passed / 6 skipped; cargo test 64 +
+`expands_step_temp_into_ordered_extra_plots` ignored smoke green; clippy `-D warnings`.
+
+Parity items: §4/P1.6 `.step` matrix source ✅ param ✅ temp ✅ (native
+expand); AC/DC native step still open. Shippable? NO.
+
+Next step: AC/DC native step UI wiring; authored-analysis differential
+parity / §10 / named-device / unsigned release.
+
 
 ## 2026-08-03T15:27Z - auto/ltspice-parity - Menu-first Class-D measurements (§4)
 

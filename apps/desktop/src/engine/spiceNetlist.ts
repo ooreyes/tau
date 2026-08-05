@@ -38,6 +38,7 @@ import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL
 import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 import { assertSimulationIntegrity } from "../simulation/simulationIntegrity";
+import { ngspiceResistorTempcoSuffix, stripTcSpec } from "../simulation/temperature";
 import { parseVaristor, varistorDeckLine } from "./varistorSpec";
 import { parsePhaseDetector, phaseDetectorDeckLines } from "./phaseDetectorSpec";
 import { isLtspiceCurrentControlledSwitch } from "../schematic/currentControlledSwitch";
@@ -1258,9 +1259,17 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         const expr = moduloToFloor(ltFuncsToNgspice(statFuncsToNgspice(ifToTernary(raw.replace(/^\s*[VR]\s*=\s*/i, "")))));
         return [`${name} ${node("a")} ${node("b")} r = '${expr}'`];
       }
+      // LTspice `tc=tc1[,tc2]` → ngspice `tc1=`/`tc2=` so `.temp` / native
+      // `.step temp` actually move the resistor. Magnitude is the stripped
+      // value (braces may remain for native `.step param`).
+      const tempco = ngspiceResistorTempcoSuffix(raw);
+      const magnitude = nonZeroNumberValue(
+        tempco ? { ...component, value: stripTcSpec(raw) } : component,
+        "Ohm",
+      );
       // SPICE allows negative resistance (active/negative-impedance elements,
       // e.g. Draft7's -1k); reject only zero/NaN, which is a short.
-      return [`${name} ${node("a")} ${node("b")} ${nonZeroNumberValue(component, "Ohm")}`];
+      return [`${name} ${node("a")} ${node("b")} ${magnitude}${tempco}`];
     }
     case "capacitor": {
       const charge = behavioralCapacitorDeckValue(component, node("a"), node("b"), params);

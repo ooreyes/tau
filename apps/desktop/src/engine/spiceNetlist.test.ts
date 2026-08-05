@@ -561,6 +561,31 @@ describe("buildSpiceDeck", () => {
     expect(native.netlist).not.toMatch(/\.param\b/);
   });
 
+  it("translates LTspice tc= into ngspice tc1=/tc2= on resistors", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k tc=0.01,1e-6", 96, 0),
+      component("resistor", "R2", "2k", 160, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 192, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 160, y: 0 }]),
+    ];
+    const deck = buildSpiceDeck(
+      { components, wires, directives: [".step temp 27 77 50"] },
+      { kind: "tran", stopTime: 0.001, steps: 100 },
+      { emitNativeStep: true },
+    );
+    expect(deck.netlist).toMatch(/\bR1\b[^\n]*\b1000\b[^\n]*\btc1=0\.01\b[^\n]*\btc2=1e-6\b/);
+    expect(deck.netlist).not.toMatch(/\btc=/);
+    expect(deck.netlist).toContain(".step temp 27 77 50");
+    // Plain resistor stays magnitude-only.
+    expect(deck.netlist).toMatch(/\bR2\b[^\n]*\b2000\b/);
+    expect(deck.netlist).not.toMatch(/\bR2\b[^\n]*tc1=/);
+  });
+
   it("resolves {param} braces inside emitted .meas lines", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

@@ -8,9 +8,11 @@
  * multi-plot results consumed as a {@link StepFamilyResult}.
  *
  * Honesty gate:
- * - **source** and **param** sweeps are eligible (param leaves `{X}` unresolved
- *   and emits `.param` / `.step param` in the deck builder).
- * - **temp** still needs ngspice-visible tempcos (inline `tc=` is TS-only).
+ * - **source**, **param**, and **temp** are eligible. Bundled ngspice rejects
+ *   the `.step` *card* itself; the Rust engine expands emitted `.step` into
+ *   multi-run plots (temp via `option temp=`, source via `alter`, param via
+ *   remcirc + rewritten `.param`). Resistors must carry ngspice-visible
+ *   `tc1=`/`tc2=` (translated from LTspice `tc=`).
  * - Param braces inside SINE/PULSE/PWL/… or `AC {…}` fall back to the TS path
  *   until those emitters pass braces through honestly.
  */
@@ -53,15 +55,11 @@ export function nativeStepPathRefusal(
   options: NativeStepPathOptions = {},
 ): string | null {
   if (specs.length === 0) return "No .step directives to run natively.";
-  if (specs.some((spec) => spec.kind === "temp")) {
-    return (
-      "Native single-deck .step does not yet support temperature sweeps "
-      + "(inline tc= tempcos are applied only on the TypeScript path). "
-      + "Tau will use the TypeScript re-run path instead."
-    );
-  }
-  if (!specs.every((spec) => (spec.kind === "source" || spec.kind === "param") && Boolean(spec.name))) {
-    return "Native single-deck .step only supports source and param sweeps right now.";
+  if (!specs.every((spec) =>
+    spec.kind === "temp"
+    || ((spec.kind === "source" || spec.kind === "param") && Boolean(spec.name))
+  )) {
+    return "Native single-deck .step only supports source, param, and temp sweeps.";
   }
   const paramNames = specs
     .filter((spec) => spec.kind === "param" && spec.name)

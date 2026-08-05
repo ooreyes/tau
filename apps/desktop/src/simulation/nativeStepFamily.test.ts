@@ -58,9 +58,9 @@ describe("canUseNativeStepPath", () => {
     ], { components: [resistor("{X}")] })).toBe(true);
   });
 
-  it("refuses temp sweeps (inline tc= is TS-only today)", () => {
-    expect(canUseNativeStepPath([sourceSpec(".step temp 0 50 25")])).toBe(false);
-    expect(nativeStepPathRefusal([sourceSpec(".step temp 0 50 25")])).toMatch(/temperature/i);
+  it("accepts temp sweeps (Rust expands .step; resistors emit tc1=)", () => {
+    expect(canUseNativeStepPath([sourceSpec(".step temp 0 50 25")])).toBe(true);
+    expect(nativeStepPathRefusal([sourceSpec(".step temp 0 50 25")])).toBeNull();
   });
 
   it("refuses param braces inside waveform source functions", () => {
@@ -105,6 +105,12 @@ describe("nativeStepMemberLabels / values", () => {
     const specs = [sourceSpec(".step param Rload list 1k 2k")];
     expect(nativeStepMemberLabels(specs)).toEqual(["Rload=1000", "Rload=2000"]);
     expect(nativeStepMemberValues(specs)).toEqual([1000, 2000]);
+  });
+
+  it("labels a temp list as temp=…", () => {
+    const specs = [sourceSpec(".step temp list 0 25 50")];
+    expect(nativeStepMemberLabels(specs)).toEqual(["temp=0", "temp=25", "temp=50"]);
+    expect(nativeStepMemberValues(specs)).toEqual([0, 25, 50]);
   });
 
   it("builds the outer×inner Cartesian product like nestedStepContexts", () => {

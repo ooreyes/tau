@@ -867,10 +867,10 @@ function App() {
     }
     setAnalysisRunning(true);
     try {
-      // P1.6 native single-deck `.step` (source + param): one emit, multi-plot
-      // consume. Mutually exclusive with the TS re-run loop below — that path
-      // never passes emitNativeStep, so decks stay step-free. Temp and
-      // unsupported param brace shapes fall through to the TS path.
+      // P1.6 native single-deck `.step` (source + param + temp): one emit,
+      // multi-plot consume. Mutually exclusive with the TS re-run loop below —
+      // that path never passes emitNativeStep, so decks stay step-free.
+      // Unsupported param brace shapes fall through to the TS path.
       if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
         const nativeFamily = await runNativeSteppedTransient(
           {

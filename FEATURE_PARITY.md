@@ -988,11 +988,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `emitNativeStep` deck flag (default off) + `stepLinesFromDirectives`;
   `runNativeSteppedTransient` emits once and consumes `extraPlots`+current as a
   `StepFamilyResult`. **Mutually exclusive** with the TS re-run loop (that path
-  never sets the flag — would double-step). Eligible: **source** + **param**
-  (param omits stepped names from the brace bake, emits `.param` + `.step param`,
-  leaves `{X}` on R/C/L/V DC values). **Temp** still TS-only (inline `tc=`).
-  Param braces inside SINE/PULSE/PWL/… or `AC {…}` honestly fall back to TS.
-  `MAX_EXTRA_PLOTS` 255. AC/DC native step remain open;
+  never sets the flag — would double-step). Eligible: **source** + **param** +
+  **temp**. Stock ngspice rejects the `.step` *card*; Rust `step_expand`
+  strips it and multi-runs (temp via `.temp`, source via `alter`, param via
+  rewritten `.param`). Resistors emit ngspice-visible `tc1=`/`tc2=` from
+  LTspice `tc=`. Param braces inside SINE/PULSE/PWL/… or `AC {…}` fall back to
+  TS. `MAX_EXTRA_PLOTS` 255. AC/DC native step remain open;
   wire a domain selector into the STEP tab (currently transient-only in the UI);
   per-trace pick in the overlay legend.
 - ✅ `.four` **Fourier analysis** — **parser + solver + UI landed** (`simulation/fourier.ts`):

@@ -453,47 +453,27 @@ impl SpiceEngine {
         // know what was there first.
         let plots_before = self.plot_names();
 
-        let c_lines = lines
-            .iter()
-            .map(|line| {
-                CString::new(line.as_str()).map_err(|_| "Netlist contains a NUL byte.".to_string())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut pointers = c_lines
-            .iter()
-            .map(|line| line.as_ptr() as *mut c_char)
-            .collect::<Vec<_>>();
-        pointers.push(ptr::null_mut());
-        let circ_status = unsafe { (self.api.circ)(pointers.as_mut_ptr()) };
-        if circ_status != 0 {
-            return Err(with_engine_messages(
-                &self.callback_state,
-                format!("ngSpice_Circ failed with status {circ_status}"),
-            ));
-        }
-        if let Some(error) = fatal_engine_messages(&self.callback_state) {
-            return Err(error);
-        }
-
-        let command = CString::new("run").expect("constant command has no NUL byte");
-        let command_status = unsafe { (self.api.command)(command.as_ptr() as *mut c_char) };
-        if command_status != 0 {
-            return Err(with_engine_messages(
-                &self.callback_state,
-                format!("ngSpice_Command(run) failed with status {command_status}"),
-            ));
-        }
-        if let Some(error) = fatal_engine_messages(&self.callback_state) {
-            return Err(error);
-        }
-        if let Some(exit) = self
-            .callback_state
-            .exit_message
-            .lock()
-            .ok()
-            .and_then(|message| message.clone())
-        {
-            return Err(with_engine_messages(&self.callback_state, exit));
+        // Stock ngspice rejects `.step` as unimplemented. Expand emitted cards
+        // into one circ/run per member so the native-step UI path stays honest.
+        let (base_lines, axes) = crate::step_expand::split_step_directives(&lines)?;
+        let members = crate::step_expand::step_members(&axes)?;
+        if members.is_empty() {
+            self.circ_lines(&lines)?;
+            self.run_command()?;
+        } else {
+            for (index, member) in members.iter().enumerate() {
+                if index > 0 {
+                    // Drop the previous circuit; plots are retained for transfer.
+                    self.run_named_command("remcirc")?;
+                    clear_callback_state(&self.callback_state);
+                }
+                let member_lines = crate::step_expand::apply_member_to_deck(&base_lines, member);
+                self.circ_lines(&member_lines)?;
+                for alter in crate::step_expand::source_alter_commands(member) {
+                    self.run_named_command(&alter)?;
+                }
+                self.run_command()?;
+            }
         }
 
         let plot = unsafe { c_string((self.api.cur_plot)()) }.ok_or_else(|| {
@@ -511,10 +491,15 @@ impl SpiceEngine {
         let mut extra_plots = Vec::new();
         let mut extra_transferred = 0_usize;
         let mut omitted = Vec::new();
-        for name in self.plot_names() {
-            if name == plot || name == CONSTANTS_PLOT || plots_before.contains(&name) {
-                continue;
-            }
+        // Creation order from AllPlots is newest-first; reverse so extras are
+        // oldest→newest to match TypeScript `orderNativeStepPlots`.
+        let mut secondary: Vec<String> = self
+            .plot_names()
+            .into_iter()
+            .filter(|name| name != &plot && name != CONSTANTS_PLOT && !plots_before.contains(name))
+            .collect();
+        secondary.reverse();
+        for name in secondary {
             if extra_plots.len() >= MAX_EXTRA_PLOTS {
                 omitted.push(name);
                 continue;
@@ -545,7 +530,62 @@ impl SpiceEngine {
         })
     }
 
-    /** Names of every plot ngspice currently holds, oldest first. */
+    fn circ_lines(&mut self, lines: &[String]) -> Result<(), String> {
+        let c_lines = lines
+            .iter()
+            .map(|line| {
+                CString::new(line.as_str()).map_err(|_| "Netlist contains a NUL byte.".to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut pointers = c_lines
+            .iter()
+            .map(|line| line.as_ptr() as *mut c_char)
+            .collect::<Vec<_>>();
+        pointers.push(ptr::null_mut());
+        let circ_status = unsafe { (self.api.circ)(pointers.as_mut_ptr()) };
+        if circ_status != 0 {
+            return Err(with_engine_messages(
+                &self.callback_state,
+                format!("ngSpice_Circ failed with status {circ_status}"),
+            ));
+        }
+        if let Some(error) = fatal_engine_messages(&self.callback_state) {
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn run_command(&mut self) -> Result<(), String> {
+        self.run_named_command("run")
+    }
+
+    fn run_named_command(&mut self, command: &str) -> Result<(), String> {
+        let command = CString::new(command).map_err(|_| {
+            "ngspice command contains a NUL byte.".to_string()
+        })?;
+        let command_status = unsafe { (self.api.command)(command.as_ptr() as *mut c_char) };
+        if command_status != 0 {
+            return Err(with_engine_messages(
+                &self.callback_state,
+                format!("ngSpice_Command failed with status {command_status}"),
+            ));
+        }
+        if let Some(error) = fatal_engine_messages(&self.callback_state) {
+            return Err(error);
+        }
+        if let Some(exit) = self
+            .callback_state
+            .exit_message
+            .lock()
+            .ok()
+            .and_then(|message| message.clone())
+        {
+            return Err(with_engine_messages(&self.callback_state, exit));
+        }
+        Ok(())
+    }
+
+    /** Names of every plot ngspice currently holds, newest first (engine order). */
     fn plot_names(&self) -> Vec<String> {
         let names = unsafe { (self.api.all_plots)() };
         if names.is_null() {
@@ -2225,6 +2265,54 @@ Adiode diode 0 tau_diode
                 .iter()
                 .map(|plot| &plot.name)
                 .collect::<Vec<_>>()
+        );
+    }
+
+    /** Stock ngspice rejects `.step`; Tau expands `.step temp` into multi-run
+     * plots. A 1k/1k divider with R1 tc1=0.01 must read 0.5 V at 27 °C and
+     * 0.4 V at 77 °C (R1→1.5k). */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn expands_step_temp_into_ordered_extra_plots() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let result = engine
+            .run(SpiceRequest {
+                netlist: r#"Tau step temp
+V1 in 0 1
+R1 in out 1k tc1=0.01
+R2 out 0 1k
+.op
+.step temp 27 77 50
+.end"#
+                    .to_string(),
+            })
+            .expect(".step temp should expand and solve");
+        assert_eq!(
+            result.extra_plots.len(),
+            1,
+            "two temps → one extra + current; got extras {:?}",
+            result.extra_plots.iter().map(|p| &p.name).collect::<Vec<_>>()
+        );
+        let vout_at = |vectors: &[super::SpiceVector]| {
+            vectors
+                .iter()
+                .find(|v| v.name.eq_ignore_ascii_case("out") || v.name.eq_ignore_ascii_case("v(out)"))
+                .and_then(|v| v.real.first().copied())
+                .unwrap_or_else(|| panic!("v(out) missing; msgs {:?}", result.messages))
+        };
+        let first = vout_at(&result.extra_plots[0].vectors);
+        let second = vout_at(&result.vectors);
+        assert!(
+            (0.49..0.51).contains(&first),
+            "temp=27 should give divider 0.5 V; got {first}"
+        );
+        assert!(
+            (0.39..0.41).contains(&second),
+            "temp=77 should give divider 0.4 V; got {second}"
         );
     }
 }

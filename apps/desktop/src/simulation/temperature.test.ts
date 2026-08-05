@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import {
   TNOM_C,
   stripTcSpec,
+  ngspiceResistorTempcoSuffix,
   parseResistorTemp,
   resistanceAtTemperature,
   applyTemperature,
@@ -31,6 +32,14 @@ describe("stripTcSpec", () => {
   });
   it("leaves a plain value untouched", () => {
     expect(stripTcSpec("10meg")).toBe("10meg");
+  });
+});
+
+describe("ngspiceResistorTempcoSuffix", () => {
+  it("translates LTspice tc= into ngspice tc1=/tc2=", () => {
+    expect(ngspiceResistorTempcoSuffix("1k tc=0.01")).toBe(" tc1=0.01");
+    expect(ngspiceResistorTempcoSuffix("1k tc=0.001,1e-6")).toBe(" tc1=0.001 tc2=1e-6");
+    expect(ngspiceResistorTempcoSuffix("1k")).toBe("");
   });
 });
 

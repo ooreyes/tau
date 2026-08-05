@@ -1146,16 +1146,57 @@ describe("native single-deck .step (P1.6)", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("returns null for temp sweeps so the TS re-run path stays exclusive", async () => {
+  it("returns a multi-plot family for temp sweeps (Rust expands .step)", async () => {
     enableNativeRuntime();
     const temp = parseStepDirective(".step temp 0 50 25");
     if (!temp) throw new Error("parse failed");
-    await expect(runNativeSteppedTransient(
-      { ...rcSchematic(), directives: [".step temp 0 50 25"] },
+    invoke.mockResolvedValueOnce({
+      plot: "tran3",
+      vectors: [
+        { name: "time", real: [0, 0.001], imaginary: null },
+        { name: "v(n001)", real: [1, 1], imaginary: null },
+        { name: "v(n002)", real: [0, 0.6], imaginary: null },
+      ],
+      extraPlots: [
+        {
+          name: "tran1",
+          vectors: [
+            { name: "time", real: [0, 0.001], imaginary: null },
+            { name: "v(n001)", real: [1, 1], imaginary: null },
+            { name: "v(n002)", real: [0, 0.5], imaginary: null },
+          ],
+        },
+        {
+          name: "tran2",
+          vectors: [
+            { name: "time", real: [0, 0.001], imaginary: null },
+            { name: "v(n001)", real: [1, 1], imaginary: null },
+            { name: "v(n002)", real: [0, 0.55], imaginary: null },
+          ],
+        },
+      ],
+      messages: [],
+      libraryPath: "/bundle/libngspice.dylib",
+    });
+    const family = await runNativeSteppedTransient(
+      {
+        ...rcSchematic(),
+        components: rcSchematic().components.map((part) =>
+          part.label === "R1" ? { ...part, value: "1k tc=0.01" } : part,
+        ),
+        directives: [".step temp 0 50 25"],
+      },
       { stopTime: 0.001, steps: 100 },
       [temp],
-    )).resolves.toBeNull();
-    expect(invoke).not.toHaveBeenCalled();
+    );
+    expect(family).not.toBeNull();
+    expect(family!.ok).toBe(true);
+    expect(family!.members.map((m) => m.label)).toEqual(["temp=0", "temp=25", "temp=50"]);
+    const netlist = (invoke.mock.calls[0]![1] as { request: { netlist: string } }).request.netlist;
+    // Deck still carries .step for the engine expander; resistors show tc1=.
+    expect(netlist).toContain(".step temp 0 50 25");
+    expect(netlist).toMatch(/\btc1=0\.01\b/);
+    expect(netlist).not.toMatch(/\btc=/);
   });
 
   it("returns null for param braces inside PULSE so the TS path stays exclusive", async () => {

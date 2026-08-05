@@ -114,9 +114,10 @@ export async function runNativeTransient(
 /**
  * Single-deck native `.step` (P1.6): emit `.step` once, consume every returned
  * plot as a family member. Mutually exclusive with the TypeScript re-run loop
- * — that path must keep `emitNativeStep` off. Source and param kinds are
- * eligible; temp and unsupported param brace shapes return null so the caller
- * keeps the TS path. Returns null outside the Tauri runtime.
+ * — that path must keep `emitNativeStep` off. Source, param, and temp kinds are
+ * eligible (Rust expands the unimplemented ngspice `.step` card). Unsupported
+ * param brace shapes return null so the caller keeps the TS path. Returns null
+ * outside the Tauri runtime.
  */
 export async function runNativeSteppedTransient(
   schematic: Schematic,

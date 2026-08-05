@@ -5,13 +5,12 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 21:30 CDT - P1.6 native `.step` param
-landed (unresolved braces + `.param`/`.step param` emit + family
-consume). Temp / waveform-fn / AC-brace param still TS. Shippable? NO.
+**Status:** IDLE 2026-08-04 21:51 CDT - P1.6 native `.step` temp landed
+(`tc=`→`tc1`/`tc2`, Rust expands `.step` because stock ngspice has no
+card). Source/param/temp native. AC/DC native step open. Shippable? NO.
 
-**Next unit:** native `.step` temp and/or AC/DC native step;
-authored-analysis differential parity / §10 / named-device / unsigned
-release proof.
+**Next unit:** AC/DC native step wiring; authored-analysis differential
+parity / §10 / named-device / unsigned release proof.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.

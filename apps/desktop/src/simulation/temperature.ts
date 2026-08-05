@@ -46,6 +46,23 @@ export function stripTcSpec(value: string): string {
 }
 
 /**
+ * Translate LTspice's inline `tc=tc1[,tc2]` into ngspice instance parameters
+ * (`tc1=` / `tc2=`). Empty when the value carries no tempco. Native `.temp` /
+ * `.step temp` only shift resistance when these are visible on the element line;
+ * the TypeScript path still uses {@link applyTemperature} separately.
+ */
+export function ngspiceResistorTempcoSuffix(value: string): string {
+  const match = value.match(TC_RE);
+  if (!match) return "";
+  const parts: string[] = [`tc1=${match[1]}`];
+  if (match[2] !== undefined && match[2] !== "") {
+    const tc2 = Number(match[2]);
+    if (Number.isFinite(tc2) && tc2 !== 0) parts.push(`tc2=${match[2]}`);
+  }
+  return ` ${parts.join(" ")}`;
+}
+
+/**
  * Parse a resistor value that may carry an inline `tc=tc1[,tc2]` tempco into its
  * base resistance and coefficients. Throws when the magnitude cannot be parsed
  * (e.g. an unresolved parameter expression) so callers can fall back cleanly.
