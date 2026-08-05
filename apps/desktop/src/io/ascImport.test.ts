@@ -722,6 +722,11 @@ SYMATTR Value2 AC 1`;
     expect(v1?.value).toBe("SINE(0 1 1) AC 1");
   });
 
+  it("drops LTspice empty-attribute quote sentinels on sources (LT3956)", () => {
+    expect(componentValueFromAttrs("vsource", { Value: "10", Value2: '""', SpiceLine: '""' })).toBe("10");
+    expect(componentValueFromAttrs("vsource", { Value: '""', Value2: "AC 1" })).toBe("AC 1");
+  });
+
   it("keeps only Value for non-source kinds (Value2 not appended)", () => {
     const SRC3 = `Version 4
 SHEET 1 880 680

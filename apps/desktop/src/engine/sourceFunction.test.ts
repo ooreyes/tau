@@ -42,6 +42,11 @@ describe("parseSourceFunction", () => {
     expect(spec!.dc).toBe(0);
   });
 
+  it("parses paren-less PWL (LT8708-1)", () => {
+    const spec = parseSourceFunction("PWL 0 0 +10u 3.3 3m 3.3 +10u 0", "V");
+    expect(spec!.text).toBe("DC 0 PWL(0 0 0.00001 3.3 0.003 3.3 0.00301 0)");
+  });
+
   it("keeps an explicit operating-point bias separate from the transient waveform", () => {
     const spec = parseSourceFunction("DC 3.3 PWL(0 0 1m 5)", "V");
     expect(spec).toEqual({ text: "DC 3.3 PWL(0 0 0.001 5)", dc: 3.3 });

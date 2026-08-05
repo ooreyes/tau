@@ -56,11 +56,14 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
     }
     value = value.slice(dcMatch[0].length).trim();
   }
-  const match = value.match(/^(SINE|SIN|PULSE|PWL|EXP|SFFM)\s*\(([^)]*)\)/i);
+  // LTspice accepts both `PWL(...)` and paren-less `PWL 0 0 +10u 3.3 …`
+  // (LT8708-1 V3). Require a following `(` or whitespace+args so a bare
+  // keyword alone is not treated as a waveform.
+  const match = value.match(/^(SINE|SIN|PULSE|PWL|EXP|SFFM)(?:\s*\(([^)]*)\)|\s+(.+))$/i);
   if (!match) return null;
 
-  const fn = match[1].toUpperCase();
-  const args = match[2].trim().split(/[\s,]+/).filter(Boolean);
+  const fn = match[1]!.toUpperCase();
+  const args = (match[2] ?? match[3] ?? "").trim().split(/[\s,]+/).filter(Boolean);
 
   // Per-argument unit so SI suffixes resolve correctly (s for time, Hz for
   // frequency, V/A for levels). Unknown/extra args parse as dimensionless.

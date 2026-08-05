@@ -1318,22 +1318,28 @@ export function extendedSymbolAttrs(attrs: Record<string, string>): Record<strin
  * - rides on the value, exactly as LTspice concatenates them on the netlist
  * line. Other kinds map `Value` only.
  */
+/** LTspice empty SYMATTR fields are often the quoted sentinel `""` / `''`.
+ * Treat those as absent so they are not joined into Value (LT3956 V1). */
+function normalizeLtspiceAttr(value: string | undefined): string {
+  const trimmed = (value ?? "").trim();
+  return /^["']*$/.test(trimmed) ? "" : trimmed;
+}
+
 export function componentValueFromAttrs(
   kind: ComponentKind,
   attrs: Record<string, string>,
 ): string {
   // LTspice writes an empty source value as the quoted sentinel `""` (a 0 V/0 A
   // source, typically excited only by its AC spec). Normalize it to empty.
-  const rawBase = (attrs.Value ?? "").trim();
-  const base = /^["']*$/.test(rawBase) ? "" : rawBase;
+  const base = normalizeLtspiceAttr(attrs.Value);
   if (SOURCE_KINDS_WITH_INLINE_SPEC.has(kind)) {
     // LTspice can split one transient spec across all four attribute fields
     // (e.g. `Value SINE(` / `Value2 0 100u` / `SpiceLine 5Meg` /
     // `SpiceLine2 0 0 0 1)`), so concatenate every field - in document order -
     // to reconstruct the full netlist value, exactly as LTspice joins them.
     const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
-      .map((s) => s?.trim())
-      .filter((s): s is string => !!s);
+      .map(normalizeLtspiceAttr)
+      .filter(Boolean);
     return [base, ...extras].filter(Boolean).join(" ");
   }
   // A transmission line whose `Value` is omitted inherits its .asy symbol
@@ -1347,8 +1353,8 @@ export function componentValueFromAttrs(
   // builder can read Avol for the rail-clamped model (engine/opampSpec.ts).
   if (kind === "opamp") {
     const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
-      .map((s) => s?.trim())
-      .filter((s): s is string => !!s);
+      .map(normalizeLtspiceAttr)
+      .filter(Boolean);
     return [base, ...extras].filter(Boolean).join(" ");
   }
   // Digital A-devices spread `Vhigh=/Vlow=/Vt=/Vhys=/Td=` across all four
@@ -1358,8 +1364,8 @@ export function componentValueFromAttrs(
   // path) since LTspice encodes it in the symbol name, not the value.
   if (kind === "digitalGate" || kind === "dflop" || kind === "sampleHold" || kind === "modulator") {
     const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
-      .map((s) => s?.trim())
-      .filter((s): s is string => !!s);
+      .map(normalizeLtspiceAttr)
+      .filter(Boolean);
     return [base, ...extras].filter(Boolean).join(" ");
   }
   // Capacitors/inductors may carry an initial condition in any of the spec

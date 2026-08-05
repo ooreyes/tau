@@ -376,6 +376,18 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/PULSE/i);
   });
 
+  it("builds a paren-less PWL voltage source (LT8708-1)", () => {
+    const components = [
+      component("vsource", "V3", "PWL 0 0 +10u 3.3 3m 3.3 +10u 0", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/^V3\s+\S+\s+0\s+DC\s+0\s+PWL\(/m);
+  });
+
   it("keeps Rload+ and Rload- as distinct SPICE instance names (LTC3260)", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),
