@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { summarizeCorpus, ngspiceOpSucceeded, formatCorpusReport, type CorpusRow } from "./corpusReport";
+import {
+  summarizeCorpus,
+  ngspiceOpSucceeded,
+  formatCorpusReport,
+  classifyCorpusCapability,
+  summarizeCorpusCapability,
+  formatCorpusCapabilitySummary,
+  type CorpusRow,
+} from "./corpusReport";
 
 const row = (over: Partial<CorpusRow>): CorpusRow => ({
   file: "a.asc",
@@ -57,6 +65,91 @@ describe("summarizeCorpus", () => {
       validated: 0,
       modelSubstitutions: 0,
     });
+  });
+});
+
+describe("classifyCorpusCapability", () => {
+  it("marks a full success", () => {
+    expect(classifyCorpusCapability(row({}))).toBe("success");
+  });
+
+  it("treats unresolvedSubckts as a capability refusal even without matching prose", () => {
+    expect(classifyCorpusCapability(row({
+      deckBuilt: false,
+      opConverged: false,
+      unresolvedSubckts: ["LT1184F"],
+      error: "deck: something else entirely",
+    }))).toBe("capability_refusal");
+  });
+
+  it("classifies product-copy deck refusals as capability_refusal", () => {
+    expect(classifyCorpusCapability(row({
+      deckBuilt: false,
+      opConverged: false,
+      error: "deck: Simulation refused: NIGBT is LTspice-only.",
+    }))).toBe("capability_refusal");
+    expect(classifyCorpusCapability(row({
+      deckBuilt: false,
+      opConverged: false,
+      error: 'deck: No imported library defines the subcircuit "LT1001". Attach the vendor model file.',
+    }))).toBe("capability_refusal");
+  });
+
+  it("classifies unknown-subckt OP deaths as deck_guard_leak, not success-by-wording", () => {
+    expect(classifyCorpusCapability(row({
+      opConverged: false,
+      error: "op: Error: unknown subckt: lt1184f",
+    }))).toBe("deck_guard_leak");
+  });
+
+  it("classifies real OP misses and unexpected deck throws as failure", () => {
+    expect(classifyCorpusCapability(row({
+      opConverged: false,
+      error: "op: singular matrix: check nodes",
+    }))).toBe("failure");
+    expect(classifyCorpusCapability(row({
+      deckBuilt: false,
+      opConverged: false,
+      error: "deck: Add a ground symbol before simulating.",
+    }))).toBe("failure");
+    expect(classifyCorpusCapability(row({
+      imported: false,
+      deckBuilt: false,
+      opConverged: false,
+      error: "import: bad bytes",
+    }))).toBe("failure");
+  });
+
+  it("summarizes buckets without a zero-hard-failure fiction", () => {
+    const rows = [
+      row({ file: "ok.asc" }),
+      row({
+        file: "refused.asc",
+        deckBuilt: false,
+        opConverged: false,
+        unresolvedSubckts: ["Missing"],
+        error: 'deck: No imported library defines the subcircuit "Missing".',
+      }),
+      row({
+        file: "leak.asc",
+        opConverged: false,
+        error: "op: unknown subckt: foo",
+      }),
+      row({
+        file: "singular.asc",
+        opConverged: false,
+        error: "op: singular matrix",
+      }),
+    ];
+    expect(summarizeCorpusCapability(rows)).toEqual({
+      success: 1,
+      capability_refusal: 1,
+      deck_guard_leak: 1,
+      failure: 1,
+    });
+    expect(formatCorpusCapabilitySummary(summarizeCorpusCapability(rows))).toBe(
+      "success 1 · capability-refusal 1 · deck-guard-leak 1 · failure 1",
+    );
   });
 });
 

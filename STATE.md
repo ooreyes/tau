@@ -5,13 +5,10 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 20:24 CDT - transitive `.subckt` closure landed;
-staged GPL residue cleared locally. Canonical floors unchanged (closure is a
-refusal/emission correctness unit, not a corpus-floor mover). Completion
-remains RETRACTED.
+**Status:** IN PROGRESS 2026-08-04 20:26 CDT - P0.4 structured corpus
+capability buckets (replace prefix-based zero-hard-failure gate).
 
-**Next unit:** P0.4 full-corpus capability measurement (gate on capability,
-not message prefixes) and/or Class-D `.tran`/`.meas` blockers.
+**Next unit (after this):** Class-D `.tran`/`.meas` blockers / remaining DoD.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.

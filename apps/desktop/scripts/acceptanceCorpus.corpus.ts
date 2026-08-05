@@ -27,7 +27,7 @@ import { importAsc, makeSubcircuitResolver, decodeSchematicText, parseAsy, type 
 import { buildParamScope } from "../src/simulation/paramScope";
 import { buildSpiceDeck, unresolvedSubcktMessage } from "../src/engine/spiceNetlist";
 import { validateSchematicDocument } from "../src/schematic/documentValidation";
-import { summarizeCorpus, formatCorpusReport, type CorpusRow } from "../src/io/corpusReport";
+import { summarizeCorpus, formatCorpusReport, summarizeCorpusCapability, formatCorpusCapabilitySummary, classifyCorpusCapability, type CorpusRow } from "../src/io/corpusReport";
 import { opampIdentity } from "../src/engine/opampModel";
 import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
 import { ltspiceLibRoots } from "./ltspiceLibRoot";
@@ -281,8 +281,10 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
     );
     // Match the app path (`nativeSpice.ts`): a missing X definition must not
     // reach ngspice as a cryptic "unknown subckt". Fail at deck time with the
-    // same product copy the UI shows.
+    // same product copy the UI shows. Record the names on the row so capability
+    // classification does not depend on error-message prefixes alone.
     if (deck.unresolvedSubckts.length > 0) {
+      row.unresolvedSubckts = [...deck.unresolvedSubckts];
       throw new Error(unresolvedSubcktMessage(deck.unresolvedSubckts));
     }
     row.modelSubstitutions = deck.modelSubstitutions.length;
@@ -339,38 +341,35 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       const summary = summarizeCorpus(rows);
       const canonicalRows = rows.filter((_, index) => corpus[index]?.canonical);
       const canonicalSummary = summarizeCorpus(canonicalRows);
-      const isHonestDeckRefusal = (error: string | undefined): boolean => {
-        if (!error?.startsWith("deck: ")) return false;
-        const body = error.slice("deck: ".length);
-        // App-path refusals: Simulation refused:… (NIGBT/Chan/foreign) and the
-        // unresolvedSubcktMessage product copy from nativeSpice.ts.
-        return (
-          body.startsWith("Simulation refused:")
-          || body.startsWith("No imported library defines the subcircuit")
-          || body.startsWith("No imported library defines these subcircuits:")
-        );
-      };
-      const unsupportedRefusals = rows.filter((row) => isHonestDeckRefusal(row.error));
-      const hardFailures = rows.filter((row) => (
-        !row.imported
-        || !row.validated
-        || (!isHonestDeckRefusal(row.error) && (
-          !row.deckBuilt || (!skipNgspice && !row.opConverged)
-        ))
-      ));
+      const capability = summarizeCorpusCapability(rows, { skipNgspice });
+      const canonicalCapability = summarizeCorpusCapability(canonicalRows, { skipNgspice });
+      const capabilityRefusals = rows.filter(
+        (row) => classifyCorpusCapability(row, { skipNgspice }) === "capability_refusal",
+      );
+      const deckGuardLeaks = rows.filter(
+        (row) => classifyCorpusCapability(row, { skipNgspice }) === "deck_guard_leak",
+      );
+      const failures = rows.filter(
+        (row) => classifyCorpusCapability(row, { skipNgspice }) === "failure",
+      );
       console.log([
         "",
         "ALL DISCOVERED FILES",
         `total ${summary.total} · imported ${summary.imported} · warning-clean ${summary.warningClean} · deck-built ${summary.deckBuilt} · op-converged ${summary.opConverged} · schema-valid ${summary.validated} · model-substitutions ${summary.modelSubstitutions}`,
-        hardFailures.length > 0
-          ? `\nHARD FAILURES (${hardFailures.length})\n${formatCorpusReport(hardFailures)}`
-          : "\nHARD FAILURES (0)",
-        unsupportedRefusals.length > 0
-          ? `\nHONEST UNSUPPORTED REFUSALS (${unsupportedRefusals.length})\n${formatCorpusReport(unsupportedRefusals)}`
-          : "\nHONEST UNSUPPORTED REFUSALS (0)",
+        `CAPABILITY ${formatCorpusCapabilitySummary(capability)}`,
+        deckGuardLeaks.length > 0
+          ? `\nDECK-GUARD LEAKS (${deckGuardLeaks.length}) — reached ngspice with a missing subckt/model\n${formatCorpusReport(deckGuardLeaks)}`
+          : "\nDECK-GUARD LEAKS (0)",
+        failures.length > 0
+          ? `\nFAILURES (${failures.length}) — import/validate/unexpected deck/real OP miss\n${formatCorpusReport(failures)}`
+          : "\nFAILURES (0)",
+        capabilityRefusals.length > 0
+          ? `\nCAPABILITY REFUSALS (${capabilityRefusals.length})\n${formatCorpusReport(capabilityRefusals)}`
+          : "\nCAPABILITY REFUSALS (0)",
         "",
       ].join("\n"));
-      console.log(`\nCANONICAL RELEASE SUBSET\n${formatCorpusReport(canonicalRows)}\n`);
+      console.log(`\nCANONICAL RELEASE SUBSET\n${formatCorpusReport(canonicalRows)}`);
+      console.log(`CANONICAL CAPABILITY ${formatCorpusCapabilitySummary(canonicalCapability)}\n`);
       if (skipNgspice) console.log("(ngspice runs skipped - CORPUS_SKIP_NGSPICE or ngspice not installed)");
 
       // Regression guard (always enforced, canonical corpus or not): every
@@ -381,11 +380,13 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
 
       // Floors = measured truthful release numbers after fail-closed Chan
       // refusal + corpus unresolvedSubckts guard (2026-08-04): 82 imported /
-      // 81 warning-clean / 79 deck-built / 79 op-converged. Three honest deck
-      // refusals: NIGBT (IGBT.asc), Chan-core NonLinearTransformer, and
-      // encrypted LT1184F via unresolvedSubckts (Royer.asc) - matching the
-      // app path in nativeSpice.ts. Hard failures on the canonical subset
-      // are now zero.
+      // 81 warning-clean / 79 deck-built / 79 op-converged. Three capability
+      // refusals on the canonical subset: NIGBT (IGBT.asc), Chan-core
+      // NonLinearTransformer, and encrypted LT1184F via unresolvedSubckts
+      // (Royer.asc). Full-corpus hard-failure === 0 is intentionally NOT
+      // asserted here (P0.4): that ceiling was prefix-satisfiable and hid
+      // thousands of deck-guard leaks / real failures on the recursive tree.
+      // Capability buckets are printed above; measure before claiming done.
       // `expect.soft` is deliberate: a missing input must not mask a separate
       // warning/deck/convergence regression in the same run's report.
       if (EXTRA_ROOTS.length === 0 && !CORPUS_MATCH) {
@@ -395,9 +396,10 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
         expect.soft(canonicalSummary.deckBuilt, "canonical deck-build floor").toBeGreaterThanOrEqual(79);
         if (!skipNgspice) {
           expect.soft(canonicalSummary.opConverged, "canonical operating-point floor").toBeGreaterThanOrEqual(79);
-        }
-        if (process.env.CORPUS_CANONICAL_ONLY !== "1") {
-          expect.soft(hardFailures.length, "full-corpus non-refusal hard-failure ceiling").toBe(0);
+          expect.soft(
+            canonicalCapability.deck_guard_leak,
+            "canonical subset must not leak missing subckts/models into ngspice",
+          ).toBe(0);
         }
       }
     } finally {

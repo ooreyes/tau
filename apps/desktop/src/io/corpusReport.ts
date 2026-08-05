@@ -32,6 +32,37 @@ export interface CorpusRow {
   modelSubstitutions: number;
   /** First failure message (import throw, deck throw, or ngspice marker). */
   error?: string;
+  /**
+   * Missing subcircuit names caught by `buildSpiceDeck` / the corpus harness
+   * before ngspice (same list the app path refuses on). Structured signal for
+   * capability classification — do not infer solely from error-message text.
+   */
+  unresolvedSubckts?: string[];
+}
+
+/**
+ * Capability bucket for one corpus file. Replaces the old prefix-only
+ * "honest refusal vs hard failure" split that could be gamed by error wording.
+ *
+ * - `success` — imported, validated, deck built, and (unless ngspice skipped) OP converged.
+ * - `capability_refusal` — product refused at deck time (missing library /
+ *   unsupported device / integrity block), including unresolvedSubckts.
+ * - `deck_guard_leak` — reached ngspice and died on a missing subckt/model that
+ *   the deck builder should have refused first.
+ * - `failure` — import/validate/unexpected deck throw, or a real OP failure
+ *   (singular matrix, convergence, timeout, …) that is not a guard leak.
+ */
+export type CorpusCapability =
+  | "success"
+  | "capability_refusal"
+  | "deck_guard_leak"
+  | "failure";
+
+export interface CorpusCapabilitySummary {
+  success: number;
+  capability_refusal: number;
+  deck_guard_leak: number;
+  failure: number;
 }
 
 export interface CorpusSummary {
@@ -56,6 +87,86 @@ export function summarizeCorpus(rows: CorpusRow[]): CorpusSummary {
     validated: rows.filter((r) => r.imported && r.validated).length,
     modelSubstitutions: rows.reduce((count, row) => count + row.modelSubstitutions, 0),
   };
+}
+
+/** OP-time markers that mean the deck let a missing definition reach ngspice. */
+const DECK_GUARD_LEAK_MARKERS = [
+  /unknown subckt/i,
+  /could not find a valid modelname/i,
+  /unable to find definition of model/i,
+  /unknown model/i,
+];
+
+/**
+ * Classify one corpus row into a capability bucket. Prefer structured fields
+ * (`unresolvedSubckts`, stage flags) over message prefixes; prefixes remain a
+ * fallback for product-copy refusals that do not yet attach structured data.
+ */
+export function classifyCorpusCapability(
+  row: CorpusRow,
+  options: { skipNgspice?: boolean } = {},
+): CorpusCapability {
+  const skipNgspice = options.skipNgspice === true;
+  if (
+    row.imported
+    && row.validated
+    && row.deckBuilt
+    && (skipNgspice || row.opConverged)
+    && !row.error
+  ) {
+    return "success";
+  }
+
+  if (row.unresolvedSubckts && row.unresolvedSubckts.length > 0) {
+    return "capability_refusal";
+  }
+
+  if (row.error?.startsWith("deck: ")) {
+    const body = row.error.slice("deck: ".length);
+    if (
+      body.startsWith("Simulation refused:")
+      || body.startsWith("No imported library defines the subcircuit")
+      || body.startsWith("No imported library defines these subcircuits:")
+    ) {
+      return "capability_refusal";
+    }
+    return "failure";
+  }
+
+  if (row.error?.startsWith("op: ")) {
+    const body = row.error.slice("op: ".length);
+    if (DECK_GUARD_LEAK_MARKERS.some((marker) => marker.test(body))) {
+      return "deck_guard_leak";
+    }
+    return "failure";
+  }
+
+  return "failure";
+}
+
+export function summarizeCorpusCapability(
+  rows: CorpusRow[],
+  options: { skipNgspice?: boolean } = {},
+): CorpusCapabilitySummary {
+  const summary: CorpusCapabilitySummary = {
+    success: 0,
+    capability_refusal: 0,
+    deck_guard_leak: 0,
+    failure: 0,
+  };
+  for (const row of rows) {
+    summary[classifyCorpusCapability(row, options)] += 1;
+  }
+  return summary;
+}
+
+export function formatCorpusCapabilitySummary(summary: CorpusCapabilitySummary): string {
+  return [
+    `success ${summary.success}`,
+    `capability-refusal ${summary.capability_refusal}`,
+    `deck-guard-leak ${summary.deck_guard_leak}`,
+    `failure ${summary.failure}`,
+  ].join(" · ");
 }
 
 /**

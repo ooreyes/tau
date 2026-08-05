@@ -83,9 +83,15 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   warning-clean / 79 deck-built / 79 op-converged.** Three honest deck
   refusals: NIGBT (IGBT.asc), Chan-core NonLinearTransformer, and unresolved
   LT1184F on Royer.asc (corpus now applies the app's `unresolvedSubckts`
-  guard). Canonical hard failures: 0. Knobs: `CORPUS_SKIP_NGSPICE=1`
+  guard). Canonical hard failures: 0.   Knobs: `CORPUS_SKIP_NGSPICE=1`
   (import+deck only),
   `CORPUS_CANONICAL_ONLY=1` (historical release subset).
+  **P0.4 capability buckets (2026-08-04):** the runner reports
+  `success` / `capability-refusal` / `deck-guard-leak` / `failure` via
+  `classifyCorpusCapability` (structured `unresolvedSubckts` preferred over
+  error-message prefixes). The full-corpus `hardFailures === 0` soft assert is
+  removed — it was prefix-satisfiable and hid recursive-tree leaks. Canonical
+  soft floors remain; canonical `deck_guard_leak` must stay 0.
 - ✅ **Real-`.asc` release floors by the committed runner: warning-clean ≥80,
   deck-built ≥79, op-converged ≥79** (was 34/82 at this work's start; briefly
   80/82 while a Chan core was silently sized to unsaturated linear L and while

@@ -9,37 +9,35 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 20:33 CDT**
+
+Unit: P0.4 structured corpus capability buckets. Full-corpus
+`hardFailures === 0` (prefix-satisfiable) removed. Runner prints
+success / capability-refusal / deck-guard-leak / failure; prefers
+`unresolvedSubckts` over message prefixes. Canonical re-check:
+82/81/79/79, CAPABILITY success 79 · capability-refusal 3 ·
+deck-guard-leak 0 · failure 0. Stale codemodel staging test no longer
+requires GPL `table.cm`. DoD still open; shippable? NO.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 20:24 CDT**
 
 Unit: transitive `.subckt` closure in `buildSpiceDeck`. Nested `X` refs inside
 inlined bodies now emit resolvable peers or land on `unresolvedSubckts`.
-Staged GPL residue (`table.cm` / `ivlng*` / `scripts/src` / cosim scripts)
-cleared from `resources/ngspice` + digest map; cargo `staged_engine` green.
-Gates: typecheck clean; 2554 frontend tests passed; staged_engine 23/23.
-
-Next unit: P0.4 full-corpus capability measurement (honest gate vs message
-prefixes) and/or Class-D blockers. DoD still open; shippable? NO.
-
-Previous completed unit:
-
-**Status: DONE - 2026-08-04 20:25 CDT**
-
-Unit: corpus harness applies the app's unresolvedSubckts guard. Royer/LT1184F
-is now an honest deck refusal instead of an ngspice "unknown subckt" hard op
-failure. Canonical re-measured: 82/81/79/79, HARD FAILURES (0), three honest
-refusals (NIGBT, Chan, LT1184F).
+Staged GPL residue cleared locally; cargo `staged_engine` green.
 
 What landed this unit:
 
-- `nestedXSubcktRefs` extracts peer `X` names from a body (skips local nested
-  `.subckt` defs; stops at `params:` / `a=b`).
-- `buildSpiceDeck` BFS-closes over inlined/emitted bodies: emit from document /
-  user / bundled registries, else name on `unresolvedSubckts`.
-- Tests: missing nested peer reported; peer from user lib emitted once; local
-  nested def not flagged; helper unit tests.
-- Local fix (gitignored resources): deleted GPL staged files and rewrote
-  `build-info.json` digests so cargo packaging checks pass without a full
-  `./scripts/build-ngspice.sh` rebuild.
+- `classifyCorpusCapability` / `summarizeCorpusCapability` in `corpusReport.ts`
+- Corpus harness records `row.unresolvedSubckts`; reports capability buckets
+- Removed full-corpus `hardFailures === 0` soft assert
+- Canonical soft floors kept; canonical `deck_guard_leak` must stay 0
+- `codemodelStaging.corpus.ts` CODE_MODELS drops `table` (GPL, not staged)
+
+Next unit: Class-D `.tran`/`.meas` blockers / authored-analysis differential
+parity / remaining DoD. Full recursive tree still needs a measured bucket
+baseline (not asserted as zero).
 
 Previous completed unit:
 

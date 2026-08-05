@@ -32,16 +32,17 @@ const RESOURCE_LIB = join(
 );
 
 /** The set the engine loader asks for (`load_bundled_codemodels` in spice.rs),
- * which is also the set ngspice's own icm makefile builds. The two agreeing is
- * the whole point: a module the loader wants and the build does not produce is
- * a device that fails at run time and nowhere earlier. */
+ * which is also the set ngspice's own icm makefile builds — except `table.cm`,
+ * which is GPL v2 and deliberately dropped by `build-ngspice.sh` (Tau emits no
+ * device that needs it). The two agreeing is the whole point: a module the
+ * loader wants and the build does not produce is a device that fails at run
+ * time and nowhere earlier. */
 const CODE_MODELS = [
   "spice2poly",
   "analog",
   "digital",
   "xtradev",
   "xtraevt",
-  "table",
   "tlines",
 ];
 
