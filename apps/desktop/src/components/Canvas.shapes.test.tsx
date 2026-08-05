@@ -100,6 +100,20 @@ describe("Canvas - preserved LTspice drawing primitives", () => {
   });
 });
 
+describe("Canvas - Cupertino schematic zoom chrome (§10)", () => {
+  it("exposes Lucide InstrumentIconButtons (not ASCII +/−/⌂ glyphs)", () => {
+    render(<Canvas interactive />);
+    const zoomIn = screen.getByRole("button", { name: "Zoom in" });
+    const zoomOut = screen.getByRole("button", { name: "Zoom out" });
+    const fit = screen.getByRole("button", { name: "Fit circuit to view" });
+    expect(zoomIn.querySelector(".lucide-zoom-in")).toBeTruthy();
+    expect(zoomOut.querySelector(".lucide-zoom-out")).toBeTruthy();
+    expect(fit.querySelector(".lucide-scan")).toBeTruthy();
+    expect(zoomIn.textContent).not.toMatch(/[+\-−⌂]/);
+    expect(document.querySelector('[aria-label="Schematic view"]')).toBeTruthy();
+  });
+});
+
 describe("Canvas - fit-to-view frames the artwork too", () => {
   const WIDTH = 400;
   const HEIGHT = 300;

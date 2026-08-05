@@ -2172,7 +2172,7 @@ SettingsPanel tests (combobox triggers, not native `<select>`).
 scroll; editor toolbar horizontal scroll) — shots in
 `screenshots/min-window-dod/`. Remaining §10 debt that blocks an honest
 **§10 design-system** DoD check:
-Cupertino icon chrome still settling; both-theme screenshot settlement for
+Cupertino canvas zoom + EmptyState Sparkles settled 2026-08-05 (Lucide InstrumentIconButton / CircuitBoard); both-theme screenshot settlement for
 zero ad-hoc drift still required (machine gate
 `scripts/design-system-drift.sh` is green for select/hex/Command-Toast-
 Resizable consumption, but does not flip the DoD alone). Resizable/Command/
@@ -2419,7 +2419,7 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   re-exports Tau panelResize (honest deviation from react-resizable-panels);
   `scripts/design-system-drift.sh` proves zero native selects, hex confined
   to token zone, and primitive consumption. AGENTS §10 stays UNCHECKED
-  pending Cupertino chrome + both-theme screenshot settlement. →
+  Cupertino canvas/EmptyState icons settled 2026-08-05; pending both-theme screenshot settlement. →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
   same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`

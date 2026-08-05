@@ -4102,13 +4102,9 @@ body {
   vector-effect: non-scaling-stroke;
 }
 
-/* ── View controls (zoom / fit) ────────────────────────── */
-/* Canvas view controls - a segmented vertical cluster (zoom in / out / fit)
-   pinned top-right of the schematic. Consolidated here; the old duplicate lower
-   in the file is deleted. Matches the ui/Button outline/icon language
-   (hairline-bordered group, --overlay-hover on hover, real Tooltips per
-   button rather than a native `title`), hand-rolled here since these float
-   directly over the canvas rather than inside a primitive tree. */
+/* Canvas view controls — segmented vertical Lucide cluster (zoom in / out /
+   fit) pinned top-right. Same InstrumentIconButton / SF Symbol language as
+   ScopeZoomCluster; hand-rolled container since it floats over the canvas. */
 .view-controls {
   position: absolute;
   top: var(--sp-4);
@@ -4121,40 +4117,35 @@ body {
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
 }
-.view-btn {
-  width: 44px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--muted);
-  background: transparent;
+.view-controls .view-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 0;
   border: 0;
   border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  cursor: pointer;
-  transition: color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring),
-    box-shadow var(--motion-fast) var(--spring);
+  color: var(--muted);
+  background: transparent;
 }
 /* last cell has no separator so it meets the container's rounded base cleanly */
-.view-btn:last-child {
+.view-controls .view-btn:last-child {
   border-bottom: 0;
 }
-.view-btn:hover {
+.view-controls .view-btn:hover {
   color: var(--text);
   background: var(--overlay-hover);
+  border-color: transparent;
+  border-bottom-color: var(--border);
+}
+.view-controls .view-btn:last-child:hover {
+  border-bottom-color: transparent;
 }
 /* pressed: settle into the accent so a zoom action reads as firing */
-.view-btn:active {
+.view-controls .view-btn:active {
   color: var(--accent);
   background: var(--accent-soft);
 }
 /* focus ring is INSET - the container clips outer rings via overflow:hidden */
-.view-btn:focus-visible {
+.view-controls .view-btn:focus-visible {
   outline: none;
   color: var(--text);
   box-shadow: inset 0 0 0 1.5px var(--accent);

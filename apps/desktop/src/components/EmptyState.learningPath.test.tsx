@@ -19,7 +19,10 @@ describe("EmptyState first-success learning path", () => {
         onTryFirstSuccess={onTryFirstSuccess}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Try RC Charging/i }));
+    const cta = screen.getByRole("button", { name: /Try RC Charging/i });
+    expect(cta.querySelector(".lucide-circuit-board")).toBeTruthy();
+    expect(cta.querySelector(".lucide-sparkles")).toBeNull();
+    fireEvent.click(cta);
     expect(onTryFirstSuccess).toHaveBeenCalledOnce();
   });
 

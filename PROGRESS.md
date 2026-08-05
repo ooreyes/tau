@@ -1,16 +1,51 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~14:10 CDT**
+**Status: DONE - 2026-08-05 ~14:00 CDT**
 
-Unit: **Educational/contrib gr_del midnodes → pass=110** — all-pass lattice
-AC on non-hollow n005/n006/n008 (gd1/gd2 |V|≈1 hollow deferred). DoD broad
-box stays open. SHIPPABLE? **NO**
+Unit: **§10 Cupertino canvas zoom + EmptyState icon chrome** — Canvas
+`+/−/⌂` → Lucide InstrumentIconButton; EmptyState Sparkles → CircuitBoard.
+AGENTS §10 stays UNCHECKED (both-theme screenshot settlement remains).
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+### 2026-08-05 — §10 Cupertino canvas zoom + EmptyState icons
+
+**What I did**
+- Replaced schematic Canvas ASCII zoom glyphs (`+` / `−` / `⌂`) with Lucide
+  ZoomIn / ZoomOut / Scan via `InstrumentIconButton` (same SF Symbol language
+  as ScopeZoomCluster).
+- Replaced EmptyState learning-path `Sparkles` with `CircuitBoard` (Cupertino
+  QA: no toy glyphs).
+- Did **not** flip AGENTS §10 (both-theme screenshot settlement still open).
+  SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/components/Canvas.tsx` (+ Canvas.shapes.test)
+- `apps/desktop/src/components/EmptyState.tsx` (+ learningPath test)
+- `apps/desktop/src/App.css` (`.view-controls` Lucide cluster)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- Canvas.shapes / Canvas.simulator / EmptyState.learningPath → 35/35
+- `pnpm -C apps/desktop typecheck` / `test` → 2985 passed / 8 skipped
+
+**Parity items**
+- §10 partial: Cupertino canvas + EmptyState icon chrome settled. Box ⬜.
+  SHIPPABLE? NO
+
+**Next step**
+- Both-theme screenshot settlement for zero-drift DoD. Never flip AGENTS §10
+  on a partial.
+
+SHIPPABLE? **NO**
+
+---
+
 
 ### 2026-08-05 — Educational/contrib gr_del midnodes → pass=110 (§DoD)
 

@@ -19,7 +19,8 @@ import {
   opComponentCurrents,
   tranComponentCurrents,
 } from "../simulation/wireCurrentFlow";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
+import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import {
   autoNetLabelOffset,
   autoNetLabelOffsets,
@@ -1399,31 +1400,31 @@ export function Canvas({
         })()}
       </svg>
 
-      <div className="view-controls">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button className="view-btn" onClick={() => zoomBy(1.25)} aria-label="Zoom in">
-              +
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">Zoom in</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button className="view-btn" onClick={() => zoomBy(0.8)} aria-label="Zoom out">
-              −
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">Zoom out</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button className="view-btn" onClick={fitView} aria-label="Fit circuit to view">
-              ⌂
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">Fit to view</TooltipContent>
-        </Tooltip>
+      <div className="view-controls" role="toolbar" aria-label="Schematic view">
+        <InstrumentIconButton
+          icon={ZoomIn}
+          label="Zoom in"
+          tooltip="Zoom in"
+          tooltipSide="left"
+          className="view-btn"
+          onClick={() => zoomBy(1.25)}
+        />
+        <InstrumentIconButton
+          icon={ZoomOut}
+          label="Zoom out"
+          tooltip="Zoom out"
+          tooltipSide="left"
+          className="view-btn"
+          onClick={() => zoomBy(0.8)}
+        />
+        <InstrumentIconButton
+          icon={Scan}
+          label="Fit circuit to view"
+          tooltip="Fit to view"
+          tooltipSide="left"
+          className="view-btn"
+          onClick={fitView}
+        />
       </div>
 
       {labelDraft && (

@@ -1,6 +1,6 @@
 import { useRef, type ChangeEvent } from "react";
 import { BodeMascot } from "./BodeMascot";
-import { FolderOpen, FolderPlus, Import, MessageSquare, Plus, Sparkles } from "lucide-react";
+import { FolderOpen, FolderPlus, Import, MessageSquare, Plus, CircuitBoard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
@@ -76,7 +76,7 @@ export function EmptyState({
             <div className="empty-state-actions">
               {offerFirstSuccess && (
                 <Button type="button" size="sm" onClick={onTryFirstSuccess}>
-                  <Sparkles aria-hidden="true" /> Try RC Charging
+                  <CircuitBoard aria-hidden="true" /> Try RC Charging
                 </Button>
               )}
               <Button
