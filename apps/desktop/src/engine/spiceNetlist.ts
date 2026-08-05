@@ -17,7 +17,7 @@ import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes, definedSubcktNames } from "./modelDirectives";
 import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { laplaceTransfer, laplaceSourceLines } from "./laplace";
-import { coreInductance } from "./coreInductor";
+import { coreInductorRefusalMessage, isCoreInductor } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
 import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
 import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL_REFUSAL_MARKER, TAU_NOISE_REFUSAL_MARKER, translateSwitchModelCard } from "./userModelLibrary";
@@ -1142,14 +1142,16 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       ];
     }
     case "inductor": {
-      // A nonlinear (Chan) magnetic-core inductor (Hc/Bs/Br/A/Lm/Lg/N) has no
-      // ngspice equivalent; emit its unsaturated linear inductance instead so the
-      // deck builds and runs (engine/coreInductor.ts).
-      const core = coreInductance(component.value);
+      // A nonlinear (Chan) magnetic-core inductor has no ngspice equivalent.
+      // Refuse rather than silently substituting the unsaturated linear L.
+      if (isCoreInductor(component.value)) {
+        throw new Error(
+          `Simulation refused: ${coreInductorRefusalMessage(component.label.trim() || name)} No approximate or partial circuit was run.`,
+        );
+      }
       const ic = directiveInductorIc === undefined
         ? icSpecDeckText(component.value)
         : ` IC=${substituteKnownBraces(directiveInductorIc, params).replace(/µ/g, "u")}`;
-      if (core !== null) return [`${name} ${node("a")} ${node("b")} ${core}${ic}`];
       const series = passiveSeriesResistance(component);
       const inductance = positiveNumberFromText(component, stripIcSpec(series.value), "H");
       if (series.ohms === null || series.ohms === 0) {

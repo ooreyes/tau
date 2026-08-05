@@ -5,40 +5,19 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 - P0.2 is two thirds closed. A non-rational or
-current-source `Laplace=` now names the DC gain it was collapsed to, and a
-dropped `load`/`load2` flag says so; both ride `circuit.warnings` and both
-render. P0.1 stays closed. Completion remains RETRACTED by the owner.
+**Status:** IDLE 2026-08-04 20:20 CDT - P0.2 closed. All three silent
+substitutions are honest: Laplace/`load` warn; Chan-core inductors refuse.
+Canonical corpus re-measured at 82/81/80/79. Completion remains RETRACTED.
 
-**The third silent substitution is deliberately NOT landed, and is the next
-unit: the saturable Chan core emitted as a plain linear `L`.** It has to be a
-refusal, not a warning, and the refusal costs a canonical corpus file.
-`examples/Educational/NonLinearTransformer.asc` is the ONLY Chan-core file in
-the canonical 82, so refusing it moves `deckBuilt` and `opConverged` 80 -> 79
-and trips two `>= 80` floors in `acceptanceCorpus.corpus.ts`. Land it with the
-floor correction in the same commit - the gate already sets its floors at 82
-minus its honest refusals, so 79 with a third named refusal follows its own
-design rather than weakening it - and re-run the corpus for real. That needs a
-current staged ngspice, which this tree does not have.
+**Next unit:** make the corpus harness apply the app's `unresolvedSubckts`
+guard (and/or transitive `.subckt` closure). Today Royer.asc builds a deck
+that names encrypted LT1184F and hard-fails at op - the app path would refuse
+earlier via `nativeSpice.ts`. That is P0.3/P0.4.
 
-**A deck warning can never move the corpus `warningClean` count.**
-`acceptanceCorpus.corpus.ts:231` sets `row.warnings` from `imported.warnings`
-alone, so anything pushed onto `circuit.warnings` during `buildSpiceDeck` is
-invisible to that floor. This is what made the two warning halves provably
-floor-neutral and separable from the refusal. Do not re-derive it.
-
-Two things a fresh fire needs before it wastes its window:
-
-- **The staged ngspice resource in a fresh clone is older than `build.rs`'s
-  digest check and makes every Rust gate look broken.** `cargo test`,
-  `cargo clippy` and `scripts/acceptance-corpus.sh` all die in `build.rs` with
-  `build-info.json has no "files" digest object`. That is a stale resource, not
-  a regression: the digest map arrived in `0c95d14` (2026-08-02) and the staged
-  copy predates it. Fix is `./scripts/build-ngspice.sh`, which takes many
-  minutes from a cold `configure` - budget for it or pick TS-only work.
-- **Run the gates serially.** The React suite times out under load and looks
-  red when it is not; see the 2026-08-04 entry in `FIX_BUGS.md` for the
-  measurement.
+**Staged GPL residue:** `resources/ngspice/lib/ngspice/table.cm` is still on
+disk and fails `staged_engine::the_staged_resource_carries_no_gpl_licensed_file`.
+`build-ngspice.sh` already `rm -f`s it; a rebuild (or digest-aware delete) is
+needed. Do not claim the legal gate green until that test passes.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -61,11 +40,11 @@ What the audit measured, against what these docs claimed:
   satisfiable by error-message wording rather than capability.
 - **"80/82" is a constructed subset** that excludes all 3,913 vendor files and
   counts 12 of the owner's own `Draft*`/`hw3` scratch files.
-- **Three silent wrong answers still ship:** saturable core → linear `L` with no
-  warning; non-rational/current-source `Laplace=` → DC gain with `exact:false`
-  discarded; `load`/`load2` dropped.
-- **Legal blockers:** no `LICENSE`/`THIRD_PARTY_NOTICES` at all; unused GPLv2
-  `table.cm` in the bundle; ADI's `AD8541.lib` committed and advertised.
+- **Three silent wrong answers (P0.2):** CLOSED 2026-08-04. Saturable Chan core
+  refuses; non-rational/current-source `Laplace=` and `load`/`load2` warn.
+- **Legal blockers (P0.1):** mostly closed - `LICENSE`/`THIRD_PARTY_NOTICES`
+  exist and ADI's `AD8541.lib` is gone. Residual: staged `table.cm` still on
+  disk fails the GPL staging test until a rebuild deletes it from the digest.
 - Good news that is also verified: ngspice is Modified BSD and `dlopen`ed, so
   Tau's own source has no copyleft exposure, and all 725 npm deps are clean.
 
@@ -75,10 +54,10 @@ the local MLX provider so their prompts cannot drift. Per-provider keychain
 entries; CSP pins `generativelanguage.googleapis.com`. Unit-tested against a
 stubbed fetch; **not yet exercised against the live Google API.**
 
-Next up, in order: the saturable-core refusal described above (the last of the
-three silent substitutions), then the transitive `.subckt` closure check, then
-making the corpus gate measure capability instead of message prefixes.
-Third-party attribution is done.
+Next up, in order: transitive `.subckt` closure + corpus harness applying
+`unresolvedSubckts` (converts Royer/LT1184F and ~1,465 unknown-subckt crashes
+into named refusals), then make the corpus gate measure capability instead of
+message prefixes. P0.1 and P0.2 are closed.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
 wrapper.** Known SPICE semantics must appear as named, editable controls in the
@@ -145,6 +124,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - CHAN-CORE INDUCTORS REFUSE INSTEAD OF SUBSTITUTING LINEAR L. NonLinearTransformer is the only canonical casualty; corpus re-measured 82/81/80/79; mutation-checked. P0.2 closed.
 - 2026-08-04 - TWO OF THE THREE SILENT SUBSTITUTIONS NOW SPEAK. A `Laplace=` that no rational polynomial can express - which is every current-source `Laplace=`, since `s_xfer` is voltage-in/voltage-out - reports the DC gain H(0) it actually ran and that its frequency response is unsimulated; a dropped LTspice `load`/`load2` flag reports that the source can now deliver as well as draw current. Mutation-checked: reverting the three pushes fails exactly the three positive tests and neither negative control.
 - 2026-08-04 - TAU REDISTRIBUTES NO MANUFACTURER MODEL FILE. ADI's copyrighted `AD8541.lib` is gone, along with the `.sim` that embedded the same netlist verbatim in JSON, its corpus proof, and its paragraphs in four documents; the sanitizer's vendor-macromodel coverage moves to a Tau-authored fixture, and the model-attach walkthrough now teaches the flow with the user's own `.lib`.
 - 2026-08-04 - TAU HAS A `LICENSE` AND `THIRD_PARTY_NOTICES`, AND SHIPS NO GPL CODE. Beyond the known `table.cm`, review found `ivlng.vpi` and `ghdl_vpi.c` (GPL v2+, Icarus Verilog) were also shipping; the unused `d_cosim` tool chain is now dropped at staging and a test reads the staged tree rather than the script text.

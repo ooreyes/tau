@@ -1948,4 +1948,16 @@ describe("constructs the engine cannot reproduce are never answered silently", (
     );
     expect(deck.circuit.warnings.some((w) => /load/.test(w))).toBe(false);
   });
+
+  it("refuses a Chan magnetic-core inductor instead of substituting linear L", () => {
+    const l1 = component(
+      "inductor",
+      "L1",
+      "Hc=16. Bs=.44 Br=.10 A=0.0000251 Lm=0.0198 Lg=0.0006858 N=1000",
+      128,
+      128,
+    );
+    expect(() => buildSpiceDeck({ components: [grounded, l1], wires: [] }, { kind: "op" }))
+      .toThrow(/Simulation refused: L1 is an LTspice Chan magnetic-core inductor.*No approximate or partial circuit was run/);
+  });
 });

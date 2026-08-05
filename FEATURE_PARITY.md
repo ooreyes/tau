@@ -10,9 +10,13 @@
 > copy‑pasted here, since this file is not rewritten every run and WILL drift.
 > Acceptance corpus is tracked qualitatively below (per‑symbol ⬜/🟡/✅ in §1)
 > **and quantitatively by the committed runner** `scripts/acceptance-corpus.sh`
-> (✅ — see §1; measured 2026‑08‑02: 82 imported / 80 warning‑clean / 80
-> deck‑built / 80 op‑converged, with two named honest refusals). **Done = corpus script proves ≥ 80/82 + Class‑D
+> (✅ — see §1; measured 2026‑08‑04: 82 imported / 81 warning‑clean / 80
+> deck‑built / 79 op‑converged. Deck refusals: NIGBT, Chan‑core
+> NonLinearTransformer. Royer.asc hard‑fails at op on encrypted LT1184F until
+> the harness applies unresolvedSubckts). **Done = corpus script
+> proves ≥ 80/82 + Class‑D
 > `.tran`/`.meas` parity + production-ready unsigned DMG** (full checklist in AGENTS.md → Definition of Done).
+> The AGENTS.md ≥80/82 op box stays open at the measured **79/82** op floor.
 
 ---
 
@@ -75,14 +79,20 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   67 op-converged** — the 3 deck-build failures are fixed for real: Pierce XTAL
   now expands to a 4-element crystal model (`engine/crystalSpec.ts`), and
   varistor/diac placeholders get a valid high-Z value + collision-safe SPICE
-  names. **Current truthful measurement (2026-08-02): 82 imported / 80
-  warning-clean / 80 deck-built / 80 op-converged.** NIGBT and LT1184F are
-  printed as honest unsupported refusals, never as hard failures or false
-  passes. Knobs: `CORPUS_SKIP_NGSPICE=1` (import+deck only),
+  names. **Current truthful measurement (2026-08-04): 82 imported / 81
+  warning-clean / 80 deck-built / 79 op-converged.** Deck refusals: NIGBT
+  (IGBT.asc) and Chan-core NonLinearTransformer. Royer.asc still hard-fails
+  at op on encrypted LT1184F (`unknown subckt`) until the harness applies the
+  app's `unresolvedSubckts` guard. Knobs: `CORPUS_SKIP_NGSPICE=1`
+  (import+deck only),
   `CORPUS_CANONICAL_ONLY=1` (historical release subset).
-- ✅ **Real-`.asc` release floor is 80/82 by the committed runner** (was 34/82
-  at this work's start; the "82/82" previously recorded here predated the runner
-  and double-counted 3 files — Pierce/dimmer/varistor — that throw at deck time):
+- ✅ **Real-`.asc` release floors by the committed runner: warning-clean ≥80,
+  deck-built ≥80, op-converged ≥79** (was 34/82 at this work's start; briefly
+  80/82 op while a Chan core was silently sized to unsaturated linear L;
+  fail-closed Chan refusal on 2026-08-04 drops op to 79 without lowering the
+  deck floor). The "82/82" previously recorded here
+  predated the runner and double-counted 3 files — Pierce/dimmer/varistor —
+  that throw at deck time:
   `decodeSchematicText` falls back to **Windows-1252** when the bytes aren't valid
   UTF-8, so LTspice's single-byte `µ` (0xB5) decodes as the micro sign instead of
   U+FFFD (was the biggest blocker — 32 files); `buildParamScope` accepts the
@@ -94,18 +104,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   SYMATTR fields** (`Value`/`Value2`/`SpiceLine`/`SpiceLine2` — P2.asc's SINE);
   and **`Laplace=H(s)` on E/G sources** is realized as an XSPICE `s_xfer`
   (rational transfers, ngspice-verified) or its DC gain H(0) (exact for `.op`;
-  transport-delay/√ fallbacks) — unblocked Draft8/PLL/PLL2/TwoTau/HalfSlope; and
-  a **Chan magnetic-core inductor** (`Hc/Bs/Br/A/Lm/Lg/N`) is sized to its
-  **unsaturated linear inductance** from the gap+core reluctance
-  (`engine/coreInductor.ts`; ngspice has no saturable-core primitive) — unblocked
-  NonLinearTransformer. **80/82 build and converge per the committed runner.**
-  DIAC/TRIAC invoke the unmodified file's authored `.subckt`s; VARISTOR and
-  PHASEDET have direct LTspice waveform proofs. Only NIGBT (an LTspice-only
-  intrinsic) and encrypted LT1184F refuse explicitly.
-  (NonLinearTransformer is a
-  behavioral-magnetics demo whose flux-integrating G-source loop still hits a
-  singular matrix in ngspice without the true Chan model — building ≠ converging
-  for that one file; the saturable waveform is genuinely out of ngspice's reach.)
+  transport-delay/√ fallbacks, with `exact:false` now warned on
+  `circuit.warnings`) — unblocked Draft8/PLL/PLL2/TwoTau/HalfSlope. A **Chan
+  magnetic-core inductor** (`Hc/Bs/Br/A/Lm/Lg/N`) now **refuses atomically**
+  (`engine/coreInductor.ts`) — ngspice has no saturable-core primitive, and
+  substituting unsaturated linear L deleted the phenomenon under study.
+  NonLinearTransformer is the Chan casualty. DIAC/TRIAC invoke the
+  unmodified file's authored `.subckt`s; VARISTOR and PHASEDET have direct
+  LTspice waveform proofs. Named deck refusals: NIGBT (LTspice-only
+  intrinsic) and Chan-core NonLinearTransformer. Royer's encrypted LT1184F
+  remains a harness hard op failure until unresolvedSubckts is applied.
 - ✅ **Repository-owned analysis/UX stress pack** (`Circuit_testing_v1/`,
   expanded 2026-07-23): 19 LTspice-compatible `.asc` fixtures plus `run.sh`
   cover OP/TRAN/AC/DC/STEP/MEAS/TF/NOISE, RLC behavior, an 18-part ladder,
@@ -184,8 +192,10 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     map their control/output pairs (the `2` variants swap controls; G reverses
     output polarity). This flips **22 acceptance files** from "placed without
     pin-accurate geometry (connections may be wrong)" to pin-accurate — incl. the
-    key-goal `deadtime.asc`. Warning-clean import coverage ultimately reached
-    **80/82**; only NIGBT and encrypted LT1184F remain named refusals.
+    key-goal `deadtime.asc`. Warning-clean import coverage is **81/82**;
+    deck-built **80/82**; op-converged **79/82**. Deck refusals: NIGBT and
+    Chan-core NonLinearTransformer. Royer.asc hard-fails at op on encrypted
+    LT1184F until unresolvedSubckts is applied in the harness.
     **Correction (2026-08-03):** “every vendor part” was false. AD8235, LT1168,
     LT1194, and LT1795 expose instrumentation/fully-differential/high-current
     multi-pin layouts. The guessed opampO bank collapsed REF/output/supply nets
@@ -2117,5 +2127,7 @@ should map LTspice symbol `type` → Tau `ComponentKind`, falling back to a gene
 
 _This footer is intentionally not a live status line — see the `PROGRESS.md`
 heartbeat for the current test count and active unit. The committed runner now
-proves **80/82 warning-clean, deck-built, and op-converged**. The remaining two
-files—misc\nigbt and encrypted LT1184F—are explicit refusals, not false passes._
+proves **81/82 warning-clean, 80/82 deck-built, and 79/82 op-converged**. Deck
+refusals: misc\nigbt and Chan-core NonLinearTransformer. Royer.asc still
+hard-fails at op on encrypted LT1184F until the harness applies
+unresolvedSubckts._

@@ -1,21 +1,20 @@
 /**
- * LTspice nonlinear (Chan) magnetic-core inductors → a linear ngspice inductor.
+ * LTspice nonlinear (Chan) magnetic-core inductors.
  *
  * LTspice sizes a saturable inductor from core geometry and a B-H curve, e.g.
  *   SYMATTR Value     Hc=16. Bs=.44 Br=.10     (coercive force / saturation / remanence)
  *   SYMATTR Value2    A=0.0000251 Lm=0.0198    (core area m² / magnetic path length m)
  *   SYMATTR SpiceLine Lg=0.0006858 N=1000      (air-gap length m / turns)
- * ngspice (≤46) has no equivalent saturable-core primitive, so the hysteretic
- * waveform can't be reproduced. We instead emit the *unsaturated* small-signal
- * inductance from the magnetic circuit's reluctance - exact in the linear region
- * (the operating point and small-signal AC of most transformer demos) - so the
- * deck builds and runs instead of throwing.
+ *
+ * ngspice (≤46) has no equivalent saturable-core primitive, so Tau refuses to
+ * simulate these parts rather than silently substituting the unsaturated
+ * linear inductance (which deletes the saturation phenomenon under study).
+ *
+ * `coreInductance` remains as the documented linear-region size for diagnostics
+ * and unit tests; the deck builder must not emit it.
  *
  *   reluctance R = Lg/(µ0·A) + Lm/(µ0·µi·A),  initial permeability µi = Br/(µ0·Hc)
  *   inductance  L = N² / R = N²·µ0·A / (Lg + Lm/µi)
- *
- * A gapped core is gap-dominated (the µi term is negligible); an ungapped core
- * (Lg=0) reduces to L = µ0·µi·N²·A / Lm.
  */
 const MU0 = 4 * Math.PI * 1e-7; // 1.25663706…e-6 H/m
 
@@ -34,10 +33,15 @@ export function isCoreInductor(value: string): boolean {
   return /\b(hc|bs|br|lm|lg)\s*=/i.test(value);
 }
 
+/** User-visible refusal when a Chan-core inductor cannot be simulated exactly. */
+export function coreInductorRefusalMessage(ref: string): string {
+  return `${ref} is an LTspice Chan magnetic-core inductor; ngspice has no saturable-core primitive and Tau no longer substitutes its unsaturated linear inductance.`;
+}
+
 /**
  * Compute the unsaturated linear inductance (Henries) of an LTspice Chan-core
- * inductor spec, or `null` when the spec lacks the geometry needed to size it
- * (it then falls back to the caller's normal parse).
+ * inductor spec, or `null` when the spec lacks the geometry needed to size it.
+ * Kept for diagnostics/tests only - never emit this as a silent substitute.
  */
 export function coreInductance(value: string): number | null {
   if (!isCoreInductor(value)) return null;
