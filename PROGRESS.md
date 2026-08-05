@@ -2269,6 +2269,31 @@ needs Omar's Developer ID.
 - **Next candidates:** keep the remaining unsupported ASC drawing/window records explicit, and continue the acceptance-corpus path rather than widening the editor with lossy representations.
 
 
+## 2026-08-04 22:12 CDT — auto/ltspice-parity — authored-analysis differential parity slice
+
+What I did:
+- Landed a re-runnable LTspice↔ngspice differential harness beyond TRAN-only
+  waveform proofs: RC `.tran`/`.ac` and divider `.dc`/`.op`/`.tf`/`.noise`.
+- Coverage matrix printed to stdout (`pass`/`sibling`/`gap`); DoD broad-
+  differential box stays **open** (step families, curvetrace, NoiseFigure,
+  Class-D non-tran still gaps).
+- Fixed Class-D Efficiency pairing after P1.6 `.meas` deck emission
+  (strip duplicate `.meas` in `prepareDeck` so LTspice no longer refuses
+  "Multiply defined .measure").
+
+Files: `scripts/parityHarness.ts`, `scripts/differentialParity.corpus.ts`,
+`src/io/differentialParityReport.ts(+test)`, `scripts/differential-parity.sh`,
+`scripts/dod-parity.sh`, AGENTS/FEATURE_PARITY/PROGRESS/STATE.
+
+Tests: tsc clean; vitest 2609 passed / 6 skipped; differential + full
+dod-parity corpora green (pass=6 sibling=5 gap=6 on stdout).
+
+Parity items: DoD differential 🟡 partial (harness + small matrix); not ✅.
+Shippable? NO.
+
+Next step: widen differential matrix; §10; named-device; unsigned release.
+
+
 ## 2026-08-04 21:51 CDT — auto/ltspice-parity — native `.step` temp + Rust expander (P1.6)
 
 What I did:
