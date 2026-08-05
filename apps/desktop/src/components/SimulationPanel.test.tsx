@@ -567,7 +567,11 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     fireEvent.change(screen.getByLabelText("Circuit duration unit"), { target: { value: "min" } });
     fireEvent.change(screen.getByLabelText("Circuit duration value"), { target: { value: "3" } });
     expect(handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 180, steps: 240 });
-    expect(screen.getByText(/simulated circuit time/i)).toBeTruthy();
+    // Advanced help and the duration control both say "simulated circuit time"
+    // on purpose — assert the control-specific note (and the 3 min → 180 s map).
+    expect(
+      screen.getByText(/This is simulated circuit time\. A 3 min run models 180 s/i),
+    ).toBeTruthy();
   });
 
   it("reports measured solver elapsed time without presenting it as an estimate", () => {
