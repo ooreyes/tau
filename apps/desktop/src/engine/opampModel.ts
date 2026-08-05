@@ -11,6 +11,7 @@ import {
 const BEHAVIORAL_SYMBOLS = new Set([
   "opamp2",
   "universalopamp",
+  "universalopamp1",
   "universalopamp2",
 ]);
 

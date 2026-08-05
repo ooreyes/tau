@@ -185,6 +185,8 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("ind")).toBe("inductor");
     expect(ltspiceTypeToKind("voltage")).toBe("vsource");
     expect(ltspiceTypeToKind("current")).toBe("isource");
+    expect(ltspiceTypeToKind("load")).toBe("isource");
+    expect(ltspiceTypeToKind("load2")).toBe("isource");
     expect(ltspiceTypeToKind("diode")).toBe("diode");
     expect(ltspiceTypeToKind("npn")).toBe("npn");
     expect(ltspiceTypeToKind("pnp")).toBe("pnp");
@@ -1668,8 +1670,39 @@ PINATTR SpiceOrder 3`);
     const u1 = doc.components.find((c) => c.label === "U1");
     const u2 = doc.components.find((c) => c.label === "U2");
     expect(u1?.ltModelFile).toBe("UniversalOpAmp1.lib");
+    expect(u1?.ltModelName).toBe("level1");
     expect(u2?.ltModelFile).toBe("AD8237.lib");
     expect(u2?.ltModelName ?? u2?.value).toMatch(/AD8237/i);
+  });
+
+  it("imports load.asy as isource with the dissipative load flag", () => {
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL load 100 100 R0
+SYMATTR InstName Iload
+SYMATTR Value PWL(0 0 +250m -50 +500m 50)
+WIRE 100 100 100 50
+WIRE 100 164 100 200`;
+    const loadAsy = parseAsy(`Version 4
+SymbolType CELL
+SYMATTR Value I
+SYMATTR Prefix I
+PIN 16 0 NONE 0
+PINATTR PinName A
+PINATTR SpiceOrder 1
+PIN 16 64 NONE 0
+PINATTR PinName B
+PINATTR SpiceOrder 2`);
+    const doc = importAsc(source, {
+      resolveSymbolMetadata: (symbolType) => {
+        const leaf = symbolType.replace(/\\/g, "/").split("/").pop()?.toLowerCase();
+        return leaf === "load" ? loadAsy : null;
+      },
+    });
+    const iload = doc.components.find((c) => c.label === "Iload");
+    expect(iload?.kind).toBe("isource");
+    expect(iload?.value).toMatch(/PWL\(0 0 \+250m -50 \+500m 50\)\s+load$/i);
+    expect(doc.foreignSymbols).toHaveLength(0);
   });
 
   it("Opamps\\opamp is a subckt (not the behavioral opamp kind) with SpiceOrder pins invin FIRST", () => {

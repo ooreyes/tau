@@ -9,18 +9,40 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 01:16 CDT**
+**Status: DONE - 2026-08-05 01:38 CDT**
 
-Unit: Educational Cohn.asc authored `.ac` differential → **pass=23**.
+Unit: load/load2 + OTA soft-epsilon + UOA1 behavioral / SpiceModel profile → named-device **47.9%**.
 ```
-SUMMARY pass=23 sibling=5 gap=1
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1217 refuse=1324 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.9%
 ```
-Class-D noise/tf stays gap (no authored .noise/.tf). Named-device tip **47.3%**.
-SHIPPABLE? **NO**
+Differential gap=1 Class-D noise/tf unchanged. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
 ---
+
+### 2026-08-05 — load/soft-epsilon/UOA1 → exact-rate 47.9% (§DoD)
+
+**What I did**
+- `load`/`load2.asy` → isource with dissipative flag (AD8410A/AD8411A).
+- OTA literal soft `epsilon`: Help smoothstep Rout↔Rclamp blend (AD8205/ADR225).
+- `ltModelName` prefers `.asy` SpiceModel profile (`level1`); UniversalOpAmp1
+  joins Tau-owned behavioral family with UOA/UOA2.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1217 refuse=1324 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.9%
+```
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **47.9%** (not ≥95%). SHIPPABLE? NO
+
+**Next**
+- Encrypted bare SYMBOL stays refuse; remaining non-REF refuse classes;
+  broaden differential (Class-D noise/tf stays gap — no authored .noise/.tf)
+
 
 ### 2026-08-05 — Cohn.asc AC differential → pass=23 (§DoD)
 

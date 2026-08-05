@@ -347,6 +347,11 @@ function runFile(file: CorpusFile): { row: CorpusRow; encryptedDependent: boolea
     row.error = `deck: ${error instanceof Error ? error.message : String(error)}`;
   }
 
+  if (CORPUS_MATCH && process.env.NAMED_DEVICE_DUMP === "1") {
+    // eslint-disable-next-line no-console
+    console.log(`DUMP ${file.display}: error=${row.error ?? "(none)"} unresolved=${(row.unresolvedSubckts ?? []).join(",")}`);
+  }
+
   return {
     row,
     encryptedDependent: circuitDependsOnEncryptedModel(components, row.unresolvedSubckts ?? []),

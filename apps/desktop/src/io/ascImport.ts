@@ -460,6 +460,11 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     battery: "vsource",
     signal: "vsource",
     current: "isource",
+    // load/load2.asy are Prefix-I current sources whose leaf name IS the
+    // dissipative `load`/`load2` flag (AD8410A Iload). Map to isource; the
+    // importer appends the flag onto Value so spiceNetlist can handle it.
+    load: "isource",
+    load2: "isource",
     diode: "diode",
     schottky: "diode",
     varactor: "diode",
@@ -601,6 +606,11 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
   // onto n; the identity map would flip every imported source's sign (logamp's
   // I1 then starves the log loop and ngspice's op hangs in gmin stepping).
   current: [{ name: "-", dx: 0, dy: 80 }, { name: "+", dx: 0, dy: 0 }],
+  // load.asy: A(16,0)=SpiceOrder1 (+), B(16,64)=SpiceOrder2 (−). Same polarity
+  // zip as current.asy so Iload PWL demos (AD8410A) keep signed current.
+  load: [{ name: "-", dx: 16, dy: 64 }, { name: "+", dx: 16, dy: 0 }],
+  // load2.asy shares current.asy pin geometry (+(0,0)/−(0,80)).
+  load2: [{ name: "-", dx: 0, dy: 80 }, { name: "+", dx: 0, dy: 0 }],
   // bi (B-current) has current.asy's geometry (+(0,0)/−(0,80)) but bsource
   // emission is `B p n` verbatim (no isource swap), so it keeps the identity
   // zip that `current` had to give up.
@@ -926,6 +936,8 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     ind: "ind", ind2: "ind", l: "ind",
     voltage: "voltage", battery: "voltage", signal: "voltage",
     current: "current",
+    load: "load",
+    load2: "load2",
     diode: "diode", schottky: "schottky", zener: "zener", led: "led",
     varactor: "diode", smdiode: "smdiode",
     npn: "npn", npn3: "npn", npn4: "npn",
@@ -1966,7 +1978,11 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
           ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
           : kind === "subckt"
             ? subcktValueFromSymbol(leaf, symbol.attrs, symbolMetadata?.attrs)
-            : componentValueFromAttrs(kind, symbol.attrs);
+            : kind === "isource" && (leaf === "load" || leaf === "load2")
+              // Leaf name IS the dissipative flag; append so spiceNetlist sees
+              // the same `… load` / `… load2` token a hand-netlisted I-source uses.
+              ? `${componentValueFromAttrs(kind, symbol.attrs)} ${leaf}`.trim()
+              : componentValueFromAttrs(kind, symbol.attrs);
     // A part Tau wrote under a carrier symbol keeps its slots in the Tau-only
     // field, since on the carrier their own names belong to another part. They
     // are read back with the `Value` they sat beside, so the exporter has the
@@ -2011,9 +2027,20 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       // the named Simulation model control.
       ...((kind === "opamp" || kind === "subckt") && symbolMetadata
         ? {
-          ltModelName: [symbolMetadata.attrs.Value2, symbolMetadata.attrs.Value, leaf]
-            .map((candidate) => candidate?.trim().split(/\s+/)[0] ?? "")
-            .find((candidate) => candidate !== "" && !candidate.includes("=")) ?? leaf,
+          // Prefer .asy SpiceModel when it is a profile/subckt name (level1,
+          // ISO pulse) rather than a *.lib path — Value2 is often params
+          // (`Avol=1Meg…`), so leaf alone wrongly requested "universalopamp1".
+          ltModelName: (() => {
+            const metaSpice = symbolMetadata.attrs.SpiceModel?.trim() ?? "";
+            const metaFile = symbolMetadata.attrs.ModelFile?.trim() ?? "";
+            const profile = metaSpice
+              && (metaFile || !/\.(lib|sub|mod)$/i.test(metaSpice))
+              ? metaSpice.split(/\s+/)[0]
+              : "";
+            return [profile, symbolMetadata.attrs.Value2, symbolMetadata.attrs.Value, leaf]
+              .map((candidate) => candidate?.trim().split(/\s+/)[0] ?? "")
+              .find((candidate) => candidate !== "" && !candidate.includes("=")) ?? leaf;
+          })(),
           ...(resolvedModelFile ? { ltModelFile: resolvedModelFile } : {}),
         }
         : {}),

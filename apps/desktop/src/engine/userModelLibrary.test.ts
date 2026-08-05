@@ -362,7 +362,7 @@ describe("parseUserModelLibraries", () => {
     // Rout is swapped for Rclamp outside the rails — never a bare R plus dead open.
     expect(block).not.toMatch(/R__tau_ota_AMP_A1/);
     expect(block).toContain(
-      "B__tau_ota_comp_AMP_A1 N006 0 I={(V(N006,0))>(560m) ? ((V(N006,0))-(560m))/(1) : (V(N006,0))<(-560m) ? ((V(N006,0))-(-560m))/(1) : (V(N006,0))/(1k)}",
+      "B__tau_ota_comp_AMP_A1 N006 0 I={(V(N006,0))>(560m) ? (((V(N006,0))-(560m))/(1)) : (V(N006,0))<(-560m) ? (((V(N006,0))-(-560m))/(1)) : (V(N006,0))/(1k)}",
     );
   });
 
@@ -376,17 +376,18 @@ describe("parseUserModelLibraries", () => {
     ]).subckts.get("amp") ?? "";
     expect(block).toContain("iout=3u");
     expect(block).toContain(
-      "B__tau_ota_comp_AMP_A1 N003 1 I={(V(N003,1))>(0) ? ((V(N003,1))-(0))/(1) : (V(N003,1))<(-1) ? ((V(N003,1))-(-1))/(1) : 0}",
+      "B__tau_ota_comp_AMP_A1 N003 1 I={(V(N003,1))>(0) ? (((V(N003,1))-(0))/(1)) : (V(N003,1))<(-1) ? (((V(N003,1))-(-1))/(1)) : 0}",
     );
   });
 
-  it("refuses OTA soft epsilon voltage-compliance shaping", () => {
-    const registry = parseUserModelLibraries([
+  it("maps OTA soft epsilon voltage-compliance via smoothstep Rclamp blend", () => {
+    const block = parseUserModelLibraries([
       ".subckt AMP 1 2 3 4 5\nA1 0 N003 0 0 0 0 N006 0 OTA g=1u linear Vlow=-60m Vhigh=60m epsilon=20m\n.ends AMP",
-    ]);
-    expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
-      /Simulation refused: AMP\/A1 uses OTA voltage-compliance shaping \(rclamp\/epsilon\) not mapped exactly\..*No approximate or partial circuit was run/,
-    );
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("B__tau_ota_comp_");
+    expect(block).toContain("20m");
+    expect(block).toMatch(/3-2\*/); // smoothstep
+    expect(block).not.toMatch(/TAU_MODEL_REFUSAL.*epsilon/i);
   });
 
   it("refuses non-literal OTA voltage compliance rails", () => {
@@ -566,13 +567,13 @@ describe("parseUserModelLibraries", () => {
     expect(block).toContain("A__tau_ota_AMP_A1 0 N004 __tau_ota_sink_AMP_A1 __tau_ota_AMP_A1");
   });
 
-  it("refuses soft epsilon even when four-quadrant ports are active", () => {
-    const registry = parseUserModelLibraries([
+  it("maps soft epsilon even when four-quadrant ports are active", () => {
+    const block = parseUserModelLibraries([
       ".subckt AMP 1 2 3 4 5\nA1 1 2 3 4 0 0 5 0 OTA g=1m Vhigh=1e308 Vlow=-1e308 epsilon=20m\n.ends AMP",
-    ]);
-    expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
-      /Simulation refused: AMP\/A1 uses OTA voltage-compliance shaping \(rclamp\/epsilon\) not mapped exactly\..*No approximate or partial circuit was run/,
-    );
+    ]).subckts.get("amp") ?? "";
+    // Infinite rails → no voltage clamp B-load; soft epsilon is a no-op there.
+    expect(block).not.toMatch(/TAU_MODEL_REFUSAL.*epsilon/i);
+    expect(block).toContain("A__tau_ota_");
   });
 
   it("strips the fatal bare `noiseless` flag from a captured subckt's instance lines", () => {

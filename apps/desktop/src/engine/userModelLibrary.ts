@@ -446,8 +446,10 @@ function negateOtaCurrentToken(token: string): string | null {
  * disables current limiting entirely (`Io = G·Vdiff·…`) — map that by
  * omitting Iout so the native model stays on its unbounded gm path; never
  * substitute tanh. Finite Vhigh/Vlow (Help defaults 2/0 when omitted) map
- * as epsilon=0 Rclamp-to-rail load swap on V(out,common); non-zero
- * `epsilon` still refuses. Cout remains a literal passive across out/common. */
+ * as Rclamp-to-rail load swap on V(out,common); literal `epsilon` is the
+ * Help "voltage range to gradually switch in Rclamp" — smoothstep-blend
+ * Rout↔Rclamp over that width (epsilon=0 / omitted stays abrupt). Cout
+ * remains a literal passive across out/common. */
 function translateLtspiceOta(line: string, subcktName: string): string[] {
   const match = /^\s*(A\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+OTA\b(.*)$/i.exec(line);
   if (!match) return [line];
@@ -457,12 +459,15 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
 
   const mul1Active = mul1p.toLowerCase() !== mul1n.toLowerCase();
   const mul2Active = mul2p.toLowerCase() !== mul2n.toLowerCase();
-  // Soft epsilon blend is not yet pin-faithful; abrupt (0 / omitted) is.
+  let epsilonTok: string | null = null;
+  let epsilonAbs = 0;
   if (params.has("epsilon")) {
     const epsilon = parseOtaComplianceLiteral(params.get("epsilon")!);
-    if (epsilon === null || Math.abs(epsilon) > 0) {
-      return refusal("uses OTA voltage-compliance shaping (rclamp/epsilon) not mapped exactly.");
+    if (epsilon === null) {
+      return refusal("uses non-literal OTA epsilon; Tau cannot map expression soft-clamp width exactly.");
     }
+    epsilonAbs = Math.abs(epsilon);
+    if (epsilonAbs > 0) epsilonTok = params.get("epsilon")!;
   }
 
   // LTspice Help / LTwiki: `linear` disables tanh current limiting
@@ -581,9 +586,27 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
       rout !== undefined && (routLiteral === null || routLiteral < 1e100)
         ? `(${vDiff})/(${rout})`
         : "0";
-    translated.push(
-      `B__tau_ota_comp_${safe} ${out} ${common} I={(${vDiff})>(${vhighTok}) ? ((${vDiff})-(${vhighTok}))/(${rclampTok}) : (${vDiff})<(${vlowTok}) ? ((${vDiff})-(${vlowTok}))/(${rclampTok}) : ${inRangeLoad}}`,
-    );
+    const iHigh = `((${vDiff})-(${vhighTok}))/(${rclampTok})`;
+    const iLow = `((${vDiff})-(${vlowTok}))/(${rclampTok})`;
+    if (epsilonTok !== null && epsilonAbs > 0) {
+      // Help: epsilon is the voltage range to gradually switch in Rclamp.
+      // Smoothstep weights rise from 0→1 across [Vhigh−ε, Vhigh] and
+      // [Vlow, Vlow+ε]; outside the window the abrupt Rclamp-to-rail load
+      // applies, inside the rails Rout (or open) remains.
+      const tHigh = `((${vDiff})-((${vhighTok})-(${epsilonTok})))/(${epsilonTok})`;
+      const tLow = `(((${vlowTok})+(${epsilonTok}))-(${vDiff}))/(${epsilonTok})`;
+      const wHigh =
+        `(${vDiff})<=((${vhighTok})-(${epsilonTok})) ? 0 : (${vDiff})>=(${vhighTok}) ? 1 : (${tHigh})*(${tHigh})*(3-2*(${tHigh}))`;
+      const wLow =
+        `(${vDiff})>=((${vlowTok})+(${epsilonTok})) ? 0 : (${vDiff})<=(${vlowTok}) ? 1 : (${tLow})*(${tLow})*(3-2*(${tLow}))`;
+      translated.push(
+        `B__tau_ota_comp_${safe} ${out} ${common} I={(1-(${wHigh})-(${wLow}))*(${inRangeLoad})+(${wHigh})*(${iHigh})+(${wLow})*(${iLow})}`,
+      );
+    } else {
+      translated.push(
+        `B__tau_ota_comp_${safe} ${out} ${common} I={(${vDiff})>(${vhighTok}) ? (${iHigh}) : (${vDiff})<(${vlowTok}) ? (${iLow}) : ${inRangeLoad}}`,
+      );
+    }
   } else if (rout && (routLiteral === null || routLiteral < 1e100)) {
     translated.push(`R__tau_ota_${safe} ${out} ${common} ${rout}`);
   }

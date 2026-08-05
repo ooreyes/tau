@@ -162,8 +162,8 @@ account and sign/notarize/ship.
       document, user-installed, user-attached, or Tau-owned compatible models.
       **Partial (2026-08-05):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
-      `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1201 refuse=1340 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.3%` — tip after
-      nested .lib attach (+10 vs 46.9%; incomplete asym prior). Soft epsilon / encrypted bare SYMBOL stay refuse.
+      `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1217 refuse=1324 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.9%` — tip after
+      nested .lib attach (+16 vs 47.3%; load/soft-epsilon/UOA1). Soft epsilon / encrypted bare SYMBOL stay refuse.
       Full unique-leaf probe 33.4%/enc=2781 remains retracted (denominator
       game). Never silent substitution. ≥95% exact-rate **not** met; DoD box
       stays unchecked. SHIPPABLE? **NO**.

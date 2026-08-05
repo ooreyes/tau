@@ -44,6 +44,15 @@ describe("vendor op-amp model identity", () => {
     })).mode).toBe("behavioral");
   });
 
+  it("treats UniversalOpAmp1 as Tau-owned behavioral (level1 family)", () => {
+    expect(opampIdentity(opamp({
+      value: "level1",
+      ltSymbolType: "OpAmps\\UniversalOpAmp1",
+      ltModelName: "level1",
+      ltModelFile: "UniversalOpAmp1.lib",
+    })).mode).toBe("behavioral");
+  });
+
   it("parses a continued subckt interface without counting params as ports", () => {
     expect(opampSubcktHeader(
       ".subckt AMP in+ in- v+\n+ v- out params: A=1Meg\nR1 out 0 1k\n.ends AMP",
