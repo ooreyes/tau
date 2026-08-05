@@ -83,8 +83,13 @@ export function formatDifferentialParityReport(report: DifferentialParityReport)
       + `(DoD box stays open until broad authored-analysis matrix is green)`,
   );
   lines.push("GAPS (explicit):");
-  for (const cell of report.cells.filter((entry) => entry.status === "gap")) {
-    lines.push(`  - ${cell.analysis}/${cell.circuit}: ${cell.note}`);
+  const gaps = report.cells.filter((entry) => entry.status === "gap");
+  if (gaps.length === 0) {
+    lines.push("  (none in this harness slice — DoD broad matrix still open)");
+  } else {
+    for (const cell of gaps) {
+      lines.push(`  - ${cell.analysis}/${cell.circuit}: ${cell.note}`);
+    }
   }
   return `${lines.join("\n")}\n`;
 }

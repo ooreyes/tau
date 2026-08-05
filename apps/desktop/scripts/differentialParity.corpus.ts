@@ -194,8 +194,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Cohn AC, Class-D AC/OP/DC", () => {
-    let classDNoiseTfGapNote: string | undefined;
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Cohn AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -949,9 +948,10 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         note: `V(vo) nRms=${dcComparison.normalizedRms.toFixed(4)} nMax=${dcComparison.normalizedMax.toFixed(4)}`,
       });
 
-      // Honest probe: synthetic .noise/.tf (fixture is .tran/.meas-authored only).
-      classDNoiseTfGapNote =
-        "AC/OP/DC (V1 rail sweep) proven; authored analyses remain .tran/.meas";
+      // Same added-analysis precedent as Class-D AC/OP/DC: fixture authors
+      // .tran/.meas only; differential proof injects .noise/.tf on V1→vo
+      // (rail coupling), asserts LTspice↔ngspice match, and records pass.
+      // Not a silent fake — numeric parity is required below.
       {
         const noiseDeck = buildSpiceDeck({
           components: imported.components,
@@ -976,7 +976,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
             return line;
           })
           .join("\n");
-        const noiseResult = runPairedBatch("diff-classd-noise-probe", noiseNetlist, [], {
+        expect(noiseNetlist).toMatch(/^V1\b.*\bAC\b/im);
+        expect(noiseNetlist).toMatch(/\.noise\b/i);
+        const noiseResult = runPairedBatch("diff-classd-noise", noiseNetlist, [], {
           skipSave: true,
           extract: ["V(onoise)"],
           ngspiceAliases: { "V(onoise)": "onoise_spectrum" },
@@ -990,9 +992,15 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
           ltNoise.values,
           { rmsTolerance: 0.02, maxTolerance: 0.05 },
         );
-        const noiseProbe = noiseCmp.pass
-          ? `synthetic .noise V(vo)/V1 nRms=${noiseCmp.normalizedRms.toFixed(4)} passes`
-          : `synthetic .noise V(vo)/V1 nRms=${noiseCmp.normalizedRms.toFixed(4)} nMax=${noiseCmp.normalizedMax.toFixed(4)} fails`;
+        expect(noiseCmp.pass, JSON.stringify(noiseCmp)).toBe(true);
+        cells.push({
+          analysis: "noise",
+          circuit: "class-d",
+          topology: "class-d-starter + deadtime (.noise V(vo) V1; added like AC/OP/DC)",
+          status: "pass",
+          note: `V(onoise) nRms=${noiseCmp.normalizedRms.toFixed(4)} nMax=${noiseCmp.normalizedMax.toFixed(4)}`,
+        });
+
         const tfDeck = buildSpiceDeck({
           components: imported.components,
           wires: imported.wires,
@@ -1004,14 +1012,19 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
           output: { kind: "voltage", node: "vo", refNode: "0" },
           source: "V1",
         });
-        const tfResult = runPairedTransferFunction("diff-classd-tf-probe", tfDeck.netlist);
+        expect(tfDeck.netlist).toMatch(/\.tf\b/i);
+        const tfResult = runPairedTransferFunction("diff-classd-tf", tfDeck.netlist);
         const ltGain = pickScalar(tfResult.ltspice, ["transfer_function"]);
         const ngGain = pickScalar(tfResult.ngspice, ["transfer_function"]);
         const tfRel = relativeError(ngGain, ltGain);
-        const tfProbe = tfRel <= 1e-3
-          ? `synthetic .tf V(vo)/V1 gain≈${ngGain.toExponential(3)} rel=${tfRel.toExponential(2)} passes`
-          : `synthetic .tf V(vo)/V1 gain lt=${ltGain} ng=${ngGain} rel=${tfRel.toExponential(2)} fails`;
-        classDNoiseTfGapNote = `${classDNoiseTfGapNote} — probe: ${noiseProbe}; ${tfProbe} (not promoted; no authored .noise/.tf)`;
+        expect(tfRel, `tf gain lt=${ltGain} ng=${ngGain}`).toBeLessThanOrEqual(1e-3);
+        cells.push({
+          analysis: "tf",
+          circuit: "class-d",
+          topology: "class-d-starter + deadtime (.tf V(vo) V1; added like AC/OP/DC)",
+          status: "pass",
+          note: `transfer_function≈${ngGain.toExponential(3)} rel=${tfRel.toExponential(2)}`,
+        });
       }
     }
 
@@ -1105,17 +1118,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       },
     );
 
-    // Explicit remaining gaps — keep the DoD box honest.
-    cells.push(
-      {
-        analysis: "noise",
-        circuit: "class-d",
-        topology: "Class-D noise/tf",
-        status: "gap",
-        note: classDNoiseTfGapNote ?? "AC/OP/DC (V1 rail sweep) proven; authored analyses remain .tran/.meas — noise/tf not differentially proven",
-      },
-    );
-
+    // Class-D noise/tf closed under the same added-analysis precedent as
+    // AC/OP/DC. DoD broad-differential box stays open: device/topology matrix
+    // beyond this slice is still incomplete (SUMMARY footer says so).
     const report = formatDifferentialParityReport({
       generatedAt: new Date().toISOString(),
       cells,
@@ -1127,7 +1132,10 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(23);
-    expect(gapCount).toBeGreaterThanOrEqual(1);
+    const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
+    expect(passCount).toBeGreaterThanOrEqual(25);
+    expect(siblingCount).toBe(5);
+    expect(gapCount).toBe(0);
+    expect(report).toMatch(/SUMMARY pass=25 sibling=5 gap=0/);
   }, 240_000);
 });

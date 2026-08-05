@@ -47,4 +47,13 @@ describe("differentialParityReport", () => {
     expect(text).toMatch(/GAPS \(explicit\):[\s\S]*step\/any/);
     expect(text).not.toMatch(/SUMMARY[^\n]*pass=3/);
   });
+
+  it("prints (none) when this harness slice has zero gaps", () => {
+    const text = formatDifferentialParityReport({
+      generatedAt: "2026-08-05T00:00:00Z",
+      cells: cells.filter((cell) => cell.status !== "gap"),
+    });
+    expect(text).toContain("SUMMARY pass=1 sibling=1 gap=0");
+    expect(text).toMatch(/GAPS \(explicit\):\n {2}\(none in this harness slice/);
+  });
 });

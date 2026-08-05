@@ -9,18 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 01:38 CDT**
+**Status: DONE - 2026-08-05 01:42 CDT**
 
-Unit: load/load2 + OTA soft-epsilon + UOA1 behavioral / SpiceModel profile → named-device **47.9%**.
+Unit: Track A — Class-D differential noise/tf gap→pass (same AC/OP/DC added-analysis precedent).
 ```
-NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1217 refuse=1324 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.9%
+SUMMARY pass=25 sibling=5 gap=0
 ```
-Differential gap=1 Class-D noise/tf unchanged. SHIPPABLE? **NO**
+Harness-slice gaps closed; broad DoD matrix still open. Named-device 47.9% unchanged. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — Class-D noise/tf differential → pass=25 (§DoD)
+
+**What I did**
+- Promoted Class-D `.noise V(vo) V1` and `.tf V(vo) V1` from gap/probe to
+  asserted **pass** cells under the same added-analysis precedent already used
+  for Class-D AC/OP/DC (fixture authors `.tran`/`.meas`; harness injects analyses).
+- Report helper prints `(none…)` when harness-slice gap=0; DoD footer still
+  says broad matrix open.
+
+**Exact stdout**
+```
+SUMMARY pass=25 sibling=5 gap=0 (DoD box stays open until broad authored-analysis matrix is green)
+noise class-d pass … V(onoise) nRms=0.0003 nMax=0.0005
+tf    class-d pass … transfer_function≈9.771e-1 rel=3.00e-8
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `apps/desktop/src/io/differentialParityReport.ts` (+ unit test)
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `vitest` differentialParityReport + `scripts/differential-parity.sh`
+- typecheck + apps/desktop test (gates)
+
+**Parity items**
+- Differential 🟡 harness **pass=25 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- Broaden differential topology/device matrix; overnight plaintext refuse dig
+  (Track B); encrypted bare SYMBOL stay honest refuse
+
 
 ### 2026-08-05 — load/soft-epsilon/UOA1 → exact-rate 47.9% (§DoD)
 
