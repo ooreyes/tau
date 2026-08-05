@@ -280,8 +280,10 @@ function translateDissipativeCurrentLoad(line: string): string {
 
 /** Map the documented LTspice OTA subset used by current vendor op-amp
  * libraries onto Tau's pinned native OTA code model. Multiplying ports must be
- * tied off, compliance must be explicitly infinite, and asymmetric/linear
- * variants refuse rather than quietly changing transfer behavior. Cout/Rout
+ * tied off and voltage compliance must be explicitly infinite. Asymmetric
+ * Isource/Isink (`asym`) and input `Ref` offset map onto the patched OTA
+ * (tanh current limit + series offset). `linear`, `rclamp`, and `epsilon`
+ * still refuse — they change the transfer or compliance shape. Cout/Rout
  * remain literal passive elements across LTspice's output/common pins. */
 function translateLtspiceOta(line: string, subcktName: string): string[] {
   const match = /^\s*(A\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+OTA\b(.*)$/i.exec(line);
@@ -293,8 +295,18 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   if (mul1p.toLowerCase() !== mul1n.toLowerCase() || mul2p.toLowerCase() !== mul2n.toLowerCase()) {
     return refusal("uses active four-quadrant multiplier ports; the native two-port OTA is not equivalent.");
   }
-  if (/\b(?:asym|linear)\b/i.test(tail) || params.has("isink") || params.has("ref") || params.has("rclamp") || params.has("epsilon")) {
-    return refusal("uses an asymmetric, linear, offset, or compliance-shaping OTA option not yet mapped exactly.");
+  if (/\blinear\b/i.test(tail)) {
+    return refusal("uses LTspice OTA 'linear' hard-clip transfer; Tau's tanh Iout limit is not equivalent.");
+  }
+  if (params.has("rclamp") || params.has("epsilon")) {
+    return refusal("uses OTA voltage-compliance shaping (rclamp/epsilon) not mapped exactly.");
+  }
+
+  const isource = params.get("isource") ?? params.get("isrc");
+  const isink = params.get("isink");
+  const wantsAsym = /\basym\b/i.test(tail) || isource !== undefined || isink !== undefined;
+  if (wantsAsym && (isource === undefined || isink === undefined)) {
+    return refusal("uses asymmetric OTA current limits without both Isource and Isink; refusing rather than guessing a symmetric Iout.");
   }
 
   const gm = params.get("g") ?? "1";
@@ -310,7 +322,12 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   const model = `__tau_ota_${safe}`;
   const sink = `__tau_ota_sink_${safe}`;
   const sensor = `V__tau_ota_${safe}`;
-  const modelParams = [`gm=${gm}`, `iout=${params.get("iout") ?? "10u"}`, "rout=1e308", "rin=1e308"];
+  const modelParams = [`gm=${gm}`, "rout=1e308", "rin=1e308"];
+  if (wantsAsym && isource !== undefined && isink !== undefined) {
+    modelParams.push(`isource=${isource}`, `isink=${isink}`);
+  } else {
+    modelParams.push(`iout=${params.get("iout") ?? "10u"}`);
+  }
   const simpleNoise = [
     ["en", "en"], ["enk", "enk"], ["in", "in_noise"],
     ["ink", "ink"], ["incm", "incm"], ["incmk", "incmk"],
@@ -323,12 +340,21 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
     else modelParams.push(`${ngName}=${value}`);
   }
 
-  const translated = [
-    `.model ${model} ota(${modelParams.join(" ")})`,
-    `A__tau_ota_${safe} ${inp} ${inn} ${sink} ${model}`,
+  const translated: string[] = [`.model ${model} ota(${modelParams.join(" ")})`];
+  let innNode = inn;
+  const ref = params.get("ref");
+  if (ref !== undefined) {
+    // LTspice: I = f(gm*(V(in+)-V(in-)-Ref)). Raise inn by Ref so the
+    // differential seen by the two-port OTA matches that offset exactly.
+    const refNode = `__tau_ota_ref_${safe}`;
+    translated.push(`V__tau_ota_ref_${safe} ${refNode} ${inn} ${ref}`);
+    innNode = refNode;
+  }
+  translated.push(
+    `A__tau_ota_${safe} ${inp} ${innNode} ${sink} ${model}`,
     `${sensor} ${sink} 0 0`,
     `F__tau_ota_${safe} ${out} ${common} ${sensor} 1`,
-  ];
+  );
   const cout = params.get("cout");
   if (cout && finiteLiteral(cout) !== 0) translated.push(`C__tau_ota_${safe} ${out} ${common} ${cout}`);
   const rout = params.get("rout");

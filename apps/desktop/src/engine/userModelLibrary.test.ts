@@ -230,11 +230,49 @@ describe("parseUserModelLibraries", () => {
         ".ends AMP",
       ].join("\n"),
     ]).subckts.get("amp") ?? "";
-    expect(block).toContain(".model __tau_ota_AMP_A1 ota(gm=150u iout=7u rout=1e308 rin=1e308 en=9.8n enk=4)");
+    expect(block).toContain(".model __tau_ota_AMP_A1 ota(gm=150u rout=1e308 rin=1e308 iout=7u en=9.8n enk=4)");
     expect(block).toContain("A__tau_ota_AMP_A1 0 N004 __tau_ota_sink_AMP_A1 __tau_ota_AMP_A1");
     expect(block).toContain("F__tau_ota_AMP_A1 X 0 V__tau_ota_AMP_A1 1");
     expect(block).toContain("C__tau_ota_AMP_A1 X 0 28p");
     expect(block).not.toMatch(/^A1\b/m);
+  });
+
+  it("maps asymmetric Isource/Isink OTA onto the patched split current limits", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A2 0 N005 M M M M N006 M OTA g=130u Isrc=90u Isink=-120u en=16n enk=100 Vlow=-1e308 Vhigh=1e308 Cout=4p asym",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain(
+      ".model __tau_ota_AMP_A2 ota(gm=130u rout=1e308 rin=1e308 isource=90u isink=-120u en=16n enk=100)",
+    );
+    expect(block).toContain("A__tau_ota_AMP_A2 0 N005 __tau_ota_sink_AMP_A2 __tau_ota_AMP_A2");
+    expect(block).toContain("C__tau_ota_AMP_A2 N006 M 4p");
+    expect(block).not.toMatch(/\basym\b/i);
+  });
+
+  it("maps OTA Ref offset as a series input voltage without changing gm/Iout", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A3 N008 4 4 4 4 4 N009 4 OTA g=5.6m iout=300u ref=1.035 Vlow=-1e308 Vhigh=1e308",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("V__tau_ota_ref_AMP_A3 __tau_ota_ref_AMP_A3 4 1.035");
+    expect(block).toContain("A__tau_ota_AMP_A3 N008 __tau_ota_ref_AMP_A3 __tau_ota_sink_AMP_A3 __tau_ota_AMP_A3");
+    expect(block).toContain("iout=300u");
+  });
+
+  it("refuses LTspice OTA linear hard-clip with a specific reason", () => {
+    const registry = parseUserModelLibraries([
+      ".subckt AMP 1 2 3 4 5\nA1 0 N003 0 0 0 0 N006 0 OTA g=1u linear Vlow=-1e308 Vhigh=1e308\n.ends AMP",
+    ]);
+    expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
+      /Simulation refused: AMP\/A1 uses LTspice OTA 'linear' hard-clip transfer.*No approximate or partial circuit was run/,
+    );
   });
 
   it("replaces LTspice's built-in pi constant at full double precision", () => {

@@ -2124,6 +2124,61 @@ Adiode diode 0 tau_diode
         );
     }
 
+    /** Asymmetric Isource/Isink must follow LTspice's split tanh limits — not
+     * the larger of the two, and not a silent symmetric Iout substitution. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice with its code models"]
+    fn runs_ltspice_ota_asymmetric_isource_isink_limits() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let mut run = |vin: f64| {
+            engine
+                .run(SpiceRequest {
+                    netlist: format!(
+                        r#"Tau asymmetric OTA
+Vin in 0 {vin}
+.model tau_ota ota(gm=1 isource=10m isink=-4m rout=1e308 rin=1e308)
+Aota in 0 ota_sink tau_ota
+Vsense ota_sink 0 0
+Fout out 0 Vsense 1
+Rout out 0 1k
+.op
+.end"#
+                    ),
+                })
+                .expect("asymmetric OTA should solve")
+        };
+        let pos = run(1.0);
+        let pos_out = pos
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("out"))
+            .and_then(|vector| vector.real.first())
+            .copied()
+            .unwrap_or_else(|| panic!("out missing; messages: {:?}", pos.messages));
+        assert!(
+            (9.9..10.1).contains(&pos_out),
+            "positive side should limit at Isource=10m into 1k; got {} V",
+            pos_out
+        );
+        let neg = run(-1.0);
+        let neg_out = neg
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("out"))
+            .and_then(|vector| vector.real.first())
+            .copied()
+            .unwrap_or_else(|| panic!("out missing; messages: {:?}", neg.messages));
+        assert!(
+            (-4.1..-3.9).contains(&neg_out),
+            "negative side should limit at |Isink|=4m into 1k; got {} V",
+            neg_out
+        );
+    }
+
     /** A library with no `.cm` modules beside it is exactly the state Tau's
      * own bundled resource is in, and the state the diagnosis exists for. It
      * is reached here by loading the real library through a directory that has

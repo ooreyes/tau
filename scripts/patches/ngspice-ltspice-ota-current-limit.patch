@@ -1,5 +1,5 @@
 diff --git a/src/xspice/icm/analog/ota/cfunc.mod b/src/xspice/icm/analog/ota/cfunc.mod
-index e82ee0e..9b16ef4 100644
+index e82ee0e16..4664a4c59 100644
 --- a/src/xspice/icm/analog/ota/cfunc.mod
 +++ b/src/xspice/icm/analog/ota/cfunc.mod
 @@ -23,6 +23,7 @@ SUMMARY
@@ -10,25 +10,32 @@ index e82ee0e..9b16ef4 100644
  #include <stdlib.h>
  
  
-@@ -31,6 +32,7 @@ void cm_ota(ARGS)
+@@ -31,6 +32,9 @@ void cm_ota(ARGS)
      double gm_val = PARAM(gm);
      double rout = PARAM(rout);
      double rin = PARAM(rin);
 +    double iout = PARAM(iout);
++    double isource = PARAM(isource);
++    double isink = PARAM(isink);
  
      Mif_Complex_t ac_gain;
  
-@@ -84,8 +86,20 @@ void cm_ota(ARGS)
+@@ -84,8 +88,25 @@ void cm_ota(ARGS)
          double v_in = INPUT(inp);
          double v_out = INPUT(out);
  
 -        OUTPUT(out) = gm_val * v_in + v_out / rout;
 -        PARTIAL(out, inp) = gm_val;
++        /* LTspice OTA: I = Ilim*tanh(gm*Vin/Ilim). Symmetric Iout, or
++         * asymmetric Isource (Vin>=0) / |Isink| (Vin<0) when those are set. */
 +        double drive;
 +        double drive_gain;
-+        if (iout < 1.0e29) {
-+            double limited = tanh(gm_val * v_in / iout);
-+            drive = iout * limited;
++        double i_pos = (isource < 1.0e29) ? isource : iout;
++        double i_neg = (fabs(isink) < 1.0e29) ? fabs(isink) : iout;
++        double i_lim = (v_in >= 0.0) ? i_pos : i_neg;
++        if (i_lim < 1.0e29) {
++            double limited = tanh(gm_val * v_in / i_lim);
++            drive = i_lim * limited;
 +            drive_gain = gm_val * (1.0 - limited * limited);
 +        }
 +        else {
@@ -41,14 +48,17 @@ index e82ee0e..9b16ef4 100644
          PARTIAL(out, out) = 1.0 / rout;
  
          OUTPUT(inp) = v_in / rin;
-@@ -95,7 +109,14 @@ void cm_ota(ARGS)
+@@ -95,7 +116,17 @@ void cm_ota(ARGS)
          Mif_Complex_t ac_rout;
          Mif_Complex_t ac_rin;
  
 -        ac_gain.real = gm_val;
 +        double v_in = INPUT(inp);
-+        if (iout < 1.0e29) {
-+            double limited = tanh(gm_val * v_in / iout);
++        double i_pos = (isource < 1.0e29) ? isource : iout;
++        double i_neg = (fabs(isink) < 1.0e29) ? fabs(isink) : iout;
++        double i_lim = (v_in >= 0.0) ? i_pos : i_neg;
++        if (i_lim < 1.0e29) {
++            double limited = tanh(gm_val * v_in / i_lim);
 +            ac_gain.real = gm_val * (1.0 - limited * limited);
 +        }
 +        else {
@@ -58,22 +68,23 @@ index e82ee0e..9b16ef4 100644
          AC_GAIN(out, inp) = ac_gain;
  
 diff --git a/src/xspice/icm/analog/ota/ifspec.ifs b/src/xspice/icm/analog/ota/ifspec.ifs
-index 0a6721a..6c6a3f4 100644
+index 0a6721a09..6fd0da72e 100644
 --- a/src/xspice/icm/analog/ota/ifspec.ifs
 +++ b/src/xspice/icm/analog/ota/ifspec.ifs
-@@ -41,7 +41,7 @@ Parameter_Name:     gm                  rout
+@@ -41,7 +41,33 @@ Parameter_Name:     gm                  rout
  Description:        "transconductance"  "output resistance"
  Data_Type:          real                real
  Default_Value:      1.0e-3              1.0e12
 -Limits:             [1e-15 -]           [0 -]
 +Limits:             -                   [0 -]
- Vector:             no                  no
- Vector_Bounds:      -                   -
- Null_Allowed:       yes                 yes
-@@ -50,6 +50,19 @@ Null_Allowed:       yes                 yes
- PARAMETER_TABLE:
- 
- 
++Vector:             no                  no
++Vector_Bounds:      -                   -
++Null_Allowed:       yes                 yes
++
++
++PARAMETER_TABLE:
++
++
 +Parameter_Name:     iout
 +Description:        "symmetric output current limit"
 +Data_Type:          real
@@ -87,17 +98,22 @@ index 0a6721a..6c6a3f4 100644
 +PARAMETER_TABLE:
 +
 +
- Parameter_Name:     rin
- Description:        "input resistance"
- Data_Type:          real
-@@ -110,5 +123,3 @@ Limits:             -
++Parameter_Name:     isource             isink
++Description:        "positive output current limit"  "negative output current limit (signed)"
++Data_Type:          real                real
++Default_Value:      1.0e30              -1.0e30
++Limits:             -                   -
+ Vector:             no                  no
+ Vector_Bounds:      -                   -
+ Null_Allowed:       yes                 yes
+@@ -110,5 +136,3 @@ Limits:             -
  Vector:             no
  Vector_Bounds:      -
  Null_Allowed:       yes
 -
 -
 diff --git a/src/xspice/icm/xtradev/sidiode/ifspec.ifs b/src/xspice/icm/xtradev/sidiode/ifspec.ifs
-index ba0754e..9cb556e 100644
+index ba0754e93..9cb556e1d 100644
 --- a/src/xspice/icm/xtradev/sidiode/ifspec.ifs
 +++ b/src/xspice/icm/xtradev/sidiode/ifspec.ifs
 @@ -60,7 +60,7 @@ Parameter_Name:    vfwd                      vrev

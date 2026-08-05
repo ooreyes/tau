@@ -226,12 +226,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     fail-closed deck: missing named models block Run rather than promising a
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
-    `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=410 refuse=2128 silent=0
-    hard-failure=0 encrypted-excluded=1474 exact-rate=16.2%` (tip 2026-08-04
-    23:59). Bare Applications SYMBOL → unique-leaf `.asy` + plaintext
-    ModelFile/SpiceModel.lib (+10 exact vs 15.8% ModelFile-twin tip). Harness
-    skips encrypted-only leaves (no 33.4% denominator game). Never silent
-    substitution. SHIPPABLE? NO.
+    `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=439 refuse=2099 silent=0
+    hard-failure=0 encrypted-excluded=1474 exact-rate=17.3%` (tip 2026-08-05
+    00:15). OTA `asym` Isource/Isink + `Ref` map via patched ngspice tanh
+    limits (+29 exact vs 16.2% tip); `linear`/finite-V stay honest refuse.
+    Harness skips encrypted-only leaves (no 33.4% denominator game). Never
+    silent substitution. SHIPPABLE? NO.
     Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise
     recursive exact-model floor to ≥95% with hard-failure=0; a shared five-pin
     shape does not prove pin fidelity for those parts.

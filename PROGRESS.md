@@ -9,15 +9,51 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:09 CDT**
+**Status: DONE - 2026-08-05 00:15 CDT** (Overnight DoD — OTA asym/Ref map)
 
-Unit: native step_expand differential → **SUMMARY pass=20 sibling=5 gap=1**.
-Only Class-D DC/noise/tf gap remains in this slice. Named-device tip 16.2%/HF0.
-Freshman AI untouched. SHIPPABLE? **NO**
+Unit: Patched ngspice OTA `isource`/`isink` + translator map for `asym` and
+`Ref`; `linear`/`rclamp`/`epsilon`/finite-V stay honest refuse with clearer
+reasons. Never silent symmetric Iout. Never encrypted denominator games.
+
+**Measured tip stdout (truth):**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=439 refuse=2099 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=17.3%
+```
+Before @ 43077ab: 2538/410/2128/0/1474 @ 16.2%. After: exact +29 (17.3%).
+≥95% unchecked. SHIPPABLE? **NO**.
+
+**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — OTA asym Isource/Isink + Ref → exact-rate 17.3% (§DoD)
+
+**What I did**
+- Extended `scripts/patches/ngspice-ltspice-ota-current-limit.patch`: asymmetric
+  tanh limits (`isource` when Vin≥0, `|isink|` when Vin<0); rebuilt+staged
+  ngspice.
+- `translateLtspiceOta`: map `asym`+Isource/Isink (incl. `Isrc`) and `Ref` via
+  series offset V; refuse `linear` / rclamp|epsilon / incomplete asym / finite V
+  with specific reasons (no baggy “option not mapped” blob).
+- Tests: userModelLibrary asym/Ref/linear; ignored cargo asym polarity proof.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=439 refuse=2099 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=17.3%
+```
+Refuse triage after: ~197× linear · ~80× finite-V · multipliers/incomplete asym
+remain honest (ex-229× option blob split; only pin-faithful asym/Ref → exact).
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **17.3%** (not ≥95%). SHIPPABLE? NO
+
+**Next step**
+- Remaining ~197× OTA `linear` hard-clip (needs hard-limit engine path, not
+  tanh) / finite-V compliance; encrypted bare SYMBOL stays refuse.
 
 ### 2026-08-05 — Native step_expand differential → pass=20 (§DoD)
 

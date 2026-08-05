@@ -160,16 +160,15 @@ account and sign/notarize/ship.
       the full recursive corpus has zero non-refusal hard failures and at least
       95% of unencrypted circuits build their authored analysis using exact
       document, user-installed, user-attached, or Tau-owned compatible models.
-      **Partial (2026-08-04):** unit proof `scripts/named-device-fidelity.sh`
+      **Partial (2026-08-05):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
-      `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=410 refuse=2128 silent=0
-      hard-failure=0 encrypted-excluded=1474 exact-rate=16.2%` — tip after
-      bare-SYMBOL unique-leaf plaintext attach (product native unique-leaf;
-      harness unique-leaf only when ModelFile has plaintext twin — full
-      unique-leaf probe 33.4%/enc=2781 retracted as denominator game). Prior
-      ModelFile+`.lib` twin was 2539/400/2139/1473 @ 15.8%. Never silent
-      substitution. ≥95% exact-rate **not** met; DoD box stays unchecked.
-      SHIPPABLE? **NO**.
+      `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=439 refuse=2099 silent=0
+      hard-failure=0 encrypted-excluded=1474 exact-rate=17.3%` — tip after
+      OTA `asym` Isource/Isink + `Ref` exact map on patched ngspice (+29 vs
+      16.2% bare-SYMBOL tip). `linear`/finite-V/incomplete asym stay refuse.
+      Full unique-leaf probe 33.4%/enc=2781 remains retracted (denominator
+      game). Never silent substitution. ≥95% exact-rate **not** met; DoD box
+      stays unchecked. SHIPPABLE? **NO**.
 - [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs
