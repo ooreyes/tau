@@ -64,6 +64,22 @@ rewrite Design chrome.
 
 ---
 
+### 2026-08-04 — HR/ops: Design QA sealed + ownership lock
+
+**What I did**
+- Verified Design dirty already on remote: `1250dbc` (QA notes + Lucide ShellPanels
+  + DESIGN_SYSTEM), `1d6ebef` (token aliases), `f073aee` (Sparkles). Preferred
+  one-liner message partially split across those commits — aliases not in `1250dbc`.
+- AssistantPanel Sparkles was icon-only (already on HEAD). Did not touch Freshman
+  AI libs. Left Freshman/Overnight dirty. AGENTS §10 left unchecked.
+
+**Parity items**
+- FEATURE_PARITY §10 🟡; AGENTS §10 unchecked
+
+**Next step**
+- Freshman: finish SettingsAiSection extract; stop editing ShellPanels chrome.
+- Overnight: commit measuring docs (AGENTS/FEATURE/corpus) when ready.
+
 ### 2026-08-04 — Anduril Light palette pop (§10)
 
 **What I did**
