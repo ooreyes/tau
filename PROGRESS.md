@@ -9,6 +9,12 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-04 22:34 CDT**
+
+Unit: Unsigned release smoke — `tauri build` / packaged Tau.app + bundled
+ngspice end-to-end. AGENTS DoD unsigned-release box. Shippable? NO until
+proven in this run.
+
 **Status: DONE - 2026-08-04 22:33 CDT**
 
 Unit: Close remaining differential gaps — move gap→pass/sibling with
