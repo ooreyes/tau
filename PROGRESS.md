@@ -1,15 +1,44 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~10:30 CDT**
+**Status: DONE - 2026-08-05 ~10:46 CDT**
 
-Unit: EveryCircuit UX — **Palette grouping polish** (explicit section order)
-+ hard-defer 7seg / 555 / ADC-DAC / counter. Not full EC parity.
-SHIPPABLE? **NO**
+Unit: CEO war room — **Editor DoD audit** (mirror/flip, copy/paste,
+multi-select, rubber-band). All four proven green this session; AGENTS.md
+Editor box flipped. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+
+---
+
+### 2026-08-05 — Editor DoD box proven (AGENTS.md)
+
+**What I did**
+- Audited FEATURE_PARITY ✅ claims vs live tests for the four Editor DoD
+  items. No implementation gap — store/canvas/pin/shortcut suites already
+  cover mirror/flip, copy/paste (+ whole-circuit marquee), multi-select
+  (+ marquee gesture), and `moveGroup` rubber-band wire moves.
+- Ran proof suites this session: 5 files / 242 passed. Flipped AGENTS.md
+  Editor checkbox with evidence citations. SHIPPABLE? NO.
+
+**Files**
+- `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop exec vitest run` on
+  `useSchematic.test.ts`, `pins.test.ts`, `shortcuts.test.ts`,
+  `Canvas.simulator.test.tsx`, `Canvas.geometry.test.ts` → 242 passed
+- `pnpm -C apps/desktop typecheck`
+
+**Parity items**
+- AGENTS.md Editor DoD box → ✅ (proven). SHIPPABLE? NO
+
+**Next step**
+- Remaining open DoD: directives coverage, waveform viewer, §10 design
+  system, min-window UI, named-device ≥95%, broad differential, AI,
+  product gates.
 
 ---
 

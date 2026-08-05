@@ -146,7 +146,15 @@ account and sign/notarize/ship.
       .meas .noise .tf .param .func .temp .options .model .inc .subckt`.
 - [ ] Waveform viewer: arbitrary expressions, cursors, FFT/THD, stepped‑family
       overlays, CSV/image export.
-- [ ] Editor: mirror/flip, copy/paste, multi‑select, rubber‑band wire moves.
+- [x] Editor: mirror/flip, copy/paste, multi‑select, rubber‑band wire moves.
+      Proven 2026-08-05 this session (242 green): `useSchematic.test.ts`
+      (`mirror` toggle/undo/multi-select; `copySelected`/`paste`/`duplicateSelected`
+      incl. whole-circuit marquee clipboard; `multi-select` + `selectMixed`;
+      `moveGroup` rubber-band pin/midpoint/junction/elbow cases);
+      `pins.test.ts` (mirror-before-rotate); `shortcuts.test.ts` (Ctrl+E/C/V/D);
+      `Canvas.simulator.test.tsx` (marquee commit + mixed-selection drag);
+      `Canvas.geometry.test.ts` (marquee intersection). SHIPPABLE? **NO** —
+      other DoD boxes remain open.
 - [ ] **§10 visual design system fully adopted** (see FEATURE_PARITY §10 —
       IMPERATIVE per Omar): shadcn‑grade component system with a design‑token
       layer, every panel migrated, zero leftover ad‑hoc styling drift. The app
