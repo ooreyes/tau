@@ -28,33 +28,38 @@ function cacheResolvedPath(keys: Iterable<string>, path: string | null): void {
   }
 }
 
-function findAsyByBasename(root: string, leafName: string): string | null {
+/** Collect every `${leaf}.asy` under root (case-insensitive), path-confined. */
+function findAllAsyByBasename(root: string, leafName: string): string[] {
   const target = `${leafName}.asy`.toLowerCase();
-  const walk = (dir: string): string | null => {
+  const hits: string[] = [];
+  const walk = (dir: string): void => {
     let entries;
     try {
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
-      return null;
+      return;
     }
     for (const entry of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
       const abs = join(dir, entry.name);
       if (!isSafeUnderRoot(root, abs)) continue;
       if (entry.isDirectory()) {
-        const nested = walk(abs);
-        if (nested) return nested;
+        walk(abs);
         continue;
       }
-      if (entry.isFile() && entry.name.toLowerCase() === target) return abs;
+      if (entry.isFile() && entry.name.toLowerCase() === target) hits.push(abs);
     }
-    return null;
   };
-  return walk(root);
+  walk(root);
+  return hits;
 }
 
 /**
  * Resolve an installed LTspice `.asy` path under one or more `sym` roots.
- * Tries the authored relative path first, then a case-insensitive basename walk.
+ *
+ * 1. Prefer the authored relative path (`OpAmps\AD711`).
+ * 2. Else basename-search under each root. Return a hit only when the leaf
+ *    name is **unique** across all roots — ambiguous leaves stay unresolved
+ *    (honest refuse) rather than attaching the wrong family's ModelFile.
  */
 export function resolveInstalledAsyPath(symRoots: string[], symbolType: string): string | null {
   const relativeSymbol = normalizeSymbolType(symbolType);
@@ -78,13 +83,22 @@ export function resolveInstalledAsyPath(symRoots: string[], symbolType: string):
     }
   }
 
+  // Bare names (Applications `SYMBOL AD4000`) need a unique leaf match.
+  const basenameHits: string[] = [];
   for (const root of symRoots) {
-    const found = findAsyByBasename(root, leaf);
-    if (!found) continue;
+    basenameHits.push(...findAllAsyByBasename(root, leaf));
+  }
+  const unique = [...new Set(basenameHits.map((path) => path.toLowerCase()))];
+  if (unique.length === 1) {
+    const found = basenameHits[0]!;
     cacheResolvedPath([queryKey, leafKey], found);
-    const relativeKey = relative(root, found).replace(/\.asy$/i, "").toLowerCase();
-    if (relativeKey && relativeKey !== queryKey && relativeKey !== leafKey) {
-      cacheResolvedPath([relativeKey], found);
+    for (const root of symRoots) {
+      if (!found.toLowerCase().startsWith(root.toLowerCase())) continue;
+      const relativeKey = relative(root, found).replace(/\.asy$/i, "").toLowerCase();
+      if (relativeKey && relativeKey !== queryKey && relativeKey !== leafKey) {
+        cacheResolvedPath([relativeKey], found);
+      }
+      break;
     }
     return found;
   }

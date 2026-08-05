@@ -730,6 +730,27 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/\bR2\b[^\n]*tc1=/);
   });
 
+  it("strips LTspice noiseless from schematic resistor Value (AD3541R)", () => {
+    // Applications/AD3541R R1: `1k noiseless` — flag is not magnitude; ngspice
+    // rejects it on the instance line. Keep exact 1k, never silent-sub.
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k noiseless", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 128, y: 0 }]),
+    ];
+    const deck = buildSpiceDeck(
+      { components, wires },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toMatch(/\bR1\b[^\n]*\b1000\b/);
+    expect(deck.netlist).not.toMatch(/noiseless/i);
+  });
+
   it("resolves {param} braces inside emitted .meas lines", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

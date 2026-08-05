@@ -9,28 +9,48 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:35 CDT** (Staff EE — encrypted-103 honesty)
+**Status: IN PROGRESS - 2026-08-04 23:37 CDT** (Overnight DoD — refuse→exact)
 
-Unit: CEO redirect — sample the HF→encrypted −103/+103. Verdict: **TRUE
-encrypted dependents**, not false positives hiding HF. DoD ≥95% stays
-**unchecked**. SHIPPABLE? **NO**.
+Unit: Raise named-device exact-rate by converting refuse→exact via real plaintext
+library/model resolve. Never silent generic semiconductor substitution; never
+weaken encrypted refusals. No UI/Settings/Assistant.
 
-**Measured (re-prove):** `scripts/named-device-fidelity.sh`
-```
-NAMED-DEVICE: exact=2 refuse=4 silent=0
-NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%
-```
-`NAMED_DEVICE_ENCRYPTED_AUDIT=1`: without-flag refuse=1474 hard_failure=0;
-reasons unresolvedEncStem=1439 otherEncSignal=35. Clearing encryptedDependent
-never yields HF — classifier fail-closed holds.
+Baseline (Staff EE / prior stdout):
+`NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
+hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%`
 
-**Next unit:** refuse→exact via library/symbol resolve (plaintext models only);
-basename ASY search must not re-enter the recursive denominator until HF
-re-triaged (it inflated encrypted ~1474→2776 and resurfaced HF=13).
+**SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-04 — Named-device re-measure + schematic R noiseless (§DoD)
+
+**What I did**
+- `git pull --ff-only`. Ran `scripts/named-device-fidelity.sh` (stdout below).
+- HF=0 → no HF triage required; still landed exact-model `noiseless` strip on
+  schematic resistor Value (AD3541R-class `1k noiseless`) so parse/emit stays exact.
+- Never silent substitution; never claim ≥95% / SHIPPABLE.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%
+```
+
+**Files**
+- `spiceNetlist.ts` / `spiceNetlist.test.ts`
+- `AGENTS.md` / `FEATURE_PARITY.md` / `PROGRESS.md` (numbers already matched QA `7f90130`)
+
+**Tests / proof**
+- vitest noiseless case; `scripts/named-device-fidelity.sh`; typecheck + test
+
+**Parity items**
+- Named-device: 🟡 HF=0 silent=0; exact-rate 15.7%; SHIPPABLE? NO
+
+**Next step**
+- Raise exact-rate (refuse→exact); remaining PWL/C=0 HF classes if they reappear.
+
 
 
 ### 2026-08-04 — Staff EE: HF=0 encrypted reclass is legitimate (§DoD)

@@ -52,4 +52,11 @@ describe("ltspiceSymbolResolve", () => {
     expect(resolveInstalledAsyPath([root], "ad4000")).toBe(join(root, "ADC", "AD4000.asy"));
     expect(resolveInstalledAsyPath([root], "ADC/AD4000")).toBe(join(root, "ADC", "AD4000.asy"));
   });
+
+  it("refuses ambiguous basename matches instead of picking a family", () => {
+    const root = fixture();
+    mkdirSync(join(root, "Misc"), { recursive: true });
+    writeFileSync(join(root, "Misc", "AD4000.asy"), "Version 4\nSYMATTR Prefix X\n");
+    expect(resolveInstalledAsyPath([root], "AD4000")).toBeNull();
+  });
 });

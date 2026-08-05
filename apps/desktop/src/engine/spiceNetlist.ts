@@ -1254,7 +1254,9 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // PowerSim GD-style behavioral resistance: a res symbol whose value is a
       // `V=`/`R=` expression (switchable drive strength ron/roff). ngspice
       // takes the run-time expression quoted: R1 a b r = 'expr'.
-      const raw = component.value ?? "";
+      // LTspice `noiseless` is a device flag on Value (e.g. `1k noiseless`),
+      // not part of the magnitude — strip before parse; ngspice rejects it.
+      const raw = stripNoiselessSpec(component.value ?? "");
       if (/^\s*PWL\b/i.test(raw)) {
         const ref = component.label.trim() || name;
         throw new Error(
@@ -1270,7 +1272,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // value (braces may remain for native `.step param`).
       const tempco = ngspiceResistorTempcoSuffix(raw);
       const magnitude = resistorNumberValue(
-        tempco ? { ...component, value: stripTcSpec(raw) } : component,
+        tempco ? { ...component, value: stripTcSpec(raw) } : { ...component, value: raw },
         "Ohm",
       );
       // SPICE allows negative resistance (active/negative-impedance elements,
@@ -2282,6 +2284,13 @@ function resistorNumberValue(component: SchematicComponent, unit: string): strin
   if (hasUnresolvedBrace(raw)) return raw;
   const value = parsedNumber(component, unit);
   return value.toString();
+}
+
+/** LTspice bare `noiseless` on a schematic R Value is a device flag, not
+ *  magnitude. Same token library decks already strip for ngspice. */
+function stripNoiselessSpec(value: string): string {
+  if (!/\bnoiseless\b/i.test(value)) return value;
+  return value.replace(/\bnoiseless\b/gi, "").replace(/\s{2,}/g, " ").trim();
 }
 
 /** True when text still carries a `{…}` brace for ngspice (`.param` / `.step`). */

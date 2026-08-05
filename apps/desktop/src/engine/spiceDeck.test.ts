@@ -364,13 +364,12 @@ describe("deck builder - failure modes", () => {
     ).toThrow();
   });
 
-  it("rejects a zero-ohm resistor (would produce a singular matrix in ngspice)", () => {
-    expect(() =>
-      buildSpiceDeck(
-        { components: [Vdc(0, 32, "5"), R(96, 0, "0", "R1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
-        { kind: "op" },
-      ),
-    ).toThrow(/non-zero/i);
+  it("emits a zero-ohm short (LTspice Value 0)", () => {
+    const deck = buildSpiceDeck(
+      { components: [Vdc(0, 32, "5"), R(96, 0, "0", "R1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toMatch(/R1 \S+ \S+ 0/);
   });
 
   it("preserves LTspice negative capacitance through the native Q(V)=C*V law", () => {
