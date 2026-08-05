@@ -337,8 +337,16 @@ async function shootViewport(page, viewport, theme) {
   if (await deadtimeField.evaluate((element) => element.getBoundingClientRect().width) < 32) {
     throw new Error("dead-time mantissa collapsed below a readable width");
   }
-  if (await page.getByRole("combobox", { name: "Dead time SI prefix" }).inputValue() !== "n") {
-    throw new Error("dead-time override did not retain its nanosecond unit prefix");
+  const deadPrefix = page.getByRole("combobox", { name: "Dead time SI prefix" });
+  if ((await deadPrefix.getAttribute("data-slot")) !== "select-trigger") {
+    throw new Error("Dead time SI prefix is not ui/Select (expected data-slot=select-trigger)");
+  }
+  if (await page.locator(".eng-input select").count()) {
+    throw new Error("native eng-input <select> leaked back into the inspector");
+  }
+  const deadPrefixText = (await deadPrefix.innerText()).replace(/\s+/g, " ").trim();
+  if (!deadPrefixText.includes("ns")) {
+    throw new Error(`dead-time override did not retain its nanosecond unit prefix (got "${deadPrefixText}")`);
   }
   if (await page.getByRole("textbox", { name: "Value" }).count()) {
     throw new Error("native subcircuit exposed a raw Value/X syntax field");

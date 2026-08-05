@@ -1,13 +1,50 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:25 CDT**
+**Status: DONE - 2026-08-05 ~14:30 CDT**
 
-Unit: Differential Educational/astable.asc period-meas → **pass=106**
-SHIPPABLE? **NO**
+Unit: **§10 EngineeringInput SI prefix → ui/Select** — shared eng-input
+native `<select>` onto shadcn `ui/Select` (Settings untouched). AGENTS §10
+stays UNCHECKED. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — EngineeringInput SI prefix → ui/Select (§10)
+
+**What I did**
+- Migrated EngineeringInput SI-prefix companion from native `<select>` to
+  shadcn `ui/Select` with dense `eng-input-prefix` trigger; `__base__`
+  sentinel for the no-prefix slot; portal-blur guard so mantissa drafts are
+  not reverted while the list is open. CSS targets
+  `[data-slot=select-trigger].eng-input-prefix` beside legacy `select` rules.
+- Updated EngineeringInput / ShellPanels / SimulationPanel tests for Radix
+  combobox + chooseSelectOption; refreshed design-shot Dead-time SI prefix
+  probe. Did **not** flip AGENTS §10 DoD box.
+
+**Files**
+- `apps/desktop/src/components/EngineeringInput.tsx`
+- `apps/desktop/src/components/EngineeringInput.test.tsx`
+- `apps/desktop/src/components/ShellPanels.test.tsx`
+- `apps/desktop/src/components/SimulationPanel.test.tsx`
+- `apps/desktop/src/App.css`
+- `scripts/design-shot.mjs`, `scripts/_design-shot-light-qa.mjs`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- focused EngineeringInput + related ShellPanels/SimulationPanel cases
+- `pnpm -C apps/desktop typecheck` / `test` (gates before push)
+
+**Parity items**
+- §10 partial: EngineeringInput SI prefix Select. Box stays ⬜. SHIPPABLE? NO
+
+**Next step**
+- AnalysisSetupForms SourceSelect/Kind → ui/Select, or circuit-duration unit;
+  local-AI (Settings locked). Never flip AGENTS §10 on a partial.
+
+SHIPPABLE? **NO**
 
 ---
 

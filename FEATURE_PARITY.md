@@ -2143,24 +2143,19 @@ extended (`--r-2xs`/`--r-xs`/`--r-pill`) and raw chrome radii snapped; warning
 chrome stays quiet ochre (soft ≈0.05 — not danger-red for optional empties);
 settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model +
 IndependentSourceEditor Waveform type + semiconductor Simulation model +
-Subcircuit model native `<select>`s migrated onto shadcn `ui/Select`
-(Settings locked/untouched); unit proof in SimulationPanel/ShellPanels tests
-(combobox triggers, not native `<select>`). **Simulation setup dialog
-`ui/Select` (2026-08-05):** Primary analysis, AC sweep type, and all
-measurement builder selects (analysis / calculation / quantity / node /
-component) use dense `simulation-setup-select` triggers;
-`SimulationSetupDialog.test.tsx` asserts combobox `data-slot=select-trigger`,
-open→pick analysis, and zero native `<select>` in the dialog body.
-**Min-window DoD (separate AGENTS box) proven 2026-08-05** via
-`scripts/min-window-dod.sh` at 900×600 (12/12; Settings sheet viewport cap +
+Subcircuit model + Simulation setup dialog + EngineeringInput SI-prefix native
+`<select>`s migrated onto shadcn `ui/Select` (Settings locked/untouched); unit
+proof in SimulationPanel/ShellPanels/EngineeringInput tests (combobox triggers,
+not native `<select>`). **Min-window DoD (separate AGENTS box) proven 2026-08-05**
+via `scripts/min-window-dod.sh` at 900×600 (12/12; Settings sheet viewport cap +
 scroll; editor toolbar horizontal scroll) — shots in
 `screenshots/min-window-dod/`. Remaining §10 debt that blocks an honest **§10
 design-system** DoD check:
 Resizable/Command/Toast primitives still deferred; other native `<select>`s
-(EngineeringInput units, AnalysisSetupForms, local-AI
-settings) not yet on `ui/Select`; Assistant/local-AI
-settings surfaces still mid-migration; Cupertino icon chrome still settling;
-no proof of zero ad-hoc drift across every panel at both themes.
+(AnalysisSetupForms, local-AI settings, circuit-duration unit) not yet on
+`ui/Select`; Assistant/local-AI settings surfaces still mid-migration;
+Cupertino icon chrome still settling; no proof of zero ad-hoc drift across
+every panel at both themes.
 Do **not** flip the AGENTS **§10** box until that grep+screenshot proof exists.
 
 **Earlier claim (2026-07-08 Phase 4c) that §10 "closes" AGENTS DoD was premature**
@@ -2379,9 +2374,15 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   `simulation-setup-select` triggers (`--row-h`); unset node/component mapped
   through `__tau_unset__` (Radix forbids empty item values). Unit proof
   open→pick Primary analysis / AC sweep; zero `.simulation-setup-body select`.
-  Left for a later pass: EngineeringInput units, AnalysisSetupForms,
-  local-AI settings; deferred Resizable/Command/Toast. AGENTS §10 stays
-  UNCHECKED. →
+  **EngineeringInput SI prefix `ui/Select` (2026-08-05):** shared mantissa
+  companion prefix picker uses dense `eng-input-prefix` trigger; base (no
+  prefix) mapped through `__base__` (Radix forbids empty item values); portal
+  blur ignored so incomplete mantissas are not reverted while the list is
+  open. Unit proof in `EngineeringInput.test.tsx` + cursor/seek cases in
+  SimulationPanel/ShellPanels; `design-shot.mjs` Dead-time SI prefix probe
+  updated for Radix (Settings untouched). Left for a later pass:
+  AnalysisSetupForms, circuit-duration unit, local-AI settings; deferred
+  Resizable/Command/Toast. AGENTS §10 stays UNCHECKED. →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
   same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`
