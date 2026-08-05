@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { SimulationPanel, StepPlot } from "./SimulationPanel";
+import { SimulationPanel, StepPlot, WaveformPlot } from "./SimulationPanel";
 import { visibleTransientTraces } from "../simulation/visibleTraces";
 import {
   defaultDcSetup,
@@ -12,6 +12,7 @@ import {
 } from "../simulation/analysisSetup";
 import { useSchematic } from "../store/useSchematic";
 import { formatEngineering } from "../simulation/quantity";
+import { defaultLayout } from "./plotPanes";
 
 /**
  * the simulator tab must NOT carry its own primary Run button;
@@ -859,6 +860,16 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     expect(document.querySelector(".trace-seek__note")?.textContent).toMatch(/never reaches/i);
   });
 
+  it("does not paint idle seek fields as invalid before the user types", () => {
+    renderTwoTracePanel();
+    selectOutTrace();
+
+    const time = screen.getByRole("textbox", { name: "Move cursor C1 on V(out) to a time" });
+    const value = screen.getByRole("textbox", { name: "Move cursor C1 to where V(out) equals a value" });
+    expect(time.getAttribute("aria-invalid")).toBe("false");
+    expect(value.getAttribute("aria-invalid")).toBe("false");
+  });
+
   it("reads a value off the line on hover, in pan mode, per pane", () => {
     const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
       // Matches the 340x190 viewBox so svg units map 1:1 to client pixels.
@@ -899,5 +910,32 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
     expect(document.querySelector(".scope-hover-surface")).toBeNull();
     expect(document.querySelector(".cursor-glide-surface")).toBeTruthy();
+  });
+
+  it("names the nearest trace when several share one pane", () => {
+    const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, width: 340, height: 190, right: 340, bottom: 190, x: 0, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    try {
+      const result = twoTraceResult();
+      // One shared pane so nearest-vertical hover must disambiguate.
+      render(
+        <WaveformPlot
+          result={result}
+          baseTraces={result.traces}
+          netLabels={[]}
+          paneLayout={defaultLayout(["n1", "n2"])}
+        />,
+      );
+      expect(document.querySelectorAll(".scope-hover-surface")).toHaveLength(1);
+      // Point near the flat 5 V rail (top of the padded 0..5 domain) so V(in) wins.
+      fireEvent.pointerMove(document.querySelector(".scope-hover-surface")!, { clientX: 170, clientY: 40 });
+      const chip = document.querySelector(".scope-hover text")?.textContent ?? "";
+      expect(chip).toContain("V(in)");
+      expect(chip).toContain(formatEngineering(5, "V", 3));
+      expect(chip).toContain(formatEngineering(1, "s", 3));
+    } finally {
+      rect.mockRestore();
+    }
   });
 });

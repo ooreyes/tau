@@ -1992,7 +1992,16 @@ function TranScopePane({
               />
             )}
             {hoverVisible && hover && (() => {
-              const chipWidth = 132;
+              // Single-trace panes already title the card; multi-trace panes
+              // must name which line the nearest-vertical pick landed on.
+              const named = paneTraces.length > 1;
+              const readout = named
+                ? `${hover.trace.label} · ${formatEngineering(hover.value, hover.trace.unit, 3)} · ${formatEngineering(hover.dataX, "s", 3)}`
+                : `${formatEngineering(hover.value, hover.trace.unit, 3)} · ${formatEngineering(hover.dataX, "s", 3)}`;
+              const chipWidth = Math.min(
+                PLOT_WIDTH - 2 * PLOT_PAD - 8,
+                Math.max(named ? 168 : 132, 10 + readout.length * 6.2),
+              );
               const chipX = hover.x > PLOT_WIDTH / 2 ? hover.x - chipWidth - 4 : hover.x + 4;
               const chipY = Math.max(PLOT_PAD + 3, Math.min(hover.y - 20, plotHeight - PLOT_PAD - 18));
               return (
@@ -2001,7 +2010,7 @@ function TranScopePane({
                   <circle className="scope-hover-point" cx={hover.x} cy={hover.y} r={3} fill={hover.trace.color} />
                   <rect x={chipX} y={chipY} width={chipWidth} height={17} rx={3} />
                   <text x={chipX + 5} y={chipY + 11.5}>
-                    {formatEngineering(hover.value, hover.trace.unit, 3)} · {formatEngineering(hover.dataX, "s", 3)}
+                    {readout}
                   </text>
                 </g>
               );
@@ -3917,6 +3926,7 @@ function TraceSeekFields({
           label={`Move cursor ${cursorLabel} on ${label} to a time`}
           value={cursorX != null ? engineeringInputDisplay(cursorX, "s") : ""}
           unit="s"
+          allowEmpty
           onValueChange={seekTime}
         />
       </label>
@@ -3926,6 +3936,7 @@ function TraceSeekFields({
           label={`Move cursor ${cursorLabel} to where ${label} equals a value`}
           value=""
           unit={valueUnit}
+          allowEmpty
           onValueChange={seekValue}
         />
       </label>

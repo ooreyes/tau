@@ -18,6 +18,12 @@ interface EngineeringInputProps {
   min?: number;
   max?: number;
   minExclusive?: boolean;
+  /**
+   * Optional command fields (e.g. scope "At value") may sit empty at rest.
+   * When true, an empty mantissa is not marked invalid — incomplete drafts
+   * like `1e` still are, and empty still never commits.
+   */
+  allowEmpty?: boolean;
 }
 
 /** Numeric mantissa plus explicit SI-prefix picker for SPICE-like values. */
@@ -30,6 +36,7 @@ export function EngineeringInput({
   min,
   max,
   minExclusive = false,
+  allowEmpty = false,
 }: EngineeringInputProps) {
   const [parts, setParts] = useState(() => splitEngineeringValue(value, unit));
   const focused = useRef(false);
@@ -47,7 +54,8 @@ export function EngineeringInput({
     if (max !== undefined && numeric > max) return false;
     return true;
   };
-  const valid = validParts(parts);
+  const emptyAllowed = allowEmpty && parts.mantissa.trim() === "";
+  const valid = emptyAllowed || validParts(parts);
   // `field-sizing: content` is not reliable in the macOS WebView. Give WebKit
   // an explicit character width so the complete mantissa remains visible.
   const inputSize = Math.max(2, Math.min(14, parts.mantissa.length + 1));

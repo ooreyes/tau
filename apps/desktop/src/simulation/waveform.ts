@@ -1,5 +1,5 @@
 import type { Trace } from "./linearTransient";
-import { classifySignal } from "./measurementModel";
+import { classifySignal, noiseFloorForUnit } from "./measurementModel";
 import type { Viewport } from "./plotViewport";
 
 export const MAX_WAVEFORM_RENDER_POINTS = 4_096;
@@ -102,7 +102,7 @@ export function visibleWaveformBounds(
  */
 export function autoFrameWaveform(
   times: ReadonlyArray<number>,
-  traces: ReadonlyArray<Pick<Trace, "values">>,
+  traces: ReadonlyArray<Pick<Trace, "values" | "unit">>,
   currentX: { xMin: number; xMax: number },
   requestedCycles = 4,
 ): Viewport {
@@ -137,6 +137,7 @@ export function autoFrameWaveform(
       const classification = classifySignal(
         start === 0 ? times : times.slice(start, sampleCount),
         start === 0 ? trace.values : trace.values.slice(start, sampleCount),
+        noiseFloorForUnit(trace.unit),
       );
       if (classification.kind === "periodic" && classification.period && Number.isFinite(classification.period)) {
         period = Math.max(period, classification.period);

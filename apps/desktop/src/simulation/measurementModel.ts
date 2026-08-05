@@ -107,6 +107,31 @@ export function traceStatistics(times: readonly number[], values: readonly numbe
 }
 
 /**
+ * Absolute "this is solver noise, not signal" floor per physical quantity,
+ * matching the tolerances a SPICE engine itself converges to (ngspice's
+ * `abstol` 1 pA and `vntol` 1 µV, loosened one decade for headroom).
+ *
+ * A purely relative tolerance is not enough. For a dead 5 pA leakage current,
+ * `scale * 1e-9` is 5e-21 A - far below double-precision noise - so femtoamp
+ * jitter got classified as signal, and the period detector then invented a
+ * frequency for it (a 15.9 kHz "oscillation" on a physically dead node).
+ * Below these floors a quantity is indistinguishable from zero movement.
+ */
+const SIGNAL_NOISE_FLOOR: Record<TraceUnit, number> = {
+  A: 1e-12,
+  V: 1e-9,
+  // Power is a product of the two, so its floor is their product.
+  W: 1e-15,
+  "Ω": 0,
+  S: 0,
+  "": 0,
+};
+
+export function noiseFloorForUnit(unit: TraceUnit | undefined): number {
+  return unit ? SIGNAL_NOISE_FLOOR[unit] ?? 0 : 0;
+}
+
+/**
  * Classify a trace as constant/steady, repeating, or a one-shot transient.
  *
  * Periodicity uses interpolated mean crossings in both directions so a single
@@ -115,7 +140,12 @@ export function traceStatistics(times: readonly number[], values: readonly numbe
  * rise+fall crossings resolve one cycle. Amplitude must stay broadly stable so
  * a single overshoot or damped ring is not labelled periodic.
  */
-export function classifySignal(times: readonly number[], values: readonly number[]): SignalClassification {
+export function classifySignal(
+  times: readonly number[],
+  values: readonly number[],
+  /** Absolute floor below which movement is noise. See SIGNAL_NOISE_FLOOR. */
+  absoluteFloor = 0,
+): SignalClassification {
   const count = Math.min(times.length, values.length);
   let min = Infinity;
   let max = -Infinity;
@@ -137,7 +167,7 @@ export function classifySignal(times: readonly number[], values: readonly number
   if (validCount < 2) return { kind: "steady" };
   const range = max - min;
   const scale = Math.max(Math.abs(min), Math.abs(max));
-  if (range <= Math.max(scale * 1e-9, 1e-30)) return { kind: "steady" };
+  if (range <= Math.max(scale * 1e-9, absoluteFloor, 1e-30)) return { kind: "steady" };
 
   const mean = sum / validCount;
   const crossings: Array<{ time: number; direction: "rising" | "falling" }> = [];
@@ -374,7 +404,7 @@ function makeSeries(
     unit,
     values: decimateFinite(values, 96),
     statistics,
-    classification: classifySignal(times, values),
+    classification: classifySignal(times, values, noiseFloorForUnit(unit)),
   };
 }
 

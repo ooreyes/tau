@@ -1,5 +1,5 @@
 import type { Trace, TraceUnit } from "./linearTransient";
-import { classifySignal, traceStatistics, type SignalClassification } from "./measurementModel";
+import { classifySignal, noiseFloorForUnit, traceStatistics, type SignalClassification } from "./measurementModel";
 
 export interface TraceReadoutCursor {
   /** Cursor position on the trace's horizontal time axis. */
@@ -78,7 +78,7 @@ export function buildEngineeringTraceReadout(
 ): EngineeringTraceReadoutModel | null {
   const statistics = traceStatistics(times, trace.values);
   if (!statistics) return null;
-  const classification = classifySignal(times, trace.values);
+  const classification = classifySignal(times, trace.values, noiseFloorForUnit(trace.unit));
   const cursorValue = cursor
     ? Number.isFinite(cursor.value)
       ? cursor.value!

@@ -86,7 +86,7 @@ describe("waveform display data", () => {
     const times = Array.from({ length: Math.round(stopTime / step) + 1 }, (_, index) => index * step);
     const values = times.map((time) => 2 + 3 * Math.sin(2 * Math.PI * frequency * time));
 
-    const frame = autoFrameWaveform(times, [{ values }], { xMin: 0, xMax: stopTime });
+    const frame = autoFrameWaveform(times, [{ values, unit: "V" }], { xMin: 0, xMax: stopTime });
 
     expect(frame.xMax).toBeCloseTo(stopTime, 10);
     expect(frame.xMax - frame.xMin).toBeCloseTo(4 / frequency, 8);
@@ -101,7 +101,7 @@ describe("waveform display data", () => {
 
     const frame = autoFrameWaveform(
       times,
-      [{ values: slow }, { values: fast }],
+      [{ values: slow, unit: "V" }, { values: fast, unit: "V" }],
       { xMin: 0, xMax: 0.02 },
     );
 
@@ -113,7 +113,7 @@ describe("waveform display data", () => {
   it("keeps the current X window for non-periodic data and only fits visible Y", () => {
     const times = [0, 1, 2, 3, 4];
     const values = [100, 10, 2, 3, 4];
-    const frame = autoFrameWaveform(times, [{ values }], { xMin: 2, xMax: 4 });
+    const frame = autoFrameWaveform(times, [{ values, unit: "V" }], { xMin: 2, xMax: 4 });
 
     expect(frame.xMin).toBe(2);
     expect(frame.xMax).toBe(4);

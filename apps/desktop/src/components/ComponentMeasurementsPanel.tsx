@@ -289,7 +289,12 @@ function CompactMeasurementCard({
   selected: boolean;
   onSelect: (componentId: string | null) => void;
 }) {
-  const timeVarying = row.voltage?.classification.kind !== "steady" || row.current?.classification.kind !== "steady";
+  // Only a series that actually exists can say the component varies. The old
+  // `row.voltage?.classification.kind !== "steady"` was true for a MISSING
+  // series too (undefined !== "steady"), so a component Tau could not measure
+  // was badged as time-varying on no evidence at all.
+  const timeVarying = [row.voltage, row.current]
+    .some((series) => series !== undefined && series.classification.kind !== "steady");
 
   return (
     <li className="telemetry-card-item">

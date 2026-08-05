@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnalysisResult } from "./linearTransient";
-import { classifySignal, componentMeasurements, traceStatistics } from "./measurementModel";
+import { classifySignal, componentMeasurements, noiseFloorForUnit, traceStatistics } from "./measurementModel";
 
 describe("traceStatistics", () => {
   it("computes min/max/final and time-weighted AVG/RMS on a non-uniform axis", () => {
@@ -279,5 +279,45 @@ describe("componentMeasurements", () => {
     expect(row.voltage?.values.length).toBeLessThanOrEqual(96);
     expect(row.current?.values.length).toBeLessThanOrEqual(96);
     expect(row.power?.values.length).toBeLessThanOrEqual(96);
+  });
+});
+
+describe("classifySignal noise floor", () => {
+  const times = Array.from({ length: 601 }, (_, i) => i * 1e-5);
+
+  it("calls a dead pA-scale current steady instead of inventing a frequency", () => {
+    // Exactly the shape of a settled RC under a DC source in native ngspice:
+    // a ~5 pA leakage with femtoamp solver jitter. With only a relative
+    // tolerance this returned {kind:"periodic", frequency:~15.9 kHz}.
+    const values = times.map((_, i) => 5e-12 + Math.sin(i) * 1e-15);
+    const classification = classifySignal(times, values, noiseFloorForUnit("A"));
+    expect(classification.kind).toBe("steady");
+    expect(classification.frequency).toBeUndefined();
+  });
+
+  it("still resolves a real small-signal current above the floor", () => {
+    // A 5 pA peak-to-peak 1 kHz signal is genuine, not noise, and must survive.
+    const values = times.map((t) => 5e-12 * Math.sin(2 * Math.PI * 1e3 * t));
+    const classification = classifySignal(times, values, noiseFloorForUnit("A"));
+    expect(classification.kind).toBe("periodic");
+    expect(classification.frequency).toBeCloseTo(1e3, -2);
+  });
+
+  it("keeps a settled volt-scale node steady, as it already did", () => {
+    const values = times.map((_, i) => 5 + Math.sin(i) * 3e-15);
+    expect(classifySignal(times, values, noiseFloorForUnit("V")).kind).toBe("steady");
+  });
+
+  it("maps each quantity to its own floor and leaves unitless traces alone", () => {
+    expect(noiseFloorForUnit("A")).toBe(1e-12);
+    expect(noiseFloorForUnit("V")).toBe(1e-9);
+    expect(noiseFloorForUnit("W")).toBe(1e-15);
+    expect(noiseFloorForUnit("")).toBe(0);
+    expect(noiseFloorForUnit(undefined)).toBe(0);
+  });
+
+  it("defaults to the old purely-relative behaviour when no floor is given", () => {
+    const values = times.map((_, i) => 5e-12 + Math.sin(i) * 1e-15);
+    expect(classifySignal(times, values).kind).not.toBe("steady");
   });
 });

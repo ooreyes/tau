@@ -121,4 +121,29 @@ describe("EngineeringInput", () => {
     expect(input.getAttribute("aria-invalid")).toBe("true");
     expect(onValueChange).toHaveBeenCalledTimes(1);
   });
+
+  it("treats an empty optional field as valid without committing", () => {
+    const onValueChange = vi.fn();
+    render(
+      <EngineeringInput label="At value" unit="V" value="" allowEmpty onValueChange={onValueChange} />,
+    );
+    const input = screen.getByLabelText("At value") as HTMLInputElement;
+    expect(input.getAttribute("aria-invalid")).toBe("false");
+    expect(onValueChange).not.toHaveBeenCalled();
+
+    // Incomplete drafts are still invalid and still do not commit.
+    fireEvent.change(input, { target: { value: "1e" } });
+    expect(input.value).toBe("1e");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(onValueChange).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "" } });
+    expect(input.getAttribute("aria-invalid")).toBe("false");
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it("still marks empty invalid when allowEmpty is off", () => {
+    render(<EngineeringInput label="R1" unit="Ω" value="" onValueChange={vi.fn()} />);
+    expect(screen.getByLabelText("R1").getAttribute("aria-invalid")).toBe("true");
+  });
 });
