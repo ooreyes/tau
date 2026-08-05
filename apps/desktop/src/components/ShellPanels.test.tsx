@@ -257,7 +257,7 @@ describe("ComponentInspector - imported op-amp parameters", () => {
 });
 
 describe("ComponentInspector - semiconductor model chooser", () => {
-  it("selects the exact bundled Class-D PMOS and drops inapplicable Level-1 geometry", () => {
+  it("selects the exact bundled Class-D PMOS and drops inapplicable Level-1 geometry", async () => {
     const selected = {
       id: "m-p",
       kind: "pmos" as const,
@@ -270,16 +270,22 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
     render(<ComponentInspector selected={selected} />);
 
-    const chooser = screen.getByRole("combobox", { name: "Simulation model" }) as HTMLSelectElement;
-    expect(Array.from(chooser.options).some((option) => option.textContent?.includes("RSR015P06 · Tau exact models"))).toBe(true);
-    expect(Array.from(chooser.options).some((option) => option.textContent?.startsWith("QS6K1"))).toBe(false);
-    fireEvent.change(chooser, { target: { value: "RSR015P06" } });
+    const chooser = screen.getByRole("combobox", { name: "Simulation model" });
+    expect(chooser.tagName).toBe("BUTTON");
+    expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
+    expect(document.querySelector("select[aria-label='Simulation model']")).toBeNull();
+
+    fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });
+    const rsr = await screen.findByRole("option", { name: /RSR015P06 · Tau exact models/ });
+    expect(screen.queryByRole("option", { name: /^QS6K1/ })).toBeNull();
+    fireEvent.pointerUp(rsr, { button: 0, pointerId: 1, pointerType: "mouse" });
+    fireEvent.click(rsr);
 
     expect(useSchematic.getState().components[0].value).toBe("RSR015P06");
     expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
   });
 
-  it("offers compatible attached models with their filename and never wrong device types", () => {
+  it("offers compatible attached models with their filename and never wrong device types", async () => {
     const selected = {
       id: "q-n",
       kind: "npn" as const,
@@ -300,10 +306,15 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     });
     render(<ComponentInspector selected={selected} />);
 
-    const chooser = screen.getByRole("combobox", { name: "Simulation model" }) as HTMLSelectElement;
-    expect(Array.from(chooser.options).map((option) => option.textContent)).toContain("MY_NPN · transistors.lib");
-    expect(Array.from(chooser.options).some((option) => option.textContent?.includes("NOT_FOR_Q1"))).toBe(false);
+    const chooser = screen.getByRole("combobox", { name: "Simulation model" });
+    expect(chooser.tagName).toBe("BUTTON");
+    expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
+    expect(chooser.textContent).toContain("MY_NPN · transistors.lib");
     expect(screen.getByRole("status").textContent).toContain("Ready · exact NPN model from transistors.lib");
+
+    fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });
+    expect(await screen.findByRole("option", { name: "MY_NPN · transistors.lib" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /NOT_FOR_Q1/ })).toBeNull();
   });
 
   it("keeps an unresolved imported part visible and offers the library action", () => {
@@ -320,7 +331,11 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
     render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
 
-    expect((screen.getByRole("combobox", { name: "Simulation model" }) as HTMLSelectElement).value).toBe("IRF540");
+    const chooser = screen.getByRole("combobox", { name: "Simulation model" });
+    expect(chooser.tagName).toBe("BUTTON");
+    expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
+    expect(chooser.textContent).toContain("IRF540");
+    expect(document.querySelector("select[aria-label='Simulation model']")).toBeNull();
     expect(screen.getByRole("status").textContent).toMatch(/Needs a model ·.*won't substitute a generic NMOS/);
     fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
     expect(openLibraries).toHaveBeenCalledOnce();

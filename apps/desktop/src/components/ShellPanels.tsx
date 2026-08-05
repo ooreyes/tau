@@ -1695,20 +1695,18 @@ export function ComponentInspector({
             <>
               <label className="property-field">
                 <span>Simulation model</span>
-                <select
-                  className="mono-num"
-                  aria-label="Simulation model"
-                  value={selectedModelOption?.name ?? selectedModelName}
-                  onFocus={() => {
-                    editKeyRef.current = null;
+                <Select
+                  value={(selectedModelOption?.name ?? selectedModelName) || undefined}
+                  onOpenChange={(open) => {
+                    if (open) editKeyRef.current = null;
                   }}
-                  onChange={(event) => {
+                  onValueChange={(nextModel) => {
                     beginParamChange("model");
                     if (modelKind === "nmos" || modelKind === "pmos") {
-                      const choice = modelOptions.find((option) => option.name === event.currentTarget.value);
+                      const choice = modelOptions.find((option) => option.name === nextModel);
                       const next: Record<string, string> = {
                         ...decodeParams(modelKind, selected.value.trim() || entry?.defaultValue || ""),
-                        model: event.currentTarget.value,
+                        model: nextModel,
                       };
                       // KP/VTO belong to Tau's editable generic Level-1 model,
                       // never to an exact vendor model. A VDMOS also has no W/L
@@ -1725,19 +1723,33 @@ export function ComponentInspector({
                       }
                       setValue(selected.id, encodeParams(modelKind, next));
                     } else {
-                      setValue(selected.id, event.currentTarget.value);
+                      setValue(selected.id, nextModel);
                     }
                   }}
                 >
-                  {!selectedModelOption && selectedModelName && (
-                    <option value={selectedModelName}>{selectedModelName} · missing or incompatible</option>
-                  )}
-                  {modelOptions.map((option) => (
-                    <option key={`${option.source}:${option.sourceLabel}:${option.name}`} value={option.name}>
-                      {option.name} · {option.sourceLabel}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    size="sm"
+                    className="property-select mono-num w-full max-w-[168px]"
+                    aria-label="Simulation model"
+                  >
+                    <SelectValue placeholder="Model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!selectedModelOption && selectedModelName && (
+                      <SelectItem value={selectedModelName}>
+                        {selectedModelName} · missing or incompatible
+                      </SelectItem>
+                    )}
+                    {modelOptions.map((option) => (
+                      <SelectItem
+                        key={`${option.source}:${option.sourceLabel}:${option.name}`}
+                        value={option.name}
+                      >
+                        {option.name} · {option.sourceLabel}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </label>
               <p className="property-hint" role="status">
                 {!selectedModelOption

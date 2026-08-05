@@ -1,17 +1,49 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:20 CDT**
+**Status: DONE - 2026-08-05 ~12:55 CDT**
 
-Unit: **Product gates — crash-safe unsaved recovery** — versioned recovery
-envelope + Restore/Discard dialog; no silent hydrate. Product-gates DoD box
-stays ⬜ (learning path / external-edit / run records / CLI still open).
-SHIPPABLE? **NO**
+Unit: **§10 ShellPanels Simulation model → ui/Select** — native semiconductor
+Simulation model `<select>` onto shadcn `ui/Select` (Settings untouched).
+AGENTS §10 / min-window DoD stay UNCHECKED. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+### 2026-08-05 — ShellPanels Simulation model → ui/Select (§10)
+
+**What I did**
+- Migrated inspector semiconductor Simulation model from native `<select>` to
+  shadcn `ui/Select` with the same dense `property-select` / `--row-h` trigger
+  recipe as Op-amp / Waveform (Settings untouched). Unresolved models stay
+  visible as SelectItems; empty model uses uncontrolled placeholder.
+- ShellPanels tests assert `data-slot=select-trigger`, no native Simulation
+  model `<select>`, open→pick RSR015P06, attached MY_NPN options, unresolved
+  IRF540 + Attach Model Library.
+- Did **not** flip AGENTS §10 or min-window DoD boxes.
+
+**Files**
+- `apps/desktop/src/components/ShellPanels.tsx`
+- `apps/desktop/src/components/ShellPanels.test.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2903 passed / 6 skipped
+- focused: ShellPanels semiconductor model chooser (3/3)
+
+**Parity items**
+- §10 partial: Simulation model Select. Box stays ⬜. SHIPPABLE? NO
+
+**Next step**
+- Remaining native `<select>`s (sim setup / EngineeringInput units /
+  subckt chooser) or min-window screenshot proof. Never flip whole
+  §10/min-window on a partial.
+
+SHIPPABLE? **NO**
+
 
 ### 2026-08-05 — Crash-safe unsaved recovery (product-gates partial)
 

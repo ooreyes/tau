@@ -2114,13 +2114,13 @@ popped to `#EDF1F6` / `#0068D6` (was `#F5F6F8` / `#0A66C2`); radius scale
 extended (`--r-2xs`/`--r-xs`/`--r-pill`) and raw chrome radii snapped; warning
 chrome stays quiet ochre (soft ≈0.05 — not danger-red for optional empties);
 settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model +
-IndependentSourceEditor Waveform type native `<select>`s migrated onto shadcn
-`ui/Select` (Settings locked/untouched); unit proof in
-SimulationPanel/ShellPanels tests (combobox triggers, not native `<select>`).
-Remaining §10 debt that blocks an honest DoD check:
+IndependentSourceEditor Waveform type + semiconductor Simulation model native
+`<select>`s migrated onto shadcn `ui/Select` (Settings locked/untouched); unit
+proof in SimulationPanel/ShellPanels tests (combobox triggers, not native
+`<select>`). Remaining §10 debt that blocks an honest DoD check:
 Resizable/Command/Toast primitives still deferred; other native `<select>`s
-(Simulation setup, EngineeringInput units, semiconductor/subckt model
-choosers, local-AI settings) not yet on `ui/Select`; Assistant/local-AI
+(Simulation setup, EngineeringInput units, subckt model chooser, local-AI
+settings) not yet on `ui/Select`; Assistant/local-AI
 settings surfaces still mid-migration; Cupertino icon chrome still settling;
 no proof of zero ad-hoc drift across every panel at both themes + min window.
 Do **not** flip the AGENTS box until that grep+screenshot proof exists.
@@ -2328,9 +2328,13 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   **IndependentSourceEditor Waveform `ui/Select` (2026-08-05 follow-up):**
   inspector Waveform type uses the same `property-select` dense trigger;
   ShellPanels tests open the list and pick Sine (jsdom pointer-capture
-  polyfill). Left for a later pass: other native `<select>`s (sim setup,
-  eng-input units, MOSFET/subckt choosers), deferred Resizable/Command/Toast,
-  and min-window screenshot proof for this slice. →
+  polyfill). **Semiconductor Simulation model `ui/Select` (2026-08-05):**
+  MOSFET/BJT/diode Simulation model chooser uses the same dense trigger;
+  ShellPanels tests assert `data-slot=select-trigger`, open→pick RSR015P06,
+  and unresolved IRF540 remains visible (Settings untouched). Left for a
+  later pass: other native `<select>`s (sim setup, eng-input units, subckt
+  chooser), deferred Resizable/Command/Toast, and min-window screenshot
+  proof for this slice. →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
   same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`
