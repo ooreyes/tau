@@ -24,7 +24,7 @@ import {
 import { decodeSchematicText, importAsc, makeSubcircuitResolver } from "../src/io/ascImport";
 import { analysesFromDirectives } from "../src/io/directiveAnalysis";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
-import { buildParamScope, expandDirectiveLines } from "../src/simulation/paramScope";
+import { buildParamScope } from "../src/simulation/paramScope";
 import { runMeasurements } from "../src/simulation/measure";
 import { compareWaveforms } from "../src/simulation/waveformCompare";
 import {
@@ -60,8 +60,7 @@ const OPAMP_FILTER_ASC = join(EDU, "opamp.asc");
 const LINKWITZ_ASC = join(EDU, "Linkwitz.asc");
 const LM741_ASC = join(EDU, "LM741.asc");
 const GFT_ASC = join(EDU, "GFT.asc");
-const AUDIOAMP_ASC = join(EDU, "audioamp.asc");
-const UHFPREAMP_ASC = join(EDU, "UHFpreamp.asc");
+const DCOPNT_ASC = join(EDU, "DCopPnt.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -209,7 +208,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741 TRAN, GFT AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741 TRAN, GFT AC, DCopPnt OP, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1310,6 +1309,40 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+
+    // --- Educational DCopPnt.asc authored .op (BJT operating-point demo) ---
+    // HalfSlope Laplace strips to unity VCCS (hollow) — not landed.
+    // BandGaps .dc temp misses LTspice nRms≈0.05 — honest miss.
+    {
+      expect(existsSync(DCOPNT_ASC), `missing ${DCOPNT_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(DCOPNT_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.directives.some((d) => /^\.op\b/i.test(d.trim()))).toBe(true);
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, { kind: "op" });
+      expect(deck.unresolvedSubckts).toEqual([]);
+      const result = runPairedBatch("diff-dcoppnt-op", deck.netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!.values[0]!;
+      const ng = result.ngspice.get("v(out)")!.values[0]!;
+      expect(Number.isFinite(lt) && Number.isFinite(ng)).toBe(true);
+      const scale = Math.abs(lt) > 1e-30 ? Math.abs(lt) : 1;
+      const relErr = Math.abs(ng - lt) / scale;
+      expect(relErr, `V(out) lt=${lt} ng=${ng}`).toBeLessThanOrEqual(1e-3);
+      cells.push({
+        analysis: "op",
+        circuit: "dcoppnt",
+        topology: "Educational DCopPnt.asc BJT bias network (authored .op)",
+        status: "pass",
+        note: `V(out) lt=${lt.toExponential(4)} ng=${ng.toExponential(4)} rel=${relErr.toExponential(2)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -1603,9 +1636,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(38);
+    expect(passCount).toBeGreaterThanOrEqual(39);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=38 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=39 sibling=5 gap=0/);
   }, 240_000);
 });
