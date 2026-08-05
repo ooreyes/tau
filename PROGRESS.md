@@ -9,20 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:08 CDT**
+**Status: DONE - 2026-08-05 05:11 CDT**
 
-Unit: LTspice.app help `ACstep.asc` AC (≠ Educational stepAC) → differential **pass=81**.
+Unit: LTspice.app help `NoiseStep.asc` noise (≠ Educational stepnoise) → differential **pass=82**.
 ```
-SUMMARY pass=81 sibling=5 gap=0
-ac help-acstep … v(z) nRms=0.0000 span=4779.4 (list→band; C=20p)
+SUMMARY pass=82 sibling=5 gap=0
+noise help-noisestep … V(onoise)/V(inoise) nRms=0.0000
 ```
-Named-device 48.1%. SHIPPABLE? **NO**
+sinh/divide2/inverter deferred (log-domain / `.machine`). SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — help NoiseStep.asc noise → pass=82 (§DoD)
+
+**What I did**
+- LTspice.app help `NoiseStep.asc` authored `.NOISE … list 10K` + `.step oct
+  param R` (first R=500). Same CE-pair + 2N2222 topology as Educational
+  stepnoise but distinct help path. list→9.5–10.5 kHz band stand-in; V(onoise)/
+  V(inoise) match LTspice (nRms=0).
+- Probed Resources sinh (ngspice log domain @ |x|>1), divide2/inverter
+  (`.machine`) — honest defer, not landed. Left ACstep/Butterworth/Draft1/100W.
+
+**Exact stdout**
+
+```
+SUMMARY pass=82 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- differential corpus → pass=82
+
+**Parity items**
+- Differential 🟡 **pass=82**. Named-device 🟡 **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Continue 22; remaining help/Resources walls mapped.
+
+
 
 
 ### 2026-08-05 — help ACstep.asc AC → pass=81 (§DoD)

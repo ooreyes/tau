@@ -100,6 +100,11 @@ const HELP_ACSTEP_ASC = join(
   "/Applications/LTspice.app/Contents/Resources/LTspice.help/Contents/Resources/English.lproj",
   "ACstep.asc",
 );
+/** LTspice.app help CE-pair `.noise list`+`.step R` — ≠ Educational/stepnoise.asc (same topology, distinct path). */
+const HELP_NOISESTEP_ASC = join(
+  "/Applications/LTspice.app/Contents/Resources/LTspice.help/Contents/Resources/English.lproj",
+  "NoiseStep.asc",
+);
 /** LTspice.app Resources BV demo — soft `_exp` (≠ Documents/LTspice/Draft1.asc diode–L–R). */
 const RESOURCES_DRAFT1_ASC = join("/Applications/LTspice.app/Contents/Resources", "Draft1.asc");
 const EDU_100W_ASC = join(EDU, "100W.asc");
@@ -262,7 +267,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -3296,6 +3301,79 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- LTspice.app help NoiseStep.asc authored .noise list + .step R (≠ Educational stepnoise) ---
+    // Same CE-pair + 2N2222 topology as Educational/stepnoise.asc but distinct help path.
+    // Authored `.NOISE … list 10K` (Tau lacks list) → 9.5–10.5 kHz band stand-in; `.step
+    // oct param R` → first R=500. Resources sinh (.dc±1.01 log domain) and divide2/inverter
+    // (.machine) remain honest walls. Left ACstep/Butterworth/Draft1/100W alone.
+    // Tip help-ACstep pass=81 → 82.
+    {
+      expect(existsSync(HELP_NOISESTEP_ASC), `missing ${HELP_NOISESTEP_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(HELP_NOISESTEP_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      expect(dirs.some((d) => /\.noise\b/i.test(d) && /\blist\b/i.test(d) && /10\s*k/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.step\s+oct\s+param\s+R\b/i.test(d))).toBe(true);
+      const params = buildParamScope(dirs);
+      expect(Number(params.scope.R ?? params.scope.r)).toBeCloseTo(500, 10);
+      expect(Number(params.scope.V ?? params.scope.v)).toBeCloseTo(15, 10);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "noise",
+        output: { node: "out+", refNode: "out-" },
+        source: "V1",
+        startHz: 9.5e3,
+        stopHz: 10.5e3,
+        pointsPerDecade: 10,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+2N2222\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/\.noise\s+v\(out\+,out-\)\s+V1\b/i);
+      const qLines = deck.netlist.split(/\r?\n/).filter((line) => /^Q\w*\b/i.test(line.trim()));
+      expect(qLines.length).toBeGreaterThanOrEqual(2);
+      for (const line of qLines) {
+        expect(line, line).toMatch(/\b2N2222\b/);
+        expect(line, line).not.toMatch(/\bTAU_NPN\b/);
+      }
+      const result = runPairedBatch("diff-help-noisestep-noise", deck.netlist, [], {
+        skipSave: true,
+        extract: ["V(onoise)", "V(inoise)"],
+        ngspiceAliases: {
+          "V(onoise)": "onoise_spectrum",
+          "V(inoise)": "inoise_spectrum",
+        },
+      });
+      const memberNotes: string[] = [];
+      for (const probe of ["V(onoise)", "V(inoise)"] as const) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `help-NoiseStep ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(lt.values[0]!, `${probe} lt hollow`).toBeGreaterThan(0);
+        expect(ng.values[0]!, `${probe} ng hollow`).toBeGreaterThan(0);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`,
+        );
+      }
+      cells.push({
+        analysis: "noise",
+        circuit: "help-noisestep",
+        topology: "LTspice.app help NoiseStep.asc CE pair + 2N2222 (.noise list 10K→9.5–10.5k; .step R first=500; ≠ Educational stepnoise)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3592,6 +3670,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=81 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=82 sibling=5 gap=0/);
   }, 240_000);
 });
