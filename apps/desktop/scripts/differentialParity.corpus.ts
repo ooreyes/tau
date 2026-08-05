@@ -52,6 +52,8 @@ const CT_STEP_LOADED_ASC = join(REPO_ROOT, "Circuit_testing_v1", "05_step_loaded
 const CT_NOISE_RC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "07_noise_rc_lowpass.asc");
 /** Tau Circuit_testing_v1 — RC lowpass authored .ac (≠ synthetic RC_AC / ct noise RC). */
 const CT_AC_RC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "03_ac_rc_lowpass.asc");
+/** Tau Circuit_testing_v1 — resistive divider authored .tf (≠ synthetic DIVIDER_TF netlist). */
+const CT_TF_DIVIDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "06_tf_voltage_divider.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -3761,6 +3763,71 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/06_tf_voltage_divider.asc authored .tf (1:1 resistive) ---
+    // Tau-owned ASC: V1=0 + R1=1k + R2=1k. Authored `.tf V(out) V1`. Expected
+    // gain 0.5 / Rin 2k / Rout 500Ω. Distinct from synthetic DIVIDER_TF
+    // (hand-written netlist, V1=5) and class-d injected `.tf` — this cell
+    // proves importAsc → buildSpiceDeck → paired TF on an authored ASC.
+    // Left 100W/IRFP / Documents Draft* / Settings alone. Tip ct-ac pass=88 → **pass=89**.
+    {
+      expect(existsSync(CT_TF_DIVIDER_ASC), `missing ${CT_TF_DIVIDER_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_TF_DIVIDER_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tf, "06_tf_voltage_divider.asc must author .tf").toBeTruthy();
+      expect(parsed.tf!.source.toUpperCase()).toBe("V1");
+      expect(parsed.tf!.output.kind).toBe("voltage");
+      const params = buildParamScope(dirs);
+      const outNode =
+        parsed.tf!.output.kind === "voltage" ? parsed.tf!.output.pos : "out";
+      const outRef =
+        parsed.tf!.output.kind === "voltage" ? parsed.tf!.output.neg : undefined;
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tf",
+        output: { kind: "voltage", node: outNode, refNode: outRef },
+        source: parsed.tf!.source,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^V1\b/im);
+      expect(deck.netlist).toMatch(/^R1\b.+\b1000\b/im);
+      expect(deck.netlist).toMatch(/^R2\b.+\b1000\b/im);
+      expect(deck.netlist).toMatch(/\.tf\s+v\(out\)\s+V1\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).not.toMatch(/^\.model\b/im);
+      const result = runPairedTransferFunction("diff-ct-tf-divider", deck.netlist);
+      const ltGain = pickScalar(result.ltspice, ["transfer_function"]);
+      const ngGain = pickScalar(result.ngspice, ["transfer_function"]);
+      const ltRin = pickScalar(result.ltspice, ["v1#input_impedance"]);
+      const ngRin = pickScalar(result.ngspice, ["v1#input_impedance"]);
+      const ltRout = pickScalar(result.ltspice, ["output_impedance_at_v(out)"]);
+      const ngRout = pickScalar(result.ngspice, ["output_impedance_at_v(out)"]);
+      const gainRel = relativeError(ngGain, ltGain);
+      const rinRel = relativeError(ngRin, ltRin);
+      const routRel = relativeError(ngRout, ltRout);
+      expect(gainRel, `ct-tf gain lt=${ltGain} ng=${ngGain}`).toBeLessThanOrEqual(1e-6);
+      expect(rinRel, `ct-tf Rin lt=${ltRin} ng=${ngRin}`).toBeLessThanOrEqual(1e-6);
+      expect(routRel, `ct-tf Rout lt=${ltRout} ng=${ngRout}`).toBeLessThanOrEqual(1e-6);
+      expect(ngGain).toBeCloseTo(0.5, 6);
+      expect(ngRin).toBeCloseTo(2000, 4);
+      expect(ngRout).toBeCloseTo(500, 4);
+      cells.push({
+        analysis: "tf",
+        circuit: "ct-tf-divider",
+        topology: "Circuit_testing_v1/06_tf_voltage_divider.asc R1=R2=1k (authored .tf V(out) V1)",
+        status: "pass",
+        note: `gain/Rin/Rout relErr<=1e-6 (gain≈${ngGain}, Rin≈${ngRin}, Rout≈${ngRout})`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4057,6 +4124,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=88 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=89 sibling=5 gap=0/);
   }, 240_000);
 });

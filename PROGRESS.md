@@ -1,15 +1,45 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:09 CDT**
+**Status: DONE - 2026-08-05 06:15 CDT**
 
-Unit: Waveform DoD — **AC Bode log/linear X toggle** (`freqToFraction` + Log X / Lin X).
-Base tip `2a5ad88` pass=88. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `06_tf_voltage_divider.asc` authored `.tf` → differential **pass=89**.
+```
+SUMMARY pass=89 sibling=5 gap=0
+tf ct-tf-divider … gain/Rin/Rout relErr<=1e-6 (gain≈0.5, Rin≈2000, Rout≈500)
+```
+Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over Bode X tip `4558027`. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — ct 06_tf_voltage_divider .tf → pass=89 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `06_tf_voltage_divider.asc` authored
+  `.tf V(out) V1` (R1=R2=1k, V1=0): gain/Rin/Rout vs LTspice
+  relErr≤1e-6 (gain≈0.5, Rin≈2k, Rout≈500). Distinct from synthetic
+  DIVIDER_TF (hand netlist) and class-d injected `.tf` — proves
+  importAsc → buildSpiceDeck → paired TF. Avoided Staff EE 100W/IRFP,
+  Documents Draft*, Settings/palette thrash. Rebased over Bode Log/Lin X tip.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=89 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2727 passed)
+
+**Parity items**
+- Differential **pass=89** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue: ct `01_op` / `02_tran` or non-wall Educational leftovers.
+  Leave IRFP/Draft*/Settings alone.
 
 
 ### 2026-08-05 — AC Bode log/linear X toggle (§waveform DoD)
