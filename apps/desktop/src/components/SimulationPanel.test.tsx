@@ -1084,6 +1084,51 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
     }
   });
 
+  it("exports AC step-family CSV as step,freq_Hz,signal long-format", async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const capturedBlobs: Blob[] = [];
+    URL.createObjectURL = ((blob: Blob) => {
+      capturedBlobs.push(blob);
+      return "blob:mock-ac-step-csv";
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    try {
+      const acMember = (label: string, magDb: number[]) => ({
+        label,
+        value: 1,
+        result: {
+          ok: true as const,
+          freqs: [10, 100],
+          traces: [{ id: "n1", label: "V(out)", magDb, phaseDeg: [0, -45] }],
+          warnings: [],
+        },
+      });
+      render(
+        <AcFamilyPlot
+          family={{
+            ok: true,
+            spec: { kind: "param", name: "R", values: [1, 2] },
+            members: [acMember("R=1", [0, -3]), acMember("R=2", [0, -6])],
+            warnings: [],
+          }}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+      expect(capturedBlobs).toHaveLength(1);
+      const csv = await capturedBlobs[0].text();
+      expect(csv).toBe(
+        ["step,freq_Hz,V(out)", "R=1,10,0", "R=1,100,-3", "R=2,10,0", "R=2,100,-6"].join("\n"),
+      );
+      expect(clickSpy).toHaveBeenCalled();
+    } finally {
+      clickSpy.mockRestore();
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    }
+  });
+
   it("right-click AC step SIGNAL chip plots abs(V(out)) across steps", async () => {
     const acMember = (label: string, magDb: number[]) => ({
       label,
@@ -1145,6 +1190,50 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
     } finally {
       toPng.mockRestore();
       download.mockRestore();
+    }
+  });
+
+  it("exports DC step-family CSV as step,sweep,signal long-format", async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const capturedBlobs: Blob[] = [];
+    URL.createObjectURL = ((blob: Blob) => {
+      capturedBlobs.push(blob);
+      return "blob:mock-dc-step-csv";
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    try {
+      const dcMember = (label: string, voltages: number[]) => ({
+        label,
+        value: 1,
+        result: {
+          ok: true as const,
+          source: "V1",
+          sweep: [0, 1, 2],
+          nets: [{ id: "n1", label: "V(out)", voltages, ground: false }],
+          warnings: [],
+        },
+      });
+      render(
+        <DcFamilyPlot
+          family={{
+            ok: true,
+            spec: { kind: "param", name: "R", values: [1] },
+            members: [dcMember("R=1", [0, 0.5, 1])],
+            warnings: [],
+          }}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+      expect(capturedBlobs).toHaveLength(1);
+      const csv = await capturedBlobs[0].text();
+      expect(csv).toBe(["step,sweep,V(out)", "R=1,0,0", "R=1,1,0.5", "R=1,2,1"].join("\n"));
+      expect(clickSpy).toHaveBeenCalled();
+    } finally {
+      clickSpy.mockRestore();
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
     }
   });
 

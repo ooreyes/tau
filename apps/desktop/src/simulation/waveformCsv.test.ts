@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { seriesToCsv, stepFamilyToCsv, spectrumToCsv, cursorReadoutToCsv } from "./waveformCsv";
+import { seriesToCsv, stepFamilyToCsv, spectrumToCsv, cursorReadoutToCsv, analysisFamilyToCsv } from "./waveformCsv";
 
 describe("seriesToCsv", () => {
   it("writes a header row plus one row per axis sample", () => {
@@ -65,6 +65,32 @@ describe("stepFamilyToCsv", () => {
       { label: "V1=5", times: [0, 1, 2], values: [0.1] },
     ]);
     expect(csv).toBe(["step,time,I(R1)", "V1=5,0,0.1", "V1=5,1,", "V1=5,2,"].join("\n"));
+  });
+});
+
+describe("analysisFamilyToCsv", () => {
+  it("exports AC step families as step,freq_Hz,signal long-format", () => {
+    const csv = analysisFamilyToCsv("freq_Hz", "V(out)", [
+      { label: "R=1", axis: [10, 100], values: [0, -3] },
+      { label: "R=2", axis: [10, 100, 1000], values: [0, -6, -40] },
+    ]);
+    expect(csv).toBe(
+      [
+        "step,freq_Hz,V(out)",
+        "R=1,10,0",
+        "R=1,100,-3",
+        "R=2,10,0",
+        "R=2,100,-6",
+        "R=2,1000,-40",
+      ].join("\n"),
+    );
+  });
+
+  it("exports DC step families as step,sweep,signal long-format", () => {
+    const csv = analysisFamilyToCsv("sweep", "V(out)", [
+      { label: "R=1", axis: [0, 1, 2], values: [0, 0.5, 1] },
+    ]);
+    expect(csv).toBe(["step,sweep,V(out)", "R=1,0,0", "R=1,1,0.5", "R=1,2,1"].join("\n"));
   });
 });
 

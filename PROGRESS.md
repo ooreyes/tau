@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:46 CDT**
+**Status: DONE - 2026-08-05 07:52 CDT**
 
-Unit: Waveform DoD — **standalone detached Bode phase window**.
-Worktree `Tau-wt-wave-phase` rebased over Continue ct14 → **pass=98**.
+Unit: Waveform DoD — **AC/DC step-family Export CSV**.
+Worktree `Tau-wt-wave-family-csv` over tip `f08237b` → this commit. pass=98.
 Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -13,6 +13,31 @@ Settings locked. SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — AC/DC step-family Export CSV (§waveform DoD)
+
+**What I did**
+- `analysisFamilyToCsv` long-format (`step,freq_Hz|sweep,<signal>`);
+  AcFamilyPlot / DcFamilyPlot **Export CSV** (mirrors StepPlot CSV). Worktree
+  `Tau-wt-wave-family-csv` over `f08237b`. Left ct 14/15, continue 37 ASC,
+  ct 19 OP, Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/waveformCsv.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring tests)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2776 passed)
+- analysisFamilyToCsv 2 + Ac/DcFamilyPlot Export CSV wiring
+
+**Parity items**
+- Waveform viewer 🟡 (AC/DC step-family CSV landed). Differential pass=98 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Step-family cursors / manual axis limits / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — standalone detached Bode phase window (§waveform DoD)
 

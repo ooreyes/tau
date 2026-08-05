@@ -1538,7 +1538,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Export PNG** rasters the family SVG via `waveformSvgsToPng` (`tau-step-….png`).
   1 wiring test. **AC/DC step-family Export PNG landed** (2026-08-05):
   AcFamilyPlot / DcFamilyPlot **Export PNG** (`tau-ac-step-….png` /
-  `tau-dc-step-….png`). 2 wiring tests. **Bode Log Y / Lin Y landed**
+  `tau-dc-step-….png`). 2 wiring tests. **AC/DC step-family Export CSV landed**
+  (2026-08-05): `analysisFamilyToCsv` long-format `step,freq_Hz|sweep,<signal>`;
+  AcFamilyPlot / DcFamilyPlot **Export CSV**. 2 pure + 2 wiring tests. **Bode Log Y / Lin Y landed**
   (2026-08-05): AcPlot magnitude Lin Y = dB; Log Y = `|V|/|Vref|` decades
   via `bodeMagYDomain` / `dbToLinearMag`. **FFT Export PNG landed** (2026-08-05):
   FftView **Export PNG** (`tau-fft-….png`). 1 wiring test. **Group-delay lower

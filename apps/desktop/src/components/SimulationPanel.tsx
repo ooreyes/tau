@@ -76,7 +76,7 @@ import { groupDelay, groupDelayYDomain } from "../simulation/groupDelay";
 import { bodeMagYDomain, dbToLinearMag, freqToFraction } from "../simulation/freqAxis";
 import type { AxisScale } from "../simulation/axisTicks";
 import { stabilityMargins } from "../simulation/stability";
-import { seriesToCsv, stepFamilyToCsv, spectrumToCsv, cursorReadoutToCsv } from "../simulation/waveformCsv";
+import { seriesToCsv, stepFamilyToCsv, spectrumToCsv, cursorReadoutToCsv, analysisFamilyToCsv } from "../simulation/waveformCsv";
 import {
   applyPltSection,
   buildPltSection,
@@ -5047,6 +5047,17 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
     }
   };
 
+  const exportAcStepCsv = () => {
+    downloadCsv(
+      analysisFamilyToCsv(
+        "freq_Hz",
+        overlay.signal,
+        overlay.series.map((s) => ({ label: s.label, axis: s.freqs, values: s.magDb })),
+      ),
+      "ac-step",
+    );
+  };
+
   return (
     <>
       <div className="scope-shell">
@@ -5123,6 +5134,9 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
             Use probe
           </Button>
         )}
+        <Button variant="outline" size="sm" onClick={exportAcStepCsv}>
+          Export CSV
+        </Button>
         <Button variant="outline" size="sm" onClick={() => void exportAcStepPng()}>
           Export PNG
         </Button>
@@ -5228,6 +5242,17 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
     }
   };
 
+  const exportDcStepCsv = () => {
+    downloadCsv(
+      analysisFamilyToCsv(
+        "sweep",
+        overlay.signal,
+        overlay.series.map((s) => ({ label: s.label, axis: s.sweep, values: s.voltages })),
+      ),
+      "dc-step",
+    );
+  };
+
   return (
     <>
       <div className="scope-shell">
@@ -5302,6 +5327,9 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
             Use probe
           </Button>
         )}
+        <Button variant="outline" size="sm" onClick={exportDcStepCsv}>
+          Export CSV
+        </Button>
         <Button variant="outline" size="sm" onClick={() => void exportDcStepPng()}>
           Export PNG
         </Button>

@@ -51,31 +51,56 @@ export interface StepFamilyCsvMember {
   values: ReadonlyArray<number>;
 }
 
+/** Generic long-format family member: own axis grid (freq / sweep / time). */
+export interface AnalysisFamilyCsvMember {
+  label: string;
+  axis: ReadonlyArray<number>;
+  values: ReadonlyArray<number>;
+}
+
 /**
- * Serialize a stepped family as a long-format CSV: `step,time,<signal>` with
- * one row per sample. Each member's time grid is preserved verbatim (empty /
- * non-finite values become blank cells). Header-only when `members` is empty.
+ * Serialize a stepped / analysis family as long-format CSV:
+ * `step,<axis>,<signal>` with one row per sample. Each member's axis grid is
+ * preserved verbatim (empty / non-finite values become blank cells).
+ * Header-only when `members` is empty.
+ */
+export function analysisFamilyToCsv(
+  axisName: string,
+  signalLabel: string,
+  members: ReadonlyArray<AnalysisFamilyCsvMember>,
+): string {
+  const axis = axisName.trim() || "axis";
+  const header = ["step", axis, signalLabel].map(csvCell).join(",");
+  const rows: string[] = [header];
+  for (const member of members) {
+    const step = csvCell(member.label);
+    const n = Math.min(member.axis.length, member.values.length);
+    // Prefer the shorter of axis/values so a truncated series never invents
+    // paired cells from undefined indices.
+    for (let i = 0; i < n; i++) {
+      rows.push([step, num(member.axis[i]), num(member.values[i])].join(","));
+    }
+    // Trailing unpaired axis samples (values shorter) still emit as gaps.
+    for (let i = n; i < member.axis.length; i++) {
+      rows.push([step, num(member.axis[i]), ""].join(","));
+    }
+  }
+  return rows.join("\n");
+}
+
+/**
+ * Serialize a stepped transient family as a long-format CSV: `step,time,<signal>`
+ * with one row per sample. Each member's time grid is preserved verbatim.
  */
 export function stepFamilyToCsv(
   signalLabel: string,
   members: ReadonlyArray<StepFamilyCsvMember>,
 ): string {
-  const header = ["step", "time", signalLabel].map(csvCell).join(",");
-  const rows: string[] = [header];
-  for (const member of members) {
-    const step = csvCell(member.label);
-    const n = Math.min(member.times.length, member.values.length);
-    // Prefer the shorter of times/values so a truncated series never invents
-    // paired cells from undefined indices.
-    for (let i = 0; i < n; i++) {
-      rows.push([step, num(member.times[i]), num(member.values[i])].join(","));
-    }
-    // Trailing unpaired times (values shorter) still emit as gaps.
-    for (let i = n; i < member.times.length; i++) {
-      rows.push([step, num(member.times[i]), ""].join(","));
-    }
-  }
-  return rows.join("\n");
+  return analysisFamilyToCsv(
+    "time",
+    signalLabel,
+    members.map((m) => ({ label: m.label, axis: m.times, values: m.values })),
+  );
 }
 
 /**
