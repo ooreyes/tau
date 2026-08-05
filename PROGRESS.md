@@ -9,20 +9,55 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:11 CDT**
+**Status: DONE - 2026-08-05 02:15 CDT**
 
-Unit: Educational opamp.asc + Linkwitz.asc authored `.ac` → differential **pass=36**.
+Unit: Educational `LM741.asc` authored `.tran` (discrete BJT op-amp, exact NP/PN) → differential **pass=37**.
 ```
-SUMMARY pass=36 sibling=5 gap=0
-ac opamp-filter … |v(bp)| nRms=0.0000
-ac linkwitz … |v(out)| nRms=0.0000
+SUMMARY pass=37 sibling=5 gap=0
+tran lm741 … v(6)/v(3)/v(2) nRms≈0.0005
 ```
-Left Howland/LM741 for continue 6. Named-device 47.9%. SHIPPABLE? **NO**
+Built on tip `0aeb204` (opamp/Linkwitz → pass=36). Howland+LT1001 deferred (OTA remap not LTspice-same-deck). Named-device 47.9% unchanged. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — LM741 TRAN differential → pass=37 (§DoD)
+
+**What I did**
+- Educational `LM741.asc` authored `.tran 10m`: 20 discrete BJTs with
+  schematic `.model NP` / `.model PN` (zero `modelSubstitutions`, no TAU_*
+  generics). Probed net labels 6=OUT / 3=IN+ / 2=IN− vs LTspice.
+- Collision-avoided Clapp/Hartly / opamp/Linkwitz (Staff EE; tip pass=36).
+  Howland+LT1001 probed but deferred — Tau OTA A-device remap is ngspice-shaped;
+  same-deck LTspice rejects it. HalfSlope Laplace silently collapses to G=1 —
+  rejected as dishonest.
+- Broad DoD matrix still open. SHIPPABLE? **NO**.
+
+**Exact stdout**
+```
+SUMMARY pass=37 sibling=5 gap=0
+tran lm741 … v(6) nRms=0.0005 nMax=0.0009; v(3) nRms=0.0004; v(2) nRms=0.0005
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` (vitest corpus); typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 harness **pass=37 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- audioamp TRAN; SoftDiodeRecovery; dual-deck Howland path. Never fake
+  Vswitch continuous SW or encrypted SpiceModel decrypt.
+
+
 
 ### 2026-08-05 — opamp/Linkwitz AC differential → pass=36 (§DoD)
 

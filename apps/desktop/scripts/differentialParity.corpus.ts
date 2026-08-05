@@ -58,6 +58,7 @@ const CLAPP_ASC = join(EDU, "Clapp.asc");
 const HARTLY_ASC = join(EDU, "Hartly.asc");
 const OPAMP_FILTER_ASC = join(EDU, "opamp.asc");
 const LINKWITZ_ASC = join(EDU, "Linkwitz.asc");
+const LM741_ASC = join(EDU, "LM741.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -205,7 +206,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741 TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1209,6 +1210,56 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     }
 
 
+    // --- Educational LM741.asc authored .tran (discrete BJT op-amp; exact NP/PN models) ---
+    {
+      expect(existsSync(LM741_ASC), `missing ${LM741_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(LM741_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.tran, "LM741.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      const qLines = deck.netlist.split(/\r?\n/).filter((line) => /^Q\w*\b/i.test(line.trim()));
+      expect(qLines.length).toBeGreaterThanOrEqual(18);
+      for (const line of qLines) {
+        expect(line, line).not.toMatch(/\bTAU_NPN\b|\bTAU_PNP\b/);
+        expect(line, line).toMatch(/\b(NP|PN)\b/);
+      }
+      expect(deck.netlist).toMatch(/\.model\s+NP\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+PN\s+PNP\b/i);
+      const result = runPairedBatch("diff-lm741-tran", deck.netlist, ["v(6)", "v(3)", "v(2)"]);
+      const memberNotes: string[] = [];
+      for (const trace of ["v(6)", "v(3)", "v(2)"] as const) {
+        const lt = result.ltspice.get(trace)!;
+        const ng = result.ngspice.get(trace)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${trace} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`${trace} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`);
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "lm741",
+        topology: "Educational LM741.asc discrete BJT op-amp NP/PN (authored .tran 10m)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -1502,9 +1553,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(36);
+    expect(passCount).toBeGreaterThanOrEqual(37);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=36 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=37 sibling=5 gap=0/);
   }, 240_000);
 });

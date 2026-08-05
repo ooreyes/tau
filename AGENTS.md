@@ -173,7 +173,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=35 · sibling=5 · gap=0 on stdout: prior RC/divider/curvetrace/
+      pass=37 · sibling=5 · gap=0 on stdout: prior RC/divider/curvetrace/
       NoiseFigure + Educational noise/Cohn/MeasureBW AC + Transformer family
       TRAN + notch/passive/butter + Clapp/Hartly AC + opamp.asc/Linkwitz.asc
       authored `.ac`, expanded `.step` families, steptemp/stepmodelparam,
