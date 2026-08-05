@@ -1577,7 +1577,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=77 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=78 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
@@ -1593,7 +1593,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   authored `.tran` (bundled 12V+24V starting profiles; v(n001)/v(n002)
   nRms≈0.035/0.025 @ rmsTol=0.05) plus LTspice.app Resources/**IGBTeq.asc**
   authored nested `.dc` (NMOS+PNP IGBT-eq; index-aligned v(n002)/i(v1)
-  nRms≈5e-4 / ≈0).  deferred (all-pass |V|≈1
+  nRms≈5e-4 / ≈0) plus LTspice.app help/**Butterworth.asc** authored `.ac`
+  (normalized LC ladder; ≠ Educational butter.asc; v(n001)/v(n002)/v(out)
+  nRms≈6e-4). gr_del deferred (all-pass |V|≈1
   hollow). TwoTau / Draft8 Laplace brace-mangle deferred. Draft6 AD823 /
   Draft10 UOA2 same-deck not landed. tip 65e05ce thrash
   corrected. phono/relax blocked. wavein (wavefile=) deferred. HalfSlope Laplace stripped;

@@ -9,20 +9,100 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:45 CDT**
+**Status: DONE - 2026-08-05 04:50 CDT**
 
-Unit: Merged Educational `ISO16750-2_example.asc` TRAN + LTspice.app `IGBTeq.asc`
-nested DC → differential **pass=77**.
+Unit: LTspice.app help `Butterworth.asc` authored `.ac` → differential **pass=78**.
 ```
-SUMMARY pass=77 sibling=5 gap=0
+SUMMARY pass=78 sibling=5 gap=0
+ac help-butterworth … v(n001) nRms=0.0006 span=1.642; v(out) nRms=0.0006 span=0.499
 ```
-Both landed after tip diverge. Named-device 48.1%. SHIPPABLE? **NO**
+Normalized LC ladder (≠ Educational butter.asc). Left ISO7637/named-device alone.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+
 ---
+
+
+### 2026-08-05 — LTspice.app help Butterworth.asc AC → pass=78 (§DoD)
+
+**What I did**
+- LTspice.app help `Butterworth.asc` authored `.ac oct 25 .01 3`: I-source AC
+  stim + normalized LC ladder + OUT. Distinct from Educational `butter.asc`
+  (oct 50 / v(out1)). Default 2%/5%: v(n001)/v(n002)/v(out) nRms≈6e-4;
+  spans 1.642 / 0.637 / 0.499. Zero unresolved / substitutions.
+- Tip `cbd34ae` ISO16750+IGBTeq pass=77 → **78**. Worktree `Tau-wt-dod-draft`.
+  Left ISO7637 spike / sinh / Draft* / named-device maps / avoid-list alone.
+
+**Exact stdout**
+
+```
+SUMMARY pass=78 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/differential-parity.sh` → pass=78
+
+**Parity items**
+- Differential 🟡 **pass=78**. Named-device 48.1%. SHIPPABLE? NO
+
+**Next step**
+- Continue honest differential (help ACstep / other Resources demos). Avoid
+  ISO7637 spike / sinh log-domain / Draft* / named-device thrash.
+
+
+
+---
+
+
+
+
+### 2026-08-05 — LTspice.app help Butterworth.asc AC → pass=78 (§DoD)
+
+**What I did**
+- LTspice.app help `Butterworth.asc` authored `.ac oct 25 .01 3`: normalized
+  LC ladder (I-source AC stim). Distinct from Educational/`butter.asc`.
+  Default 2%/5%: v(n001)/v(n002)/v(out) nRms≈6e-4. Zero unresolved /
+  substitutions.
+- Engine: LTspice soft `_exp(x)` → `exp(x)` in `ltFuncsToNgspice` for same-deck
+  ngspice (unit-tested). Left ISO7637 spike / sinh / named-device / Documents
+  Draft* alone. Tip after ISO16750+IGBTeq merge pass=77 → **78**.
+
+**Exact stdout**
+
+```
+SUMMARY pass=78 sibling=5 gap=0
+ac help-butterworth … v(n001) nRms=0.0006; v(n002) nRms=0.0007; v(out) nRms=0.0006
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `apps/desktop/src/simulation/behavioral.ts` (+ test)
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/differential-parity.sh` → pass=78
+
+**Parity items**
+- Differential 🟡 **pass=78**. Named-device exact **1222** / **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Resources/`Draft1.asc` `_exp` BV DC (now unblocked); avoid ISO7637 spike /
+  sinh domain / Documents Draft* thrash.
+
+
+
+---
+
 
 
 ### 2026-08-05 — merge ISO16750 TRAN + IGBTeq nested DC → pass=77 (§DoD)

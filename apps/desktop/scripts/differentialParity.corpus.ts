@@ -90,6 +90,11 @@ const WAVEOUT_ASC = join(EDU, "waveout.asc");
 const ISO16750_ASC = join(EDU, "ISO16750-2_example.asc");
 /** Bundled LTspice.app demo — NMOS+PNP IGBT equivalent (not Educational/IGBT.asc NIGBT). */
 const IGBT_EQ_ASC = join("/Applications/LTspice.app/Contents/Resources", "IGBTeq.asc");
+/** LTspice.app help demo — distinct from Educational/butter.asc (oct 25 vs oct 50). */
+const HELP_BUTTERWORTH_ASC = join(
+  "/Applications/LTspice.app/Contents/Resources/LTspice.help/Contents/Resources/English.lproj",
+  "Butterworth.asc",
+);
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
@@ -249,7 +254,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -3041,6 +3046,64 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- LTspice.app help Butterworth.asc authored .ac (normalized LC ladder) ---
+    // Distinct from Educational/butter.asc (that cell probes v(out1); oct 50). Help demo
+    // authors `.ac oct 25 .01 3` with I-source AC stim + OUT label. Pure R/L/C — zero
+    // unresolved / substitutions. Default 2%/5%: v(n001)/v(n002)/v(out) nRms≈6e-4.
+    // Left ISO7637 spike / sinh(log domain) / named-device / Draft* alone.
+    // Stacked on tip pass=77 (ISO16750+IGBTeq) → **pass=78**.
+    {
+      expect(existsSync(HELP_BUTTERWORTH_ASC), `missing ${HELP_BUTTERWORTH_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(HELP_BUTTERWORTH_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "help Butterworth.asc must author .ac").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^I1\b/im);
+      expect(deck.netlist).toMatch(/^L\d+\b/im);
+      expect(deck.netlist).toMatch(/^C\d+\b/im);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).toMatch(/\.ac\b/i);
+      const probes = ["v(n001)", "v(n002)", "v(out)"] as const;
+      const result = runPairedBatch("diff-help-butterworth-ac", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `help-Butterworth ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `help-Butterworth ${probe} non-hollow`).toBeGreaterThan(0.4);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "ac",
+        circuit: "help-butterworth",
+        topology: "LTspice.app help Butterworth.asc normalized LC ladder (authored .ac oct 25 .01–3; ≠ Educational butter.asc)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3337,6 +3400,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=77 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=78 sibling=5 gap=0/);
   }, 240_000);
 });
