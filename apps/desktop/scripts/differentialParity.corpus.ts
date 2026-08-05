@@ -81,6 +81,8 @@ const MC1648_ASC = join(EDU, "MC1648.asc");
 const HANDSFREE_PREAMP_ASC = join(EDU, "PAsystem", "HandsFreePreamp.asc");
 /** Educational Vswitch — continuous negative-Vh SW (ngspice gets B rewrite). */
 const VSWITCH_ASC = join(EDU, "Vswitch.asc");
+/** Educational dimmer — on-schematic DIAC/TRIAC + stepped Rdim (load-power probe). */
+const DIMMER_ASC = join(EDU, "dimmer.asc");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
@@ -389,7 +391,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -4925,6 +4927,93 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational/dimmer.asc authored .tran + .step param Rdim ---
+    // Lamp dimmer: on-schematic DIAC + TRIAC subckts (exact BJT latch models in
+    // TEXT), SINE mains, Rdim gate timing, B-source LoadPower RC average.
+    // Expand `.step param Rdim list 1K…325K` for the solid-conduction members
+    // 1k/50k/100k (strip .step; bake each `.param Rdim=`) — same honest pattern
+    // as ct-step-loaded / steptemp. Probe v(loadpower) (non-hollow filtered
+    // power; span shrinks as dimmer closes). TRIAC gate/MT2 v(b) phase-skew and
+    // near-cutoff Rdim≥200k remain deferred (firing-edge miss). Tip pass=102 →
+    // **pass=103**. Left SoftDiodeRecovery / PowerAmp TIP / Staff EE / Settings /
+    // Fc / ISO7637 / EveryCircuit alone.
+    {
+      expect(existsSync(DIMMER_ASC), `missing ${DIMMER_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(DIMMER_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      expect(dirs.some((d) => /\.step\s+param\s+Rdim\b/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.subckt\s+DIAC\b/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.subckt\s+TRIAC\b/i.test(d))).toBe(true);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "dimmer.asc must author .tran").toBeTruthy();
+      expect(parsed.tran!.stopTime, "dimmer .tran 0.3").toBeCloseTo(0.3, 12);
+      const rdims = [
+        { label: "1k", ohms: 1e3, minSpan: 80 },
+        { label: "50k", ohms: 50e3, minSpan: 70 },
+        { label: "100k", ohms: 100e3, minSpan: 50 },
+      ] as const;
+      const memberNotes: string[] = [];
+      for (const member of rdims) {
+        const withParam = [
+          ...dirs.filter((d) => !/^\.step\b/i.test(d.trim())),
+          `.param Rdim=${member.label}`,
+        ];
+        const params = buildParamScope(withParam);
+        expect(
+          Number(params.scope.Rdim ?? params.scope.rdim),
+          `Rdim=${member.label}`,
+        ).toBeCloseTo(member.ohms, 6);
+        const deck = buildSpiceDeck({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          directives: withParam,
+          params,
+        }, {
+          kind: "tran",
+          stopTime: parsed.tran!.stopTime,
+          // Short-form `.tran .3` yields steps=240 — too coarse for TRIAC
+          // edges on the shared save grid; use denser steps (probe-proven).
+          steps: 5000,
+        });
+        expect(deck.unresolvedSubckts ?? [], `dimmer Rdim=${member.label}`).toEqual([]);
+        expect(deck.modelSubstitutions ?? [], `dimmer Rdim=${member.label}`).toEqual([]);
+        expect(deck.netlist).toMatch(/\.subckt\s+DIAC\b/i);
+        expect(deck.netlist).toMatch(/\.subckt\s+TRIAC\b/i);
+        expect(deck.netlist).toMatch(/^XQ1\b.+\bDIAC\b/im);
+        expect(deck.netlist).toMatch(/^XU1\b.+\bTRIAC\b/im);
+        expect(deck.netlist).toMatch(new RegExp(`^R1\\b.+\\b${member.ohms}\\b`, "im"));
+        expect(deck.netlist).toMatch(/^Rload\b.+\b135\b/im);
+        expect(deck.netlist).toMatch(/^B1\b.+V\(A,B\)/im);
+        expect(deck.netlist).not.toMatch(/^\.step\b/im);
+        const result = runPairedBatch(`diff-dimmer-${member.label}`, deck.netlist, ["v(loadpower)"]);
+        const lt = result.ltspice.get("v(loadpower)")!;
+        const ng = result.ngspice.get("v(loadpower)")!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          // TRIAC firing edges + RC-averaged LoadPower: allow modest edge
+          // skew (nMax) while keeping RMS tight on the filtered power.
+          rmsTolerance: 0.08,
+          maxTolerance: 0.20,
+        });
+        expect(comparison.pass, `dimmer Rdim=${member.label} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(
+          comparison.referenceRange,
+          `dimmer Rdim=${member.label} non-hollow`,
+        ).toBeGreaterThan(member.minSpan);
+        memberNotes.push(
+          `Rdim=${member.label} v(loadpower) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "dimmer",
+        topology: "Educational/dimmer.asc DIAC+TRIAC + Rdim step 1k/50k/100k (authored .tran 0.3; loadpower; gate v(b)/Rdim≥200k deferred)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (TRIAC load-power)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -5221,6 +5310,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=102 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=103 sibling=5 gap=0/);
   }, 240_000);
 });

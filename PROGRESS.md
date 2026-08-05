@@ -1,19 +1,47 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 09:50 CDT**
+**Status: DONE - 2026-08-05 ~09:40 CDT**
 
-Unit: AC/DC step-family manual Y limits (waveform DoD).
-Worktree `Tau-wt-wave-acdc-step-ylim` on tip `96b8ba1`. Left EveryCircuit
-library fills 2 / Settings / Educational / stash@{0} alone. SHIPPABLE? **NO**
+Unit: Educational **dimmer.asc** authored `.tran` + `.step Rdim` → differential
+**pass=103** (DIAC/TRIAC load-power; gate v(b) / Rdim≥200k deferred).
+Worktree `Tau-wt-diff-103` rebased over EveryCircuit/waveform tip. Left SoftDiode /
+PowerAmp / Staff EE / Settings / EveryCircuit fills alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
-
-
 
 
 ---
 
 
+
+### 2026-08-05 — Educational dimmer .tran → pass=103 (§DoD)
+
+**What I did**
+- Educational `dimmer.asc` authored `.tran 0.3` + `.step param Rdim list
+  1K…325K`: on-schematic DIAC/TRIAC subckts (exact BJT latch TEXT models).
+- Expand solid-conduction members Rdim=1k/50k/100k (strip `.step`; bake
+  `.param Rdim=`); probe `v(loadpower)` (filtered B-source power; span shrinks
+  as dimmer closes). Dense steps=5000; nRms≈0.0003/0.011/0.008 @ rmsTol=0.08.
+- TRIAC gate/MT2 `v(b)` phase-skew and near-cutoff Rdim≥200k remain deferred.
+  No engine change — topology already exact. Left SoftDiodeRecovery / PowerAmp
+  TIP / Staff EE / Settings / Fc / ISO7637 / EveryCircuit library alone.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=103 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` (before push)
+
+**Parity items**
+- Differential **pass=103** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Educational leftovers (Fc timestep / ISO7637 spike / gr_del / walls). Leave
+  SoftDiodeRecovery / PowerAmp / Staff EE / Settings / EveryCircuit alone.
+
+---
 
 ### 2026-08-05 — AC/DC step-family manual Y limits (§waveform DoD)
 
