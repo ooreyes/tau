@@ -21,6 +21,12 @@ import { LocalAiSetupDialog } from "./LocalAiSetupDialog";
 import { saveAssistantPreferences } from "../lib/assistantPreferences";
 import type { LocalAiStatus } from "../lib/localAiRuntime";
 
+// jsdom lacks PointerEvent capture APIs that Radix Select uses on open.
+Element.prototype.hasPointerCapture = () => false;
+Element.prototype.setPointerCapture = () => {};
+Element.prototype.releasePointerCapture = () => {};
+Element.prototype.scrollIntoView = () => {};
+
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
@@ -102,6 +108,11 @@ describe("LocalAiSetupDialog", () => {
     runtime.getStatus.mockResolvedValue(status({ installed: true, downloaded: false }));
     runtime.start.mockResolvedValue(status({ state: "starting", managed: true, installed: true }));
     render(<LocalAiSetupDialog />);
+
+    const model = await screen.findByRole("combobox", { name: "Setup local model" });
+    expect(model.tagName).toBe("BUTTON");
+    expect(model.getAttribute("data-slot")).toBe("select-trigger");
+    expect(document.querySelector(".settings-field select")).toBeNull();
 
     // First-run prefers the smaller 1.7B download for tryouts.
     fireEvent.click(await screen.findByRole("button", { name: "Turn on" }));

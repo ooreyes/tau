@@ -1,14 +1,48 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:40 CDT**
+**Status: DONE - 2026-08-05 ~13:45 CDT**
 
-Unit: **§10 AnalysisSetupForms + circuit-duration → ui/Select (formalize)** —
-expand TF/Noise/orphan SourceSelect proof; durability `wip:` `b7d265a` already
-carried the migration. AGENTS §10 stays UNCHECKED. SHIPPABLE? **NO**
+Unit: **§10 Settings / LocalAiSetup native `<select>` → ui/Select** —
+On-device model, Cloud provider, Gemini model, Setup local model. Zero
+component native `<select>` remaining. AGENTS §10 stays UNCHECKED
+(Resizable/Command/Toast + whole-app drift proof). SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — §10 Settings AI + LocalAiSetup → ui/Select
+
+**What I did**
+- Migrated Settings → Circuit assistant and first-run Local AI setup model
+  choosers from native `<select>` onto shadcn `ui/Select` with tokenized
+  `.settings-select` triggers (`--row-h`, `--panel-2`, ellipsis value).
+- Grep: zero native `<select>` left under `apps/desktop/src/**/*.tsx`
+  (tests excluded). Did **not** flip AGENTS §10 (Resizable/Command/Toast +
+  both-theme drift screenshot proof still open). SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/components/SettingsAiSection.tsx`
+- `apps/desktop/src/components/LocalAiSetupDialog.tsx`
+- `apps/desktop/src/components/SettingsPanel.test.tsx`
+- `apps/desktop/src/components/LocalAiSetupDialog.test.tsx`
+- `apps/desktop/src/App.css`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `vitest run SettingsPanel.test.tsx LocalAiSetupDialog.test.tsx` → 11/11
+- `pnpm -C apps/desktop typecheck` / `test` → 2977 passed / 8 skipped
+
+**Parity items**
+- §10 partial: local-AI Settings selects closed. Box ⬜. SHIPPABLE? NO
+
+**Next step**
+- Resizable/Command/Toast primitives; whole-app ad-hoc drift proof at both
+  themes. Never flip AGENTS §10 on a partial.
+
+SHIPPABLE? **NO**
 
 ---
 

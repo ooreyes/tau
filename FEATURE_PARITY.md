@@ -2167,10 +2167,11 @@ box) proven 2026-08-05** via `scripts/min-window-dod.sh` at 900×600 (12/12;
 Settings sheet viewport cap + scroll; editor toolbar horizontal scroll) —
 shots in `screenshots/min-window-dod/`. Remaining §10 debt that blocks an
 honest **§10 design-system** DoD check:
-Resizable/Command/Toast primitives still deferred; other native `<select>`s
-(local-AI settings) not yet on `ui/Select`; Assistant/local-AI settings
-surfaces still mid-migration; Cupertino icon chrome still settling; no proof
-of zero ad-hoc drift across every panel at both themes.
+Resizable/Command/Toast primitives still deferred; Cupertino icon chrome
+still settling; no proof of zero ad-hoc drift across every panel at both
+themes. **2026-08-05:** Settings AI + LocalAiSetupDialog model/provider
+choosers migrated onto `ui/Select` — zero native `<select>` remain under
+`apps/desktop/src/**/*.tsx` (component sources).
 Do **not** flip the AGENTS **§10** box until that grep+screenshot proof exists.
 
 **Earlier claim (2026-07-08 Phase 4c) that §10 "closes" AGENTS DoD was premature**
@@ -2401,8 +2402,13 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   `circuit-duration-unit` triggers (`--row-h`, `--panel-2`,
   `--tracking-micro` field labels); empty source mapped through
   `__tau_empty__`. Unit proof in `AnalysisSetupForms.test.tsx` +
-  SimulationPanel/App.workspace duration cases. Left for a later pass:
-  local-AI settings; deferred Resizable/Command/Toast. AGENTS §10 stays
+  SimulationPanel/App.workspace duration cases. **Settings AI + LocalAiSetup
+  `ui/Select` (2026-08-05):** On-device model, Cloud provider, Gemini model,
+  and first-run Setup local model use dense `settings-select` triggers
+  (`--row-h`, `--panel-2`, ellipsis value); unit proof in
+  `SettingsPanel.test.tsx` + `LocalAiSetupDialog.test.tsx` (combobox
+  triggers, zero `.settings-field select`). Left for a later pass:
+  deferred Resizable/Command/Toast + whole-app drift proof. AGENTS §10 stays
   UNCHECKED. →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,

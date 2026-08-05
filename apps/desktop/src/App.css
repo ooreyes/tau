@@ -8393,21 +8393,34 @@ button.bottom-panel-head:focus-visible {
 }
 
 
-.settings-select {
+.settings-select,
+.settings-field [data-slot="select-trigger"].settings-select {
   width: 100%;
   height: var(--row-h);
+  min-height: var(--row-h);
+  max-width: none;
   padding: 0 var(--sp-2);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--panel-2);
   color: var(--text);
   font: 500 var(--fs-label) var(--font-ui);
+  box-sizing: border-box;
   outline: none;
 }
 
-.settings-select:focus-visible {
+.settings-select:focus-visible,
+.settings-field [data-slot="select-trigger"].settings-select:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-line);
+}
+
+.settings-field [data-slot="select-trigger"].settings-select [data-slot="select-value"] {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-local-runtime {

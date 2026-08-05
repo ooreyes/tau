@@ -8,6 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAssistantPreferences, saveAssistantPreferences } from "../lib/assistantPreferences";
 import {
   dismissLocalAiSetup,
@@ -168,24 +175,33 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
         {status?.installed && (
           <label className="settings-field" htmlFor="setup-local-model">
             <span>Model</span>
-            <select
-              id="setup-local-model"
-              className="settings-select"
-              aria-label="Setup local model"
+            <Select
               value={preferences.localModel}
               disabled={busy || status.state === "starting"}
-              onChange={(event) => saveAssistantPreferences({
+              onValueChange={(next) => saveAssistantPreferences({
                 ...preferences,
-                localModel: event.currentTarget.value as LocalAiPresetInfo["id"],
+                localModel: next as LocalAiPresetInfo["id"],
               })}
             >
-              {(presets.length ? presets : [{
-                id: preferences.localModel,
-                label: preferences.localModel,
-              } as LocalAiPresetInfo]).map((preset) => (
-                <option key={preset.id} value={preset.id}>{preset.label}</option>
-              ))}
-            </select>
+              <SelectTrigger
+                id="setup-local-model"
+                size="sm"
+                className="settings-select w-full"
+                aria-label="Setup local model"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(presets.length ? presets : [{
+                  id: preferences.localModel,
+                  label: preferences.localModel,
+                } as LocalAiPresetInfo]).map((preset) => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <span className="settings-field-hint">
               Start with 1.7B (~900 MB) for a quick try; switch to 4B for better circuit proposals if you have 8 GB+ memory.
             </span>

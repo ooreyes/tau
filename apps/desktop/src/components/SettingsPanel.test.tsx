@@ -28,6 +28,20 @@ import { saveAssistantPreferences } from "../lib/assistantPreferences";
 import { saveCloudAiConsent } from "../lib/cloudAiConsent";
 import type { LocalAiStatus } from "../lib/localAiRuntime";
 
+// jsdom lacks PointerEvent capture APIs that Radix Select uses on open.
+Element.prototype.hasPointerCapture = () => false;
+Element.prototype.setPointerCapture = () => {};
+Element.prototype.releasePointerCapture = () => {};
+Element.prototype.scrollIntoView = () => {};
+
+async function chooseSelectOption(ariaLabel: string, optionName: string | RegExp) {
+  const trigger = screen.getByRole("combobox", { name: ariaLabel });
+  fireEvent.pointerDown(trigger, { button: 0, pointerId: 1, pointerType: "mouse" });
+  const option = await screen.findByRole("option", { name: optionName });
+  fireEvent.pointerUp(option, { button: 0, pointerId: 1, pointerType: "mouse" });
+  fireEvent.click(option);
+}
+
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
@@ -95,7 +109,11 @@ describe("SettingsAiSection local assistant lifecycle", () => {
     runtime.getStatus.mockResolvedValue(status());
     render(<SettingsAiSection onNotice={vi.fn()} />);
     expect(screen.getByRole("radio", { name: "On-device" }).getAttribute("aria-checked")).toBe("true");
-    expect((screen.getByRole("combobox", { name: "On-device model" }) as HTMLSelectElement).value).toBe("qwen3-1.7b-4bit");
+    const model = screen.getByRole("combobox", { name: "On-device model" });
+    expect(model.tagName).toBe("BUTTON");
+    expect(model.getAttribute("data-slot")).toBe("select-trigger");
+    expect(model.textContent).toMatch(/Qwen3 1\.7B/);
+    expect(document.querySelector(".settings-field select")).toBeNull();
     expect(await screen.findByText("Download: 914 MB")).toBeTruthy();
     expect(screen.queryByText(/8080|127\.0\.0\.1|localhost/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Download & turn on" }));
@@ -130,8 +148,8 @@ describe("SettingsAiSection local assistant lifecycle", () => {
       target: { value: "mlx-community/Custom-Circuit-4bit" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Import" }));
-    await waitFor(() => expect((screen.getByRole("combobox", { name: "On-device model" }) as HTMLSelectElement).value)
-      .toBe("custom:mlx-community/Custom-Circuit-4bit"));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "On-device model" }).textContent)
+      .toMatch(/Custom-Circuit-4bit|mlx-community/));
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(confirm).toHaveBeenCalledOnce();
     confirm.mockRestore();
@@ -145,7 +163,22 @@ describe("SettingsAiSection local assistant lifecycle", () => {
     expect(await screen.findByLabelText(/API key/)).toBeTruthy();
     expect(screen.getByText(/Consent is required/i)).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: "On-device model" })).toBeNull();
+    const cloudProvider = screen.getByRole("combobox", { name: "Cloud provider" });
+    expect(cloudProvider.tagName).toBe("BUTTON");
+    expect(cloudProvider.getAttribute("data-slot")).toBe("select-trigger");
+    expect(screen.getByRole("combobox", { name: "Gemini model" }).tagName).toBe("BUTTON");
+    expect(document.querySelector(".settings-field select")).toBeNull();
     fireEvent.click(screen.getByRole("checkbox"));
     expect(screen.queryByText(/Consent is required/i)).toBeNull();
+  });
+
+  it("picks Anthropic through cloud-provider ui/Select", async () => {
+    runtime.getStatus.mockResolvedValue(status());
+    render(<SettingsAiSection onNotice={vi.fn()} />);
+    await screen.findByText("Download: 914 MB");
+    fireEvent.click(screen.getByRole("radio", { name: "Cloud" }));
+    await chooseSelectOption("Cloud provider", /Anthropic/);
+    expect(await screen.findByLabelText(/Anthropic API key/)).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Gemini model" })).toBeNull();
   });
 });

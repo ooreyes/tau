@@ -6,6 +6,13 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { userFacingErrorMessage } from "../lib/errorMessage";
 import { saveAssistantApiKey, useHasAssistantApiKey } from "../lib/assistant";
 import { saveGeminiApiKey, useHasGeminiApiKey } from "../lib/providerApiKey";
@@ -33,6 +40,47 @@ import {
 } from "../lib/localAiModels";
 import { saveCloudAiConsent } from "../lib/cloudAiConsent";
 import { useCloudAiConsent } from "../lib/cloudAiConsentHooks";
+
+const CLOUD_PROVIDER_ITEMS: readonly { value: "gemini" | "anthropic"; label: string }[] = [
+  { value: "gemini", label: "Gemini · free tier" },
+  { value: "anthropic", label: "Anthropic · your API key" },
+];
+
+function SettingsSelect({
+  id,
+  label,
+  value,
+  onValueChange,
+  items,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  items: readonly { value: string; label: string }[];
+  disabled?: boolean;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+      <SelectTrigger
+        id={id}
+        size="sm"
+        className="settings-select w-full"
+        aria-label={label}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export function SettingsAiSection({
   onNotice,
@@ -164,20 +212,19 @@ export function SettingsAiSection({
           <>
             <label className="settings-field" htmlFor="assistant-local-model">
               <span>Model</span>
-              <select
+              <SettingsSelect
                 id="assistant-local-model"
-                className="settings-select"
-                aria-label="On-device model"
+                label="On-device model"
                 value={assistantPreferences.localModel}
-                onChange={(event) => saveAssistantPreferences({
+                onValueChange={(next) => saveAssistantPreferences({
                   ...assistantPreferences,
-                  localModel: event.currentTarget.value as LocalAiPresetInfo["id"],
+                  localModel: next as LocalAiPresetInfo["id"],
                 })}
-              >
-                {localPresets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>{preset.label}</option>
-                ))}
-              </select>
+                items={localPresets.map((preset) => ({
+                  value: preset.id,
+                  label: preset.label,
+                }))}
+              />
               <span className="settings-field-hint">
                 Start with 1.7B for a quick try (~900 MB). 4B is better for building circuits if you have 8 GB+ memory.
               </span>
@@ -282,19 +329,18 @@ export function SettingsAiSection({
           <>
             <label className="settings-field" htmlFor="assistant-cloud-provider">
               <span>Cloud provider</span>
-              <select
+              <SettingsSelect
                 id="assistant-cloud-provider"
-                className="settings-select"
-                aria-label="Cloud provider"
-                value={assistantPreferences.provider}
-                onChange={(event) => saveAssistantPreferences({
+                label="Cloud provider"
+                value={
+                  assistantPreferences.provider === "anthropic" ? "anthropic" : "gemini"
+                }
+                onValueChange={(next) => saveAssistantPreferences({
                   ...assistantPreferences,
-                  provider: event.currentTarget.value as AssistantProviderChoice,
+                  provider: next as AssistantProviderChoice,
                 })}
-              >
-                <option value="gemini">Gemini · free tier</option>
-                <option value="anthropic">Anthropic · your API key</option>
-              </select>
+                items={CLOUD_PROVIDER_ITEMS}
+              />
               <span className="settings-field-hint">
                 Gemini Flash is free for students (no credit card). Anthropic bills separately from any ChatGPT plan.
               </span>
@@ -302,22 +348,19 @@ export function SettingsAiSection({
             {assistantPreferences.provider === "gemini" && (
               <label className="settings-field" htmlFor="assistant-gemini-model">
                 <span>Gemini model</span>
-                <select
+                <SettingsSelect
                   id="assistant-gemini-model"
-                  className="settings-select"
-                  aria-label="Gemini model"
+                  label="Gemini model"
                   value={assistantPreferences.geminiModel}
-                  onChange={(event) => saveAssistantPreferences({
+                  onValueChange={(next) => saveAssistantPreferences({
                     ...assistantPreferences,
-                    geminiModel: event.currentTarget.value,
+                    geminiModel: next,
                   })}
-                >
-                  {Object.entries(GEMINI_MODEL_PRESETS).map(([id, preset]) => (
-                    <option key={id} value={id}>
-                      {preset.freeTier ? `${preset.label} (free tier)` : preset.label}
-                    </option>
-                  ))}
-                </select>
+                  items={Object.entries(GEMINI_MODEL_PRESETS).map(([id, preset]) => ({
+                    value: id,
+                    label: preset.freeTier ? `${preset.label} (free tier)` : preset.label,
+                  }))}
+                />
               </label>
             )}
             <label className="settings-consent" htmlFor="assistant-cloud-consent">
