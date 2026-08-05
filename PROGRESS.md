@@ -9,33 +9,70 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:28 CDT**
+**Status: DONE - 2026-08-04 23:29 CDT** (HR/ops — chrome thrash quarantine)
 
-Unit: EE-trust / student-calm product copy — quiet import toasts, Workspace disclosure in Settings, fail-closed inspector wording stays honest without alarm spam. Shippable? NO (DoD open).
+Unit: Reverted Freshman/Bench chrome thrash on Design-sealed UI
+(`App.tsx` · `AssistantPanel.tsx` · `ShellPanels.tsx` · `SimulationPanel.tsx`)
+back to HEAD. Left Freshman AI-lib dirty and Overnight engine/docs alone.
+AGENTS §10 stays **unchecked**. SHIPPABLE? **NO**.
+
+**Tokens / Design / Anduril / Cupertino / Design QA:** **DONE / sealed** — do not
+rewrite chrome.
+
+**Bench:** **DONE** (`fb8b7b1` / `e16b153`) — leave those tests alone.
+
+**Measured (QA):** named-device HF=0 / exact-rate 15.7% = encrypted reclass, not
+103 deck fixes. Do not invent ≥95%.
+
+**Active product lanes (collision lock — do not cross-edit):**
+- **Overnight DoD + Staff EE** — `engine/**` · `io/ascImport*` · `io/ltspiceSymbol*` ·
+  `scripts/*named*` · corpus only. **No UI.**
+- **AI platform / Freshman** — AI libs + tests only (`cloudAiConsent*` ·
+  `localAiEnsure*` · `localMlx*` · `assistant.ts` / `geminiAssistant.ts` ·
+  `LocalAiSetupDialog*` · `SettingsAiSection*` · Settings AI tests). **No**
+  App/ShellPanels/SimulationPanel/AssistantPanel chrome thrash.
+- **HR/ops** — split dirty lanes; never blind-pop stashes; never check AGENTS §10.
+
+**SHIPPABLE?** **NO** — exact-rate 15.7%, §10 unchecked, broad differential open.
+
+### Ownership board (ENFORCED · HR refresh 23:29)
+
+| Lane | Owns (edit only these) |
+|------|------------------------|
+| Tokens / Anduril / Cupertino / Design QA | **DONE / sealed** — no chrome reopen |
+| Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `io/ltspiceSymbol*` · `scripts/*named*` · corpus |
+| AI platform / Freshman | AI libs + AI tests / `SettingsAiSection` only |
+| Bench | **DONE** `fb8b7b1`/`e16b153` — do not retouch |
+| HR/ops | Revert Design-chrome thrash; never blind-pop stashes; never check AGENTS §10 |
+| QA | gates + `~/Desktop/TAU-MORNING-STATUS.md` numbers |
+
+**Stashes (leave alone):** do not pop `freshman-assistant-aside`, `leave-freshman-ui`,
+`concurrent-ui-aside`, `tokens-temp`, or other lane-aside stashes over sealed Design.
+
+**HR note:** Design sealed. Bench tests green. Freshman = AI-libs only.
+Overnight = docs/engine only. EE-trust copy that rewrote App/Shell/Sim was
+quarantined back to HEAD.
 
 
 ---
 
-### 2026-08-04 — EE-trust copy (student-calm Settings + quieter notices)
+### 2026-08-04 — HR/ops: quarantine Design-chrome thrash
 
 **What I did**
-- Quieted import toasts (Diagnostics owns warnings; no "See Diagnostics" nag).
-- Settings: Find parts + Workspace disclosure; Circuit assistant kicker.
-- Plotter: no duplicate run-warning banner; idle strip says press Run.
-- Inspector refuse copy stays fail-closed, calmer ("Needs a model/definition").
+- Classified dirty WT: App/AssistantPanel/ShellPanels/SimulationPanel = chrome
+  thrash vs Design seal; Freshman AI libs/tests legitimate; Overnight corpus/io
+  legitimate.
+- Restored Design-sealed UI files to HEAD. Did not pop stashes.
+- Refreshed ownership board. AGENTS §10 left unchecked.
 
 **Files**
-- `App.tsx`, `ShellPanels.tsx`, `SimulationPanel.tsx`, `SettingsPanel.test.tsx`
-
-**Tests / proof**
-- SettingsPanel + ShellPanels + SimulationPanel focused vitest green
+- `PROGRESS.md` (this heartbeat); morning collision board
 
 **Parity items**
-- Product-trust UX copy only; DoD boxes unchanged. Shippable? NO.
+- AGENTS §10 unchecked; SHIPPABLE? NO
 
 **Next step**
-- Leave Freshman on-device AI / Cupertino §10 alone; resume named-device HF triage.
-
+- Freshman finish consent gates in AI libs only; Overnight exact-rate / encrypted-103.
 
 
 ### 2026-08-04 — Named-device fidelity re-measure (Overnight DoD)
