@@ -91,26 +91,25 @@ beforeEach(() => {
 });
 
 describe("SettingsPanel local assistant lifecycle", () => {
-  it("offers Set up local AI when the runtime is missing", async () => {
+  it("offers Set up when the runtime is missing", async () => {
     runtime.getStatus.mockResolvedValue(status({ installed: false }));
     runtime.install.mockResolvedValue(status({ installed: true }));
     render(<SettingsPanel {...props} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Set up local AI" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Set up" }));
     await waitFor(() => expect(runtime.install).toHaveBeenCalledTimes(1));
     expect(runtime.start).not.toHaveBeenCalled();
   });
 
   it("defaults to Local MLX and requires an explicit size-labeled download start", async () => {
-    const stopped = status();
-    runtime.getStatus.mockResolvedValue(stopped);
+    runtime.getStatus.mockResolvedValue(status());
     runtime.start.mockResolvedValue(status({ state: "starting", managed: true }));
     render(<SettingsPanel {...props} />);
 
     expect((screen.getByRole("combobox", { name: "Provider" }) as HTMLSelectElement).value).toBe("local-mlx");
-    expect((screen.getByRole("combobox", { name: "Local model" }) as HTMLSelectElement).value).toBe("qwen3-1.7b-4bit");
+    expect((screen.getByRole("combobox", { name: "Model" }) as HTMLSelectElement).value).toBe("qwen3-1.7b-4bit");
     expect(screen.queryByLabelText("Anthropic API key")).toBeNull();
-    expect(await screen.findByText("Download size: 914 MB")).toBeTruthy();
+    expect(await screen.findByText("914 MB download")).toBeTruthy();
     expect(runtime.start).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Download & Start" }));
@@ -124,7 +123,7 @@ describe("SettingsPanel local assistant lifecycle", () => {
     render(<SettingsPanel {...props} />);
 
     const start = await screen.findByRole("button", { name: "Start" });
-    expect(screen.queryByText(/Download size:/)).toBeNull();
+    expect(screen.queryByText(/MB download/)).toBeNull();
     fireEvent.click(start);
     await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-4b-4bit", false));
   });
@@ -134,7 +133,7 @@ describe("SettingsPanel local assistant lifecycle", () => {
     runtime.stop.mockResolvedValue(status({ downloaded17: true }));
     render(<SettingsPanel {...props} />);
 
-    expect(await screen.findByText("Local inference · Ready")).toBeTruthy();
+    expect(await screen.findByText("Status · Ready")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     await waitFor(() => expect(runtime.stop).toHaveBeenCalledTimes(1));
   });
@@ -144,14 +143,14 @@ describe("SettingsPanel local assistant lifecycle", () => {
     runtime.start.mockResolvedValue(status({ state: "starting", managed: true }));
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<SettingsPanel {...props} />);
-    await screen.findByText("Download size: 914 MB");
+    await screen.findByText("914 MB download");
 
     fireEvent.change(screen.getByRole("textbox", { name: "Hugging Face model repository" }), {
       target: { value: "mlx-community/Custom-Circuit-4bit" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
-    await waitFor(() => expect((screen.getByRole("combobox", { name: "Local model" }) as HTMLSelectElement).value)
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "Model" }) as HTMLSelectElement).value)
       .toBe("custom:mlx-community/Custom-Circuit-4bit"));
     fireEvent.click(screen.getByRole("button", { name: "Download & Start" }));
     await waitFor(() => expect(runtime.start).toHaveBeenCalledWith(
@@ -161,7 +160,7 @@ describe("SettingsPanel local assistant lifecycle", () => {
     ));
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(confirm).toHaveBeenCalledOnce();
-    await waitFor(() => expect((screen.getByRole("combobox", { name: "Local model" }) as HTMLSelectElement).value)
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "Model" }) as HTMLSelectElement).value)
       .toBe("qwen3-4b-4bit"));
     confirm.mockRestore();
   });
@@ -169,26 +168,23 @@ describe("SettingsPanel local assistant lifecycle", () => {
   it("shows the cloud key only after Anthropic is selected", async () => {
     runtime.getStatus.mockResolvedValue(status());
     render(<SettingsPanel {...props} />);
-    await screen.findByText("Download size: 914 MB");
+    await screen.findByText("914 MB download");
 
     fireEvent.change(screen.getByRole("combobox", { name: "Provider" }), {
       target: { value: "anthropic" },
     });
     expect(await screen.findByLabelText("Anthropic API key")).toBeTruthy();
-    expect(screen.queryByRole("combobox", { name: "Local model" })).toBeNull();
-    expect(screen.queryByText(/Download size:/)).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Model" })).toBeNull();
+    expect(screen.queryByText(/MB download/)).toBeNull();
   });
 
-  it("keeps workspace recovery controls behind a closed disclosure", async () => {
+  it("keeps student-simple Settings rows for palette and recovery", async () => {
     runtime.getStatus.mockResolvedValue(status());
     render(<SettingsPanel {...props} />);
-    expect(screen.getByText("Find parts")).toBeTruthy();
-    expect(screen.getByText("Circuit assistant")).toBeTruthy();
-    const workspace = screen.getByText("Workspace").closest("details");
-    expect(workspace).toBeTruthy();
-    expect(workspace?.hasAttribute("open")).toBe(false);
-    expect(screen.queryByText("Recovery copy of untitled edits")).toBeNull();
-    fireEvent.click(screen.getByText("Workspace"));
-    expect(screen.getByText("Recovery copy of untitled edits")).toBeTruthy();
+    expect(screen.getAllByText("Appearance").length).toBeGreaterThan(0);
+    expect(screen.getByText("Assistant")).toBeTruthy();
+    expect(screen.getByText("Command palette")).toBeTruthy();
+    expect(screen.getByText("Autosave")).toBeTruthy();
+    expect(screen.getByText("Recovery snapshot for untitled edits")).toBeTruthy();
   });
 });

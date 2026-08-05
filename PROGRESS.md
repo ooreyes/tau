@@ -9,49 +9,57 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-04 23:21 CDT**
+**Status: DONE - 2026-08-04 23:23 CDT** (HR/ops — Design QA land + ownership lock)
 
-Unit: Raise recursive named-device exact-rate (stdout currently **15.7%**) toward
-≥95% — triage top refuse classes; prefer exact model attach / library resolve;
-refuse-over-fake for unsupported devices. Do **not** claim ≥95% unless measured.
-Shippable? **NO**.
+Unit: Design dirty sealed on remote; ownership board refreshed. AGENTS §10 DoD
+stays **unchecked**. SHIPPABLE? **NO**.
 
-**Measured 2026-08-04 23:20 CDT** (`scripts/named-device-fidelity.sh`):
+**Tokens:** **DONE** (`58b13c6` light default + honest §10; Anduril pop + aliases
+`1d6ebef` / Design QA `1250dbc`).
+
+**Measured (Overnight):** `scripts/named-device-fidelity.sh` @ 23:20 —
+`NAMED-DEVICE: exact=2 refuse=4 silent=0` ·
 `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%`
-Prior: HF 103 → **0** (Cpar/Rpar, `;` strip, Rload±, quote sentinels, paren-less PWL).
+hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` (raise exact-rate next;
+do not invent ≥95%).
 
 **Active product lanes (collision lock — do not cross-edit):**
-- **Overnight DoD + Staff EE** — `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus (this unit). **No UI.**
-- **Cupertino** — DONE @ `6aa5f98` (Lucide chrome, light default). Do not reopen icon pass.
-- **Anduril Light** — `App.css` light tokens / `DESIGN_SYSTEM.md` palette pop ONLY — not ShellPanels icon redo.
-- **AI platform / Freshman** — `localAiEnsure*` · `cloudAiConsent*` · `localMlxAssistant*` ·
-  `LocalAiSetupDialog*` · Settings AI sections. **AssistantPanel ONLY for ensure/consent wiring — no chrome thrash.**
-- **Design QA** — review `screenshots/hig-chrome-2026-08-04/` + keep typecheck green.
+- **Overnight DoD + Staff EE** — measuring / raising named-device exact-rate via
+  `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus. **No UI.**
+- **Anduril Light** — `tokens.css` aliases · `DESIGN_SYSTEM.md` palette tables
+  · `App.css` light token blocks **only**. No ShellPanels icon redo.
+- **Cupertino** — chrome icons DONE (`6aa5f98` / Design QA `1250dbc`). Closed.
+- **AI platform / Freshman** — AI libs only: `localAiEnsure*` · `cloudAiConsent*` ·
+  `localMlxAssistant*` · `LocalAiSetupDialog*` · extracted Settings AI module.
+  Do **not** thrash ShellPanels chrome; prefer `SettingsAiSection` extract.
+- **Design QA** — notes landed `1250dbc`; light screenshots at min + 1440 next.
 - **Bench** — help/warning copy strings only.
-- **QA / HR** — gates + morning-status numbers; stash discipline.
+- **QA / HR** — gates + morning-status; stash discipline; never force-push;
+  never check AGENTS §10.
 
-**SHIPPABLE?** **NO** — exact-rate 15.7% (need ≥95%), §10, broad differential, other DoD open.
+**SHIPPABLE?** **NO** — exact-rate 15.7%, §10 unchecked, broad differential open.
 
-### Ownership board (ENFORCED overnight 2026-08-04 · HR refresh 23:22)
+### Ownership board (ENFORCED · HR refresh 23:23)
 
 | Lane | Owns (edit only these) |
 |------|------------------------|
-| Cupertino | **DONE** `6aa5f98` — Lucide / light default; no further icon thrash |
-| Anduril Light | **DONE** — light tokens `#EDF1F6`/`#0068D6` + aliases; Design QA handoff |
-| Design QA | Screenshot review · typecheck green · test one-liners |
-| Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus — **no UI** |
-| AI platform / Freshman | `localAiEnsure*` · `cloudAiConsent*` · `localMlxAssistant*` · LocalAiSetupDialog · Settings AI; AssistantPanel **ensure/consent only** |
-| Bench | help/warning copy strings only — coordinate; no ShellPanels structure |
-| HR/ops | Split dirty lanes; never blind-pop stashes |
+| Tokens | **DONE** `58b13c6` / Anduril aliases `1d6ebef` |
+| Anduril Light | `tokens.css` · `DESIGN_SYSTEM.md` · `App.css` light tokens **only** |
+| Cupertino / Design QA | **DONE** icons + `DESIGN-QA-NOTES` (`1250dbc` / `f073aee`) — no reopen |
+| Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus — measuring |
+| AI platform / Freshman | AI libs only (`localAiEnsure*` · `cloudAiConsent*` · `localMlx*` · LocalAiSetupDialog · SettingsAiSection) |
+| Bench | help/warning copy strings only |
+| HR/ops | Split dirty lanes; never blind-pop stashes; never check AGENTS §10 |
 | QA | gates + `~/Desktop/TAU-MORNING-STATUS.md` numbers |
 
 **Stashes (leave alone):** `freshman-assistant-aside`, `tokens-temp`,
 `concurrent-ui-aside`, `leave-freshman-ui` — do not pop over Design/Freshman work.
 
-**HR note:** Real engine PWL/LT3956 = `6a1a44e`. Mislabelled `db57703` was ShellPanels/Assistant
-(typecheck) scooped mid-race — superseded by Design QA `1250dbc` + Sparkles drop `f073aee`.
-AI wording = `98ffd2d`.
+**HR note:** Design sealed = `1250dbc` (QA notes + ShellPanels Lucide + DESIGN_SYSTEM)
++ `1d6ebef` (token aliases) + `f073aee` (Sparkles drop). Engine PWL/LT3956 =
+`6a1a44e`/`db57703`. AI wording = `98ffd2d`. **Collision:** Freshman WIP still
+touches `ShellPanels.tsx` Settings AI — move to `SettingsAiSection.tsx`; do not
+rewrite Design chrome.
 
 
 ---
