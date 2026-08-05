@@ -192,7 +192,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, Colpitts AC, Class-D AC/OP", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, Colpitts AC, Class-D AC/OP/DC", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -819,6 +819,37 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         status: "pass",
         note: `V(vo)/V(vpwm) relErr<=1e-6 (vo≈${ngVo.toFixed(4)}, vpwm=${ngPwm})`,
       });
+
+      // Supply-rail DC sweep (V1): same physical knob as proven AC supply coupling.
+      const dcDeck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "dc",
+        source: "V1",
+        start: 8,
+        stop: 12,
+        step: 1,
+      });
+      expect(dcDeck.unresolvedSubckts).toEqual([]);
+      const dcResult = runPairedBatch("diff-classd-dc", dcDeck.netlist, ["v(vo)"]);
+      const ltDc = dcResult.ltspice.get("v(vo)")!;
+      const ngDc = dcResult.ngspice.get("v(vo)")!;
+      const dcComparison = compareWaveforms(ngDc.axis, ngDc.values, ltDc.axis, ltDc.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(dcComparison.pass, JSON.stringify(dcComparison)).toBe(true);
+      cells.push({
+        analysis: "dc",
+        circuit: "class-d",
+        topology: "class-d-starter + deadtime (DC sweep V1 rail 8–12 V)",
+        status: "pass",
+        note: `V(vo) nRms=${dcComparison.normalizedRms.toFixed(4)} nMax=${dcComparison.normalizedMax.toFixed(4)}`,
+      });
     }
 
     // --- Native single-deck `.step` card: LTspice stepped OP vs ngspice step_expand ---
@@ -914,11 +945,11 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     // Explicit remaining gaps — keep the DoD box honest.
     cells.push(
       {
-        analysis: "dc",
+        analysis: "noise",
         circuit: "class-d",
-        topology: "Class-D DC/noise/tf",
+        topology: "Class-D noise/tf",
         status: "gap",
-        note: "AC (V1 supply coupling) and OP proven; authored analyses remain .tran/.meas — DC/noise/tf not differentially proven",
+        note: "AC/OP/DC (V1 rail sweep) proven; authored analyses remain .tran/.meas — noise/tf not differentially proven",
       },
     );
 
@@ -933,7 +964,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(20);
+    expect(passCount).toBeGreaterThanOrEqual(21);
     expect(gapCount).toBeGreaterThanOrEqual(1);
   }, 240_000);
 });

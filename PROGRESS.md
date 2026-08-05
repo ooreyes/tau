@@ -9,25 +9,28 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:15 CDT** (Overnight DoD — OTA asym/Ref map)
+**Status: DONE - 2026-08-05 00:21 CDT**
 
-Unit: Patched ngspice OTA `isource`/`isink` + translator map for `asym` and
-`Ref`; `linear`/`rclamp`/`epsilon`/finite-V stay honest refuse with clearer
-reasons. Never silent symmetric Iout. Never encrypted denominator games.
-
-**Measured tip stdout (truth):**
-```
-NAMED-DEVICE: exact=2 refuse=4 silent=0
-NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=439 refuse=2099 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=17.3%
-```
-Before @ 43077ab: 2538/410/2128/0/1474 @ 16.2%. After: exact +29 (17.3%).
-≥95% unchecked. SHIPPABLE? **NO**.
-
-**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
+Unit: Class-D DC differential (V1 rail 8–12 V) → **SUMMARY pass=21 sibling=5 gap=1**.
+Remaining gap: Class-D noise/tf. Named-device tip 17.3%. Concurrent OTA linear WIP
+left unstaged. Freshman AI untouched. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Class-D DC differential → pass=21 (§DoD)
+
+**What I did**
+- V1 rail `.dc` 8→12 V step 1 on class-d-starter+deadtime; V(vo) matches LTspice
+  (nRms=0). Same physical supply knob as proven AC coupling.
+- Gap narrowed to Class-D noise/tf only.
+
+**Proof**
+- vitest differentialParity → SUMMARY pass=21 sibling=5 gap=1
+
+**Next**
+- Class-D noise/tf or broaden matrix; named-device exact-rate (OTA linear WIP)
 
 ### 2026-08-05 — OTA asym Isource/Isink + Ref → exact-rate 17.3% (§DoD)
 
