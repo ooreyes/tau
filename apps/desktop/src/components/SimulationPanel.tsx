@@ -3624,10 +3624,14 @@ export function AcPlot({
   const [magYScale, setMagYScale] = useState<AxisScale>("linear");
   const [lowerMode, setLowerMode] = useState<"phase" | "groupDelay">("phase");
   const [cursorsOn, setCursorsOn] = useState(false);
+  const [phaseWindowOpen, setPhaseWindowOpen] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
   const magTicks = tickCountsFromSize(magSize);
   const phaseTicks = tickCountsFromSize(phaseSize);
+  const detachedPhaseClipId = useId();
+  const [detachedPhaseMeasureRef, detachedPhaseSize] = useMeasuredSize<SVGSVGElement>();
+  const detachedPhaseTicks = tickCountsFromSize(detachedPhaseSize);
   const traces = success ? success.traces.slice(0, 4) : [];
   // Expression overlays share the magnitude axis (their value rides `magDb`).
   const magTraces = success ? [...traces, ...overlays] : [];
@@ -3709,6 +3713,16 @@ export function AcPlot({
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
   });
+  const detachedPhaseVp = usePlotViewport({
+    domain: phaseDomain,
+    xScale: freqScale,
+    resetKey: plot && success
+      ? `detached:${freqScale}:${lowerMode}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
+      : null,
+    width: PLOT_WIDTH,
+    height: PLOT_HEIGHT,
+    pad: PLOT_PAD,
+  });
   const setMagRefs = useCallback(
     (el: SVGSVGElement | null) => {
       magMeasureRef.current = el;
@@ -3722,6 +3736,13 @@ export function AcPlot({
       phaseVp.attachSvg(el);
     },
     [phaseMeasureRef, phaseVp.attachSvg],
+  );
+  const setDetachedPhaseRefs = useCallback(
+    (el: SVGSVGElement | null) => {
+      detachedPhaseMeasureRef.current = el;
+      detachedPhaseVp.attachSvg(el);
+    },
+    [detachedPhaseMeasureRef, detachedPhaseVp.attachSvg],
   );
 
   // Two log-fraction cursors shared across Bode mag + lower panes (FFT-style):
@@ -4094,6 +4115,16 @@ export function AcPlot({
           </Button>
           <Button
             size="sm"
+            variant={phaseWindowOpen ? "default" : "outline"}
+            aria-pressed={phaseWindowOpen}
+            aria-label="Open standalone phase window"
+            disabled={!plot}
+            onClick={() => setPhaseWindowOpen(true)}
+          >
+            Phase window
+          </Button>
+          <Button
+            size="sm"
             variant={cursorsOn ? "default" : "outline"}
             aria-pressed={cursorsOn}
             aria-label="Toggle Bode cursors"
@@ -4199,6 +4230,119 @@ export function AcPlot({
           />
         </div>
       )}
+      <Dialog open={phaseWindowOpen} onOpenChange={setPhaseWindowOpen}>
+        <DialogContent
+          className="max-w-[720px]"
+          aria-describedby="bode-phase-window-desc"
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {lowerMode === "groupDelay" ? "Group delay window" : "Phase window"}
+            </DialogTitle>
+            <DialogDescription id="bode-phase-window-desc">
+              Standalone Bode {lowerMode === "groupDelay" ? "group-delay" : "phase"} pane
+              (LTspice-style detached plot). Zoom and pan independently of the stacked Bode.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="scope-shell">
+            <div className="scope-plot-wrap">
+              <svg
+                ref={setDetachedPhaseRefs}
+                className={detachedPhaseVp.isPanning ? "scope-svg panning" : "scope-svg"}
+                viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+                role="img"
+                aria-label={
+                  lowerMode === "groupDelay"
+                    ? "Detached Bode group delay"
+                    : "Detached Bode phase"
+                }
+                {...detachedPhaseVp.dragHandlers}
+              >
+                <PlotAxes
+                  width={PLOT_WIDTH}
+                  height={PLOT_HEIGHT}
+                  pad={PLOT_PAD}
+                  xMin={detachedPhaseVp.viewport.xMin}
+                  xMax={detachedPhaseVp.viewport.xMax}
+                  yMin={detachedPhaseVp.viewport.yMin}
+                  yMax={detachedPhaseVp.viewport.yMax}
+                  xScale={freqScale}
+                  xUnit="Hz"
+                  yUnit={lowerMode === "groupDelay" ? "s" : "°"}
+                  targetXTicks={detachedPhaseTicks.targetXTicks}
+                  targetYTicks={detachedPhaseTicks.targetYTicks}
+                />
+                {plot && (
+                  <ScopeClip
+                    id={detachedPhaseClipId}
+                    width={PLOT_WIDTH}
+                    height={PLOT_HEIGHT}
+                    pad={PLOT_PAD}
+                  >
+                    {lowerMode === "groupDelay"
+                      ? plot.tauSeries.map((tau, i) => (
+                          <path
+                            key={traces[i]?.id ?? `tau-d-${i}`}
+                            className="scope-trace ref"
+                            stroke={AC_COLORS[i % AC_COLORS.length]}
+                            d={bodeValuePath(tau, success!.freqs, {
+                              min: detachedPhaseVp.viewport.yMin,
+                              max: detachedPhaseVp.viewport.yMax,
+                              xMin: detachedPhaseVp.viewport.xMin,
+                              xMax: detachedPhaseVp.viewport.xMax,
+                              xScale: freqScale,
+                            })}
+                          />
+                        ))
+                      : traces.map((t, i) => (
+                          <path
+                            key={t.id}
+                            className="scope-trace ref"
+                            stroke={AC_COLORS[i % AC_COLORS.length]}
+                            d={bodeValuePath(t.phaseDeg, success!.freqs, {
+                              min: detachedPhaseVp.viewport.yMin,
+                              max: detachedPhaseVp.viewport.yMax,
+                              xMin: detachedPhaseVp.viewport.xMin,
+                              xMax: detachedPhaseVp.viewport.xMax,
+                              xScale: freqScale,
+                            })}
+                          />
+                        ))}
+                  </ScopeClip>
+                )}
+                {bodeLowerCursors &&
+                  [bodeLowerCursors.x1, bodeLowerCursors.x2].map((f, i) => {
+                    const x = bodeCursorPixelX(f, detachedPhaseVp.viewport);
+                    if (x === null) return null;
+                    return (
+                      <g key={`bdpc${i}`} className="plot-cursor">
+                        <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                        <text x={x + 3} y={PLOT_PAD + 10}>
+                          {i + 1}
+                        </text>
+                      </g>
+                    );
+                  })}
+              </svg>
+              {plot && (
+                <ScopeZoomCluster
+                  onZoomIn={() => detachedPhaseVp.zoomBy(0.7)}
+                  onZoomOut={() => detachedPhaseVp.zoomBy(1 / 0.7)}
+                  onFit={detachedPhaseVp.fit}
+                />
+              )}
+            </div>
+            <div className="scope-legend" aria-label="Detached phase legend">
+              {traces.map((t, i) => (
+                <span key={t.id} className="bode-legend-chip">
+                  <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} />
+                  {t.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

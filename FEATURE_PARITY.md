@@ -1440,7 +1440,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   via `logFractionToX` / `cursorReadout` / `dbPerDecade`. **Bode phase /
   group-delay cursors landed** (2026-08-05): same Cursors toggle also marks
   the lower pane and reads φ@C1/φ@C2/Δ (or τ when Group delay). 2 wiring
-  tests. Still ⬜: standalone detached phase window.
+  tests. **Standalone detached phase window landed** (2026-08-05): AcPlot
+  **Phase window** opens a Dialog with an independent zoom/pan Bode
+  phase / group-delay pane (LTspice-style detach).
 - 🟡 **Loop-stability margins** (LTspice Bode readouts) — **landed**
   (`simulation/stability.ts`, 10 tests): `stabilityMargins(freqs, magDb, phaseDeg)`
   returns **phase margin** (180°+φ at the 0 dB gain crossover) and **gain margin**
@@ -1544,9 +1546,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   PNG landed** (2026-08-05): AcPlot lower-pane **Export PNG** (`tau-ac-phase-….png`).
   **Bode AC magnitude cursors landed** (2026-08-05): AcPlot Cursors toggle +
   f1/f2/Δ/SLOPE readout. **Bode phase/group-delay cursors landed** (2026-08-05):
-  shared Cursors toggle marks lower pane + φ/τ readout. **NEXT:** (waveform
-  CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/τ/cursors covered —
-  remaining: standalone phase window).
+  shared Cursors toggle marks lower pane + φ/τ readout. **Standalone detached
+  phase window landed** (2026-08-05): AcPlot **Phase window** Dialog. **NEXT:**
+  (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/τ/
+  cursors/phase-window covered).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;
@@ -1568,7 +1571,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **AC/DC step-family legend right-click math landed** (2026-08-05):
   `evaluateAcStepPlotExpression` / `evaluateDcStepPlotExpression` + SIGNAL
   chip ContextMenu via `acTraceMathMenuItems` (abs/neg/db/uramp/sgn) on
-  AcFamilyPlot / DcFamilyPlot. Still ⬜: standalone detached phase window.
+  AcFamilyPlot / DcFamilyPlot. **Standalone detached phase window landed**
+  (2026-08-05): AcPlot **Phase window** Dialog with independent φ/τ pane.
 
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`

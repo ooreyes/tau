@@ -421,6 +421,27 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(gdReadout.textContent).toMatch(/τ@C2/);
   });
 
+  it("Phase window opens a standalone detached Bode phase dialog", async () => {
+    const freqs = [10, 100, 1000];
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20], phaseDeg: [0, -45, -90] }],
+      warnings: [],
+    };
+    const { unmount } = render(<AcPlot result={result} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open standalone phase window" }));
+    expect(await screen.findByRole("heading", { name: "Phase window" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Detached Bode phase" })).toBeTruthy();
+    unmount();
+
+    render(<AcPlot result={result} />);
+    fireEvent.click(screen.getByRole("button", { name: "Group delay" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open standalone phase window" }));
+    expect(await screen.findByRole("heading", { name: "Group delay window" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Detached Bode group delay" })).toBeTruthy();
+  });
+
   it("right-click Bode legend adds abs(V(out)) via onPlotExpression", async () => {
     const onPlotExpression = vi.fn();
     const freqs = [10, 100, 1000];
