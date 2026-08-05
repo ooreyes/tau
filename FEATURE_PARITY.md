@@ -2132,13 +2132,18 @@ settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model +
 IndependentSourceEditor Waveform type + semiconductor Simulation model native
 `<select>`s migrated onto shadcn `ui/Select` (Settings locked/untouched); unit
 proof in SimulationPanel/ShellPanels tests (combobox triggers, not native
-`<select>`). **Min-window DoD (separate AGENTS box) proven 2026-08-05** via
+`<select>`). **Simulation setup dialog `ui/Select` (2026-08-05):** Primary
+analysis, AC sweep type, and all measurement builder selects (analysis /
+calculation / quantity / node / component) use dense `simulation-setup-select`
+triggers; `SimulationSetupDialog.test.tsx` asserts combobox
+`data-slot=select-trigger`, open→pick analysis, and zero native `<select>` in
+the dialog body. **Min-window DoD (separate AGENTS box) proven 2026-08-05** via
 `scripts/min-window-dod.sh` at 900×600 (12/12; Settings sheet viewport cap +
 scroll; editor toolbar horizontal scroll) — shots in
 `screenshots/min-window-dod/`. Remaining §10 debt that blocks an honest **§10
 design-system** DoD check:
 Resizable/Command/Toast primitives still deferred; other native `<select>`s
-(Simulation setup, EngineeringInput units, subckt model chooser, local-AI
+(EngineeringInput units, subckt model chooser, AnalysisSetupForms, local-AI
 settings) not yet on `ui/Select`; Assistant/local-AI
 settings surfaces still mid-migration; Cupertino icon chrome still settling;
 no proof of zero ad-hoc drift across every panel at both themes.
@@ -2350,10 +2355,14 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   polyfill). **Semiconductor Simulation model `ui/Select` (2026-08-05):**
   MOSFET/BJT/diode Simulation model chooser uses the same dense trigger;
   ShellPanels tests assert `data-slot=select-trigger`, open→pick RSR015P06,
-  and unresolved IRF540 remains visible (Settings untouched). Left for a
-  later pass: other native `<select>`s (sim setup, eng-input units, subckt
-  chooser), deferred Resizable/Command/Toast, and min-window screenshot
-  proof for this slice. →
+  and unresolved IRF540 remains visible (Settings untouched).
+  **Simulation setup dialog `ui/Select` (2026-08-05):** all seven native
+  `<select>`s in `SimulationSetupDialog` → dense `simulation-setup-select`
+  triggers (`--row-h`); unset node/component mapped through `__tau_unset__`
+  (Radix forbids empty item values). Unit proof open→pick Primary analysis /
+  AC sweep; zero `.simulation-setup-body select`. Left for a later pass:
+  EngineeringInput units, subckt model chooser, AnalysisSetupForms,
+  local-AI settings; deferred Resizable/Command/Toast. §10 DoD stays open. →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
   same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`

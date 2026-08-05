@@ -8511,7 +8511,9 @@ button.bottom-panel-head:focus-visible {
   color: var(--text-dim);
 }
 
-.simulation-setup-field select,
+/* Simulation setup selects use ui/Select; keep full-width dense mono triggers. */
+.simulation-setup-field .simulation-setup-select,
+.simulation-setup-field [data-slot="select-trigger"].simulation-setup-select,
 .simulation-setup-advanced textarea {
   width: 100%;
   border: 1px solid var(--border-strong);
@@ -8521,9 +8523,21 @@ button.bottom-panel-head:focus-visible {
   font: 500 var(--fs-label) var(--font-mono);
 }
 
-.simulation-setup-field select {
-  min-height: 34px;
+.simulation-setup-field .simulation-setup-select,
+.simulation-setup-field [data-slot="select-trigger"].simulation-setup-select {
+  min-height: var(--row-h);
+  height: var(--row-h);
+  max-width: none;
   padding: 0 var(--sp-3);
+  box-sizing: border-box;
+}
+
+.simulation-setup-field .simulation-setup-select [data-slot="select-value"] {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .simulation-setup-source-note,

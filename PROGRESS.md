@@ -1,14 +1,50 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:40 CDT**
+**Status: DONE - 2026-08-05 ~13:15 CDT**
 
-Unit: **min-window DoD** — Settings sheet viewport cap + editor toolbar
-horizontal scroll; `scripts/min-window-dod.sh` 12/12 at 900×600.
-§10 design-system DoD stays unchecked. SHIPPABLE? **NO**
+Unit: **§10 Simulation setup `ui/Select`** — Primary analysis, AC sweep,
+measurement builder selects migrated off native `<select>`; unit proof
+6/6. §10 design-system DoD stays unchecked (eng-input / subckt /
+AnalysisSetupForms / local-AI / Resizable·Command·Toast remain).
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — §10 Simulation setup dialog → ui/Select
+
+**What I did**
+- Migrated all native `<select>`s in `SimulationSetupDialog` onto shadcn
+  `ui/Select` (Primary analysis, AC sweep type, measurement analysis /
+  calculation / quantity / node / component) with dense
+  `simulation-setup-select` triggers tokenized to `--row-h`.
+- Empty node/component choice mapped through `__tau_unset__` (Radix
+  forbids empty item values). Settings / local-AI left untouched.
+- §10 DoD box stays unchecked. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/components/SimulationSetupDialog.tsx`
+- `apps/desktop/src/components/SimulationSetupDialog.test.tsx`
+- `apps/desktop/src/App.css` (`.simulation-setup-select` trigger rules)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `vitest run SimulationSetupDialog.test.tsx` → 6/6
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2926 passed / 8 skipped
+
+**Parity items**
+- §10 partial: Simulation setup selects ✅. Full §10 DoD still open.
+  SHIPPABLE? **NO**
+
+**Next step**
+- EngineeringInput units or subckt model chooser `ui/Select`; or
+  AnalysisSetupForms / local-AI (Settings locked).
+
+SHIPPABLE? **NO**
 
 ---
 

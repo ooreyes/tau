@@ -11,6 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   blankEditableMeasurement,
   editableMeasurementFromDirective,
   measurementAuthoringContext,
@@ -29,6 +36,81 @@ let measurementSequence = 0;
 function nextMeasurementId(): string {
   measurementSequence += 1;
   return `measurement-${measurementSequence}`;
+}
+
+
+/** Radix Select forbids empty-string item values; map UI "unset" through this. */
+const SELECT_UNSET = "__tau_unset__";
+
+const PRIMARY_ANALYSIS_ITEMS: readonly { value: PrimaryAnalysis; label: string }[] = [
+  { value: "none", label: "None / advanced only" },
+  { value: "op", label: "Operating point (.op)" },
+  { value: "tran", label: "Transient (.tran)" },
+  { value: "ac", label: "AC sweep (.ac)" },
+];
+
+const AC_SWEEP_ITEMS: readonly { value: string; label: string }[] = [
+  { value: "dec", label: "Decade" },
+  { value: "oct", label: "Octave" },
+  { value: "lin", label: "Linear" },
+];
+
+const MEASUREMENT_ANALYSIS_ITEMS: readonly { value: EditableMeasurement["analysis"]; label: string }[] = [
+  { value: "tran", label: "Transient" },
+  { value: "ac", label: "AC sweep" },
+  { value: "dc", label: "DC sweep" },
+  { value: "noise", label: "Noise" },
+];
+
+const MEASUREMENT_CALCULATION_ITEMS: readonly { value: EditableMeasurementCalculation; label: string }[] = [
+  { value: "AVG", label: "Average" },
+  { value: "RMS", label: "RMS" },
+  { value: "MAX", label: "Maximum" },
+  { value: "MIN", label: "Minimum" },
+  { value: "PP", label: "Peak to peak" },
+  { value: "INTEG", label: "Integral" },
+  { value: "PARAM", label: "Derived result" },
+];
+
+const MEASUREMENT_QUANTITY_ITEMS: readonly { value: EditableMeasurementQuantity; label: string }[] = [
+  { value: "node-voltage", label: "Node voltage" },
+  { value: "component-current", label: "Component current" },
+  { value: "component-power", label: "Power absorbed by component" },
+  { value: "component-power-delivered", label: "Power delivered by source" },
+  { value: "formula", label: "Formula" },
+];
+
+function SetupSelect({
+  label,
+  value,
+  onValueChange,
+  items,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  items: readonly { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger
+        size="sm"
+        className="simulation-setup-select w-full"
+        aria-label={label}
+      >
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 function normalizedDirective(line: string): string {
@@ -166,19 +248,15 @@ export function SimulationSetupDialog({
         <div className="simulation-setup-body">
           <label className="simulation-setup-field">
             <span>Primary analysis</span>
-            <select
-              aria-label="Primary analysis"
+            <SetupSelect
+              label="Primary analysis"
               value={analysis}
-              onChange={(event) => {
-                setAnalysis(event.currentTarget.value as PrimaryAnalysis);
+              onValueChange={(next) => {
+                setAnalysis(next as PrimaryAnalysis);
                 setError("");
               }}
-            >
-              <option value="none">None / advanced only</option>
-              <option value="op">Operating point (.op)</option>
-              <option value="tran">Transient (.tran)</option>
-              <option value="ac">AC sweep (.ac)</option>
-            </select>
+              items={PRIMARY_ANALYSIS_ITEMS}
+            />
           </label>
 
           {analysis === "op" && (
@@ -204,11 +282,12 @@ export function SimulationSetupDialog({
             <div className="simulation-setup-grid simulation-setup-grid--ac">
               <label className="simulation-setup-field">
                 <span>Sweep</span>
-                <select aria-label="AC sweep type" value={acSweep} onChange={(event) => setAcSweep(event.currentTarget.value)}>
-                  <option value="dec">Decade</option>
-                  <option value="oct">Octave</option>
-                  <option value="lin">Linear</option>
-                </select>
+                <SetupSelect
+                  label="AC sweep type"
+                  value={acSweep}
+                  onValueChange={setAcSweep}
+                  items={AC_SWEEP_ITEMS}
+                />
               </label>
               <label className="simulation-setup-field">
                 <span>Points</span>
@@ -290,47 +369,36 @@ export function SimulationSetupDialog({
                         </label>
                         <label className="simulation-setup-field">
                           <span>Analysis</span>
-                          <select
-                            aria-label={`Measurement ${index + 1} analysis`}
+                          <SetupSelect
+                            label={`Measurement ${index + 1} analysis`}
                             value={measurement.analysis}
-                            onChange={(event) => updateMeasurement(measurement.id, { analysis: event.currentTarget.value as EditableMeasurement["analysis"] })}
-                          >
-                            <option value="tran">Transient</option>
-                            <option value="ac">AC sweep</option>
-                            <option value="dc">DC sweep</option>
-                            <option value="noise">Noise</option>
-                          </select>
+                            onValueChange={(next) => updateMeasurement(measurement.id, { analysis: next as EditableMeasurement["analysis"] })}
+                            items={MEASUREMENT_ANALYSIS_ITEMS}
+                          />
                         </label>
                         <label className="simulation-setup-field">
                           <span>Calculation</span>
-                          <select
-                            aria-label={`Measurement ${index + 1} calculation`}
+                          <SetupSelect
+                            label={`Measurement ${index + 1} calculation`}
                             value={measurement.calculation}
-                            onChange={(event) => {
-                              const calculation = event.currentTarget.value as EditableMeasurementCalculation;
+                            onValueChange={(next) => {
+                              const calculation = next as EditableMeasurementCalculation;
                               updateMeasurement(measurement.id, {
                                 calculation,
                                 ...(calculation === "PARAM" ? { quantity: "formula" as const } : {}),
                               });
                             }}
-                          >
-                            <option value="AVG">Average</option>
-                            <option value="RMS">RMS</option>
-                            <option value="MAX">Maximum</option>
-                            <option value="MIN">Minimum</option>
-                            <option value="PP">Peak to peak</option>
-                            <option value="INTEG">Integral</option>
-                            <option value="PARAM">Derived result</option>
-                          </select>
+                            items={MEASUREMENT_CALCULATION_ITEMS}
+                          />
                         </label>
                         {!derived && (
                           <label className="simulation-setup-field">
                             <span>Quantity</span>
-                            <select
-                              aria-label={`Measurement ${index + 1} quantity`}
+                            <SetupSelect
+                              label={`Measurement ${index + 1} quantity`}
                               value={measurement.quantity}
-                              onChange={(event) => {
-                                const nextQuantity = event.currentTarget.value as EditableMeasurementQuantity;
+                              onValueChange={(next) => {
+                                const nextQuantity = next as EditableMeasurementQuantity;
                                 const target = nextQuantity === "node-voltage"
                                   ? measurementContext.nodeNames[0] ?? ""
                                   : nextQuantity === "component-current"
@@ -342,13 +410,8 @@ export function SimulationSetupDialog({
                                       : "";
                                 updateMeasurement(measurement.id, { quantity: nextQuantity, target });
                               }}
-                            >
-                              <option value="node-voltage">Node voltage</option>
-                              <option value="component-current">Component current</option>
-                              <option value="component-power">Power absorbed by component</option>
-                              <option value="component-power-delivered">Power delivered by source</option>
-                              <option value="formula">Formula</option>
-                            </select>
+                              items={MEASUREMENT_QUANTITY_ITEMS}
+                            />
                           </label>
                         )}
                       </div>
@@ -356,27 +419,31 @@ export function SimulationSetupDialog({
                       {quantity === "node-voltage" && (
                         <label className="simulation-setup-field">
                           <span>Node</span>
-                          <select
-                            aria-label={`Measurement ${index + 1} node`}
-                            value={measurement.target}
-                            onChange={(event) => updateMeasurement(measurement.id, { target: event.currentTarget.value })}
-                          >
-                            <option value="">Choose node…</option>
-                            {measurementContext.nodeNames.map((node) => <option value={node} key={node}>{node}</option>)}
-                          </select>
+                          <SetupSelect
+                            label={`Measurement ${index + 1} node`}
+                            value={measurement.target || SELECT_UNSET}
+                            onValueChange={(next) => updateMeasurement(measurement.id, { target: next === SELECT_UNSET ? "" : next })}
+                            placeholder="Choose node…"
+                            items={[
+                              { value: SELECT_UNSET, label: "Choose node…" },
+                              ...measurementContext.nodeNames.map((node) => ({ value: node, label: node })),
+                            ]}
+                          />
                         </label>
                       )}
                       {(quantity === "component-current" || quantity === "component-power" || quantity === "component-power-delivered") && (
                         <label className="simulation-setup-field">
                           <span>Component</span>
-                          <select
-                            aria-label={`Measurement ${index + 1} component`}
-                            value={measurement.target}
-                            onChange={(event) => updateMeasurement(measurement.id, { target: event.currentTarget.value })}
-                          >
-                            <option value="">Choose component…</option>
-                            {componentTargets.map((ref) => <option value={ref} key={ref}>{ref}</option>)}
-                          </select>
+                          <SetupSelect
+                            label={`Measurement ${index + 1} component`}
+                            value={measurement.target || SELECT_UNSET}
+                            onValueChange={(next) => updateMeasurement(measurement.id, { target: next === SELECT_UNSET ? "" : next })}
+                            placeholder="Choose component…"
+                            items={[
+                              { value: SELECT_UNSET, label: "Choose component…" },
+                              ...componentTargets.map((ref) => ({ value: ref, label: ref })),
+                            ]}
+                          />
                         </label>
                       )}
                       {quantity === "formula" && (
