@@ -9,14 +9,15 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:49 CDT**
+**Status: DONE - 2026-08-05 02:52 CDT**
 
-Unit: Educational `P2.asc` authored `.tran` parametric amp → differential **pass=46**.
+Unit: Educational `P2.asc` TRAN (+ tip also carries `stepAC.asc` AC) → differential **pass=47**.
 ```
-SUMMARY pass=46 sibling=5 gap=0
+SUMMARY pass=47 sibling=5 gap=0
 tran p2 … v(out) nRms≈0.0065 span≈2.17
+ac stepac … v(out)/v(in) nRms=0
 ```
-100W IRFP not bundled (refuse). Left continue-10 stepAC alone. Named-device 47.9%. SHIPPABLE? **NO**
+100W IRFP refuse. NE555/LoopGain blocked. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -39,11 +40,11 @@ tran p2 … v(out) nRms≈0.0065 span≈2.17
 - `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
 
 **Tests**
-- `vitest … differentialParity.corpus.ts` → SUMMARY pass=46 sibling=5 gap=0
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=47 sibling=5 gap=0 (P2 + stepAC on tip)
 - `pnpm -C apps/desktop typecheck` + `test`
 
 **Parity items**
-- Differential matrix climb 45→46; DoD broad-differential box still open.
+- Differential matrix climb 45→47 (P2 + stepAC); DoD broad-differential box still open.
 - Named-device 47.9%; SHIPPABLE? **NO**
 
 **Next step**
