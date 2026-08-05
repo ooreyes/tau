@@ -68,6 +68,8 @@ const CT_FULL_BRIDGE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "18_full_bridge
 const CT_THREE_PHASE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "17_three_phase_power_grid.asc");
 /** Tau Circuit_testing_v1 — async buck RSR015P06 + 1N5819 (≠ ct 18 bridge / edu 100W IRFP). */
 const CT_BUCK_ASC = join(REPO_ROOT, "Circuit_testing_v1", "12_buck_converter.asc");
+/** Tau Circuit_testing_v1 — async boost QS6K1 + 1N5819 (≠ ct 12 buck / edu 100W IRFP). */
+const CT_BOOST_ASC = join(REPO_ROOT, "Circuit_testing_v1", "13_boost_converter.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -295,7 +297,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -4342,6 +4344,99 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/13_boost_converter.asc authored .tran + .meas ---
+    // Tau-owned ASC: V1=5 + VG PULSE 100 kHz 50% duty + NMOS QS6K1 +
+    // Schottky 1N5819 + L=100u Rser=35m + C=100u Rser=40m + RLOAD=50.
+    // Authored `.tran 50n 5m` + `.meas VOUT_AVG/VOUT_PP … FROM=4m TO=5m`.
+    // Exact standardModels QS6K1 VDMOS + 1N5819 — zero unresolved /
+    // substitutions. Probe v(out) only (switch-node edge timing can exceed
+    // 5% maxTol while filtered output tracks). Distinct from ct 12 buck
+    // (RSR015P06), ct 18 1N4007 bridge, edu 100W IRFP. Left Staff EE
+    // Bode/waveform WIP / Settings / Draft* / ct14–15 / ct19 INA alone.
+    // Tip ct-buck pass=96 → **pass=97**.
+    {
+      expect(existsSync(CT_BOOST_ASC), `missing ${CT_BOOST_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_BOOST_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      expect(imported.components.filter((c) => c.kind === "nmos")).toHaveLength(1);
+      expect(imported.components.filter((c) => c.kind === "diode")).toHaveLength(1);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "13_boost_converter.asc must author .tran").toBeTruthy();
+      const measLines = dirs.filter((d) => /^\.meas\b/i.test(d.trim()));
+      expect(measLines.length, "13_boost must author .meas").toBeGreaterThanOrEqual(2);
+      expect(measLines.some((d) => /\bvout_avg\b/i.test(d))).toBe(true);
+      expect(measLines.some((d) => /\bvout_pp\b/i.test(d))).toBe(true);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 8000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+QS6K1\s+VDMOS\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+1N5819\s+D\b/i);
+      expect(deck.netlist).toMatch(/^M1\b.+\bQS6K1\b/im);
+      expect(deck.netlist).toMatch(/^D1\b.+\b1N5819\b/im);
+      expect(deck.netlist).toMatch(/^VG\b.+\bPULSE\(/im);
+      expect(deck.netlist).toMatch(/^RLOAD\b.+\b50\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      const probes = ["v(out)"] as const;
+      const result = runPairedBatch("diff-ct-boost-tran", deck.netlist, [...probes], {
+        measurements: measLines,
+      });
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `ct-boost ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `ct-boost ${probe} non-hollow`).toBeGreaterThan(1);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      const out = result.ngspice.get("v(out)")!;
+      const tauMeas = runMeasurements(measLines, {
+        times: out.axis,
+        traces: [{ id: "out", label: "V(OUT)", values: out.values }],
+      });
+      const byName = (name: string) =>
+        tauMeas.find((row) => row.name.toLowerCase() === name.toLowerCase())?.value;
+      const ltAvg = measurementValue(result.ltspiceLog, "vout_avg");
+      const ltPp = measurementValue(result.ltspiceLog, "vout_pp");
+      const ngAvg = byName("vout_avg");
+      const ngPp = byName("vout_pp");
+      expect(ngAvg, JSON.stringify(tauMeas)).toEqual(expect.any(Number));
+      expect(ngPp, JSON.stringify(tauMeas)).toEqual(expect.any(Number));
+      expect(relativeError(ngAvg!, ltAvg), `ct-boost VOUT_AVG lt=${ltAvg} ng=${ngAvg}`).toBeLessThanOrEqual(0.02);
+      expect(relativeError(ngPp!, ltPp), `ct-boost VOUT_PP lt=${ltPp} ng=${ngPp}`).toBeLessThanOrEqual(0.02);
+      memberNotes.push(
+        `VOUT_AVG lt=${ltAvg.toFixed(4)} ng=${ngAvg!.toFixed(4)}; VOUT_PP lt=${ltPp.toFixed(4)} ng=${ngPp!.toFixed(4)}`,
+      );
+      cells.push({
+        analysis: "tran",
+        circuit: "ct-boost",
+        topology: "Circuit_testing_v1/13_boost_converter.asc QS6K1 + 1N5819 async boost (authored .tran 50n–5m; .meas VOUT_AVG/PP)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4638,6 +4733,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=96 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=97 sibling=5 gap=0/);
   }, 240_000);
 });

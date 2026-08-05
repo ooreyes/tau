@@ -1,15 +1,52 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:27 CDT**
+**Status: DONE - 2026-08-05 07:29 CDT**
 
-Unit: Waveform DoD — **step-family legend right-click math**.
-Tip `3099730` → this commit. pass=96. Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `13_boost_converter.asc` authored `.tran` → differential **pass=97**.
+```
+SUMMARY pass=97 sibling=5 gap=0
+tran ct-boost … v(out) nRms=0.0000 nMax=0.0015 span=7.577; VOUT_AVG≈9.6949
+```
+Named-device 48.1%. Worktree `Tau-wt-diff-97` rebased over tip `125495d`
+(step-family legend math + pass=96). Left Staff EE Bode/waveform / Settings /
+Draft* / ct14–15 / ct19 alone.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — ct 13_boost_converter .tran → pass=97 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `13_boost_converter.asc` authored `.tran 50n 5m`
+  (5 V + PULSE gate 100 kHz 50% + NMOS QS6K1 + Schottky 1N5819 +
+  L=100u/C=100u Rser + RLOAD=50): v(out) vs LTspice nRms=0 / nMax≈0.0015;
+  `.meas` VOUT_AVG/VOUT_PP relErr≪2% (AVG≈9.695 V, PP≈58.0 mV). Exact
+  standardModels QS6K1 + 1N5819 — zero unresolved/substitutions.
+  Probe filtered v(out) only (switch-node edge timing can exceed 5% maxTol).
+  Distinct from ct 12 buck (RSR015P06), ct 18 bridge, edu 100W IRFP.
+  Worktree `Tau-wt-diff-97` rebased over `125495d` (step-family legend math).
+  Left Staff EE Bode/waveform / Settings / Draft* / ct14–15 / ct19 alone.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=97 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2759 passed)
+
+**Parity items**
+- Differential **pass=97** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- ct 14 logic (if A-device stable), ct 15 dflop, or Educational non-wall
+  leftovers. Leave ct19 OP / IRFP WIP / Draft* / Settings alone.
+
 
 
 
