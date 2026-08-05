@@ -984,14 +984,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   transfer curves) wrappers drive the TS `runAcSweep`/`runDcSweep`. 9 hand-computed
   tests: an RC low-pass whose stepped R shifts the −3 dB corner (≥4 dB extra
   attenuation for 2× R), and a divider whose stepped top resistor tracks the ratio
-  (Rt=1k→½·Vsweep, Rt=3k→¼·Vsweep). **P1.6 native `.step` slice B (2026-08-04):**
+  (Rt=1k→½·Vsweep, Rt=3k→¼·Vsweep). **P1.6 native `.step` (2026-08-04):**
   `emitNativeStep` deck flag (default off) + `stepLinesFromDirectives`;
   `runNativeSteppedTransient` emits once and consumes `extraPlots`+current as a
   `StepFamilyResult`. **Mutually exclusive** with the TS re-run loop (that path
-  never sets the flag — would double-step). Eligible today: **source**-kind only
-  (param still bakes `{X}` before the deck; temp still needs ngspice-visible
-  tempcos). `MAX_EXTRA_PLOTS` raised to 255 so families are not truncated.
-  Param/temp native + AC/DC native step remain open;
+  never sets the flag — would double-step). Eligible: **source** + **param**
+  (param omits stepped names from the brace bake, emits `.param` + `.step param`,
+  leaves `{X}` on R/C/L/V DC values). **Temp** still TS-only (inline `tc=`).
+  Param braces inside SINE/PULSE/PWL/… or `AC {…}` honestly fall back to TS.
+  `MAX_EXTRA_PLOTS` 255. AC/DC native step remain open;
   wire a domain selector into the STEP tab (currently transient-only in the UI);
   per-trace pick in the overlay legend.
 - ✅ `.four` **Fourier analysis** — **parser + solver + UI landed** (`simulation/fourier.ts`):
@@ -1083,9 +1084,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   line (`measFourLinesFromDirectives`); `parseNativeMeasurements` /
   `parseNativeFourier` read ngspice's printed results from the engine message
   log and `App.tsx` prefers those when present (TS runners remain the fallback)
-  for transient, AC, and DC native runs. **Native `.step` slice B (2026-08-04):**
-  source-kind single-deck emit + multi-plot consume via `emitNativeStep` /
-  `runNativeSteppedTransient`; param/temp stay on the TS re-run loop (mutually
+  for transient, AC, and DC native runs. **Native `.step` (2026-08-04):**
+  source + param single-deck emit + multi-plot consume via `emitNativeStep` /
+  `runNativeSteppedTransient` (param leaves `{X}` + emits `.param`); temp and
+  unsupported param brace shapes stay on the TS re-run loop (mutually
   exclusive — no emit under that loop).
 - ✅ **DC operating point annotation on schematic** (show node V / device I
   in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels

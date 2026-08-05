@@ -7,6 +7,10 @@ import {
   parseFuncDirective,
   isExpression,
   substituteKnownBraces,
+  omitParamsFromScope,
+  paramCardsForNativeStep,
+  steppedParamNamesFromDirectives,
+  EMPTY_SCOPE,
 } from "./paramScope";
 
 describe("expandDirectiveLines", () => {
@@ -208,5 +212,31 @@ describe("substituteKnownBraces", () => {
 
   it("keeps everything verbatim under an empty scope", () => {
     expect(substituteKnownBraces("R1 1 2 {R}")).toBe("R1 1 2 {R}");
+  });
+});
+
+describe("native .step param helpers", () => {
+  it("omits stepped names so substituteKnownBraces leaves {X}", () => {
+    const full = buildParamScope([".param X=1 Y=2", ".step param X list 1 2"]);
+    const bake = omitParamsFromScope(full, new Set(["x"]));
+    expect(substituteKnownBraces("{X}", bake)).toBe("{X}");
+    expect(substituteKnownBraces("{Y}", bake)).toBe("2");
+  });
+
+  it("emits .param cards including .step param first-value seeds", () => {
+    const cards = paramCardsForNativeStep(
+      EMPTY_SCOPE,
+      [".step param Rload list 1k 2k"],
+    );
+    expect(cards.join("\n")).toMatch(/\.param\b[\s\S]*\bRload=1000\b/);
+  });
+
+  it("lists unique stepped param names from directives", () => {
+    expect(steppedParamNamesFromDirectives([
+      ".tran 1m",
+      ".step param X list 1 2",
+      ".step V1 list 3 4",
+      ".step param x list 5 6",
+    ])).toEqual(["X"]);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Native single-deck `.step` family assembly (P1.6 slice B).
+ * Native single-deck `.step` family assembly (P1.6).
  *
  * The TypeScript re-run loop (`stepFamily` / App `runStepAnalysis`) already
  * expands each swept value into its own solver call and must **never** emit
@@ -7,12 +7,15 @@
  * exclusive native path: one deck with `.step` emitted, one ngspice invoke,
  * multi-plot results consumed as a {@link StepFamilyResult}.
  *
- * Honesty gate: only **source**-kind sweeps are eligible today. Tau still
- * bakes `{param}` braces into element values at deck build, so a native
- * `.step param` would not actually vary the circuit. Temp sweeps need
- * ngspice-visible tempcos (inline `tc=` is handled only on the TS path).
+ * Honesty gate:
+ * - **source** and **param** sweeps are eligible (param leaves `{X}` unresolved
+ *   and emits `.param` / `.step param` in the deck builder).
+ * - **temp** still needs ngspice-visible tempcos (inline `tc=` is TS-only).
+ * - Param braces inside SINE/PULSE/PWL/… or `AC {…}` fall back to the TS path
+ *   until those emitters pass braces through honestly.
  */
 
+import type { SchematicComponent } from "../schematic/types";
 import type { StepSpec } from "./paramStep";
 import {
   assertStepFamilySize,
@@ -28,21 +31,28 @@ import {
  */
 export const MAX_NATIVE_STEP_PLOTS = MAX_FAMILY_MEMBERS;
 
-/** True when every axis can be honored by emitting `.step` without unresolved braces. */
-export function canUseNativeStepPath(specs: readonly StepSpec[]): boolean {
-  return nativeStepPathRefusal(specs) === null;
+const WAVEFORM_FN_RE = /\b(?:SINE|SIN|PULSE|PWL|EXP|SFFM)\s*\(/i;
+const AC_BRACE_RE = /\bAC\b\s*\{/i;
+
+export type NativeStepPathOptions = {
+  /** Schematic parts — used to refuse param braces the deck cannot yet emit. */
+  components?: ReadonlyArray<SchematicComponent>;
+};
+
+/** True when every axis can be honored by emitting `.step` without double-step. */
+export function canUseNativeStepPath(
+  specs: readonly StepSpec[],
+  options: NativeStepPathOptions = {},
+): boolean {
+  return nativeStepPathRefusal(specs, options) === null;
 }
 
 /** Why the native single-deck path refuses these specs (or null when eligible). */
-export function nativeStepPathRefusal(specs: readonly StepSpec[]): string | null {
+export function nativeStepPathRefusal(
+  specs: readonly StepSpec[],
+  options: NativeStepPathOptions = {},
+): string | null {
   if (specs.length === 0) return "No .step directives to run natively.";
-  if (specs.some((spec) => spec.kind === "param")) {
-    return (
-      "Native single-deck .step does not yet support param sweeps "
-      + "(Tau still resolves {param} braces before the deck reaches ngspice). "
-      + "Tau will use the TypeScript re-run path instead."
-    );
-  }
   if (specs.some((spec) => spec.kind === "temp")) {
     return (
       "Native single-deck .step does not yet support temperature sweeps "
@@ -50,8 +60,15 @@ export function nativeStepPathRefusal(specs: readonly StepSpec[]): string | null
       + "Tau will use the TypeScript re-run path instead."
     );
   }
-  if (!specs.every((spec) => spec.kind === "source" && Boolean(spec.name))) {
-    return "Native single-deck .step only supports source sweeps right now.";
+  if (!specs.every((spec) => (spec.kind === "source" || spec.kind === "param") && Boolean(spec.name))) {
+    return "Native single-deck .step only supports source and param sweeps right now.";
+  }
+  const paramNames = specs
+    .filter((spec) => spec.kind === "param" && spec.name)
+    .map((spec) => spec.name!.toLowerCase());
+  if (paramNames.length > 0 && options.components) {
+    const unsupported = unsupportedNativeParamBraceReason(options.components, new Set(paramNames));
+    if (unsupported) return unsupported;
   }
   try {
     assertStepFamilySize(specs);
@@ -67,6 +84,50 @@ export function nativeStepPathRefusal(specs: readonly StepSpec[]): string | null
     );
   }
   return null;
+}
+
+/**
+ * Param braces the R/C/L/V DC emitters can leave for ngspice are fine; waveform
+ * functions and `AC {…}` still bake/parse numerically and would silently ignore
+ * the sweep — refuse those so the TS re-run path stays the honest fallback.
+ */
+export function unsupportedNativeParamBraceReason(
+  components: ReadonlyArray<SchematicComponent>,
+  steppedParamNames: ReadonlySet<string>,
+): string | null {
+  if (steppedParamNames.size === 0) return null;
+  for (const component of components) {
+    const value = component.value ?? "";
+    if (!value.includes("{")) continue;
+    if (!valueReferencesSteppedParam(value, steppedParamNames)) continue;
+    if (WAVEFORM_FN_RE.test(value)) {
+      return (
+        "Native single-deck .step param cannot yet leave braces inside "
+        + "SINE/PULSE/PWL/EXP/SFFM source functions. "
+        + "Tau will use the TypeScript re-run path instead."
+      );
+    }
+    if (AC_BRACE_RE.test(value)) {
+      return (
+        "Native single-deck .step param cannot yet leave braces in AC stimuli. "
+        + "Tau will use the TypeScript re-run path instead."
+      );
+    }
+  }
+  return null;
+}
+
+function valueReferencesSteppedParam(value: string, steppedParamNames: ReadonlySet<string>): boolean {
+  for (const name of steppedParamNames) {
+    // Word-boundary match inside or outside braces (Rload, {Rload}, {2*Rload}).
+    const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(name)}(?:[^A-Za-z0-9_]|$)`, "i");
+    if (re.test(value)) return true;
+  }
+  return false;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** Cartesian product of axis labels in LTspice outer×inner order (first = outer). */

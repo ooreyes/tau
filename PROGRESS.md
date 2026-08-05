@@ -9,25 +9,23 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 21:17 CDT**
+**Status: DONE - 2026-08-04 21:30 CDT**
 
-Unit: P1.6 native `.step` single-deck emission + multi-plot
-consumption (slice B). Source-kind only: `emitNativeStep` flag
-(default off) + `runNativeSteppedTransient` assembles
-extraPlots+current into `StepFamilyResult`. TS re-run path unchanged
-and mutually exclusive (never emits `.step`). Param/temp native
-deferred (baked braces / inline tc=). `MAX_EXTRA_PLOTS` → 255.
-Shippable? NO.
+Unit: P1.6 native `.step` param — unresolved `{X}` left in the deck +
+emit `.param` / `.step param` so ngspice steps; multi-plot family
+consumption matches the source path. TS re-run kept for temp and for
+param braces inside SINE/PULSE/PWL/AC stimuli. Mutually exclusive
+(no double-step). Shippable? NO.
 
 What landed this unit:
 
-- `BuildSpiceDeckOptions.emitNativeStep` + `stepLinesFromDirectives`
-- `simulation/nativeStepFamily.ts` (+ tests) eligibility/labels/assemble
-- `runNativeSteppedTransient` + App prefers it for source-kind
-- Rust `MAX_EXTRA_PLOTS` 8 → 255
+- Bake-scope omit of stepped params + `paramCardsForNativeStep`
+- R/C/L/V emitters pass through unresolved `{expr}`
+- Eligibility: source + param; refuse temp / waveform-fn / AC braces
+- Tests: deck emit, family assemble, TS fallback shapes
 
-Next unit: P1.6 native `.step` param (unresolved `{X}` + `.param`
-emission) and/or temp; authored-analysis differential parity; §10.
+Next unit: P1.6 native `.step` temp and/or AC/DC native step;
+authored-analysis differential parity; §10; named-device; unsigned release.
 
 Previous completed unit:
 

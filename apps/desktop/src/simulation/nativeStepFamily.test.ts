@@ -6,9 +6,11 @@ import {
   nativeStepMemberValues,
   nativeStepPathRefusal,
   orderNativeStepPlots,
+  unsupportedNativeParamBraceReason,
 } from "./nativeStepFamily";
 import { parseStepDirective } from "./paramStep";
 import type { StepFamilyMember } from "./stepFamily";
+import type { SchematicComponent } from "../schematic/types";
 
 const sourceSpec = (line: string) => {
   const spec = parseStepDirective(line);
@@ -27,16 +29,33 @@ const stubMember = (plotName: string, label: string, value: number): StepFamilyM
   },
 });
 
+const resistor = (value: string): SchematicComponent => ({
+  id: "r1",
+  kind: "resistor",
+  label: "R1",
+  value,
+  x: 0,
+  y: 0,
+  rotation: 0,
+});
+
 describe("canUseNativeStepPath", () => {
   it("accepts source-kind sweeps within the plot budget", () => {
     expect(canUseNativeStepPath([sourceSpec(".step V1 list 1 2 3")])).toBe(true);
     expect(nativeStepPathRefusal([sourceSpec(".step V1 1 3 1")])).toBeNull();
   });
 
-  it("refuses param sweeps (braces are baked before the deck)", () => {
-    const refusal = nativeStepPathRefusal([sourceSpec(".step param Rload list 1k 2k")]);
-    expect(canUseNativeStepPath([sourceSpec(".step param Rload list 1k 2k")])).toBe(false);
-    expect(refusal).toMatch(/param sweeps/i);
+  it("accepts param sweeps when braces are simple R/C/L/V values", () => {
+    const specs = [sourceSpec(".step param Rload list 1k 2k")];
+    expect(canUseNativeStepPath(specs, { components: [resistor("{Rload}")] })).toBe(true);
+    expect(nativeStepPathRefusal(specs, { components: [resistor("{Rload}")] })).toBeNull();
+  });
+
+  it("accepts a mixed param×source product", () => {
+    expect(canUseNativeStepPath([
+      sourceSpec(".step param X list 1 2"),
+      sourceSpec(".step V1 list 5 10"),
+    ], { components: [resistor("{X}")] })).toBe(true);
   });
 
   it("refuses temp sweeps (inline tc= is TS-only today)", () => {
@@ -44,11 +63,34 @@ describe("canUseNativeStepPath", () => {
     expect(nativeStepPathRefusal([sourceSpec(".step temp 0 50 25")])).toMatch(/temperature/i);
   });
 
-  it("refuses a mixed param×source product", () => {
-    expect(canUseNativeStepPath([
-      sourceSpec(".step param X list 1 2"),
-      sourceSpec(".step V1 list 5 10"),
-    ])).toBe(false);
+  it("refuses param braces inside waveform source functions", () => {
+    const specs = [sourceSpec(".step param Vhi list 1 5")];
+    const pulse: SchematicComponent = {
+      id: "v1",
+      kind: "vsource",
+      label: "V1",
+      value: "PULSE(0 {Vhi} 0 1n 1n 1u 2u)",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    expect(canUseNativeStepPath(specs, { components: [pulse] })).toBe(false);
+    expect(nativeStepPathRefusal(specs, { components: [pulse] })).toMatch(/SINE\/PULSE/i);
+  });
+
+  it("refuses param braces in AC stimuli", () => {
+    const specs = [sourceSpec(".step param amp list 1 2")];
+    const vac: SchematicComponent = {
+      id: "v1",
+      kind: "vsource",
+      label: "V1",
+      value: "5 AC {amp}",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    expect(canUseNativeStepPath(specs, { components: [vac] })).toBe(false);
+    expect(unsupportedNativeParamBraceReason([vac], new Set(["amp"]))).toMatch(/AC stimuli/i);
   });
 });
 
@@ -57,6 +99,12 @@ describe("nativeStepMemberLabels / values", () => {
     const specs = [sourceSpec(".step V1 list 1 2 5")];
     expect(nativeStepMemberLabels(specs)).toEqual(["V1=1", "V1=2", "V1=5"]);
     expect(nativeStepMemberValues(specs)).toEqual([1, 2, 5]);
+  });
+
+  it("labels a param list with the param name", () => {
+    const specs = [sourceSpec(".step param Rload list 1k 2k")];
+    expect(nativeStepMemberLabels(specs)).toEqual(["Rload=1000", "Rload=2000"]);
+    expect(nativeStepMemberValues(specs)).toEqual([1000, 2000]);
   });
 
   it("builds the outer×inner Cartesian product like nestedStepContexts", () => {
@@ -99,6 +147,18 @@ describe("orderNativeStepPlots + assembleNativeStepFamily", () => {
     expect(family.members.map((m) => m.label)).toEqual(["V1=1", "V1=2"]);
     expect(family.members.map((m) => m.value)).toEqual([1, 2]);
     expect(family.members.map((m) => m.result.title)).toEqual(["tran1", "tran2"]);
+  });
+
+  it("assembles a param family the same way", () => {
+    const specs = [sourceSpec(".step param X list 1 2")];
+    const plots = [
+      { name: "tran1", vectors: [] },
+      { name: "tran2", vectors: [] },
+    ];
+    const family = assembleNativeStepFamily(plots, specs, (plot, label, value) =>
+      stubMember(plot.name, label, value),
+    );
+    expect(family.members.map((m) => m.label)).toEqual(["X=1", "X=2"]);
   });
 
   it("refuses rather than inventing members when plot count mismatches", () => {

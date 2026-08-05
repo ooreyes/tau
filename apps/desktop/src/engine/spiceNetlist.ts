@@ -1,5 +1,19 @@
 import { extractCircuit, isResistiveWire, netAtPoint, spiceSafeToken, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
-import { resolveComponentValues, expandDirectiveLines, inlineFuncCalls, substituteKnownBraces, substituteBehavioralBraces, substituteScopeIdentifiers, substituteIdentifierExpressions, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
+import {
+  resolveComponentValues,
+  resolveComponentValuesLeavingUnknown,
+  omitParamsFromScope,
+  steppedParamNamesFromDirectives,
+  paramCardsForNativeStep,
+  expandDirectiveLines,
+  inlineFuncCalls,
+  substituteKnownBraces,
+  substituteBehavioralBraces,
+  substituteScopeIdentifiers,
+  substituteIdentifierExpressions,
+  EMPTY_SCOPE,
+  type ParamScope,
+} from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
@@ -213,6 +227,15 @@ export function buildSpiceDeck(
 ): SpiceDeck {
   assertSimulationIntegrity(schematic.components, schematic.ascForeignSymbols);
   const paramScope = schematic.params ?? EMPTY_SCOPE;
+  // Native `.step param`: omit stepped names from the bake scope so `{X}` stays
+  // in the deck; emit `.param` + `.step param` for ngspice. Default (TS re-run)
+  // path still bakes every brace — it must never see unresolved stepped params.
+  const steppedParamNames = options.emitNativeStep
+    ? steppedParamNamesFromDirectives(schematic.directives ?? [])
+    : [];
+  const steppedParamSet = new Set(steppedParamNames.map((name) => name.toLowerCase()));
+  const leaveSteppedBraces = steppedParamSet.size > 0;
+  const bakeScope = leaveSteppedBraces ? omitParamsFromScope(paramScope, steppedParamSet) : paramScope;
   // Behavioral (V=/I=/R=) expressions may legitimately reference run-time
   // state (`time`, `V(node)`) inside braces or as bare param names - LTspice
   // resolves those late, so route them through the lenient behavioral
@@ -220,14 +243,20 @@ export function buildSpiceDeck(
   // reject the whole deck with e.g. `Unknown parameter "time"` (SRF_PLL).
   // (After behavioral substitution those values are brace-free, so the strict
   // resolver below leaves them untouched and everything else stays strict.)
-  const components = resolveComponentValues(
-    schematic.components.map((component) =>
-      isBehavioralValue(component.value)
-        ? { ...component, value: substituteScopeIdentifiers(substituteBehavioralBraces(inlineFuncCalls(component.value, paramScope.funcs), paramScope), paramScope) }
-        : component,
-    ),
-    paramScope,
+  const prepared = schematic.components.map((component) =>
+    isBehavioralValue(component.value)
+      ? {
+          ...component,
+          value: substituteScopeIdentifiers(
+            substituteBehavioralBraces(inlineFuncCalls(component.value, bakeScope.funcs), bakeScope),
+            bakeScope,
+          ),
+        }
+      : component,
   );
+  const components = leaveSteppedBraces
+    ? resolveComponentValuesLeavingUnknown(prepared, bakeScope)
+    : resolveComponentValues(prepared, paramScope);
   const circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
   if (components.length === 0) throw new Error("Place components before running analysis.");
   if (!circuit.groundNetId) throw new Error("Add a ground symbol so node voltages have a reference.");
@@ -339,7 +368,9 @@ export function buildSpiceDeck(
   // through the same compatibility normalizer as attached vendor libraries;
   // their local braces stay verbatim and their raw body is skipped here.
   let subcktDepth = 0;
-  const passthroughScope = schematic.params ?? EMPTY_SCOPE;
+  // When leaving stepped braces, passthrough `.model` lines must also keep
+  // `{X}` so ngspice's `.step param` actually varies model params.
+  const passthroughScope = bakeScope;
   const documentModelLines = modelLibLinesFromDirectives(rawDirectives);
   const documentLibraryRegistry = parseUserModelLibraries([documentModelLines.join("\n")]);
   for (const line of documentModelLines) {
@@ -408,7 +439,7 @@ export function buildSpiceDeck(
     const label = safeName(entry.component.label).toLowerCase();
     if (label) inductorNames.set(label, instanceNames.get(index)!);
   });
-  lines.push(...couplingLinesFromDirectives(flatDirectives, schematic.params ?? EMPTY_SCOPE, inductorNames));
+  lines.push(...couplingLinesFromDirectives(flatDirectives, bakeScope, inductorNames));
 
   // Carry a document `.temp <°C>` into the deck so native ngspice runs its
   // temperature-dependent device models at the authored operating temperature.
@@ -430,7 +461,7 @@ export function buildSpiceDeck(
     hasIc,
     inductorCurrents,
     warnings: icWarnings,
-  } = icLinesFromDirectives(flatDirectives, circuit, paramScope);
+  } = icLinesFromDirectives(flatDirectives, circuit, bakeScope);
   circuit.warnings.push(...icWarnings);
   lines.push(...icLines);
 
@@ -743,7 +774,7 @@ export function buildSpiceDeck(
       index,
       instanceNames.get(index) ?? "",
       knownModels,
-      schematic.params ?? EMPTY_SCOPE,
+      bakeScope,
       vdmosModels,
       netPinCount,
       subcktModels,
@@ -821,13 +852,18 @@ export function buildSpiceDeck(
   // them only in TypeScript and never emitted them, so ngspice never saw
   // the user's measurements or Fourier request. Domain-filtered so an AC
   // deck does not carry `.meas tran …` (and vice versa).
-  // `.step` is opt-in only ({@link BuildSpiceDeckOptions.emitNativeStep}): the
-  // default TS re-run family path must never see it in the deck.
+  // `.param` / `.step` are opt-in only ({@link BuildSpiceDeckOptions.emitNativeStep}):
+  // the default TS re-run family path must never see them in the deck (double-step).
+  // Param cards use the full scope (including stepped seeds) so ngspice can bind
+  // unresolved `{X}` left by the bake-scope omit above.
+  if (options.emitNativeStep && leaveSteppedBraces) {
+    lines.push(...paramCardsForNativeStep(paramScope, schematic.directives ?? []));
+  }
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc));
   if (options.emitNativeStep) {
     lines.push(...stepLinesFromDirectives(flatDirectives));
   }
-  lines.push(...measFourLinesFromDirectives(flatDirectives, analysis.kind, paramScope));
+  lines.push(...measFourLinesFromDirectives(flatDirectives, analysis.kind, bakeScope));
   lines.push(".end");
 
   return {
@@ -1768,9 +1804,8 @@ function icLinesFromDirectives(
  * Authoritative `.step` cards for the native single-deck path (P1.6). Emits
  * cleaned `.step …` lines in document order. Callers must only request this
  * when they will consume multi-plot results and will **not** also expand the
- * sweep in TypeScript (double-step). Param-kind honesty is the caller's job:
- * Tau still bakes `{param}` into element values, so a native `.step param`
- * without unresolved braces would not actually vary the circuit.
+ * sweep in TypeScript (double-step). Param-kind decks must also omit stepped
+ * names from the brace bake and emit `.param` cards ({@link paramCardsFromScope}).
  */
 export function stepLinesFromDirectives(directives: ReadonlyArray<string>): string[] {
   const out: string[] = [];
@@ -1987,10 +2022,12 @@ function numberValue(component: SchematicComponent, unit: string): string {
 }
 
 /** Parse a DC level from already-extracted text (the value minus its AC spec),
- *  keeping the component-aware error message. Empty text → DC 0. */
+ *  keeping the component-aware error message. Empty text → DC 0.
+ *  Unresolved `{expr}` (native `.step param`) passes through for ngspice. */
 function numberFromText(component: SchematicComponent, text: string, unit: string): string {
-  const trimmed = text.trim();
+  const trimmed = text.trim().replace(/µ/g, "u");
   if (trimmed === "") return "0";
+  if (hasUnresolvedBrace(trimmed)) return trimmed;
   try {
     const value = parseQuantity(trimmed, unit);
     if (!Number.isFinite(value)) throw new Error("not finite");
@@ -2012,11 +2049,14 @@ function parsedNumber(component: SchematicComponent, unit: string): number {
 
 /** Parse a strictly-positive value from already-extracted text (the value minus
  *  its IC spec), keeping the component-aware error message. Used for C/L whose
- *  value may carry a trailing `IC=` token. */
+ *  value may carry a trailing `IC=` token.
+ *  Unresolved `{expr}` passes through for the native `.step param` path. */
 function positiveNumberFromText(component: SchematicComponent, text: string, unit: string): string {
+  const trimmed = text.trim().replace(/µ/g, "u");
+  if (hasUnresolvedBrace(trimmed)) return trimmed;
   let value: number;
   try {
-    value = parseQuantity(text.trim(), unit);
+    value = parseQuantity(trimmed, unit);
     if (!Number.isFinite(value)) throw new Error("not finite");
   } catch {
     throw new Error(`${component.label || component.kind} needs a valid ${unit} value.`);
@@ -2103,13 +2143,21 @@ function passiveSeriesResistance(component: SchematicComponent): { value: string
 
 /** Like parsedNumber but rejects only zero/NaN, allowing negative values.
  *  Used for resistors, where SPICE permits a negative (active) resistance but a
- *  zero value is a short that yields a singular deck. */
+ *  zero value is a short that yields a singular deck.
+ *  Unresolved `{expr}` passes through for the native `.step param` path. */
 function nonZeroNumberValue(component: SchematicComponent, unit: string): string {
+  const raw = (component.value ?? "").trim().replace(/µ/g, "u");
+  if (hasUnresolvedBrace(raw)) return raw;
   const value = parsedNumber(component, unit);
   if (value === 0) {
     throw new Error(`${component.label || component.kind} needs a non-zero ${unit} value.`);
   }
   return value.toString();
+}
+
+/** True when text still carries a `{…}` brace for ngspice (`.param` / `.step`). */
+function hasUnresolvedBrace(text: string): boolean {
+  return /\{[^{}]+\}/.test(text);
 }
 
 /** Append MOSFET geometry / model params from the structured value encoding. */

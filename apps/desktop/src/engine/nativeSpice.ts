@@ -112,11 +112,11 @@ export async function runNativeTransient(
 }
 
 /**
- * Single-deck native `.step` (P1.6 slice B): emit `.step` once, consume every
- * returned plot as a family member. Mutually exclusive with the TypeScript
- * re-run loop — that path must keep `emitNativeStep` off. Returns null outside
- * the Tauri runtime so the caller can fall back; refuses (ok:false) when the
- * specs are not source-kind or plot count mismatches the sweep.
+ * Single-deck native `.step` (P1.6): emit `.step` once, consume every returned
+ * plot as a family member. Mutually exclusive with the TypeScript re-run loop
+ * — that path must keep `emitNativeStep` off. Source and param kinds are
+ * eligible; temp and unsupported param brace shapes return null so the caller
+ * keeps the TS path. Returns null outside the Tauri runtime.
  */
 export async function runNativeSteppedTransient(
   schematic: Schematic,
@@ -124,7 +124,7 @@ export async function runNativeSteppedTransient(
   specs: readonly StepSpec[],
 ): Promise<StepFamilyResult | null> {
   if (!isNativeSpiceRuntime()) return null;
-  if (!canUseNativeStepPath(specs)) return null;
+  if (!canUseNativeStepPath(specs, { components: schematic.components })) return null;
 
   const execution = await executeNative(
     schematic,

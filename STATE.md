@@ -5,13 +5,13 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 21:17 CDT - P1.6 native `.step` slice B
-landed (source-kind single-deck emit + multi-plot consume). Param/temp
-still TS re-run. Shippable? NO.
+**Status:** IDLE 2026-08-04 21:30 CDT - P1.6 native `.step` param
+landed (unresolved braces + `.param`/`.step param` emit + family
+consume). Temp / waveform-fn / AC-brace param still TS. Shippable? NO.
 
-**Next unit:** P1.6 native `.step` param (unresolved braces + `.param`
-emit) and/or temp; authored-analysis differential parity / §10 /
-named-device / unsigned release proof.
+**Next unit:** native `.step` temp and/or AC/DC native step;
+authored-analysis differential parity / §10 / named-device / unsigned
+release proof.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.

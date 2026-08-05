@@ -1146,12 +1146,31 @@ describe("native single-deck .step (P1.6)", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("returns null for param sweeps so the TS re-run path stays exclusive", async () => {
+  it("returns null for temp sweeps so the TS re-run path stays exclusive", async () => {
     enableNativeRuntime();
-    const param = parseStepDirective(".step param X list 1 2");
-    if (!param) throw new Error("parse failed");
+    const temp = parseStepDirective(".step temp 0 50 25");
+    if (!temp) throw new Error("parse failed");
     await expect(runNativeSteppedTransient(
-      { ...rcSchematic(), directives: [".step param X list 1 2"] },
+      { ...rcSchematic(), directives: [".step temp 0 50 25"] },
+      { stopTime: 0.001, steps: 100 },
+      [temp],
+    )).resolves.toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns null for param braces inside PULSE so the TS path stays exclusive", async () => {
+    enableNativeRuntime();
+    const param = parseStepDirective(".step param Vhi list 1 5");
+    if (!param) throw new Error("parse failed");
+    const schematic = {
+      ...rcSchematic(),
+      components: rcSchematic().components.map((part) =>
+        part.label === "V1" ? { ...part, value: "PULSE(0 {Vhi} 0 1n 1n 1u 2u)" } : part,
+      ),
+      directives: [".step param Vhi list 1 5"],
+    };
+    await expect(runNativeSteppedTransient(
+      schematic,
       { stopTime: 0.001, steps: 100 },
       [param],
     )).resolves.toBeNull();
@@ -1197,6 +1216,54 @@ describe("native single-deck .step (P1.6)", () => {
     expect(family.members.map((m) => m.label)).toEqual(["V1=1", "V1=5"]);
     expect(family.members[0]!.result.ok && family.members[0]!.result.traces.find((t) => t.id === "N001")?.values).toEqual([1, 1]);
     expect(family.members[1]!.result.ok && family.members[1]!.result.traces.find((t) => t.id === "N001")?.values).toEqual([5, 5]);
+  });
+
+  it("emits .param + unresolved {Rload} and assembles a param family", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce({
+      plot: "tran2",
+      vectors: [
+        { name: "time", real: [0, 0.001], imaginary: null },
+        { name: "v(n001)", real: [5, 5], imaginary: null },
+        { name: "v(n002)", real: [0, 2.5], imaginary: null },
+      ],
+      extraPlots: [{
+        name: "tran1",
+        vectors: [
+          { name: "time", real: [0, 0.001], imaginary: null },
+          { name: "v(n001)", real: [5, 5], imaginary: null },
+          { name: "v(n002)", real: [0, 1], imaginary: null },
+        ],
+      }],
+      messages: [],
+      libraryPath: "/bundle/libngspice.dylib",
+    });
+
+    const param = parseStepDirective(".step param Rload list 1k 2k");
+    if (!param) throw new Error("parse failed");
+    const schematic = {
+      ...rcSchematic(),
+      components: rcSchematic().components.map((part) =>
+        part.label === "R1" ? { ...part, value: "{Rload}" } : part,
+      ),
+      directives: [".step param Rload list 1k 2k"],
+      params: { scope: { Rload: 1000, rload: 1000 }, funcs: {} },
+    };
+
+    const family = await runNativeSteppedTransient(
+      schematic,
+      { stopTime: 0.001, steps: 100 },
+      [param],
+    );
+
+    expect(invoke).toHaveBeenCalledTimes(1);
+    const netlist = invoke.mock.calls[0]![1].request.netlist as string;
+    expect(netlist).toMatch(/\bR1\b[^\n]*\{Rload\}/);
+    expect(netlist).toMatch(/\.param\b[\s\S]*\bRload=1000\b/);
+    expect(netlist).toContain(".step param Rload list 1k 2k");
+
+    expect(family?.ok).toBe(true);
+    expect(family?.members.map((m) => m.label)).toEqual(["Rload=1000", "Rload=2000"]);
   });
 
   it("refuses a mismatched plot count instead of inventing waveforms", async () => {

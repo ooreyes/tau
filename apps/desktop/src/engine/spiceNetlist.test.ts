@@ -492,6 +492,7 @@ describe("buildSpiceDeck", () => {
       { emitNativeStep: true },
     );
     expect(nativeStep.netlist).toContain(".step param X list 1 2");
+    expect(nativeStep.netlist).toMatch(/\.param\b[\s\S]*\bX=1\b/);
     const stepIdx = nativeStep.netlist.indexOf(".step param X");
     expect(stepIdx).toBeGreaterThan(nativeStep.netlist.indexOf(".tran "));
     expect(stepIdx).toBeLessThan(nativeStep.netlist.indexOf(".meas tran peak"));
@@ -503,6 +504,61 @@ describe("buildSpiceDeck", () => {
     expect(ac.netlist).toContain(".meas ac gain FIND V(out) AT=1k");
     expect(ac.netlist).not.toContain(".meas tran peak");
     expect(ac.netlist).not.toContain(".four");
+  });
+
+  it("leaves unresolved {param} and emits .param/.step for native param sweeps (P1.6)", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "{Rload}", 96, 0),
+      component("capacitor", "C1", "1u", 224, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 256, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+    ];
+    const directives = [".param Rfixed=2k", ".step param Rload list 1k 2k"];
+    const params = buildParamScope(directives);
+
+    // Default path still bakes braces so the TS re-run loop can inject per value.
+    const baked = buildSpiceDeck(
+      { components, wires, directives, params },
+      { kind: "tran", stopTime: 0.001, steps: 100 },
+    );
+    expect(baked.netlist).toMatch(/\bR1\b.*\b1000\b/);
+    expect(baked.netlist).not.toContain("{Rload}");
+    expect(baked.netlist).not.toContain(".step");
+    expect(baked.netlist).not.toMatch(/\.param\b/);
+
+    const native = buildSpiceDeck(
+      { components, wires, directives, params },
+      { kind: "tran", stopTime: 0.001, steps: 100 },
+      { emitNativeStep: true },
+    );
+    expect(native.netlist).toMatch(/\bR1\b[^\n]*\{Rload\}/);
+    expect(native.netlist).toMatch(/\.param\b[\s\S]*\bRload=1000\b/);
+    expect(native.netlist).toMatch(/\.param\b[\s\S]*\bRfixed=2000\b/);
+    expect(native.netlist).toContain(".step param Rload list 1k 2k");
+    // Non-stepped braces still bake; fixed params need not appear as braces.
+    expect(native.netlist).not.toContain("{Rfixed}");
+  });
+
+  it("does not emit .param on a source-only native .step deck", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const native = buildSpiceDeck(
+      { components, wires, directives: [".step V1 list 1 5"] },
+      { kind: "tran", stopTime: 0.001, steps: 100 },
+      { emitNativeStep: true },
+    );
+    expect(native.netlist).toContain(".step V1 list 1 5");
+    expect(native.netlist).not.toMatch(/\.param\b/);
   });
 
   it("resolves {param} braces inside emitted .meas lines", () => {

@@ -448,3 +448,107 @@ export function resolveComponentValues(components: SchematicComponent[], ctx: Pa
       : component,
   );
 }
+
+/**
+ * Like {@link resolveComponentValues}, but keeps braces that cannot evaluate in
+ * `ctx` (native `.step param`: omit stepped names from the bake scope so
+ * `{X}` reaches ngspice alongside emitted `.param` / `.step param` cards).
+ */
+export function resolveComponentValuesLeavingUnknown(
+  components: SchematicComponent[],
+  ctx: ParamScope = EMPTY_SCOPE,
+): SchematicComponent[] {
+  if (!components.some((component) => component.value?.includes("{"))) return components;
+  return components.map((component) =>
+    component.value && component.value.includes("{")
+      ? { ...component, value: substituteKnownBraces(component.value, ctx) }
+      : component,
+  );
+}
+
+/** Drop named params from a scope (exact + lowercase keys). */
+export function omitParamsFromScope(ctx: ParamScope, names: ReadonlySet<string>): ParamScope {
+  if (names.size === 0) return ctx;
+  const lower = new Set([...names].map((name) => name.toLowerCase()));
+  const scope: Scope = {};
+  for (const [key, value] of Object.entries(ctx.scope)) {
+    if (lower.has(key.toLowerCase())) continue;
+    scope[key] = value;
+  }
+  return { scope, funcs: ctx.funcs };
+}
+
+/**
+ * Unique `.step param` names (document casing) from directive lines. Empty when
+ * the deck has no param sweeps to leave unresolved for ngspice.
+ */
+export function steppedParamNamesFromDirectives(directives: ReadonlyArray<string>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of expandDirectiveLines([...directives])) {
+    if (!/^\.step\b/i.test(line)) continue;
+    const spec = parseStepDirective(line);
+    if (spec?.kind !== "param" || !spec.name) continue;
+    const key = spec.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(spec.name);
+  }
+  return out;
+}
+
+/**
+ * `.param name=value` cards from a resolved numeric scope so ngspice can bind
+ * unresolved `{name}` braces on the native `.step param` path. One assignment
+ * per unique lowercase name; prefers first-seen casing.
+ */
+export function paramCardsFromScope(ctx: ParamScope): string[] {
+  const seen = new Set<string>();
+  const assignments: string[] = [];
+  for (const [name, value] of Object.entries(ctx.scope)) {
+    const key = name.toLowerCase();
+    if (seen.has(key) || !Number.isFinite(value)) continue;
+    seen.add(key);
+    assignments.push(`${name}=${value}`);
+  }
+  if (assignments.length === 0) return [];
+  const lines: string[] = [];
+  let current = ".param";
+  for (const assignment of assignments) {
+    const next = `${current} ${assignment}`;
+    if (current !== ".param" && next.length > 120) {
+      lines.push(current);
+      current = `.param ${assignment}`;
+    } else {
+      current = next;
+    }
+  }
+  lines.push(current);
+  return lines;
+}
+
+/**
+ * Param cards for the native step path: document scope plus first-value seeds
+ * from each `.step param` so a deck that only declares the sweep (no separate
+ * `.param X=`) still gives ngspice a bindable name.
+ */
+export function paramCardsForNativeStep(
+  ctx: ParamScope,
+  directives: ReadonlyArray<string>,
+): string[] {
+  const scope: Scope = { ...ctx.scope };
+  for (const name of steppedParamNamesFromDirectives(directives)) {
+    const key = name.toLowerCase();
+    if (key in scope || name in scope) continue;
+    for (const line of expandDirectiveLines([...directives])) {
+      if (!/^\.step\b/i.test(line)) continue;
+      const spec = parseStepDirective(line);
+      if (spec?.kind === "param" && spec.name?.toLowerCase() === key && spec.values.length > 0) {
+        scope[name] = spec.values[0]!;
+        scope[key] = spec.values[0]!;
+        break;
+      }
+    }
+  }
+  return paramCardsFromScope({ scope, funcs: ctx.funcs });
+}
