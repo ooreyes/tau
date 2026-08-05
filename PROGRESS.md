@@ -1,14 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:22 CDT**
+**Status: DONE - 2026-08-05 08:25 CDT**
 
-Unit: Educational `MC1648.asc` authored `.tran` → differential **pass=100**.
-```
-SUMMARY pass=100 sibling=5 gap=0
-tran mc1648 … v(out) nRms≈0.138 / v(bias)≈0.006 / v(agc)≈0.007
-```
-Exact on-schematic NP/DD; tank LC phase-skew deferred. Worktree
-`Tau-wt-diff-100` over `d013c71`. Left Staff EE / Settings / ct19 / Draft* alone.
+Unit: Waveform DoD — **AC/DC step-family per-trace selection**.
+Worktree `Tau-wt-wave-acdc-sel` over `d152c64` (pass=100). Settings locked.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -18,6 +13,29 @@ SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — AC/DC step-family per-trace selection (§waveform DoD)
+
+**What I did**
+- AcFamilyPlot / DcFamilyPlot legend member chips toggle draw (click hide/show);
+  refuse hiding the last visible curve; STEPS `visible/total`; axes reframe to
+  visible members. Worktree `Tau-wt-wave-acdc-sel` ff'd onto `d152c64`. Left
+  MC1648 / continue 39 Educational ASC, ct 19 OP, Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring tests)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2783 passed)
+- AC/DC step legend hide/show + last-visible refuse
+
+**Parity items**
+- Waveform viewer 🟡 (AC/DC step-family per-trace selection landed).
+  Differential pass=100 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Manual axis limits / non-wall ND. Leave Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — Educational MC1648 .tran → pass=100 (§DoD)
 

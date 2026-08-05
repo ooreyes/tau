@@ -1398,6 +1398,74 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
     expect(readout.textContent).toMatch(/Δ/);
     expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
   });
+
+  it("AC step legend click hides a member and refuses to hide the last one", () => {
+    const acMember = (label: string, magDb: number[]) => ({
+      label,
+      value: 1,
+      result: {
+        ok: true as const,
+        freqs: [10, 100, 1000],
+        traces: [{ id: "n1", label: "V(out)", magDb, phaseDeg: [0, -45, -90] }],
+        warnings: [],
+      },
+    });
+    const { container } = render(
+      <AcFamilyPlot
+        family={{
+          ok: true,
+          spec: { kind: "param", name: "R", values: [1, 2] },
+          members: [acMember("R=1", [0, -3, -20]), acMember("R=2", [0, -6, -40])],
+          warnings: [],
+        }}
+      />,
+    );
+    expect(container.querySelectorAll(".scope-trace").length).toBe(2);
+    expect(screen.getByText("STEPS").parentElement?.textContent).toMatch(/2\/2/);
+    const hideR1 = screen.getByRole("button", { name: "Hide AC step R=1" });
+    fireEvent.click(hideR1);
+    expect(hideR1.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelectorAll(".scope-trace").length).toBe(1);
+    expect(screen.getByText("STEPS").parentElement?.textContent).toMatch(/1\/2/);
+    const hideR2 = screen.getByRole("button", { name: "Hide AC step R=2" });
+    fireEvent.click(hideR2);
+    expect(hideR2.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelectorAll(".scope-trace").length).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "Show AC step R=1" }));
+    expect(container.querySelectorAll(".scope-trace").length).toBe(2);
+  });
+
+  it("DC step legend click hides a member and refuses to hide the last one", () => {
+    const dcMember = (label: string, voltages: number[]) => ({
+      label,
+      value: 1,
+      result: {
+        ok: true as const,
+        source: "V1",
+        sweep: [0, 1, 2],
+        nets: [{ id: "n1", label: "V(out)", voltages, ground: false }],
+        warnings: [],
+      },
+    });
+    const { container } = render(
+      <DcFamilyPlot
+        family={{
+          ok: true,
+          spec: { kind: "param", name: "R", values: [1, 2] },
+          members: [dcMember("R=1", [0, 0.5, 1]), dcMember("R=2", [0, 0.25, 0.5])],
+          warnings: [],
+        }}
+      />,
+    );
+    expect(container.querySelectorAll(".scope-trace").length).toBe(2);
+    const hideR1 = screen.getByRole("button", { name: "Hide DC step R=1" });
+    fireEvent.click(hideR1);
+    expect(container.querySelectorAll(".scope-trace").length).toBe(1);
+    expect(screen.getByText("STEPS").parentElement?.textContent).toMatch(/1\/2/);
+    fireEvent.click(screen.getByRole("button", { name: "Hide DC step R=2" }));
+    expect(screen.getByRole("button", { name: "Hide DC step R=2" }).getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelectorAll(".scope-trace").length).toBe(1);
+  });
 });
 
 describe("SimulationPanel - trace color choice and cursor seek", () => {

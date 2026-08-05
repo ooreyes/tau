@@ -1501,7 +1501,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Step-family per-trace selection landed** (2026-08-05): StepPlot legend
   member chips toggle draw (`aria-pressed`); refuses hiding the last visible
   curve; STEPS meter shows visible/total; axes reframe to visible members.
-  Pending: AC/DC family per-trace selection.
+  **AC/DC step-family per-trace selection landed** (2026-08-05): AcFamilyPlot /
+  DcFamilyPlot legend chips mirror StepPlot (hide/show, last-visible refuse,
+  STEPS `visible/total`, axes reframe to visible).
 - 🟡 Save plot settings (`.plt`), export image/CSV — **CSV + PNG export landed**
   (`simulation/waveformCsv.ts` `seriesToCsv`): an **Export CSV** button on the
   transient scope writes a table of `time` + every node-voltage trace + branch

@@ -5214,6 +5214,8 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
+  /** Legend click hides a step member; never allow hiding the last visible curve. */
+  const [hiddenLabels, setHiddenLabels] = useState<string[]>([]);
   const probeOverlay = useMemo(() => acFamilyOverlaySeries(family), [family]);
   const exprOverlay = useMemo(() => {
     if (!activeExpr) return null;
@@ -5231,14 +5233,21 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
       : !activeExpr
         ? probeOverlay
         : null;
+
+  const hiddenSet = useMemo(() => new Set(hiddenLabels), [hiddenLabels]);
+  const visibleSeries = useMemo(() => {
+    if (!overlay) return [];
+    return overlay.series.filter((s) => !hiddenSet.has(s.label));
+  }, [overlay, hiddenSet]);
+
   const plot = useMemo(() => {
-    if (!overlay) return null;
+    if (visibleSeries.length === 0) return null;
     let rawMin = 0;
     let rawMax = 0;
     let found = false;
     let fLo = Infinity;
     let fHi = -Infinity;
-    for (const s of overlay.series) {
+    for (const s of visibleSeries) {
       for (const db of s.magDb) {
         if (!Number.isFinite(db) || db <= -250) continue;
         if (!found) {
@@ -5261,12 +5270,27 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
     const min = Math.floor(Math.min(rawMin, max - 10) / 10) * 10;
     const xMax = fHi > fLo ? fHi : fLo * 10;
     return { min, max, xMin: fLo, xMax, xScale: "log" as const };
-  }, [overlay]);
+  }, [visibleSeries]);
 
-  // Two log-frequency cursors on the family SIGNAL (first member grid).
+  const toggleAcStepMember = (label: string) => {
+    setHiddenLabels((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+        return [...next];
+      }
+      if (!overlay) return prev;
+      const visibleCount = overlay.series.filter((s) => !next.has(s.label)).length;
+      if (visibleCount <= 1) return prev;
+      next.add(label);
+      return [...next];
+    });
+  };
+
+  // Two log-frequency cursors on the family SIGNAL (first *visible* member).
   const acStepCursors = useMemo(() => {
-    if (!cursorsOn || !overlay || overlay.series.length === 0) return null;
-    const first = overlay.series[0];
+    if (!cursorsOn || !overlay || visibleSeries.length === 0) return null;
+    const first = visibleSeries[0];
     const x1 = logFractionToX(first.freqs, cf1);
     const x2 = logFractionToX(first.freqs, cf2);
     if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
@@ -5280,7 +5304,7 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
     } catch {
       return null;
     }
-  }, [cursorsOn, overlay, cf1, cf2]);
+  }, [cursorsOn, overlay, visibleSeries, cf1, cf2]);
 
   const acStepCursorPixelX = (f: number, xMin: number, xMax: number): number | null => {
     if (!(f > 0) || !(xMin > 0) || !(xMax > 0)) return null;
@@ -5361,14 +5385,17 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
             targetXTicks={targetXTicks}
             targetYTicks={targetYTicks}
           />
-          {overlay.series.map((s, i) => (
-            <path
-              key={s.label}
-              className="scope-trace"
-              stroke={STEP_COLORS[i % STEP_COLORS.length]}
-              d={bodeValuePath(s.magDb, s.freqs, plot)}
-            />
-          ))}
+          {overlay.series.map((s, i) => {
+            if (hiddenSet.has(s.label)) return null;
+            return (
+              <path
+                key={s.label}
+                className="scope-trace"
+                stroke={STEP_COLORS[i % STEP_COLORS.length]}
+                d={bodeValuePath(s.magDb, s.freqs, plot)}
+              />
+            );
+          })}
           {acStepCursors &&
             [acStepCursors.x1, acStepCursors.x2].map((f, i) => {
               const x = acStepCursorPixelX(f, plot.xMin, plot.xMax);
@@ -5408,12 +5435,22 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
               ))}
             </ContextMenuContent>
           </ContextMenu>
-          {overlay.series.map((s, i) => (
-            <span key={s.label} className="bode-legend-chip">
-              <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
-              {s.label}
-            </span>
-          ))}
+          {overlay.series.map((s, i) => {
+            const shown = !hiddenSet.has(s.label);
+            return (
+              <button
+                key={s.label}
+                type="button"
+                className="bode-legend-chip step-member-chip"
+                aria-pressed={shown}
+                aria-label={`${shown ? "Hide" : "Show"} AC step ${s.label}`}
+                onClick={() => toggleAcStepMember(s.label)}
+              >
+                <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
+                {s.label}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="meter-row analysis-meter">
@@ -5427,7 +5464,11 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
           Cursors
         </Button>
         <Metric label="SIGNAL" value={overlay.signal} tone="green" />
-        <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
+        <Metric
+          label="STEPS"
+          value={`${visibleSeries.length}/${overlay.series.length}`}
+          tone="cyan"
+        />
         <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
         {activeExpr && (
           <Button
@@ -5515,6 +5556,8 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
+  /** Legend click hides a step member; never allow hiding the last visible curve. */
+  const [hiddenLabels, setHiddenLabels] = useState<string[]>([]);
   const probeOverlay = useMemo(() => dcFamilyOverlaySeries(family), [family]);
   const exprOverlay = useMemo(() => {
     if (!activeExpr) return null;
@@ -5532,13 +5575,20 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
       : !activeExpr
         ? probeOverlay
         : null;
+
+  const hiddenSet = useMemo(() => new Set(hiddenLabels), [hiddenLabels]);
+  const visibleSeries = useMemo(() => {
+    if (!overlay) return [];
+    return overlay.series.filter((s) => !hiddenSet.has(s.label));
+  }, [overlay, hiddenSet]);
+
   const plot = useMemo(() => {
-    if (!overlay) return null;
+    if (visibleSeries.length === 0) return null;
     let vMin = Infinity;
     let vMax = -Infinity;
     let xMin = Infinity;
     let xMax = -Infinity;
-    for (const s of overlay.series) {
+    for (const s of visibleSeries) {
       for (const v of s.voltages) {
         if (!Number.isFinite(v)) continue;
         vMin = Math.min(vMin, v);
@@ -5557,12 +5607,27 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
       vMax += 0.5;
     }
     return { vMin, vMax, xMin, xMax };
-  }, [overlay]);
+  }, [visibleSeries]);
 
-  // Two linear-sweep cursors on the family SIGNAL (first member grid).
+  const toggleDcStepMember = (label: string) => {
+    setHiddenLabels((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+        return [...next];
+      }
+      if (!overlay) return prev;
+      const visibleCount = overlay.series.filter((s) => !next.has(s.label)).length;
+      if (visibleCount <= 1) return prev;
+      next.add(label);
+      return [...next];
+    });
+  };
+
+  // Two linear-sweep cursors on the family SIGNAL (first *visible* member).
   const dcStepCursors = useMemo(() => {
-    if (!cursorsOn || !overlay || overlay.series.length === 0) return null;
-    const first = overlay.series[0];
+    if (!cursorsOn || !overlay || visibleSeries.length === 0) return null;
+    const first = visibleSeries[0];
     const x1 = fractionToX(first.sweep, cf1);
     const x2 = fractionToX(first.sweep, cf2);
     if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
@@ -5576,7 +5641,7 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
     } catch {
       return null;
     }
-  }, [cursorsOn, overlay, cf1, cf2]);
+  }, [cursorsOn, overlay, visibleSeries, cf1, cf2]);
 
   const dcStepCursorPixelX = (x: number, xMin: number, xMax: number): number | null => {
     if (!Number.isFinite(x) || !Number.isFinite(xMin) || !Number.isFinite(xMax)) return null;
@@ -5654,14 +5719,17 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
             targetXTicks={targetXTicks}
             targetYTicks={targetYTicks}
           />
-          {overlay.series.map((s, i) => (
-            <path
-              key={s.label}
-              className="scope-trace"
-              stroke={STEP_COLORS[i % STEP_COLORS.length]}
-              d={dcPath(s.voltages, s.sweep, plot)}
-            />
-          ))}
+          {overlay.series.map((s, i) => {
+            if (hiddenSet.has(s.label)) return null;
+            return (
+              <path
+                key={s.label}
+                className="scope-trace"
+                stroke={STEP_COLORS[i % STEP_COLORS.length]}
+                d={dcPath(s.voltages, s.sweep, plot)}
+              />
+            );
+          })}
           {dcStepCursors &&
             [dcStepCursors.x1, dcStepCursors.x2].map((sx, i) => {
               const x = dcStepCursorPixelX(sx, plot.xMin, plot.xMax);
@@ -5701,12 +5769,22 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
               ))}
             </ContextMenuContent>
           </ContextMenu>
-          {overlay.series.map((s, i) => (
-            <span key={s.label} className="bode-legend-chip">
-              <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
-              {s.label}
-            </span>
-          ))}
+          {overlay.series.map((s, i) => {
+            const shown = !hiddenSet.has(s.label);
+            return (
+              <button
+                key={s.label}
+                type="button"
+                className="bode-legend-chip step-member-chip"
+                aria-pressed={shown}
+                aria-label={`${shown ? "Hide" : "Show"} DC step ${s.label}`}
+                onClick={() => toggleDcStepMember(s.label)}
+              >
+                <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
+                {s.label}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="meter-row analysis-meter">
@@ -5720,7 +5798,11 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
           Cursors
         </Button>
         <Metric label="SIGNAL" value={overlay.signal} tone="green" />
-        <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
+        <Metric
+          label="STEPS"
+          value={`${visibleSeries.length}/${overlay.series.length}`}
+          tone="cyan"
+        />
         <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
         {activeExpr && (
           <Button
