@@ -1576,13 +1576,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=69 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=70 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
-  (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak). gr_del
-  deferred (all-pass |V|≈1 hollow). TwoTau deferred (LTspice s_xfer reject).
-  tip 65e05ce thrash corrected. phono/relax blocked. HalfSlope Laplace stripped;
-  SoftDiodeRecovery deferred; BandGaps dc-temp miss; LoopGain/Electrometer
-  LT1001 OTA wall; MC1648 deferred; dimmer TRIAC deferred. Harness-slice gaps closed; DoD broad-differential box
+  (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
+  Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
+  nRms=0 / nMax=0 span≈1.04). gr_del deferred (all-pass |V|≈1 hollow). TwoTau
+  deferred (LTspice s_xfer reject). tip 65e05ce thrash corrected. phono/relax
+  blocked. HalfSlope Laplace stripped; SoftDiodeRecovery deferred; BandGaps
+  dc-temp miss; LoopGain/Electrometer LT1001 OTA wall; MC1648 deferred; dimmer
+  TRIAC deferred. Harness-slice gaps closed; DoD broad-differential box
   remains open — see AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,

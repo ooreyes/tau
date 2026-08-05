@@ -173,10 +173,12 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=69 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=70 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
-      nRms≈0.0057/0.0039 @ maxTol=0.10 peak). gr_del deferred (all-pass |V|≈1
-      hollow magnitude). TwoTau deferred (LTspice rejects Tau s_xfer same-deck). HalfSlope Laplace not landed.
+      nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
+      authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04).
+      gr_del deferred (all-pass |V|≈1 hollow magnitude). TwoTau deferred
+      (LTspice rejects Tau s_xfer same-deck). HalfSlope Laplace not landed.
       SoftDiodeRecovery deferred. BandGaps `.dc temp` misses tolerance.
       dimmer TRIAC deferred. Harness-slice gap closed; broad topology/device
       matrix still open — DoD box stays unchecked.

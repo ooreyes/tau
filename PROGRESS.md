@@ -9,10 +9,14 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 03:48 CDT**
+**Status: DONE - 2026-08-05 04:05 CDT**
 
-Unit: Educational/contrib `elip_grd.asc` authored `.ac` → differential
-**pass=69** (elliptic S11/S21; maxTol=0.10 peak). gr_del/TwoTau deferred.
+Unit: Documents/LTspice `Draft3.asc` authored `.ac` → differential **pass=70**.
+```
+SUMMARY pass=70 sibling=5 gap=0
+ac draft3 … v(vout) nRms=0.0000 nMax=0.0000 span=1.044
+```
+Series RLC L/C/R; exact LT↔ng. Tip elip_grd pass=69 → 70. Left PLL/SAH alone.
 Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -20,6 +24,39 @@ Named-device 47.9%. SHIPPABLE? **NO**
 
 
 ---
+
+
+### 2026-08-05 — Documents/LTspice Draft3.asc AC → pass=70 (§DoD)
+
+**What I did**
+- Documents/LTspice `Draft3.asc` authored `.ac dec 100 100–10Meg`: series RLC
+  (L=47µ, C=330n, R=10) → probe `v(vout)`. Exact match nRms=0 / nMax=0,
+  span≈1.044. Pure passives; zero unresolved / substitutions.
+- Tip `eb46718` elip_grd pass=69 → 70. Worktree-isolated (`Tau-wt-grdel`).
+  elip_grd collision avoided (already on tip). Left PLL/SampleAndHold (Staff EE)
+  alone. Probed Draft7 (also exact) and HandsFreePreamp (nRms≈0.34 — not landed).
+
+**Exact stdout**
+```
+SUMMARY pass=70 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=70 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` (2680 passed)
+
+**Parity items**
+- Differential 🟡 harness **pass=70 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- Non-colliding Educational/Applications/Drafts. Leave PLL/Settings alone.
+
 
 
 ### 2026-08-05 — Educational/contrib elip_grd.asc AC → pass=69 (§DoD)
