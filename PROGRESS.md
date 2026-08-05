@@ -9,18 +9,41 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 01:04 CDT**
+**Status: DONE - 2026-08-05 01:14 CDT**
 
-Unit: Incomplete asym OTA Help defaults (Isrc=Iout, Isink=−Iout) → named-device **46.9%**.
+Unit: Nested `.lib` attach (AD8310→UniversalOpAmp2/level2) → named-device **47.3%**.
 ```
-NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1191 refuse=1350 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=46.9%
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1201 refuse=1340 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.3%
 ```
-Before 46.4%/1179 → +12 exact. Soft epsilon still refuse. Freshman AI untouched.
-SHIPPABLE? **NO**
+Before 46.9%/1191 → +10 exact. Corpus matches product nested-lib walk. Soft
+epsilon / encrypted bare SYMBOL stay refuse. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Nested installed `.lib` attach → exact-rate 47.3% (§DoD)
+
+**What I did**
+- Corpus `attachedInstalledModelBlocks` extracted only the requested `.subckt`
+  and dropped nested `.lib UniversalOpAmp2.lib` peers (AD8310 → unresolved
+  `level2`). Product `importProjectAsc` already followed nests.
+- Shared `installedModelAttach.ts`: full library texts + BFS nested
+  `.lib`/`.include`; named-device + acceptance corpus both use it.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1201 refuse=1340 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.3%
+```
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **47.3%** (not ≥95%). SHIPPABLE? NO
+
+**Next**
+- Soft epsilon; remaining encrypted vendor REF; broaden differential matrix
+  (Class-D noise/tf stays gap — no authored .noise/.tf)
+
 
 ### 2026-08-05 — Incomplete asym OTA Help defaults → 46.9% (§DoD)
 

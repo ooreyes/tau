@@ -27,10 +27,9 @@ import { importAsc, makeSubcircuitResolver, decodeSchematicText, parseAsy, type 
 import { buildParamScope } from "../src/simulation/paramScope";
 import { buildSpiceDeck, unresolvedSubcktMessage } from "../src/engine/spiceNetlist";
 import { validateSchematicDocument } from "../src/schematic/documentValidation";
-import { summarizeCorpus, formatCorpusReport, summarizeCorpusCapability, formatCorpusCapabilitySummary, classifyCorpusCapability, isEncryptedModelBytes, type CorpusRow } from "../src/io/corpusReport";
-import { installedLibraryFileCandidates } from "../src/io/ltspiceModelFile";
+import { summarizeCorpus, formatCorpusReport, summarizeCorpusCapability, formatCorpusCapabilitySummary, classifyCorpusCapability, type CorpusRow } from "../src/io/corpusReport";
+import { attachedInstalledModelLibraryTexts } from "../src/io/installedModelAttach";
 import { opampIdentity } from "../src/engine/opampModel";
-import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
 import { ltspiceLibRoots } from "./ltspiceLibRoot";
 import { resolveInstalledAsyPath } from "../src/io/ltspiceSymbolResolve";
 import { nativeWorkerPaths, runNativeSpiceWorker } from "./nativeSpiceWorker";
@@ -67,7 +66,6 @@ const INSTALLED_STANDARD_MODEL_LIBRARIES = [
   .filter((path): path is string => Boolean(path))
   .map((path) => decodeSchematicText(readFileSync(path)));
 const symbolMetadataCache = new Map<string, AsySymbol | null>();
-const modelRegistryCache = new Map<string, UserModelLibraryRegistry | null>();
 
 /** Every user-owned tree the Definition of Done requires this runner to cover. */
 const CORPUS_ROOTS = [
@@ -183,42 +181,18 @@ function installedSymbolMetadata(symbolType: string): AsySymbol | null {
 /** Extract only the selected vendor block from the user's model file. Parsing
  * is cached per file so the 4k corpus never repeatedly scans LTC.lib/ADI*.lib. */
 function attachedInstalledModelBlocks(components: readonly import("../src/schematic/types").SchematicComponent[]): string[] {
-  const blocks = new Map<string, string>();
+  const files: string[] = [];
+  const seen = new Set<string>();
   for (const component of components) {
     if (!component.ltModelFile || (component.kind !== "opamp" && component.kind !== "subckt")) continue;
     const opamp = component.kind === "opamp" ? opampIdentity(component) : null;
     if (opamp?.mode === "behavioral") continue;
-    const requested = opamp?.modelName ?? component.value.trim().split(/\s+/)[0] ?? "";
-    if (!requested) continue;
-    const relativeFile = normalize(component.ltModelFile.replace(/[\\/]+/g, sep));
-    if (
-      !relativeFile
-      || isAbsolute(relativeFile)
-      || relativeFile === ".."
-      || relativeFile.startsWith(`..${sep}`)
-    ) continue;
-    let registry = modelRegistryCache.get(relativeFile.toLowerCase());
-    if (registry === undefined) {
-      registry = null;
-      candidateLoop: for (const candidate of installedLibraryFileCandidates(relativeFile)) {
-        const normalizedCandidate = normalize(candidate.replace(/[\\/]+/g, sep));
-        for (const root of ltspiceLibRoots().flatMap((entry) => [join(entry, "sub"), entry])) {
-          const path = join(root, normalizedCandidate);
-          const rel = relative(root, path);
-          if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
-          const bytes = readFileSync(path);
-          if (isEncryptedModelBytes(bytes)) continue;
-          registry = parseUserModelLibraries([decodeSchematicText(bytes)]);
-          break candidateLoop;
-        }
-      }
-      modelRegistryCache.set(relativeFile.toLowerCase(), registry);
-    }
-    if (!registry) continue;
-    const block = resolveUserSubckt(registry, requested);
-    if (block) blocks.set(requested.toLowerCase(), block);
+    const key = component.ltModelFile.replace(/\\/g, "/").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    files.push(component.ltModelFile);
   }
-  return [...blocks.values()];
+  return attachedInstalledModelLibraryTexts(files, ltspiceLibRoots());
 }
 
 function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): CorpusRow {

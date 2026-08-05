@@ -40,8 +40,8 @@ import {
   type CorpusRow,
 } from "../src/io/corpusReport";
 import { opampIdentity } from "../src/engine/opampModel";
-import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
 import { installedLibraryFileCandidates, ltspiceModelFileFromSymbolAttrs } from "../src/io/ltspiceModelFile";
+import { attachedInstalledModelLibraryTexts } from "../src/io/installedModelAttach";
 import { resolveInstalledAsyPath } from "../src/io/ltspiceSymbolResolve";
 import { ltspiceLibRoots } from "./ltspiceLibRoot";
 import type { SchematicComponent } from "../src/schematic/types";
@@ -77,7 +77,6 @@ const INSTALLED_STANDARD_MODEL_LIBRARIES = [
   .map((path) => decodeSchematicText(readFileSync(path)));
 
 const symbolMetadataCache = new Map<string, AsySymbol | null>();
-const modelRegistryCache = new Map<string, UserModelLibraryRegistry | null>();
 const encryptedModelCache = new Map<string, boolean>();
 
 interface CorpusFile {
@@ -216,43 +215,20 @@ function installedModelFileIsEncrypted(relativeFile: string): boolean {
 }
 
 function attachedInstalledModelBlocks(components: readonly SchematicComponent[]): string[] {
-  const blocks = new Map<string, string>();
+  const files: string[] = [];
+  const seen = new Set<string>();
   for (const component of components) {
     if (!component.ltModelFile || (component.kind !== "opamp" && component.kind !== "subckt")) continue;
     const opamp = component.kind === "opamp" ? opampIdentity(component) : null;
     if (opamp?.mode === "behavioral") continue;
-    const requested = opamp?.modelName ?? component.value.trim().split(/\s+/)[0] ?? "";
-    if (!requested) continue;
-    const relativeFile = normalize(component.ltModelFile.replace(/[\\/]+/g, sep));
-    if (
-      !relativeFile
-      || isAbsolute(relativeFile)
-      || relativeFile === ".."
-      || relativeFile.startsWith(`..${sep}`)
-    ) continue;
-    let registry = modelRegistryCache.get(relativeFile.toLowerCase());
-    if (registry === undefined) {
-      registry = null;
-      // Prefer authored path; if encrypted/missing, try same-stem .lib/.mod twin.
-      candidateLoop: for (const candidate of installedLibraryFileCandidates(relativeFile)) {
-        const normalizedCandidate = normalize(candidate.replace(/[\\/]+/g, sep));
-        for (const root of ltspiceLibRoots().flatMap((entry) => [join(entry, "sub"), entry])) {
-          const path = join(root, normalizedCandidate);
-          const rel = relative(root, path);
-          if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
-          const bytes = readFileSync(path);
-          if (isEncryptedModelBytes(bytes)) continue;
-          registry = parseUserModelLibraries([decodeSchematicText(bytes)]);
-          break candidateLoop;
-        }
-      }
-      modelRegistryCache.set(relativeFile.toLowerCase(), registry);
-    }
-    if (!registry) continue;
-    const block = resolveUserSubckt(registry, requested);
-    if (block) blocks.set(requested.toLowerCase(), block);
+    const key = component.ltModelFile.replace(/\\/g, "/").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    files.push(component.ltModelFile);
   }
-  return [...blocks.values()];
+  // Full library texts + nested .lib peers (AD8310 → UniversalOpAmp2/level2),
+  // matching importProjectAsc — not a single extracted .subckt body.
+  return attachedInstalledModelLibraryTexts(files, ltspiceLibRoots());
 }
 
 /** True when a token names an installed encrypted model with no plaintext twin. */
