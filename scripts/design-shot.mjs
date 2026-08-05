@@ -269,22 +269,30 @@ async function shootViewport(page, viewport, theme) {
   await page.waitForSelector(".stage .component", { timeout: STATE_TIMEOUT_MS });
   const selectedPowerMosfet = await page.evaluate(() => window.__TAU_DEV__.selectComponent("M1"));
   if (!selectedPowerMosfet) throw new Error("buck-converter PMOS M1 was not imported");
+  // Simulation model is shadcn ui/Select (Radix), not a native <select>.
   const modelPicker = page.getByRole("combobox", { name: "Simulation model" });
   await modelPicker.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
-  if (await modelPicker.inputValue() !== "RSR015P06") {
-    throw new Error("buck-converter PMOS did not open on its exact RSR015P06 model");
+  if ((await modelPicker.getAttribute("data-slot")) !== "select-trigger") {
+    throw new Error("Simulation model chooser is not ui/Select (expected data-slot=select-trigger)");
   }
-  const pickerOptions = await modelPicker.locator("option").allTextContents();
-  if (!pickerOptions.some((option) => option.includes("RSR015P06 · Tau exact models"))) {
-    throw new Error("exact Class-D PMOS is absent from the model chooser");
+  if (await page.locator("select[aria-label='Simulation model']").count()) {
+    throw new Error("native Simulation model <select> leaked back into the inspector");
   }
-  if (pickerOptions.some((option) => option.startsWith("QS6K1"))) {
+  const modelTriggerText = (await modelPicker.innerText()).replace(/\s+/g, " ").trim();
+  if (!modelTriggerText.includes("RSR015P06")) {
+    throw new Error(`buck-converter PMOS did not open on its exact RSR015P06 model (got "${modelTriggerText}")`);
+  }
+  await modelPicker.click();
+  await page.getByRole("option", { name: /RSR015P06 · Tau exact models/ }).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  if (await page.getByRole("option", { name: /^QS6K1/ }).count()) {
     throw new Error("N-channel QS6K1 was offered to a PMOS symbol");
   }
-  await modelPicker.selectOption("PMOS");
+  await page.getByRole("option", { name: /^PMOS\b/ }).click();
   await page.getByText(/Generic starter/).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
-  await modelPicker.selectOption("RSR015P06");
+  await modelPicker.click();
+  await page.getByRole("option", { name: /RSR015P06 · Tau exact models/ }).click();
   await page.getByText(/Ready · exact VDMOS model from Tau exact models/).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  await page.keyboard.press("Escape");
   if (await page.getByRole("textbox", { name: "Width (W)" }).count()) {
     throw new Error("VDMOS selection incorrectly exposes Level-1 W/L geometry");
   }
@@ -307,12 +315,21 @@ async function shootViewport(page, viewport, theme) {
   const subcircuitFileButton = page.locator(".explorer-panel .tree-file", { hasText: "tau-native-deadtime.asc" });
   await subcircuitFileButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await subcircuitFileButton.click();
+  await page.waitForSelector(".stage .component", { timeout: STATE_TIMEOUT_MS });
   const selectedSubcircuit = await page.evaluate(() => window.__TAU_DEV__.selectComponent("X1"));
   if (!selectedSubcircuit) throw new Error("native five-terminal subcircuit X1 was not imported");
+  // Subcircuit model is shadcn ui/Select (Radix), not a native <select>.
   const subcircuitPicker = page.getByRole("combobox", { name: "Subcircuit model" });
   await subcircuitPicker.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
-  if (await subcircuitPicker.inputValue() !== "TauDeadtimeDriver") {
-    throw new Error("native subcircuit did not resolve Tau's bundled dead-time driver");
+  if ((await subcircuitPicker.getAttribute("data-slot")) !== "select-trigger") {
+    throw new Error("Subcircuit model chooser is not ui/Select (expected data-slot=select-trigger)");
+  }
+  if (await page.locator("select[aria-label='Subcircuit model']").count()) {
+    throw new Error("native Subcircuit model <select> leaked back into the inspector");
+  }
+  const subTriggerText = (await subcircuitPicker.innerText()).replace(/\s+/g, " ").trim();
+  if (!subTriggerText.includes("TauDeadtimeDriver")) {
+    throw new Error(`native subcircuit did not resolve Tau's bundled dead-time driver (got "${subTriggerText}")`);
   }
   await page.getByText(/5 named terminals \(vcc, vee, pwm, gp, gn\)/).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   const deadtimeField = page.getByRole("textbox", { name: "Dead time" });

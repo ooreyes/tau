@@ -353,16 +353,22 @@ describe("ComponentInspector - semiconductor model chooser", () => {
 });
 
 describe("ComponentInspector - native subcircuit chooser", () => {
-  it("places the bundled Class-D driver with exact terminals and bounded named knobs", () => {
+  it("places the bundled Class-D driver with exact terminals and bounded named knobs", async () => {
     const selected = {
       id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
       value: "tau_passthrough", label: "X1",
     };
     useSchematic.setState({ components: [selected] });
     const { rerender } = render(<ComponentInspector selected={selected} />);
-    fireEvent.change(screen.getByRole("combobox", { name: "Subcircuit model" }), {
-      target: { value: "TauDeadtimeDriver" },
-    });
+    const chooser = screen.getByRole("combobox", { name: "Subcircuit model" });
+    expect(chooser.tagName).toBe("BUTTON");
+    expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
+    expect(document.querySelector("select[aria-label='Subcircuit model']")).toBeNull();
+
+    fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });
+    const driver = await screen.findByRole("option", { name: /TauDeadtimeDriver · 5 terminals/ });
+    fireEvent.pointerUp(driver, { button: 0, pointerId: 1, pointerType: "mouse" });
+    fireEvent.click(driver);
 
     expect(useSchematic.getState().components[0]).toMatchObject({
       value: "TauDeadtimeDriver",
@@ -387,7 +393,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     expect(useSchematic.getState().components[0].value).toBe("TauDeadtimeDriver dead=250n");
   });
 
-  it("shows a named model contract and edits declared parameters without a raw Value field", () => {
+  it("shows a named model contract and edits declared parameters without a raw Value field", async () => {
     const selected = {
       id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
       value: "deadtime DEAD=300n", label: "X1",
@@ -398,8 +404,11 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     });
 
     const { rerender } = render(<ComponentInspector selected={selected} />);
-    const chooser = screen.getByRole("combobox", { name: "Subcircuit model" }) as HTMLSelectElement;
-    expect(chooser.value).toBe("deadtime");
+    const chooser = screen.getByRole("combobox", { name: "Subcircuit model" });
+    expect(chooser.tagName).toBe("BUTTON");
+    expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
+    expect(chooser.textContent).toContain("deadtime");
+    expect(document.querySelector("select[aria-label='Subcircuit model']")).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("5 named terminals (vcc, vee, pwm, gp, gn)");
     expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
 
@@ -409,7 +418,11 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     expect(useSchematic.getState().components[0].value).toBe("deadtime dead=400n");
 
     rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
-    fireEvent.change(screen.getByRole("combobox", { name: "Subcircuit model" }), { target: { value: "tau_passthrough" } });
+    const nextChooser = screen.getByRole("combobox", { name: "Subcircuit model" });
+    fireEvent.pointerDown(nextChooser, { button: 0, pointerId: 1, pointerType: "mouse" });
+    const passthrough = await screen.findByRole("option", { name: /tau_passthrough · 2 terminals/ });
+    fireEvent.pointerUp(passthrough, { button: 0, pointerId: 1, pointerType: "mouse" });
+    fireEvent.click(passthrough);
     expect(useSchematic.getState().components[0]).toMatchObject({
       value: "tau_passthrough",
       pinOverride: [
@@ -428,6 +441,11 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     useSchematic.setState({ components: [selected] });
     render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
 
+    const chooser = screen.getByRole("combobox", { name: "Subcircuit model" });
+    expect(chooser.tagName).toBe("BUTTON");
+    expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
+    expect(chooser.textContent).toContain("vendor_driver");
+    expect(document.querySelector("select[aria-label='Subcircuit model']")).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("Run won't invent pins");
     fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
     expect(openLibraries).toHaveBeenCalledOnce();

@@ -1,16 +1,50 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:40 CDT**
+**Status: DONE - 2026-08-05 ~13:50 CDT**
 
-Unit: **min-window DoD** — Settings sheet viewport cap + editor toolbar
-horizontal scroll; `scripts/min-window-dod.sh` 12/12 at 900×600.
-§10 design-system DoD stays unchecked. SHIPPABLE? **NO**
+Unit: **§10 ShellPanels Subcircuit model → ui/Select** — native subckt
+model `<select>` onto shadcn `ui/Select` (Settings untouched). Updated
+`design-shot.mjs` Simulation+Subcircuit probes for Radix. AGENTS §10 stays
+UNCHECKED (min-window already ✅). SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+### 2026-08-05 — ShellPanels Subcircuit model → ui/Select (§10)
+
+**What I did**
+- Migrated inspector Subcircuit model from native `<select>` to shadcn
+  `ui/Select` with the same dense `property-select` / `--row-h` trigger
+  recipe as Simulation model / Waveform (Settings untouched). Unresolved
+  models stay visible as SelectItems.
+- Updated `design-shot.mjs` so Simulation model + Subcircuit model probes
+  use Radix combobox/option APIs (post-`83e56c3` native `inputValue` path
+  was stale).
+- Did **not** flip AGENTS §10 DoD box.
+
+**Files**
+- `apps/desktop/src/components/ShellPanels.tsx`
+- `apps/desktop/src/components/ShellPanels.test.tsx`
+- `scripts/design-shot.mjs`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- focused ShellPanels subcircuit chooser (3/3) + full ShellPanels suite 37/37
+- `pnpm -C apps/desktop typecheck` / `test` (gates before push)
+
+**Parity items**
+- §10 partial: Subcircuit model Select. Box stays ⬜. SHIPPABLE? NO
+
+**Next step**
+- Remaining native `<select>`s (sim setup / EngineeringInput units) or other
+  open DoD boxes. Never flip whole §10 on a partial.
+
+SHIPPABLE? **NO**
+
+
 
 ### 2026-08-05 — Min-window DoD proven (900×600)
 

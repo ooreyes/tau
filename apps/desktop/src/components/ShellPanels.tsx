@@ -1609,29 +1609,41 @@ export function ComponentInspector({
             <>
               <label className="property-field">
                 <span>Subcircuit model</span>
-                <select
-                  className="mono-num"
-                  aria-label="Subcircuit model"
-                  value={selectedSubcircuit?.name ?? subcircuitInstance?.name ?? ""}
-                  onFocus={() => {
-                    editKeyRef.current = null;
+                <Select
+                  value={(selectedSubcircuit?.name ?? subcircuitInstance?.name) || undefined}
+                  onOpenChange={(open) => {
+                    if (open) editKeyRef.current = null;
                   }}
-                  onChange={(event) => {
-                    const choice = availableSubcircuits.find((option) => option.name === event.currentTarget.value);
+                  onValueChange={(nextName) => {
+                    const choice = availableSubcircuits.find((option) => option.name === nextName);
                     if (!choice) return;
                     beginParamChange("subcircuit-model");
                     setSubcircuitModel(selected.id, choice.name, choice.ports);
                   }}
                 >
-                  {!selectedSubcircuit && subcircuitInstance?.name && (
-                    <option value={subcircuitInstance.name}>{subcircuitInstance.name} · missing</option>
-                  )}
-                  {availableSubcircuits.map((option) => (
-                    <option key={`${option.source}:${option.sourceLabel}:${option.name}`} value={option.name}>
-                      {option.name} · {option.ports.length} terminals · {option.sourceLabel}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    size="sm"
+                    className="property-select mono-num w-full max-w-[168px]"
+                    aria-label="Subcircuit model"
+                  >
+                    <SelectValue placeholder="Model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!selectedSubcircuit && subcircuitInstance?.name && (
+                      <SelectItem value={subcircuitInstance.name}>
+                        {subcircuitInstance.name} · missing
+                      </SelectItem>
+                    )}
+                    {availableSubcircuits.map((option) => (
+                      <SelectItem
+                        key={`${option.source}:${option.sourceLabel}:${option.name}`}
+                        value={option.name}
+                      >
+                        {option.name} · {option.ports.length} terminals · {option.sourceLabel}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </label>
               <p className="property-hint" role="status">
                 {selectedSubcircuit

@@ -2129,16 +2129,16 @@ popped to `#EDF1F6` / `#0068D6` (was `#F5F6F8` / `#0A66C2`); radius scale
 extended (`--r-2xs`/`--r-xs`/`--r-pill`) and raw chrome radii snapped; warning
 chrome stays quiet ochre (soft ≈0.05 — not danger-red for optional empties);
 settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model +
-IndependentSourceEditor Waveform type + semiconductor Simulation model native
-`<select>`s migrated onto shadcn `ui/Select` (Settings locked/untouched); unit
-proof in SimulationPanel/ShellPanels tests (combobox triggers, not native
-`<select>`). **Min-window DoD (separate AGENTS box) proven 2026-08-05** via
-`scripts/min-window-dod.sh` at 900×600 (12/12; Settings sheet viewport cap +
-scroll; editor toolbar horizontal scroll) — shots in
-`screenshots/min-window-dod/`. Remaining §10 debt that blocks an honest **§10
-design-system** DoD check:
+IndependentSourceEditor Waveform type + semiconductor Simulation model +
+Subcircuit model native `<select>`s migrated onto shadcn `ui/Select`
+(Settings locked/untouched); unit proof in SimulationPanel/ShellPanels tests
+(combobox triggers, not native `<select>`). **Min-window DoD (separate AGENTS
+box) proven 2026-08-05** via `scripts/min-window-dod.sh` at 900×600 (12/12;
+Settings sheet viewport cap + scroll; editor toolbar horizontal scroll) —
+shots in `screenshots/min-window-dod/`. Remaining §10 debt that blocks an
+honest **§10 design-system** DoD check:
 Resizable/Command/Toast primitives still deferred; other native `<select>`s
-(Simulation setup, EngineeringInput units, subckt model chooser, local-AI
+(Simulation setup, EngineeringInput units, local-AI
 settings) not yet on `ui/Select`; Assistant/local-AI
 settings surfaces still mid-migration; Cupertino icon chrome still settling;
 no proof of zero ad-hoc drift across every panel at both themes.
@@ -2350,10 +2350,14 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   polyfill). **Semiconductor Simulation model `ui/Select` (2026-08-05):**
   MOSFET/BJT/diode Simulation model chooser uses the same dense trigger;
   ShellPanels tests assert `data-slot=select-trigger`, open→pick RSR015P06,
-  and unresolved IRF540 remains visible (Settings untouched). Left for a
-  later pass: other native `<select>`s (sim setup, eng-input units, subckt
-  chooser), deferred Resizable/Command/Toast, and min-window screenshot
-  proof for this slice. →
+  and unresolved IRF540 remains visible (Settings untouched). **Subcircuit
+  model `ui/Select` (2026-08-05 follow-up):** inspector Subcircuit model uses
+  the same `property-select` dense trigger; ShellPanels tests open→pick
+  TauDeadtimeDriver / tau_passthrough and keep unresolved `vendor_driver`
+  visible; `design-shot.mjs` model+subcircuit probes updated for Radix
+  (Settings untouched). Left for a later pass: other native `<select>`s
+  (sim setup, eng-input units), deferred Resizable/Command/Toast. AGENTS §10
+  stays UNCHECKED. →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
   same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`
