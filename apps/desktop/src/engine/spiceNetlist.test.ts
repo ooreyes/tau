@@ -452,6 +452,68 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/\.tran [\d.e-]+ 0\.005 uic/);
   });
 
+  it("emits domain-matched .meas and .four into the native deck (P1.6)", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const directives = [
+      ".meas tran peak MAX V(out)",
+      ".meas ac gain FIND V(out) AT=1k",
+      ".measure Efficiency PARAM PL/PS",
+      ".four 1k V(out)",
+      ".step param X list 1 2",
+    ];
+    const tran = buildSpiceDeck(
+      { components, wires, directives },
+      { kind: "tran", stopTime: 0.001, steps: 100 },
+    );
+    expect(tran.netlist).toContain(".meas tran peak MAX V(out)");
+    expect(tran.netlist).toContain(".measure Efficiency PARAM PL/PS");
+    expect(tran.netlist).toContain(".four 1k V(out)");
+    expect(tran.netlist).not.toContain(".meas ac gain");
+    expect(tran.netlist).not.toContain(".step");
+    // Cards sit after the analysis line and before .end.
+    const tranIdx = tran.netlist.indexOf(".tran ");
+    const measIdx = tran.netlist.indexOf(".meas tran peak");
+    const endIdx = tran.netlist.lastIndexOf(".end");
+    expect(tranIdx).toBeGreaterThan(-1);
+    expect(measIdx).toBeGreaterThan(tranIdx);
+    expect(endIdx).toBeGreaterThan(measIdx);
+
+    const ac = buildSpiceDeck(
+      { components, wires, directives },
+      { kind: "ac", startHz: 10, stopHz: 1e6, pointsPerDecade: 10 },
+    );
+    expect(ac.netlist).toContain(".meas ac gain FIND V(out) AT=1k");
+    expect(ac.netlist).not.toContain(".meas tran peak");
+    expect(ac.netlist).not.toContain(".four");
+  });
+
+  it("resolves {param} braces inside emitted .meas lines", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck(
+      {
+        components,
+        wires,
+        directives: [".meas tran vat FIND V(out) AT={tprobe}"],
+        params: { scope: { tprobe: 0.001 }, funcs: {} },
+      },
+      { kind: "tran", stopTime: 0.002, steps: 100 },
+    );
+    expect(deck.netlist).toMatch(/\.meas tran vat FIND V\(out\) AT=0\.001\b/);
+    expect(deck.netlist).not.toContain("{tprobe}");
+  });
+
   it("translates LTspice .ic inductor current assignments to ngspice instance IC", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

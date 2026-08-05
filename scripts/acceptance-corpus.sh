@@ -5,13 +5,15 @@
 # (~/Downloads/LTspice_export and ~/Documents/LTspice),
 # builds an `.op` deck for each, runs it through Tau's isolated native worker
 # and bundled ngspice/code models, and reports
-# warning-clean / deck-built / op-converged counts. Fails if any count drops
-# below the measured floors (warning-clean ≥80; deck-built / op-converged ≥79
-# of the canonical 82). Three honest deck refusals: NIGBT, Chan-core
-# NonLinearTransformer, and unresolved LT1184F (Royer.asc) via the same
-# unresolvedSubckts guard the app uses. Unsupported devices that the deck
-# builder refuses are reported as explicit refusals rather than silent
-# approximations.
+# warning-clean / deck-built / op-converged counts plus CAPABILITY buckets.
+# Fails if any floor drops: warning-clean ≥80; deck-built / op-converged ≥79
+# of the canonical 82; CAPABILITY success ≥79, deck-guard-leak 0, failure 0,
+# and success + capability-refusal === total (refusal-only remainder).
+# Three honest deck refusals: NIGBT, Chan-core NonLinearTransformer, and
+# unresolved LT1184F (Royer.asc) via the same unresolvedSubckts guard the
+# app uses. Do not weaken those refusals to inflate deck/op toward a fake 80.
+# Unsupported devices that the deck builder refuses are reported as explicit
+# refusals rather than silent approximations.
 #
 # Usage:
 #   scripts/acceptance-corpus.sh                 # all discovered user files

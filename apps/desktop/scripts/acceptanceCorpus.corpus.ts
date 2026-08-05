@@ -383,10 +383,12 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       // 81 warning-clean / 79 deck-built / 79 op-converged. Three capability
       // refusals on the canonical subset: NIGBT (IGBT.asc), Chan-core
       // NonLinearTransformer, and encrypted LT1184F via unresolvedSubckts
-      // (Royer.asc). Full-corpus hard-failure === 0 is intentionally NOT
-      // asserted here (P0.4): that ceiling was prefix-satisfiable and hid
-      // thousands of deck-guard leaks / real failures on the recursive tree.
-      // Capability buckets are printed above; measure before claiming done.
+      // (Royer.asc). Honest deck/op ceiling on this 82-set is 79 — DoD no
+      // longer asks for fake ≥80/82. Full-corpus hard-failure === 0 is
+      // intentionally NOT asserted here (P0.4): that ceiling was
+      // prefix-satisfiable and hid thousands of deck-guard leaks / real
+      // failures on the recursive tree. Capability buckets are printed above
+      // and soft-asserted below; measure before claiming done.
       // `expect.soft` is deliberate: a missing input must not mask a separate
       // warning/deck/convergence regression in the same run's report.
       if (EXTRA_ROOTS.length === 0 && !CORPUS_MATCH) {
@@ -397,9 +399,21 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
         if (!skipNgspice) {
           expect.soft(canonicalSummary.opConverged, "canonical operating-point floor").toBeGreaterThanOrEqual(79);
           expect.soft(
+            canonicalCapability.success,
+            "canonical capability success floor (honest 79 ceiling)",
+          ).toBeGreaterThanOrEqual(79);
+          expect.soft(
             canonicalCapability.deck_guard_leak,
             "canonical subset must not leak missing subckts/models into ngspice",
           ).toBe(0);
+          expect.soft(
+            canonicalCapability.failure,
+            "canonical subset must have zero hard failures (refusals only)",
+          ).toBe(0);
+          expect.soft(
+            canonicalCapability.success + canonicalCapability.capability_refusal,
+            "canonical remainder must be capability-refusal only",
+          ).toBe(canonicalSummary.total);
         }
       }
     } finally {

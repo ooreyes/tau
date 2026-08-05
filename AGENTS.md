@@ -120,11 +120,17 @@ account and sign/notarize/ship.
       warning‑clean count / deck‑builds count / op‑point‑converges count.
       A number in a doc that nobody can reproduce with one command is not a
       fact; it is a claim.
-- [ ] **Acceptance corpus ≥ 80/82** per that script's own output (not a
-      hand‑typed number — the script's stdout is the source of truth).
-      Canonical re-check remains **82 imported / 81 warning-clean / 79
-      deck-built / 79 op-converged** (three honest capability refusals:
-      NIGBT, Chan-core inductor, Royer `lt1184f` unresolved subckt).
+- [x] **Acceptance corpus capability floor** per that script's own output
+      (not a hand‑typed number — the script's stdout is the source of
+      truth). Canonical subset must prove **82 imported / ≥80
+      warning-clean / ≥79 deck-built / ≥79 op-converged** and CAPABILITY
+      **success ≥79 · capability-refusal covering the remainder ·
+      deck-guard-leak 0 · failure 0**. Proven 2026-08-04 at **82/81/79/79**
+      with CAPABILITY **79/3/0/0**. The three permanent honest refusals on
+      this 82-set are NIGBT, Chan-core inductor, and Royer `lt1184f`
+      unresolved subckt — do **not** weaken those refusals to inflate
+      deck/op toward a fake 80. The old "≥80/82" deck/op wording was
+      wrong once fail-closed Chan + unresolvedSubckts landed.
 - [x] **`class-d_starter.asc`** opens unmodified (with sibling `deadtime`
       hierarchy), runs `.tran`, and its Efficiency `.meas` matches LTspice
       within 2%. Proven 2026-08-04 by `scripts/dod-parity.sh` /

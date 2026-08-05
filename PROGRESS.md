@@ -9,6 +9,29 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 20:54 CDT**
+
+Unit: Honest DoD corpus metric reframe + P1.6 `.meas`/`.four` deck
+emission. AGENTS DoD no longer requires fake ≥80/82 deck/op; checked
+box is success ≥79 + refusal-only remainder + leak/failure 0 (script
+stdout). Corpus soft asserts encode those capability floors.
+`buildSpiceDeck` now emits domain-matched `.meas`/`.measure`/`.four`
+after the analysis card (sanitizer already allowlisted; previously
+never emitted). UI still uses TS runners until native results are
+parsed. `.step` still TS re-run. Canonical remains 82/81/79/79,
+CAPABILITY 79/3/0/0. Shippable? NO.
+
+What landed this unit:
+
+- AGENTS.md / FEATURE_PARITY / acceptance-corpus.sh DoD honesty
+- Capability soft asserts in `acceptanceCorpus.corpus.ts`
+- `measFourLinesFromDirectives` + 2 spiceNetlist tests
+
+Next unit: P1.6 native `.step` emission (or parse native `.meas`/
+`.four` into UI); authored-analysis differential parity.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 20:50 CDT**
 
 Unit: NEW BAR P1.5 nested confined `.include`/`.lib` resolution.

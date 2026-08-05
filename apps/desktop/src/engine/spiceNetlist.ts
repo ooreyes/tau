@@ -798,7 +798,14 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   if (savedVectors.length > 0) {
     lines.push(...saveCardLines(savedVectors));
   }
-  lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
+  // Analysis card first, then authored `.meas` / `.four` (P1.6). The Rust
+  // sanitizer already allowlists these cards; previously Tau reimplemented
+  // them only in TypeScript and never emitted them, so ngspice never saw
+  // the user's measurements or Fourier request. Domain-filtered so an AC
+  // deck does not carry `.meas tran …` (and vice versa).
+  lines.push(analysisLine(analysis, hasIc || hasInstanceIc));
+  lines.push(...measFourLinesFromDirectives(flatDirectives, analysis.kind, paramScope));
+  lines.push(".end");
 
   return {
     circuit,
@@ -1732,6 +1739,40 @@ function icLinesFromDirectives(
     if (voltageAssignments.length > 0) lines.push(`.ic ${voltageAssignments.join(" ")}`);
   }
   return { lines, hasIc, inductorCurrents, warnings };
+}
+
+/**
+ * Authoritative `.meas` / `.measure` / `.four` cards for the active analysis
+ * domain (NEW BAR P1.6). Typed `.meas ac|dc|noise|op|tf` only emit when the
+ * deck's analysis matches; untyped `.meas` defaults to `tran` (LTspice);
+ * `.four` only rides with transient. Brace params are resolved app-side
+ * because the deck still does not carry raw `.param` lines for ngspice.
+ */
+export function measFourLinesFromDirectives(
+  directives: ReadonlyArray<string>,
+  analysisKind: SpiceAnalysis["kind"],
+  params: ParamScope = EMPTY_SCOPE,
+): string[] {
+  const MEAS_DOMAINS = new Set(["tran", "ac", "dc", "op", "tf", "noise"]);
+  const out: string[] = [];
+  for (const directive of directives) {
+    const trimmed = directive.trim();
+    if (!trimmed) continue;
+    const bare = trimmed.replace(/^[.!]+/, "");
+    if (/^four\b/i.test(bare)) {
+      if (analysisKind !== "tran") continue;
+      out.push(substituteKnownBraces(`.${bare}`, params).replace(/µ/g, "u"));
+      continue;
+    }
+    const meas = /^(meas(?:ure)?)\b(.*)$/i.exec(bare);
+    if (!meas) continue;
+    const rest = meas[2].trim();
+    const first = rest.split(/\s+/)[0]?.toLowerCase() ?? "";
+    const domain = MEAS_DOMAINS.has(first) ? first : "tran";
+    if (domain !== analysisKind) continue;
+    out.push(substituteKnownBraces(`.${meas[1].toLowerCase()}${meas[2]}`, params).replace(/µ/g, "u"));
+  }
+  return out;
 }
 
 function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): string {
