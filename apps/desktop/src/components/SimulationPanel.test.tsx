@@ -1490,6 +1490,71 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
     expect(screen.getByRole("button", { name: "Hide DC step R=2" }).getAttribute("aria-pressed")).toBe("true");
     expect(container.querySelectorAll(".scope-trace").length).toBe(1);
   });
+
+  it("Apply Y locks AC step-family axis; Autoscale Y restores autorange", () => {
+    const acMember = (label: string, magDb: number[]) => ({
+      label,
+      value: 1,
+      result: {
+        ok: true as const,
+        freqs: [10, 100, 1000],
+        traces: [{ id: "n1", label: "V(out)", magDb, phaseDeg: [0, -45, -90] }],
+        warnings: [],
+      },
+    });
+    render(
+      <AcFamilyPlot
+        family={{
+          ok: true,
+          spec: { kind: "param", name: "R", values: [1, 2] },
+          members: [acMember("R=1", [0, -3, -20]), acMember("R=2", [0, -6, -40])],
+          warnings: [],
+        }}
+      />,
+    );
+    expect(screen.getByLabelText("AC step family Y limits")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("AC step family Y min"), { target: { value: "-40" } });
+    fireEvent.change(screen.getByLabelText("AC step family Y max"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply AC step family Y limits" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const autoscale = screen.getByRole("button", { name: "Autoscale AC step family Y" });
+    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(autoscale);
+    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("Apply Y locks DC step-family axis; Autoscale Y restores autorange", () => {
+    const dcMember = (label: string, voltages: number[]) => ({
+      label,
+      value: 1,
+      result: {
+        ok: true as const,
+        source: "V1",
+        sweep: [0, 1, 2],
+        nets: [{ id: "n1", label: "V(out)", voltages, ground: false }],
+        warnings: [],
+      },
+    });
+    render(
+      <DcFamilyPlot
+        family={{
+          ok: true,
+          spec: { kind: "param", name: "R", values: [1, 2] },
+          members: [dcMember("R=1", [0, 0.5, 1]), dcMember("R=2", [0, 0.25, 0.5])],
+          warnings: [],
+        }}
+      />,
+    );
+    expect(screen.getByLabelText("DC step family Y limits")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("DC step family Y min"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("DC step family Y max"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply DC step family Y limits" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const autoscale = screen.getByRole("button", { name: "Autoscale DC step family Y" });
+    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(autoscale);
+    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+  });
 });
 
 describe("SimulationPanel - trace color choice and cursor seek", () => {

@@ -1,17 +1,42 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~09:40 CDT**
+**Status: DONE - 2026-08-05 09:50 CDT**
 
-Unit: EveryCircuit library — **polarized capacitor** + **logic constant**
-(honest C / DC-V) + scope cursor → schematic `readoutTime`.
-Worktree `Tau-wt-ec-lib` rebased onto step-family tip. Not full EC parity.
-SHIPPABLE? **NO**
-
+Unit: AC/DC step-family manual Y limits (waveform DoD).
+Worktree `Tau-wt-wave-acdc-step-ylim` on tip `96b8ba1`. Left EveryCircuit
+library fills 2 / Settings / Educational / stash@{0} alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+
+---
+
+
+
+### 2026-08-05 — AC/DC step-family manual Y limits (§waveform DoD)
+
+**What I did**
+- AcFamilyPlot / DcFamilyPlot Ymin/Ymax + Apply Y / Autoscale Y via
+  `parseManualYLimits` / `applyManualYToDomain`. Signal/expression change
+  clears manual. Did not touch readoutTime / current-mode / palette.
+
+**Files**
+- `components/SimulationPanel.tsx` (AcFamilyPlot / DcFamilyPlot)
+- `components/SimulationPanel.test.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + AC/DC step Y tests; full suite before push
+
+**Parity items**
+- §waveform DoD: AC/DC step-family Y limits. NEXT: non-wall ND / polish.
+
+**Next step**
+- Non-wall ND leftovers or remaining waveform polish; never Chan/NIGBT/FRA.
+
+SHIPPABLE? **NO**
 
 ---
 

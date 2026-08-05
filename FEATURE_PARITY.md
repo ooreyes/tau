@@ -1334,7 +1334,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   limits; yScale flip clears manual. **FFT magnitude manual Y limits landed**
   (2026-08-05): FftView Ymin/Ymax + Apply Y / Autoscale Y; signal/window change
   clears manual. **Step-family manual Y limits landed** (2026-08-05): StepPlot
-  Ymin/Ymax + Apply Y / Autoscale Y.
+  Ymin/Ymax + Apply Y / Autoscale Y. **AC/DC step-family manual Y limits landed**
+  (2026-08-05): AcFamilyPlot / DcFamilyPlot Apply Y / Autoscale Y.
 - ✅ **Per-component simulator telemetry (§11 D10, 2026-07-10):** every named
   component receives a selectable row with voltage across, current through,
   instantaneous power, sparkline, and signal class. Voltage polarity follows
@@ -1598,7 +1599,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   multi-pane cards landed** (2026-08-05): AcPlot one-trace-per-mag-card +
   shared phase pane. **Step-family manual Y limits landed** (2026-08-05):
   StepPlot Ymin/Ymax + Apply Y / Autoscale Y; signal/expression change clears
-  manual. **NEXT:** AC/DC step-family Y limits / non-wall ND.
+  manual. **AC/DC step-family manual Y limits landed** (2026-08-05):
+  AcFamilyPlot / DcFamilyPlot Ymin/Ymax + Apply Y / Autoscale Y. **NEXT:**
+  non-wall ND / remaining waveform polish.
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;

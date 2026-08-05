@@ -6191,6 +6191,10 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
   const [cf2, setCf2] = useState(0.75);
   /** Legend click hides a step member; never allow hiding the last visible curve. */
   const [hiddenLabels, setHiddenLabels] = useState<string[]>([]);
+  const [yMinDraft, setYMinDraft] = useState("");
+  const [yMaxDraft, setYMaxDraft] = useState("");
+  const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
+  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   const probeOverlay = useMemo(() => acFamilyOverlaySeries(family), [family]);
   const exprOverlay = useMemo(() => {
     if (!activeExpr) return null;
@@ -6246,6 +6250,22 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
     const xMax = fHi > fLo ? fHi : fLo * 10;
     return { min, max, xMin: fLo, xMax, xScale: "log" as const };
   }, [visibleSeries]);
+
+  const framedPlot = useMemo(() => {
+    if (!plot) return null;
+    const domain = applyManualYToDomain(
+      { xMin: plot.xMin, xMax: plot.xMax, yMin: plot.min, yMax: plot.max },
+      manualY,
+    );
+    return { ...plot, min: domain.yMin, max: domain.yMax };
+  }, [plot, manualY]);
+
+  useEffect(() => {
+    setManualY(null);
+    setYLimitsError(null);
+    setYMinDraft("");
+    setYMaxDraft("");
+  }, [activeExpr, overlay?.signal]);
 
   const toggleAcStepMember = (label: string) => {
     setHiddenLabels((prev) => {
@@ -6317,7 +6337,7 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
       </div>
     );
   }
-  if (!overlay || !plot) return null;
+  if (!overlay || !plot || !framedPlot) return null;
 
   const exportAcStepPng = async () => {
     const svg = svgRef.current;
@@ -6350,11 +6370,11 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
             width={PLOT_WIDTH}
             height={PLOT_HEIGHT}
             pad={PLOT_PAD}
-            xMin={plot.xMin}
-            xMax={plot.xMax}
-            yMin={plot.min}
-            yMax={plot.max}
-            xScale={plot.xScale}
+            xMin={framedPlot.xMin}
+            xMax={framedPlot.xMax}
+            yMin={framedPlot.min}
+            yMax={framedPlot.max}
+            xScale={framedPlot.xScale}
             xUnit="Hz"
             yUnit="dB"
             targetXTicks={targetXTicks}
@@ -6367,13 +6387,13 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
                 key={s.label}
                 className="scope-trace"
                 stroke={STEP_COLORS[i % STEP_COLORS.length]}
-                d={bodeValuePath(s.magDb, s.freqs, plot)}
+                d={bodeValuePath(s.magDb, s.freqs, framedPlot)}
               />
             );
           })}
           {acStepCursors &&
             [acStepCursors.x1, acStepCursors.x2].map((f, i) => {
-              const x = acStepCursorPixelX(f, plot.xMin, plot.xMax);
+              const x = acStepCursorPixelX(f, framedPlot.xMin, framedPlot.xMax);
               if (x === null) return null;
               return (
                 <g key={`asc${i}`} className="plot-cursor">
@@ -6464,6 +6484,73 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
           Export PNG
         </Button>
       </div>
+      <div className="meter-row analysis-meter" aria-label="AC step family Y limits">
+        <label className="axis-limit-field">
+          Ymin
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMinDraft}
+            aria-label="AC step family Y min"
+            placeholder={String(plot.min)}
+            onChange={(e) => {
+              setYMinDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <label className="axis-limit-field">
+          Ymax
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMaxDraft}
+            aria-label="AC step family Y max"
+            placeholder={String(plot.max)}
+            onChange={(e) => {
+              setYMaxDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label="Apply AC step family Y limits"
+          onClick={() => {
+            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
+            if (!parsed.ok) {
+              setYLimitsError(parsed.error);
+              return;
+            }
+            setManualY(parsed.limits);
+            setYLimitsError(null);
+          }}
+        >
+          Apply Y
+        </Button>
+        <Button
+          size="sm"
+          variant={manualY ? "default" : "outline"}
+          aria-label="Autoscale AC step family Y"
+          aria-pressed={!manualY}
+          onClick={() => {
+            setManualY(null);
+            setYLimitsError(null);
+            setYMinDraft("");
+            setYMaxDraft("");
+          }}
+        >
+          Autoscale Y
+        </Button>
+      </div>
+      {yLimitsError && (
+        <div className="expr-error" role="alert">
+          {yLimitsError}
+        </div>
+      )}
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>
@@ -6533,6 +6620,10 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
   const [cf2, setCf2] = useState(0.75);
   /** Legend click hides a step member; never allow hiding the last visible curve. */
   const [hiddenLabels, setHiddenLabels] = useState<string[]>([]);
+  const [yMinDraft, setYMinDraft] = useState("");
+  const [yMaxDraft, setYMaxDraft] = useState("");
+  const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
+  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   const probeOverlay = useMemo(() => dcFamilyOverlaySeries(family), [family]);
   const exprOverlay = useMemo(() => {
     if (!activeExpr) return null;
@@ -6583,6 +6674,22 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
     }
     return { vMin, vMax, xMin, xMax };
   }, [visibleSeries]);
+
+  const framedPlot = useMemo(() => {
+    if (!plot) return null;
+    const domain = applyManualYToDomain(
+      { xMin: plot.xMin, xMax: plot.xMax, yMin: plot.vMin, yMax: plot.vMax },
+      manualY,
+    );
+    return { ...plot, vMin: domain.yMin, vMax: domain.yMax };
+  }, [plot, manualY]);
+
+  useEffect(() => {
+    setManualY(null);
+    setYLimitsError(null);
+    setYMinDraft("");
+    setYMaxDraft("");
+  }, [activeExpr, overlay?.signal]);
 
   const toggleDcStepMember = (label: string) => {
     setHiddenLabels((prev) => {
@@ -6653,7 +6760,7 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
       </div>
     );
   }
-  if (!overlay || !plot) return null;
+  if (!overlay || !plot || !framedPlot) return null;
 
   const exportDcStepPng = async () => {
     const svg = svgRef.current;
@@ -6686,10 +6793,10 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
             width={PLOT_WIDTH}
             height={PLOT_HEIGHT}
             pad={PLOT_PAD}
-            xMin={plot.xMin}
-            xMax={plot.xMax}
-            yMin={plot.vMin}
-            yMax={plot.vMax}
+            xMin={framedPlot.xMin}
+            xMax={framedPlot.xMax}
+            yMin={framedPlot.vMin}
+            yMax={framedPlot.vMax}
             yUnit="V"
             targetXTicks={targetXTicks}
             targetYTicks={targetYTicks}
@@ -6701,13 +6808,13 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
                 key={s.label}
                 className="scope-trace"
                 stroke={STEP_COLORS[i % STEP_COLORS.length]}
-                d={dcPath(s.voltages, s.sweep, plot)}
+                d={dcPath(s.voltages, s.sweep, framedPlot)}
               />
             );
           })}
           {dcStepCursors &&
             [dcStepCursors.x1, dcStepCursors.x2].map((sx, i) => {
-              const x = dcStepCursorPixelX(sx, plot.xMin, plot.xMax);
+              const x = dcStepCursorPixelX(sx, framedPlot.xMin, framedPlot.xMax);
               if (x === null) return null;
               return (
                 <g key={`dsc${i}`} className="plot-cursor">
@@ -6798,6 +6905,73 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
           Export PNG
         </Button>
       </div>
+      <div className="meter-row analysis-meter" aria-label="DC step family Y limits">
+        <label className="axis-limit-field">
+          Ymin
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMinDraft}
+            aria-label="DC step family Y min"
+            placeholder={String(plot.vMin)}
+            onChange={(e) => {
+              setYMinDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <label className="axis-limit-field">
+          Ymax
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMaxDraft}
+            aria-label="DC step family Y max"
+            placeholder={String(plot.vMax)}
+            onChange={(e) => {
+              setYMaxDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label="Apply DC step family Y limits"
+          onClick={() => {
+            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
+            if (!parsed.ok) {
+              setYLimitsError(parsed.error);
+              return;
+            }
+            setManualY(parsed.limits);
+            setYLimitsError(null);
+          }}
+        >
+          Apply Y
+        </Button>
+        <Button
+          size="sm"
+          variant={manualY ? "default" : "outline"}
+          aria-label="Autoscale DC step family Y"
+          aria-pressed={!manualY}
+          onClick={() => {
+            setManualY(null);
+            setYLimitsError(null);
+            setYMinDraft("");
+            setYMaxDraft("");
+          }}
+        >
+          Autoscale Y
+        </Button>
+      </div>
+      {yLimitsError && (
+        <div className="expr-error" role="alert">
+          {yLimitsError}
+        </div>
+      )}
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>
