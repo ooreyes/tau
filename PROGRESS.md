@@ -2,10 +2,16 @@
 
 **Status: DONE - 2026-08-05 ~13:30 CDT**
 
+<<<<<<< HEAD
 Unit: **Product gates — versioned CLI/API** — `tau.cli.v1` diagnose
 envelope (import → validate → deck) with machine-readable diagnostics +
 `scripts/tau-cli.mjs`. Product-gates DoD box stays ⬜ (learning path still
 open). SHIPPABLE? **NO**
+=======
+Unit: **Educational PowerAmp A=0.2..0.7 .tran → pass=107** — TIP sibling
+`.lib` full `.step A` beyond A=0.1 (after astable period-meas pass=106).
+DoD broad box stays open. SHIPPABLE? **NO**
+>>>>>>> 602f377 (auto: Educational PowerAmp A=0.2..0.7 .tran → pass=107 (§DoD))
 
 **SHIPPABLE?** **NO**
 
@@ -13,6 +19,7 @@ open). SHIPPABLE? **NO**
 
 ---
 
+<<<<<<< HEAD
 ### 2026-08-05 — Versioned CLI/API (product-gates partial)
 
 **What I did**
@@ -47,6 +54,43 @@ open). SHIPPABLE? **NO**
 SHIPPABLE? **NO**
 
 ---
+=======
+### 2026-08-05 — PowerAmp A=0.2..0.7 TRAN → pass=107 (§DoD)
+
+**What I did**
+- Educational `PAsystem/PowerAmp.asc` authored `.tran 5m` + `.step param A`:
+  added multi-member cell for **A=0.2..0.7** (strip `.step`/`.four`; bake each
+  `.param A=`) on the same TIP121/TIP127 Prefix-X + sibling `.lib` path as
+  A=0.1. Speaker nets nRms≈0.0004–0.0006 @ 5%/15%. Tip had astable as
+  pass=106 → this cell is **pass=107**.
+- Probed and left deferred: SoftDiode Vp>0, TLINE-inv, ISO7637, Draft10 UOA2
+  same-deck, NE555 Output phase, Chan NonLinearTransformer, Resources
+  `.machine`/sinh hollow, LT1001 walls. Astable continuous phase still deferred.
+- Never Chan/NIGBT/FRA. DoD broad box stays open. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2942 passed / 8 skipped
+- `scripts/differential-parity.sh` → SUMMARY pass=107 sibling=5 gap=0
+  (DoD box stays open until broad authored-analysis matrix is green)
+
+**Parity items**
+- Differential 🟡 **pass=107 · sibling=5 · gap=0**; DoD broad box unchecked.
+  SHIPPABLE? **NO**
+
+**Next step**
+- Educational leftovers (Fc / ISO7637 spike / NE555 phase / LT1001 walls /
+  Draft10 / Chan / `.machine`); never SoftDiode Vp>0 / TLINE-inv fakes.
+  SHIPPABLE? **NO**
+
+SHIPPABLE? **NO**
+
+
+>>>>>>> 602f377 (auto: Educational PowerAmp A=0.2..0.7 .tran → pass=107 (§DoD))
 
 ### 2026-08-05 — EngineeringInput SI prefix → ui/Select (§10)
 

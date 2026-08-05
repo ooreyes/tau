@@ -217,7 +217,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=106 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=107 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -301,8 +301,8 @@ account and sign/notarize/ship.
       Educational/SoftDiodeRecovery.asc authored `.tran` (`.model X D(tt/Vp/Cjo)`;
       `.step Vp` expanded Vp=0; v(n001) nRms≈0.0026; Vp>0 soft-recovery deferred) +
       Educational/PAsystem/PowerAmp.asc authored `.tran` (TIP121/TIP127 Prefix-X
-      + sibling `.lib`; `.step A` expanded A=0.1; speaker nets nRms≈0.0003;
-      higher-A deferred) +
+      + sibling `.lib`; `.step A` expanded A=0.1 + A=0.2..0.7; speaker nets
+      nRms≈0.0003–0.0006) +
       Educational/astable.asc authored `.tran` (2N3904 multivibrator; period via
       `.meas` TRIG/TARG TD=20m on Q1 collector; relErr≈0.25%; continuous phase
       deferred).
@@ -313,7 +313,8 @@ account and sign/notarize/ship.
       Laplace not landed. SoftDiodeRecovery Vp>0 still deferred. wavein (wavefile=)
       deferred. ISO7637 spike still misses. Educational/IGBT.asc NIGBT refuse (≠ IGBTeq).
       dimmer gate/near-cutoff still deferred. Resources sinh / divide2 / inverter deferred
-      (log-domain / `.machine`). Resources mextram deferred (no authored analysis).
+      (log-domain / `.machine` hollow). Resources mextram deferred (no authored analysis).
+      NonLinearTransformer Chan refuse. NE555 Output/Dischrg phase miss.
       Harness-slice gap closed; broad topology/device matrix still open —
       DoD box stays unchecked.
 - [x] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
