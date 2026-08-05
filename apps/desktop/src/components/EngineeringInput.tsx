@@ -6,8 +6,16 @@ import {
   isEngineeringMantissa,
   isEngineeringMantissaDraft,
   splitEngineeringValue,
+  type EngineeringPrefix,
 } from "../schematic/engineering";
 import { parseQuantity } from "../simulation/quantity";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface EngineeringInputProps {
   value: string;
@@ -26,6 +34,21 @@ interface EngineeringInputProps {
   allowEmpty?: boolean;
 }
 
+/** Radix SelectItem forbids value=""; map the base (no-prefix) slot. */
+const BASE_PREFIX_VALUE = "__base__";
+
+function prefixSelectValue(prefix: EngineeringPrefix): string {
+  return prefix === "" ? BASE_PREFIX_VALUE : prefix;
+}
+
+function prefixFromSelectValue(value: string): EngineeringPrefix {
+  return (value === BASE_PREFIX_VALUE ? "" : value) as EngineeringPrefix;
+}
+
+function prefixOptionLabel(prefix: (typeof ENGINEERING_PREFIXES)[number], unit: string): string {
+  return prefix.label ? `${prefix.label}${unit}` : unit;
+}
+
 /** Numeric mantissa plus explicit SI-prefix picker for SPICE-like values. */
 export function EngineeringInput({
   value,
@@ -39,8 +62,10 @@ export function EngineeringInput({
   allowEmpty = false,
 }: EngineeringInputProps) {
   const [parts, setParts] = useState(() => splitEngineeringValue(value, unit));
+  const [prefixOpen, setPrefixOpen] = useState(false);
   const focused = useRef(false);
   const changeStarted = useRef(false);
+  const prefixOpenRef = useRef(false);
   const validParts = (candidate: typeof parts) => {
     if (!isEngineeringMantissa(candidate.mantissa)) return false;
     let numeric: number;
@@ -80,7 +105,11 @@ export function EngineeringInput({
   };
 
   const onBlur = (event: FocusEvent<HTMLDivElement>) => {
-    if (event.currentTarget.contains(event.relatedTarget)) return;
+    const next = event.relatedTarget as Node | null;
+    if (event.currentTarget.contains(next)) return;
+    // Radix SelectContent portals outside `.eng-input`; ignore focus moves into it.
+    if (next && (next as Element).closest?.('[data-slot="select-content"]')) return;
+    if (prefixOpenRef.current) return;
     focused.current = false;
     changeStarted.current = false;
     if (!validParts(parts)) {
@@ -112,21 +141,37 @@ export function EngineeringInput({
         }}
       />
       {unit && (
-        <select
-          aria-label={`${label} SI prefix`}
-          value={parts.prefix}
-          onChange={(event) => {
-            const next = { ...parts, prefix: event.currentTarget.value as typeof parts.prefix };
+        <Select
+          value={prefixSelectValue(parts.prefix)}
+          open={prefixOpen}
+          onOpenChange={(open) => {
+            prefixOpenRef.current = open;
+            setPrefixOpen(open);
+          }}
+          onValueChange={(nextValue) => {
+            const next = { ...parts, prefix: prefixFromSelectValue(nextValue) };
             setParts(next);
             commit(next);
           }}
         >
-          {ENGINEERING_PREFIXES.map((prefix) => (
-            <option key={prefix.value || "base"} value={prefix.value}>
-              {prefix.label ? `${prefix.label}${unit}` : unit}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            size="sm"
+            className="eng-input-prefix mono-num"
+            aria-label={`${label} SI prefix`}
+          >
+            <SelectValue placeholder={unit} />
+          </SelectTrigger>
+          <SelectContent>
+            {ENGINEERING_PREFIXES.map((prefix) => (
+              <SelectItem
+                key={prefix.value || "base"}
+                value={prefixSelectValue(prefix.value)}
+              >
+                {prefixOptionLabel(prefix, unit)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
     </div>
   );

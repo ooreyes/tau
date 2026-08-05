@@ -384,7 +384,10 @@ describe("ComponentInspector - native subcircuit chooser", () => {
 
     const dead = screen.getByRole("textbox", { name: "Dead time" }) as HTMLInputElement;
     expect(dead.value).toBe("200");
-    expect((screen.getByRole("combobox", { name: "Dead time SI prefix" }) as HTMLSelectElement).value).toBe("n");
+    const deadPrefix = screen.getByRole("combobox", { name: "Dead time SI prefix" });
+    expect(deadPrefix.tagName).toBe("BUTTON");
+    expect(deadPrefix.getAttribute("data-slot")).toBe("select-trigger");
+    expect(deadPrefix.textContent).toContain("ns");
     expect((screen.getByRole("textbox", { name: "Input threshold" }) as HTMLInputElement).value).toBe("0.5");
     expect(screen.queryByRole("combobox", { name: "Input threshold SI prefix" })).toBeNull();
     expect(screen.getByText(/Blanking interval between one gate turning off/)).toBeTruthy();
@@ -498,7 +501,10 @@ describe("ComponentInspector - independent source waveform controls", () => {
     expect(document.querySelector(".source-value-editor select[aria-label='Waveform type']")).toBeNull();
     expect((screen.getByRole("textbox", { name: "DC operating point" }) as HTMLInputElement).value).toBe("0");
     expect((screen.getByRole("textbox", { name: "PWL time 3" }) as HTMLInputElement).value).toBe("+1");
-    expect((screen.getByRole("combobox", { name: "PWL time 3 SI prefix" }) as HTMLSelectElement).value).toBe("u");
+    const pwlPrefix = screen.getByRole("combobox", { name: "PWL time 3 SI prefix" });
+    expect(pwlPrefix.tagName).toBe("BUTTON");
+    expect(pwlPrefix.getAttribute("data-slot")).toBe("select-trigger");
+    expect(pwlPrefix.textContent).toContain("µs");
     expect((screen.getByRole("textbox", { name: "PWL level 3" }) as HTMLInputElement).value).toBe("1");
     expect((screen.getByRole("textbox", { name: "AC amplitude (.ac)" }) as HTMLInputElement).value).toBe("2");
     expect(screen.queryByRole("textbox", { name: "DC level" })).toBeNull();

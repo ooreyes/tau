@@ -3,6 +3,21 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EngineeringInput } from "./EngineeringInput";
 
+// jsdom lacks PointerEvent capture APIs that Radix Select uses on open.
+Element.prototype.hasPointerCapture = () => false;
+Element.prototype.setPointerCapture = () => {};
+Element.prototype.releasePointerCapture = () => {};
+Element.prototype.scrollIntoView = () => {};
+
+/** Radix Select opens on pointerdown; include button/pointerId for jsdom. */
+async function chooseSelectOption(ariaLabel: string, optionName: string) {
+  const trigger = screen.getByRole("combobox", { name: ariaLabel });
+  fireEvent.pointerDown(trigger, { button: 0, pointerId: 1, pointerType: "mouse" });
+  const option = await screen.findByRole("option", { name: optionName });
+  fireEvent.pointerUp(option, { button: 0, pointerId: 1, pointerType: "mouse" });
+  fireEvent.click(option);
+}
+
 afterEach(cleanup);
 
 describe("EngineeringInput", () => {
@@ -17,14 +32,22 @@ describe("EngineeringInput", () => {
     expect(onValueChange).not.toHaveBeenCalled();
   });
 
-  it("commits a mantissa plus prefix once both are set", () => {
+  it("exposes SI prefix as ui/Select combobox (not native <select>)", () => {
+    render(<EngineeringInput label="R1" unit="Ω" value="4.7k" onValueChange={vi.fn()} />);
+    const prefix = screen.getByRole("combobox", { name: "R1 SI prefix" });
+    expect(prefix.tagName).toBe("BUTTON");
+    expect(prefix.getAttribute("data-slot")).toBe("select-trigger");
+    expect(prefix.textContent).toContain("kΩ");
+    expect(document.querySelector(".eng-input select")).toBeNull();
+  });
+
+  it("commits a mantissa plus prefix once both are set", async () => {
     const onValueChange = vi.fn();
     render(<EngineeringInput label="R1" unit="Ω" value="1" onValueChange={onValueChange} />);
     const input = screen.getByLabelText("R1") as HTMLInputElement;
-    const select = screen.getByLabelText("R1 SI prefix") as HTMLSelectElement;
 
     fireEvent.change(input, { target: { value: "4.7" } });
-    fireEvent.change(select, { target: { value: "u" } });
+    await chooseSelectOption("R1 SI prefix", "µΩ");
 
     expect(onValueChange).toHaveBeenLastCalledWith("4.7u");
   });

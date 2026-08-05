@@ -3782,7 +3782,8 @@ body {
 }
 
 .eng-input input,
-.eng-input select {
+.eng-input select,
+.eng-input [data-slot="select-trigger"].eng-input-prefix {
   min-width: 0;
   height: var(--row-h);
   color: var(--text);
@@ -3806,18 +3807,36 @@ body {
   font-weight: 500;
 }
 
-.eng-input select {
+/* SI-prefix companion: native select (legacy) + ui/Select trigger. Keep the
+   unit slot intrinsic beside the mantissa — not a full-width form control. */
+.eng-input select,
+.eng-input [data-slot="select-trigger"].eng-input-prefix {
   flex: none;
   width: auto;
   min-width: 0;
-  max-width: 7.5ch;
+  max-width: 9.5ch;
   padding: 0 4px;
+  gap: 2px;
   font: 600 var(--fs-body) var(--font-mono);
   cursor: pointer;
 }
 
+.eng-input [data-slot="select-trigger"].eng-input-prefix [data-slot="select-value"] {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eng-input [data-slot="select-trigger"].eng-input-prefix svg {
+  width: 10px;
+  height: 10px;
+}
+
 .eng-input input:focus,
-.eng-input select:focus {
+.eng-input select:focus,
+.eng-input [data-slot="select-trigger"].eng-input-prefix:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
@@ -6187,7 +6206,8 @@ button.bottom-panel-head:focus-visible {
 }
 
 .property-field .eng-input input,
-.property-field .eng-input select {
+.property-field .eng-input select,
+.property-field .eng-input [data-slot="select-trigger"].eng-input-prefix {
   flex: 0 0 auto;
 }
 
@@ -6199,19 +6219,22 @@ button.bottom-panel-head:focus-visible {
   min-width: 2.5ch;
 }
 
-.property-field .eng-input select {
+.property-field .eng-input select,
+.property-field .eng-input [data-slot="select-trigger"].eng-input-prefix {
   width: auto;
   min-width: 0;
 }
 
 .property-field .eng-input input:not(:focus),
-.property-field .eng-input select:not(:focus) {
+.property-field .eng-input select:not(:focus),
+.property-field .eng-input [data-slot="select-trigger"].eng-input-prefix:not(:focus-visible) {
   background: transparent;
   border-color: transparent;
 }
 
 .property-field .eng-input input:hover:not(:focus),
-.property-field .eng-input select:hover:not(:focus) {
+.property-field .eng-input select:hover:not(:focus),
+.property-field .eng-input [data-slot="select-trigger"].eng-input-prefix:hover:not(:focus-visible) {
   background: var(--overlay-hover-faint);
 }
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { SimulationPanel, StepPlot, WaveformPlot, AcFamilyPlot, DcFamilyPlot, FftView, NoisePlot } from "./SimulationPanel";
@@ -19,6 +19,23 @@ import { defaultLayout } from "./plotPanes";
  * the single primary Run lives in the top toolbar. In-panel, selecting an
  * analysis tab IS the run gesture (all seven tabs, TRAN included).
  */
+
+beforeAll(() => {
+  // Radix Select (EngineeringInput SI prefix) needs pointer-capture APIs jsdom omits.
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+  Element.prototype.scrollIntoView = () => {};
+});
+
+/** Radix Select opens on pointerdown; include button/pointerId for jsdom. */
+async function chooseSelectOption(ariaLabel: string, optionName: string) {
+  const trigger = screen.getByRole("combobox", { name: ariaLabel });
+  fireEvent.pointerDown(trigger, { button: 0, pointerId: 1, pointerType: "mouse" });
+  const option = await screen.findByRole("option", { name: optionName });
+  fireEvent.pointerUp(option, { button: 0, pointerId: 1, pointerType: "mouse" });
+  fireEvent.click(option);
+}
 
 afterEach(() => cleanup());
 
@@ -584,7 +601,7 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     expect(screen.getByRole("status").textContent).toContain("1.25 s elapsed");
   });
 
-  it("opens cursors directly from a trace and keeps exact interval endpoints in sync", () => {
+  it("opens cursors directly from a trace and keeps exact interval endpoints in sync", async () => {
     useSchematic.setState({
       wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }] }],
       probes: [{ id: "p1", x: 0, y: 0, netId: "n1", color: "var(--trace-cyan)" }],
@@ -612,7 +629,7 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     expect(document.querySelectorAll(".transient-cursor")).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
-    fireEvent.change(screen.getByLabelText("Cursor 1 time SI prefix"), { target: { value: "" } });
+    await chooseSelectOption("Cursor 1 time SI prefix", "s");
     fireEvent.change(screen.getByLabelText("Cursor 1 time"), { target: { value: "1e0" } });
     const firstCursorLine = document.querySelector(".transient-cursor.cursor-1 line");
     expect(Number(firstCursorLine?.getAttribute("x1"))).toBeCloseTo(170, 3);
@@ -1682,25 +1699,25 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     expect(legendSwatch?.getAttribute("style")).toContain("rgb(255, 0, 170)");
   });
 
-  it("moves a cursor to an exact typed time from beside the trace", () => {
+  it("moves a cursor to an exact typed time from beside the trace", async () => {
     renderTwoTracePanel();
     selectOutTrace();
     fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
 
-    fireEvent.change(screen.getByLabelText("Move cursor C1 on V(out) to a time SI prefix"), { target: { value: "" } });
+    await chooseSelectOption("Move cursor C1 on V(out) to a time SI prefix", "s");
     fireEvent.change(screen.getByLabelText("Move cursor C1 on V(out) to a time"), { target: { value: "1e0" } });
 
     const line = document.querySelector(".transient-cursor.cursor-1 line");
     expect(Number(line?.getAttribute("x1"))).toBeCloseTo(170, 3);
   });
 
-  it("solves for the time at a typed value and reports where it landed", () => {
+  it("solves for the time at a typed value and reports where it landed", async () => {
     renderTwoTracePanel();
     selectOutTrace();
     fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
 
     const label = "Move cursor C1 to where V(out) equals a value";
-    fireEvent.change(screen.getByLabelText(`${label} SI prefix`), { target: { value: "" } });
+    await chooseSelectOption(`${label} SI prefix`, "V");
     // V(out) is 3 V halfway through the second segment, i.e. t = 1.5 s.
     fireEvent.change(screen.getByLabelText(label), { target: { value: "3e0" } });
 
@@ -1710,18 +1727,18 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     // Solving for a value must land the cursor in exactly the same place as
     // typing the equivalent time. Asserting the equivalence rather than a pixel
     // keeps this honest if the pane's x-domain headroom ever changes.
-    fireEvent.change(screen.getByLabelText("Move cursor C1 on V(out) to a time SI prefix"), { target: { value: "" } });
+    await chooseSelectOption("Move cursor C1 on V(out) to a time SI prefix", "s");
     fireEvent.change(screen.getByLabelText("Move cursor C1 on V(out) to a time"), { target: { value: "1.5e0" } });
     expect(document.querySelector(".transient-cursor.cursor-1 line")?.getAttribute("x1")).toBe(xFromValue);
   });
 
-  it("says plainly when the trace never reaches the typed value", () => {
+  it("says plainly when the trace never reaches the typed value", async () => {
     renderTwoTracePanel();
     selectOutTrace();
     fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
 
     const label = "Move cursor C1 to where V(out) equals a value";
-    fireEvent.change(screen.getByLabelText(`${label} SI prefix`), { target: { value: "" } });
+    await chooseSelectOption(`${label} SI prefix`, "V");
     fireEvent.change(screen.getByLabelText(label), { target: { value: "99e0" } });
 
     expect(document.querySelector(".trace-seek__note")?.textContent).toMatch(/never reaches/i);
