@@ -39,6 +39,33 @@ Differential pass=93 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
   waveform phase/avg-rms. Leave IRFP/Draft*/Settings/ct19 OP alone unless OP
   convergence for multi-B_U* is fixed.
 
+### 2026-08-05 — Ctrl+click avg/RMS over visible window (§waveform DoD)
+
+**What I did**
+- Legend Ctrl/⌘+click opens Dialog with Average + RMS over the zoomed
+  `sharedX` window via `windowedTraceStatistics` (LTspice Ctrl+click parity).
+- ND wall at 48.1% — waveform pivot. Left 100W/step PNG, ct ASC, Educational
+  (continue 32), Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/measurementModel.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `apps/desktop/src/App.css`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2750 passed)
+- windowedTraceStatistics 2 + Ctrl+click wiring 1
+
+**Parity items**
+- Waveform viewer 🟡 (Ctrl+click avg/RMS landed). Differential pass=93 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Phase PNG / standalone phase window / non-wall ND. Leave Educational/IRFP/Settings alone.
+
+
+
 ### 2026-08-05 — Bode Phase / Group delay lower pane (§waveform DoD)
 
 **What I did**
