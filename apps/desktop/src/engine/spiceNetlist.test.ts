@@ -1670,6 +1670,17 @@ describe("buildSpiceDeck", () => {
     expect(deck.circuit.warnings).toEqual([]);
   });
 
+  it("rewrites continuous negative-Vh SW to a B conductance (ngspice parity)", () => {
+    const base = switchedLoad(true);
+    const deck = buildSpiceDeck({
+      ...base,
+      directives: [".model MYSW SW(Ron=1 Roff=1Meg Vt=.5 Vh=-.4)"],
+    }, { kind: "tran", stopTime: 0.003, steps: 500 });
+    expect(deck.netlist).toMatch(/^B__tau_S1 \S+ \S+ I=/m);
+    expect(deck.netlist).not.toMatch(/^S1\b/m);
+    expect(deck.netlist).not.toMatch(/\.model\s+MYSW\s+SW\b/i);
+  });
+
   it("reports a model-named switch with no control wiring instead of silently opening it", () => {
     const deck = buildSpiceDeck(switchedLoad(false), { kind: "op" });
 

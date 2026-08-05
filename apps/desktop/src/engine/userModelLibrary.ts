@@ -296,6 +296,137 @@ export function translateIdealDiodeDeckLines(lines: string[]): string[] {
   return out;
 }
 
+/**
+ * LTspice continuous voltage switch: `.model … SW(… Vh=<negative> …)`.
+ * Negative `Vh` means resistance interpolates smoothly (log-R) between Roff and
+ * Ron as V(nc+,nc−) sweeps from `Vt+Vh` → `Vt−Vh`. ngspice-46's SW card does
+ * not honor that continuous mode (it trips abruptly near Vt), so Educational
+ * Vswitch.asc and ISO7637 Sideal spikes diverge. Rewrite those models' `S`
+ * instances to an equivalent B conductance; positive-`Vh` / zero-`Vh` cards
+ * stay native SW. Same-deck for both engines (LTspice accepts the B form).
+ */
+interface ContinuousSwModel {
+  ron: number;
+  roff: number;
+  vt: number;
+  vh: number;
+}
+
+function parseSwModelParams(body: string): Map<string, string> {
+  const params = new Map<string, string>();
+  for (const pair of body.matchAll(/([A-Za-z_]\w*)\s*=\s*([^\s,()]+)/g)) {
+    params.set(pair[1]!.toLowerCase(), pair[2]!);
+  }
+  return params;
+}
+
+function parseContinuousSwModel(body: string): ContinuousSwModel | null {
+  const params = parseSwModelParams(body);
+  const vhRaw = params.get("vh");
+  if (vhRaw === undefined) return null;
+  let vh: number;
+  try {
+    vh = parseQuantity(vhRaw);
+  } catch {
+    return null;
+  }
+  if (!(vh < 0)) return null;
+  const read = (key: string, fallback: number): number => {
+    const raw = params.get(key);
+    if (raw === undefined) return fallback;
+    try {
+      return parseQuantity(raw);
+    } catch {
+      return fallback;
+    }
+  };
+  const ron = read("ron", 1);
+  const roff = read("roff", 1e12);
+  const vt = read("vt", 0);
+  if (!(ron > 0) || !(roff > 0) || !Number.isFinite(vt) || !Number.isFinite(vh)) return null;
+  return { ron, roff, vt, vh };
+}
+
+function continuousSwitchCurrentExpr(
+  nPos: string,
+  nNeg: string,
+  ncPos: string,
+  ncNeg: string,
+  model: ContinuousSwModel,
+): string {
+  // x=0 @ Vc=Vt+Vh → Roff; x=1 @ Vc=Vt−Vh → Ron; log-R mid at Vc=Vt.
+  const vt = formatSwitchLevel(model.vt);
+  const vh = formatSwitchLevel(model.vh);
+  const ron = formatSwitchLevel(model.ron);
+  const roff = formatSwitchLevel(model.roff);
+  const vc = `V(${ncPos},${ncNeg})`;
+  const x = `max(0,min(1,(${vc}-(${vt})-(${vh}))/(-2*(${vh}))))`;
+  const r = `(${roff})*((${ron})/(${roff}))**(${x})`;
+  return `V(${nPos},${nNeg})/(${r})`;
+}
+
+export function translateContinuousSwitchDeckLines(lines: string[]): string[] {
+  const continuous = new Map<string, ContinuousSwModel>();
+  for (const line of lines) {
+    const match = /^\s*\.model\s+(\S+)\s+SW\s*\((.*)\)\s*$/i.exec(line);
+    if (!match) continue;
+    const parsed = parseContinuousSwModel(match[2]!);
+    if (parsed) continuous.set(match[1]!.toLowerCase(), parsed);
+  }
+  if (continuous.size === 0) return lines.slice();
+
+
+  const isSafeNode = (n: string) => n === "0" || /^[A-Za-z_][A-Za-z0-9_]*$/.test(n);
+
+  const referenced = new Set<string>();
+  const out: string[] = [];
+  for (const line of lines) {
+    const device = /^\s*(S\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)(.*)$/i.exec(line);
+    if (device) {
+      const modelName = device[6]!.toLowerCase();
+      const model = continuous.get(modelName);
+      const nodes = [device[2]!, device[3]!, device[4]!, device[5]!];
+      if (model && nodes.every(isSafeNode)) {
+        referenced.add(modelName);
+        const expr = continuousSwitchCurrentExpr(
+          device[2]!,
+          device[3]!,
+          device[4]!,
+          device[5]!,
+          model,
+        );
+        out.push(`B__tau_${device[1]} ${device[2]} ${device[3]} I=${expr}`);
+        continue;
+      }
+    }
+    const modelLine = /^\s*\.model\s+(\S+)\s+SW\s*\((.*)\)\s*$/i.exec(line);
+    if (modelLine && continuous.has(modelLine[1]!.toLowerCase())) {
+      // Keep native card until we know every instance using it was rewritten.
+      out.push(`*__tau_cont_sw_model__ ${line.trim()}`);
+      continue;
+    }
+    out.push(line);
+  }
+
+  // Restore any continuous .model still needed by an un-rewritten S (unsafe nodes).
+  const stillNeeded = new Set<string>();
+  for (const line of out) {
+    const device = /^\s*(S\S+)\s+\S+\s+\S+\s+\S+\s+\S+\s+(\S+)/i.exec(line);
+    if (device && continuous.has(device[2]!.toLowerCase())) {
+      stillNeeded.add(device[2]!.toLowerCase());
+    }
+  }
+
+  return out.flatMap((line) => {
+    const marker = /^\*__tau_cont_sw_model__\s*(\.model\s+(\S+)\s+SW\s*\(.*\))\s*$/i.exec(line);
+    if (!marker) return [line];
+    const name = marker[2]!.toLowerCase();
+    if (stillNeeded.has(name)) return [marker[1]!];
+    if (referenced.has(name)) return []; // fully rewritten — drop card
+    return [marker[1]!]; // no instances touched; keep original
+  });
+}
+
 function instanceParameter(tail: string, name: "rser" | "rpar" | "cpar" | "m"): string | null {
   return new RegExp(`\\b${name}\\s*=\\s*(\\{[^}]*\\}|[^\\s]+)`, "i").exec(tail)?.[1] ?? null;
 }

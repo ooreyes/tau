@@ -1,10 +1,24 @@
 ## HEARTBEAT
 
+<<<<<<< HEAD
 **Status: IN PROGRESS - 2026-08-05 ~09:30 CDT**
 
 Unit: EveryCircuit library — **polarized capacitor** + **logic constant**
 (honest C / DC-V) + scope cursor → schematic `readoutTime`.
 Not full EC parity. SHIPPABLE? **NO**
+=======
+**Status: DONE - 2026-08-05 09:15 CDT**
+
+Unit: Educational `Vswitch.asc` authored `.tran` → differential **pass=102**.
+```
+SUMMARY pass=102 sibling=5 gap=0
+tran vswitch … v(out) nRms≈0.0001 · v(in) nRms=0
+```
+Engine: `translateContinuousSwitchDeckLines` (negative-Vh SW → log-R B);
+same-deck both engines. Worktree `Tau-wt-diff-102`. Left SoftDiodeRecovery /
+PowerAmp / Staff EE / Settings / Omar EveryCircuit alone.
+SHIPPABLE? **NO**
+>>>>>>> 31ded20 (auto: Educational Vswitch .tran → pass=102 (§DoD))
 
 **SHIPPABLE?** **NO**
 
@@ -39,6 +53,7 @@ SHIPPABLE? **NO**
 
 ---
 
+<<<<<<< HEAD
 ### 2026-08-05 — FFT magnitude manual Y limits (§waveform DoD)
 
 **What I did**
@@ -92,10 +107,13 @@ SHIPPABLE? **NO**
 SHIPPABLE? **NO**
 
 
+=======
+>>>>>>> 31ded20 (auto: Educational Vswitch .tran → pass=102 (§DoD))
 
 ---
 
 
+<<<<<<< HEAD
 
 ### 2026-08-05 — Noise density manual Y limits (§waveform DoD)
 
@@ -178,6 +196,36 @@ SHIPPABLE? **NO**
 
 **Next step**
 - AC/DC multi-pane cards / non-wall ND. Leave Educational/Omar morning alone.
+=======
+### 2026-08-05 — Educational Vswitch .tran → pass=102 (§DoD)
+
+**What I did**
+- Educational `Vswitch.asc` authored `.tran 3m`: MYSW `SW(Ron=1 Roff=1Meg Vt=.5 Vh=-.4)`.
+- Engine: ngspice-46 ignores continuous negative-`Vh` SW (abrupt trip); rewrite
+  matching S instances to log-R B conductance (`translateContinuousSwitchDeckLines`).
+  Skip unsafe `+`/`-` node names (ISO7637 Pulse* SHORT). Return a copy when no
+  continuous models so `lines.length=0` cannot alias-clear the deck.
+- Worktree `Tau-wt-diff-102` over `fe8d57e`. Left SoftDiodeRecovery / PowerAmp
+  TIP / Staff EE / Settings / EveryCircuit alone.
+
+**Files**
+- `apps/desktop/src/engine/userModelLibrary.ts` (+ unit tests)
+- `apps/desktop/src/engine/spiceNetlist.ts` (+ unit test)
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=102 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2795 passed)
+
+**Parity items**
+- Differential **pass=102** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Educational non-wall leftovers (Fc capometer timestep / ISO7637 spike /
+  gr_del / walls) or transient numeric Y limits. Leave SoftDiodeRecovery /
+  PowerAmp / Staff EE / Settings alone.
+>>>>>>> 31ded20 (auto: Educational Vswitch .tran → pass=102 (§DoD))
 
 ### 2026-08-05 — Educational HandsFreePreamp .tran → pass=101 (§DoD)
 

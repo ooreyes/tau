@@ -79,6 +79,8 @@ const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const MC1648_ASC = join(EDU, "MC1648.asc");
 /** Educational PAsystem HandsFreePreamp — on-schematic ElectretMic sidiode + 2N5458 NJF. */
 const HANDSFREE_PREAMP_ASC = join(EDU, "PAsystem", "HandsFreePreamp.asc");
+/** Educational Vswitch — continuous negative-Vh SW (ngspice gets B rewrite). */
+const VSWITCH_ASC = join(EDU, "Vswitch.asc");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
@@ -387,7 +389,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -4861,6 +4863,68 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational/Vswitch.asc authored .tran ---
+    // Continuous negative-Vh SW: LTspice log-R interpolates Ron↔Roff across
+    // Vt±|Vh|; ngspice-46's SW card trips abruptly — rewrite to B conductance
+    // (`translateContinuousSwitchDeckLines`). Same-deck both engines.
+    // Tip pass=101 → **pass=102**. Left SoftDiodeRecovery / PowerAmp TIP /
+    // Staff EE / Settings / ISO7637 spike / Fc alone.
+    {
+      expect(existsSync(VSWITCH_ASC), `missing ${VSWITCH_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(VSWITCH_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "Vswitch.asc must author .tran").toBeTruthy();
+      expect(parsed.tran!.stopTime, "Vswitch .tran 3m").toBeCloseTo(0.003, 12);
+      const params = buildParamScope(dirs);
+      const schematic = {
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      };
+      const analysis = {
+        kind: "tran" as const,
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 5000,
+      };
+      const deck = buildSpiceDeck(schematic, analysis);
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/B__tau_S1\b/);
+      expect(deck.netlist).not.toMatch(/^S1\b/m);
+      expect(deck.netlist).not.toMatch(/\.model\s+MYSW\s+SW\b/i);
+      expect(deck.netlist).toMatch(/-0\.4/); // |Vh| baked into continuous B expr
+      const probes = [
+        { expr: "v(out)", rmsTolerance: 0.02, maxTolerance: 0.05, minSpan: 2 },
+        { expr: "v(in)", rmsTolerance: 0.01, maxTolerance: 0.02, minSpan: 0.5 },
+      ] as const;
+      const result = runPairedBatch("diff-vswitch-tran", deck.netlist, probes.map((p) => p.expr));
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe.expr)!;
+        const ng = result.ngspice.get(probe.expr)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: probe.rmsTolerance,
+          maxTolerance: probe.maxTolerance,
+        });
+        expect(comparison.pass, `vswitch ${probe.expr} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `vswitch ${probe.expr} non-hollow`).toBeGreaterThan(probe.minSpan);
+        memberNotes.push(
+          `${probe.expr} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "vswitch",
+        topology: "Educational/Vswitch.asc continuous negative-Vh SW→B (authored .tran 3m; MYSW Vt=.5 Vh=-.4)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (cont-SW B rewrite)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -5157,6 +5221,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=101 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=102 sibling=5 gap=0/);
   }, 240_000);
 });

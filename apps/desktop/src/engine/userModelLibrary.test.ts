@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt } from "./userModelLibrary";
+import {
+  parseUserModelLibraries,
+  resolveUserModel,
+  resolveUserSubckt,
+  translateContinuousSwitchDeckLines,
+} from "./userModelLibrary";
 
 describe("parseUserModelLibraries", () => {
   it("registers a .model and a .subckt block under lower-cased names", () => {
@@ -674,5 +679,48 @@ describe("parseUserModelLibraries", () => {
     expect(resolveUserSubckt(registry, "anything")).toBeNull();
     expect(resolveUserModel(registry, "")).toBeNull();
     expect(resolveUserSubckt(registry, "")).toBeNull();
+  });
+});
+
+describe("translateContinuousSwitchDeckLines", () => {
+  it("rewrites negative-Vh SW instances to log-R B conductance", () => {
+    const out = translateContinuousSwitchDeckLines([
+      "Tau generated circuit",
+      ".model MYSW SW(Ron=1 Roff=1Meg Vt=.5 Vh=-.4)",
+      "S1 0 out in 0 MYSW",
+      "R1 n001 out 1k",
+      ".end",
+    ]);
+    expect(out.join("\n")).toMatch(/^B__tau_S1 0 out I=/m);
+    expect(out.join("\n")).not.toMatch(/^S1\b/m);
+    expect(out.join("\n")).not.toMatch(/\.model\s+MYSW\s+SW\b/i);
+    expect(out.join("\n")).toContain("Tau generated circuit");
+  });
+
+  it("returns a copy when no continuous models exist (no alias clear)", () => {
+    const input = ["Tau generated circuit", ".model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)", "R1 a 0 1k"];
+    const out = translateContinuousSwitchDeckLines(input);
+    expect(out).not.toBe(input);
+    expect(out).toEqual(input);
+    input.length = 0;
+    expect(out).toEqual(["Tau generated circuit", ".model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)", "R1 a 0 1k"]);
+  });
+
+  it("leaves positive-Vh hysteresis SW native", () => {
+    const out = translateContinuousSwitchDeckLines([
+      ".model HYST SW(Ron=1 Roff=1Meg Vt=.5 Vh=.4)",
+      "S1 0 out in 0 HYST",
+    ]);
+    expect(out.join("\n")).toMatch(/^S1 0 out in 0 HYST$/m);
+    expect(out.join("\n")).toMatch(/\.model HYST SW\(Ron=1 Roff=1Meg Vt=\.5 Vh=\.4\)/);
+  });
+
+  it("skips rewrite when a switch node is named + or -", () => {
+    const out = translateContinuousSwitchDeckLines([
+      ".model SHORT SW(Ron=1m Roff=10MEG Vt=0 Vh=-.5)",
+      "S1 N001 + N002 0 SHORT",
+    ]);
+    expect(out.join("\n")).toMatch(/^S1 N001 \+ N002 0 SHORT$/m);
+    expect(out.join("\n")).toMatch(/\.model SHORT SW\(/);
   });
 });

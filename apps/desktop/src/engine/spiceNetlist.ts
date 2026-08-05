@@ -34,7 +34,7 @@ import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductorRefusalMessage, isCoreInductor } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
 import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
-import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL_REFUSAL_MARKER, TAU_NOISE_REFUSAL_MARKER, translateIdealDiodeDeckLines, translateSwitchModelCard } from "./userModelLibrary";
+import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL_REFUSAL_MARKER, TAU_NOISE_REFUSAL_MARKER, translateContinuousSwitchDeckLines, translateIdealDiodeDeckLines, translateSwitchModelCard } from "./userModelLibrary";
 import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 import { assertSimulationIntegrity } from "../simulation/simulationIntegrity";
@@ -853,6 +853,26 @@ export function buildSpiceDeck(
   // like Educational/PAsystem/HandsFreePreamp.asc diverge from LTspice.
   if (options.idealDiodeAsSidiode !== false) {
     const rewritten = translateIdealDiodeDeckLines(lines);
+    lines.length = 0;
+    lines.push(...rewritten);
+    const instanceNames = new Set(
+      lines
+        .map((line) => line.trim().split(/\s+/)[0]?.toLowerCase())
+        .filter((name): name is string => Boolean(name) && !name.startsWith("*") && !name.startsWith(".")),
+    );
+    for (let i = deviceCurrents.length - 1; i >= 0; i -= 1) {
+      const ref = /^@([^\[]+)/.exec(deviceCurrents[i]!.vector)?.[1]?.toLowerCase();
+      if (ref && !instanceNames.has(ref)) deviceCurrents.splice(i, 1);
+    }
+  }
+
+  // Negative-Vh SW → continuous B conductance (ngspice SW ignores continuous mode).
+  {
+    const before = lines.length;
+    const rewritten = translateContinuousSwitchDeckLines(lines);
+    if (rewritten.length === 0 && before > 0) {
+      throw new Error(`translateContinuousSwitchDeckLines emptied the deck (${before} → 0)`);
+    }
     lines.length = 0;
     lines.push(...rewritten);
     const instanceNames = new Set(

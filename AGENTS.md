@@ -174,7 +174,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=101 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=102 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -249,7 +249,9 @@ account and sign/notarize/ship.
       tank LC phase-skew deferred) +
       Educational/PAsystem/HandsFreePreamp.asc authored `.tran` (ElectretMic
       dual-deck ideal D↔sidiode + 2N5458/2N3906; v(out) nRms≈0.0005;
-      top-level `translateIdealDiodeDeckLines`).
+      top-level `translateIdealDiodeDeckLines`) +
+      Educational/Vswitch.asc authored `.tran` (continuous negative-Vh SW→B
+      log-R rewrite; v(out)/v(in) nRms≈0.0001/0).
       ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
       gr_del deferred (all-pass |V|≈1 hollow magnitude). TwoTau deferred
       (LTspice rejects Tau s_xfer same-deck). Draft8 Laplace brace-mangle
