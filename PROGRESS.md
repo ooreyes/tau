@@ -1,13 +1,41 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~09:00 CDT**
+**Status: DONE - 2026-08-05 09:15 CDT**
 
-Unit: EveryCircuit-style **transient current mode** (schematic V/I + wire flow
-from real `.tran` final sample; OP fallback). Worktree
-`Tau-wt-ux-tran-current`. Not live continuous sim. SHIPPABLE? **NO**
+Unit: FFT magnitude manual Y limits (waveform DoD / FFT polish).
+Worktree `Tau-wt-wave-fft-ylim` on tip `0cbdb0b`. Left EveryCircuit library /
+current-mode / Settings / Educational alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
+
+
+---
+
+
+
+### 2026-08-05 — FFT magnitude manual Y limits (§waveform DoD)
+
+**What I did**
+- FftView Ymin/Ymax + Apply Y / Autoscale Y via `parseManualYLimits` /
+  `applyManualYToDomain`. Signal or window change clears manual limits.
+
+**Files**
+- `components/SimulationPanel.tsx` (FftView)
+- `components/SimulationPanel.test.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + FftView Y test; full suite before push
+
+**Parity items**
+- §waveform DoD / FFT polish: magnitude Y limits. NEXT: AC/DC multi-pane cards.
+
+**Next step**
+- AC/DC multi-pane cards; never Chan/NIGBT/FRA.
+
+SHIPPABLE? **NO**
 
 ---
 

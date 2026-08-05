@@ -3358,6 +3358,10 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
+  const [yMinDraft, setYMinDraft] = useState("");
+  const [yMaxDraft, setYMaxDraft] = useState("");
+  const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
+  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
@@ -3420,14 +3424,32 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
     }
   }, [cursorsOn, spectrum, cf1, cf2, chosen]);
 
+  useEffect(() => {
+    setManualY(null);
+    setYLimitsError(null);
+    setYMinDraft("");
+    setYMaxDraft("");
+  }, [chosen, windowFn]);
+
   const domain = useMemo<Viewport>(
-    () => ({ xMin: plot ? 10 ** plot.f0 : 1, xMax: plot ? 10 ** plot.f1 : 10, yMin: plot ? plot.minDb : -60, yMax: plot ? plot.maxDb : 0 }),
-    [plot],
+    () =>
+      applyManualYToDomain(
+        {
+          xMin: plot ? 10 ** plot.f0 : 1,
+          xMax: plot ? 10 ** plot.f1 : 10,
+          yMin: plot ? plot.minDb : -60,
+          yMax: plot ? plot.maxDb : 0,
+        },
+        manualY,
+      ),
+    [plot, manualY],
   );
   const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
     domain,
     xScale: "log",
-    resetKey: plot ? spectrum : null,
+    resetKey: plot
+      ? `${chosen}:${windowFn}:${manualY ? `${manualY.yMin}:${manualY.yMax}` : "auto"}`
+      : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
@@ -3624,6 +3646,75 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
               )}
             </div>
           </div>
+          <div className="meter-row analysis-meter" aria-label="FFT magnitude Y limits">
+            <label className="axis-limit-field">
+              Ymin
+              <Input
+                variant="mono"
+                size="sm"
+                className="w-20"
+                value={yMinDraft}
+                aria-label="FFT magnitude Y min"
+                placeholder={plot ? String(plot.minDb) : "-60"}
+                onChange={(e) => {
+                  setYMinDraft(e.currentTarget.value);
+                  if (yLimitsError) setYLimitsError(null);
+                }}
+              />
+            </label>
+            <label className="axis-limit-field">
+              Ymax
+              <Input
+                variant="mono"
+                size="sm"
+                className="w-20"
+                value={yMaxDraft}
+                aria-label="FFT magnitude Y max"
+                placeholder={plot ? String(plot.maxDb) : "0"}
+                onChange={(e) => {
+                  setYMaxDraft(e.currentTarget.value);
+                  if (yLimitsError) setYLimitsError(null);
+                }}
+              />
+            </label>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label="Apply FFT magnitude Y limits"
+              disabled={!plot}
+              onClick={() => {
+                const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
+                if (!parsed.ok) {
+                  setYLimitsError(parsed.error);
+                  return;
+                }
+                setManualY(parsed.limits);
+                setYLimitsError(null);
+              }}
+            >
+              Apply Y
+            </Button>
+            <Button
+              size="sm"
+              variant={manualY ? "default" : "outline"}
+              aria-label="Autoscale FFT magnitude Y"
+              aria-pressed={!manualY}
+              disabled={!plot}
+              onClick={() => {
+                setManualY(null);
+                setYLimitsError(null);
+                setYMinDraft("");
+                setYMaxDraft("");
+              }}
+            >
+              Autoscale Y
+            </Button>
+          </div>
+          {yLimitsError && (
+            <div className="expr-error" role="alert">
+              {yLimitsError}
+            </div>
+          )}
           {cursorsOn && (
             <div className="cursor-sliders">
               <label>

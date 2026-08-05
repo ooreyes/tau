@@ -1880,3 +1880,39 @@ describe("FftView Export PNG", { timeout: 20_000 }, () => {
     }
   });
 });
+
+describe("FftView manual Y limits", () => {
+  function sineResult(n = 256) {
+    const times = Array.from({ length: n }, (_, i) => i / n);
+    const values = times.map((t) => Math.sin(2 * Math.PI * 8 * t));
+    return {
+      ok: true as const,
+      title: "Transient",
+      times,
+      traces: [{ id: "n1", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values }],
+      currents: [],
+      stats: { netCount: 1, componentCount: 0, sampleCount: n, stopTime: 1, stepSize: 1 / n },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [{ id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 }],
+        components: [],
+      },
+    };
+  }
+
+  it("Apply Y locks FFT magnitude axis; Autoscale Y restores autorange", async () => {
+    render(<FftView result={sineResult()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Toggle FFT spectrum" }));
+    expect(await screen.findByLabelText("FFT magnitude Y limits")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("FFT magnitude Y min"), { target: { value: "-80" } });
+    fireEvent.change(screen.getByLabelText("FFT magnitude Y max"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply FFT magnitude Y limits" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const autoscale = screen.getByRole("button", { name: "Autoscale FFT magnitude Y" });
+    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(autoscale);
+    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+  });
+});

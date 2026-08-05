@@ -1326,7 +1326,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Apply Y / Autoscale Y applied to every TranScopePane left axis (right-axis
   amps stay data-fit). **Noise density manual Y limits landed** (2026-08-05):
   NoisePlot Ymin/Ymax + Apply Y / Autoscale Y; log scale refuses non-positive
-  limits; yScale flip clears manual.
+  limits; yScale flip clears manual. **FFT magnitude manual Y limits landed**
+  (2026-08-05): FftView Ymin/Ymax + Apply Y / Autoscale Y; signal/window change
+  clears manual.
 - ✅ **Per-component simulator telemetry (§11 D10, 2026-07-10):** every named
   component receives a selectable row with voltage across, current through,
   instantaneous power, sparkline, and signal class. Voltage polarity follows
@@ -1432,7 +1434,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `freq_Hz,<signal>,<signal>_dB` per bin; FftView **Export CSV** downloads it
   (THD/SFDR remain on the meter). 2 pure tests. **FFT Export PNG landed**
   (2026-08-05): FftView **Export PNG** rasters the spectrum SVG via
-  `waveformSvgsToPng` (`tau-fft-….png`). 1 wiring test.
+  `waveformSvgsToPng` (`tau-fft-….png`). 1 wiring test. **FFT magnitude manual
+  Y limits landed** (2026-08-05): FftView Ymin/Ymax + Apply Y / Autoscale Y;
+  signal/window change clears manual.
 - 🟡 Log/linear axes, dB, phase, **group delay** — **group delay landed**
   (`simulation/groupDelay.ts`, 12 tests): pure `groupDelay(freqs, phaseDeg)`
   computes τ = −dφ/dω in seconds — phase is **unwrapped** first (`unwrapPhaseDeg`
@@ -1582,7 +1586,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (2026-08-05): AcPlot lower-pane Apply φY / Autoscale φY.   **Transient manual
   Y limits landed** (2026-08-05): WaveformPlot Apply Y / Autoscale Y on left
   axis. **Noise density manual Y limits landed** (2026-08-05): NoisePlot Apply Y
-  / Autoscale Y. **NEXT:** AC/DC multi-pane cards / FFT polish.
+  / Autoscale Y. **FFT magnitude manual Y limits landed** (2026-08-05): FftView
+  Apply Y / Autoscale Y. **NEXT:** AC/DC multi-pane cards.
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;
