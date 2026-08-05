@@ -1,14 +1,50 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:45 CDT**
+**Status: DONE - 2026-08-05 ~13:55 CDT**
 
-Unit: **§10 Settings / LocalAiSetup native `<select>` → ui/Select** —
-On-device model, Cloud provider, Gemini model, Setup local model. Zero
-component native `<select>` remaining. AGENTS §10 stays UNCHECKED
-(Resizable/Command/Toast + whole-app drift proof). SHIPPABLE? **NO**
+Unit: **Educational HandsFreeLayout → pass=109** — PAsystem layout NJF/PNP
+`.tran 10m` (≠ HandsFreePreamp ElectretMic). DoD broad-differential box
+stays open. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
+
+
+---
+
+### 2026-08-05 — HandsFreeLayout TRAN → pass=109 (§DoD)
+
+**What I did**
+- Educational `PAsystem/HandsFreeLayout.asc` authored `.tran 0 10m 0 1u`:
+  custom sibling `2N5458`/`2N3906` symbols + on-schematic `.model 2N5458 NJF`
+  — **no** ElectretMic diode (distinct from HandsFreePreamp dual-deck
+  sidiode). Strip `.four`. `v(out)` vs LTspice nRms=0 @ 2%/5%. Tip had NE555
+  as pass=108 → this cell is **pass=109**.
+- Probed and left deferred: PowerAmpLayout TIP sibling-lib attach, SoftDiode
+  Vp>0, Fc dense-timestep, TLINE-inv, ISO7637 spike, Draft10 UOA2 same-deck,
+  Draft4 AD823 wall, 160 XSPICE/LTspice dual-deck, Chan/NIGBT/FRA.
+  DoD broad box stays open. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2979 passed / 8 skipped
+- `scripts/differential-parity.sh` → SUMMARY pass=109 sibling=5 gap=0
+  (DoD box stays open until broad authored-analysis matrix is green)
+
+**Parity items**
+- Differential 🟡 **pass=109 · sibling=5 · gap=0**; DoD broad box unchecked.
+  SHIPPABLE? **NO**
+
+**Next step**
+- PowerAmpLayout TIP lib attach / Fc / ISO7637 / TLINE-inv / Draft10; never
+  SoftDiode Vp>0 fakes. SHIPPABLE? **NO**
+
+SHIPPABLE? **NO**
 
 
 ---

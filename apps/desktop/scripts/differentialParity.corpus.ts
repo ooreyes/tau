@@ -79,6 +79,8 @@ const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const MC1648_ASC = join(EDU, "MC1648.asc");
 /** Educational PAsystem HandsFreePreamp — on-schematic ElectretMic sidiode + 2N5458 NJF. */
 const HANDSFREE_PREAMP_ASC = join(EDU, "PAsystem", "HandsFreePreamp.asc");
+/** Educational PAsystem HandsFreeLayout — layout 2N5458/2N3906 (≠ Preamp ElectretMic). */
+const HANDSFREE_LAYOUT_ASC = join(EDU, "PAsystem", "HandsFreeLayout.asc");
 /** Educational Vswitch — continuous negative-Vh SW (ngspice gets B rewrite). */
 const VSWITCH_ASC = join(EDU, "Vswitch.asc");
 /** Educational dimmer — on-schematic DIAC/TRIAC + stepped Rdim (load-power probe). */
@@ -410,7 +412,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, HandsFreeLayout TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -5401,6 +5403,73 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational/PAsystem/HandsFreeLayout.asc authored .tran ---
+    // Layout variant of the hands-free mic path: custom sibling `2N5458` /
+    // `2N3906` symbols + on-schematic `.model 2N5458 NJF(…)` — **no** ElectretMic
+    // diode (≠ HandsFreePreamp dual-deck sidiode cell). Strip `.four`. Authored
+    // `.tran 0 10m 0 1u`: v(out) nRms=0 @ 2%/5%. Never Chan/NIGBT/FRA. Tip
+    // pass=108 → **pass=109**. Left SoftDiode Vp>0 / Fc / ISO7637 / TLINE-inv /
+    // PowerAmpLayout TIP attach / Draft10 UOA2 alone.
+    {
+      expect(existsSync(HANDSFREE_LAYOUT_ASC), `missing ${HANDSFREE_LAYOUT_ASC}`).toBe(true);
+      const layoutDir = dirname(HANDSFREE_LAYOUT_ASC);
+      const imported = importAsc(decodeSchematicText(readFileSync(HANDSFREE_LAYOUT_ASC)), {
+        resolveSymbolMetadata: siblingSymbolMetadata(layoutDir),
+      });
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives).filter(
+        (d) => !/^\.four\b/i.test(d.trim()),
+      );
+      expect(dirs.some((d) => /\.model\s+2N5458\s+NJF\b/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.model\s+ElectretMic\b/i.test(d))).toBe(false);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "HandsFreeLayout.asc must author .tran").toBeTruthy();
+      expect(parsed.tran!.stopTime, "HandsFreeLayout .tran 10m").toBeCloseTo(0.01, 12);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 5000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep ?? 1e-6,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+2N5458\s+NJF\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+2N3906\s+PNP\b/i);
+      expect(deck.netlist).toMatch(/^J\w+\b.+\b2N5458\b/im);
+      expect(deck.netlist).toMatch(/^Q\w+\b.+\b2N3906\b/im);
+      expect(deck.netlist).not.toMatch(/^J\w+\b.+\bTAU_NJF\b/im);
+      expect(deck.netlist).not.toMatch(/^Q\w+\b.+\bTAU_PNP\b/im);
+      expect(deck.netlist).not.toMatch(/ElectretMic/i);
+      expect(deck.netlist).not.toMatch(/^\.four\b/im);
+      expect(imported.netLabels.some((n) => n.text.toLowerCase() === "out")).toBe(true);
+      const probe = "v(out)";
+      const result = runPairedBatch("diff-handsfree-layout-tran", deck.netlist, [probe]);
+      const lt = result.ltspice.get(probe)!;
+      const ng = result.ngspice.get(probe)!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `handsfree-layout ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "handsfree-layout out non-hollow").toBeGreaterThan(0.2);
+      cells.push({
+        analysis: "tran",
+        circuit: "handsfree-layout",
+        topology: "Educational/PAsystem/HandsFreeLayout.asc 2N5458/2N3906 layout (authored .tran 10m; ≠ Preamp ElectretMic)",
+        status: "pass",
+        note: `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -5697,6 +5766,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=108 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=109 sibling=5 gap=0/);
   }, 600_000);
 });
