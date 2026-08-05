@@ -5,10 +5,13 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS 2026-08-04 20:26 CDT - P0.4 structured corpus
-capability buckets (replace prefix-based zero-hard-failure gate).
+**Status:** IDLE 2026-08-04 20:33 CDT - P0.4 capability buckets landed;
+full-corpus zero-hard-failure fiction removed. Canonical 82/81/79/79 with
+capability 79/3/0/0. Completion remains RETRACTED.
 
-**Next unit (after this):** Class-D `.tran`/`.meas` blockers / remaining DoD.
+**Next unit:** Class-D `.tran`/`.meas` blockers / authored-analysis
+differential parity. Optionally remeasure full recursive tree buckets and
+set honest regression ceilings (not zero).
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -45,10 +48,10 @@ the local MLX provider so their prompts cannot drift. Per-provider keychain
 entries; CSP pins `generativelanguage.googleapis.com`. Unit-tested against a
 stubbed fetch; **not yet exercised against the live Google API.**
 
-Next up, in order: P0.4 full-corpus capability measurement (gate on
-capability, not message-prefix wording), then Class-D `.tran`/`.meas`
-blockers. P0.1, P0.2, and transitive nested-X closure are closed; corpus
-already applies `unresolvedSubckts` at the harness.
+Next up, in order: Class-D `.tran`/`.meas` blockers and authored-analysis
+differential parity; optionally remeasure full recursive capability buckets
+and set honest ceilings. P0.1–P0.4 (structured measurement) closed;
+capability ≠ done.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
 wrapper.** Known SPICE semantics must appear as named, editable controls in the
@@ -115,6 +118,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - P0.4 CORPUS CAPABILITY BUCKETS. Prefix-based full-corpus hardFailures===0 removed; runner reports success/capability-refusal/deck-guard-leak/failure; canonical 79/3/0/0; table.cm dropped from staging corpus test.
 - 2026-08-04 - TRANSITIVE `.subckt` CLOSURE: nested X refs inside inlined bodies emit resolvable peers or land on unresolvedSubckts; staged GPL residue cleared locally so cargo staged_engine is green.
 - 2026-08-04 - CORPUS APPLIES THE APP'S unresolvedSubckts GUARD. Royer/LT1184F is an honest deck refusal; canonical hard failures 1 -> 0; floors 82/81/79/79.
 - 2026-08-04 - CHAN-CORE INDUCTORS REFUSE INSTEAD OF SUBSTITUTING LINEAR L. NonLinearTransformer is the only canonical casualty; corpus re-measured 82/81/80/79; mutation-checked. P0.2 closed.
