@@ -2258,6 +2258,49 @@ Rout out 0 1k
         );
     }
 
+    /** Four-quadrant OTA: effective Vin = Vdiff · V(mul). Linear unbounded
+     * path must multiply, not silently ignore the mul port (which would
+     * under-read by the mul factor). */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice with its code models"]
+    fn runs_ltspice_ota_four_quadrant_linear_product() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let result = engine
+            .run(SpiceRequest {
+                // gm=1 · Vin=50m · Vmul=2 → 100 mA into 1 kΩ → 100 V.
+                // Dropping the mul port would yield only 50 V.
+                netlist: r#"Tau four-quadrant linear OTA
+Vin in 0 50m
+Vmul m 0 2
+.model tau_ota ota(gm=1 rout=1e308 rin=1e308)
+Bveff veff 0 V={(V(in)-V(0))*V(m,0)}
+Aota veff 0 ota_sink tau_ota
+Vsense ota_sink 0 0
+Fout out 0 Vsense 1
+Rout out 0 1k
+.op
+.end"#
+                    .to_string(),
+            })
+            .expect("four-quadrant linear OTA should solve");
+        let out = result
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("out"))
+            .and_then(|vector| vector.real.first())
+            .copied()
+            .unwrap_or_else(|| panic!("out missing; messages: {:?}", result.messages));
+        assert!(
+            (99.0..101.0).contains(&out),
+            "four-quadrant product should be gm*Vin*Vmul into 1k (≈100 V); got {} V",
+            out
+        );
+    }
+
     /** A library with no `.cm` modules beside it is exactly the state Tau's
      * own bundled resource is in, and the state the diagnosis exists for. It
      * is reached here by loading the real library through a directory that has

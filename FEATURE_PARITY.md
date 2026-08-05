@@ -226,8 +226,8 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     fail-closed deck: missing named models block Run rather than promising a
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
-    `NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=729 refuse=1810 silent=0
-    hard-failure=0 encrypted-excluded=1473 exact-rate=28.7%` (tip 2026-08-05
+    `NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=837 refuse=1702 silent=0
+    hard-failure=0 encrypted-excluded=1473 exact-rate=33.0%` (tip 2026-08-05
     00:33). Finite-V OTA epsilon=0 Rclamp→rail load swap (+179 exact vs 21.7%
     linear tip; prior linear unbounded + asym/Ref). Soft epsilon / multipliers /
     incomplete asym stay honest refuse.

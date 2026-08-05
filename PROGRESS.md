@@ -9,24 +9,38 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:34 CDT** (Overnight DoD — finite-V OTA)
+**Status: DONE - 2026-08-05 00:45 CDT**
 
-Unit: LTspice OTA finite-V epsilon=0 Rclamp→rail load swap → named-device
-**28.7%**. Pin-faithful refuse→exact. Never silent unclamp. Never fake ≥95%.
-
-**Measured tip stdout (truth):**
+Unit: Exact ideal-diode M/N instance multipliers → named-device **33.0%**.
 ```
-NAMED-DEVICE: exact=2 refuse=4 silent=0
-NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=729 refuse=1810 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=28.7%
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=837 refuse=1702 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=33.0%
 ```
-Before: 550/21.7%. After: +179 exact. Soft epsilon / multipliers / incomplete
-asym stay refuse. Encrypted bare SYMBOL stays refuse. SHIPPABLE? **NO**
-
-**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
+Before 28.7%/729 → +108 exact. off/non-default temp stay refuse. Freshman AI
+untouched. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Ideal-diode M/N scale → exact-rate 33.0% (§DoD)
+
+**What I did**
+- Map LTspice ideal-diode `m=`/`N=` onto scaled sidiode model params (Ron/Roff
+  series÷parallel, Ilimit×parallel, Vfwd/epsilon×series).
+- Refuse `off`, non-default `temp=`, `area=` with explicit reasons — never silent
+  generic diode.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=837 refuse=1702 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=33.0%
+```
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **33.0%** (not ≥95%). SHIPPABLE? NO
+
+**Next**
+- Vendor REF (~740); multipliers; incomplete asym
 
 ### 2026-08-05 — OTA finite-V Rclamp compliance → exact-rate 28.7% (§DoD)
 

@@ -23,7 +23,7 @@
  * just text in, a registry out.
  */
 
-import { parseQuantity } from "../simulation/quantity";
+import { formatEngineering, parseQuantity } from "../simulation/quantity";
 import { sanitizeSubcktName } from "./bundledSubcircuits";
 import { ifToTernary, ltFuncsToNgspice } from "../simulation/behavioral";
 
@@ -119,6 +119,112 @@ function finiteLiteral(value: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+interface IdealDiodeModelBinding {
+  readonly emitted: string;
+  readonly body: string;
+}
+
+function formatScaledSpiceValue(value: number): string {
+  return formatEngineering(value).replace(/\s+/g, "");
+}
+
+function isHugeSpiceValue(value: string): boolean {
+  if (/[{}A-Za-z_]/.test(value)) return false;
+  try {
+    return parseQuantity(value) >= 1e30;
+  } catch {
+    return false;
+  }
+}
+
+/** LTspice M/N instance multipliers on an ideal diode: M strings in parallel,
+ * each string N devices in series. Scale the sidiode model parameters once. */
+function scaleIdealDiodeModelBody(body: string, parallel: number, series: number): string {
+  if (parallel === 1 && series === 1) return body;
+  return body.replace(
+    /([A-Za-z_]\w*)\s*=\s*(\{[^}]*\}|[^\s,)]+)/g,
+    (full, key: string, value: string) => {
+      if (value.includes("{")) return full;
+      const kl = key.toLowerCase();
+      let factor = 1;
+      if (kl === "ron" || kl === "roff" || kl === "rrev") factor = series / parallel;
+      else if (kl === "ilimit" || kl === "revilimit") factor = parallel;
+      else if (kl === "vfwd" || kl === "vrev" || kl === "epsilon" || kl === "revepsilon") factor = series;
+      else return full;
+      if (factor === 1) return full;
+      if (isHugeSpiceValue(value)) return full;
+      try {
+        return `${key}=${formatScaledSpiceValue(parseQuantity(value) * factor)}`;
+      } catch {
+        return full;
+      }
+    },
+  );
+}
+
+function idealDiodeInstanceRefusal(device: string, detail: string): string {
+  return `${TAU_MODEL_REFUSAL_MARKER}${device} uses LTspice ideal-diode instance options Tau cannot map exactly (${detail}).`;
+}
+
+function parseIdealDiodeMultiplier(token: string | null): number | "expr" | "invalid" {
+  if (token === null) return 1;
+  if (token.includes("{")) return "expr";
+  try {
+    const value = parseQuantity(token);
+    if (!Number.isFinite(value) || value <= 0) return "invalid";
+    return value;
+  } catch {
+    return "invalid";
+  }
+}
+
+function parseIdealDiodeInstanceTail(tail: string): {
+  parallel: number | "expr" | "invalid";
+  series: number | "expr" | "invalid";
+  refusal: string | null;
+} {
+  let remaining = stripNoiselessFlag(tail).trim();
+  const parallelToken = /\bm\s*=\s*(\{[^}]*\}|[^\s]+)/i.exec(remaining)?.[1] ?? null;
+  remaining = remaining.replace(/\bm\s*=\s*(?:\{[^}]*\}|[^\s]+)/gi, "").trim();
+  const seriesToken = /\bn\s*=\s*(\{[^}]*\}|[^\s]+)/i.exec(remaining)?.[1] ?? null;
+  remaining = remaining.replace(/\bn\s*=\s*(?:\{[^}]*\}|[^\s]+)/gi, "").trim();
+  const tempToken = /\btemp\s*=\s*(\{[^}]*\}|[^\s]+)/i.exec(remaining)?.[1] ?? null;
+  remaining = remaining.replace(/\btemp\s*=\s*(?:\{[^}]*\}|[^\s]+)/gi, "").trim();
+  if (/\barea\s*=/i.test(remaining)) {
+    return { parallel: 1, series: 1, refusal: "area= is not defined for LTspice ideal diodes" };
+  }
+  if (/\boff\b/i.test(remaining)) {
+    return { parallel: 1, series: 1, refusal: "off initial condition is not mapped onto sidiode" };
+  }
+  if (/\bon\b/i.test(remaining)) {
+    return { parallel: 1, series: 1, refusal: "on initial condition is not mapped onto sidiode" };
+  }
+  if (tempToken !== null) {
+    if (tempToken.includes("{")) {
+      return { parallel: 1, series: 1, refusal: "non-literal temp= is not mapped onto sidiode" };
+    }
+    try {
+      if (parseQuantity(tempToken) !== 27) {
+        return { parallel: 1, series: 1, refusal: "non-default temp= is not mapped onto sidiode" };
+      }
+    } catch {
+      return { parallel: 1, series: 1, refusal: "non-literal temp= is not mapped onto sidiode" };
+    }
+  }
+  if (remaining !== "") {
+    return { parallel: 1, series: 1, refusal: `unrecognized option ${remaining.split(/\s+/)[0]}` };
+  }
+  const parallel = parseIdealDiodeMultiplier(parallelToken);
+  const series = parseIdealDiodeMultiplier(seriesToken);
+  if (parallel === "expr" || series === "expr") {
+    return { parallel, series, refusal: "non-literal m=/n= multipliers are not expanded exactly yet" };
+  }
+  if (parallel === "invalid" || series === "invalid") {
+    return { parallel, series, refusal: "m=/n= must be positive literal values" };
+  }
+  return { parallel, series, refusal: null };
+}
+
 /** LTspice's piecewise-linear diode and ngspice's bundled `sidiode` code
  * model implement the same Ron/Roff/Vfwd/Vrev/Rrev/current-limit/quadratic-
  * shoulder contract. Rename the model type and its instances; do not feed the
@@ -129,7 +235,7 @@ function translateIdealDiodes(lines: string[]): string[] {
     const name = /^\s*\.model\s+(\S+)/i.exec(line)?.[1];
     if (name) usedModelNames.add(name.toLowerCase());
   }
-  const idealModels = new Map<string, string>();
+  const idealModels = new Map<string, IdealDiodeModelBinding>();
   for (const line of lines) {
     const match = /^\s*\.model\s+(\S+)\s+D\s*\((.*)\)\s*$/i.exec(line);
     if (!match || !LTSPICE_IDEAL_DIODE_KEYS.test(match[2])) continue;
@@ -145,22 +251,47 @@ function translateIdealDiodes(lines: string[]): string[] {
       while (usedModelNames.has(emitted.toLowerCase())) emitted = `${base}_${suffix++}`;
       usedModelNames.add(emitted.toLowerCase());
     }
-    idealModels.set(original.toLowerCase(), emitted);
+    idealModels.set(original.toLowerCase(), {
+      emitted,
+      body: stripNoiselessFlag(match[2]).trim(),
+    });
   }
-  return lines.map((line) => {
+  const out: string[] = [];
+  for (const line of lines) {
     const model = /^\s*\.model\s+(\S+)\s+D\s*\((.*)\)\s*$/i.exec(line);
-    const emittedModel = model ? idealModels.get(model[1].toLowerCase()) : undefined;
-    if (model && emittedModel) {
-      return `.model ${emittedModel} sidiode(${stripNoiselessFlag(model[2]).trim()})`;
+    const binding = model ? idealModels.get(model[1].toLowerCase()) : undefined;
+    if (model && binding) {
+      out.push(`.model ${binding.emitted} sidiode(${binding.body})`);
+      continue;
     }
     const device = /^\s*(D\S+)\s+(\S+)\s+(\S+)\s+(\S+)(.*)$/i.exec(line);
-    const emittedDeviceModel = device ? idealModels.get(device[4].toLowerCase()) : undefined;
-    if (!device || !emittedDeviceModel) return line;
-    if (device[5].trim() !== "") {
-      return `${TAU_MODEL_REFUSAL_MARKER}${device[1]} uses LTspice ideal-diode instance options Tau cannot map exactly.`;
+    const deviceBinding = device ? idealModels.get(device[4].toLowerCase()) : undefined;
+    if (!device || !deviceBinding) {
+      out.push(line);
+      continue;
     }
-    return `A__tau_${device[1]} ${device[2]} ${device[3]} ${emittedDeviceModel}`;
-  });
+    const parsed = parseIdealDiodeInstanceTail(device[5]);
+    if (parsed.refusal !== null) {
+      out.push(idealDiodeInstanceRefusal(device[1], parsed.refusal));
+      continue;
+    }
+    const parallel = parsed.parallel as number;
+    const series = parsed.series as number;
+    if (parallel === 1 && series === 1) {
+      out.push(`A__tau_${device[1]} ${device[2]} ${device[3]} ${deviceBinding.emitted}`);
+      continue;
+    }
+    const safe = device[1].replace(/[^A-Za-z0-9_]/g, "_");
+    let instModel = `__tau_sidiode_${safe}`;
+    let suffix = 2;
+    while (usedModelNames.has(instModel.toLowerCase())) instModel = `__tau_sidiode_${safe}_${suffix++}`;
+    usedModelNames.add(instModel.toLowerCase());
+    out.push(
+      `.model ${instModel} sidiode(${scaleIdealDiodeModelBody(deviceBinding.body, parallel, series)})`,
+      `A__tau_${device[1]} ${device[2]} ${device[3]} ${instModel}`,
+    );
+  }
+  return out;
 }
 
 function instanceParameter(tail: string, name: "rser" | "rpar" | "cpar" | "m"): string | null {
@@ -290,14 +421,18 @@ function parseOtaComplianceLiteral(token: string): number | null {
 }
 
 /** Map the documented LTspice OTA subset used by current vendor op-amp
- * libraries onto Tau's pinned native OTA code model. Multiplying ports must be
- * tied off. Asymmetric Isource/Isink (`asym`) and input `Ref` offset map onto
- * the patched OTA (tanh current limit + series offset). The LTspice `linear`
- * flag disables current limiting entirely (`Io = G·Vdiff`) — map that by
- * omitting Iout so the native model stays on its unbounded gm path; never
- * substitute tanh. Finite Vhigh/Vlow (Help defaults 2/0 when omitted) map as
- * epsilon=0 Rclamp-to-rail load swap on V(out,common); non-zero `epsilon`
- * still refuses. Cout remains a literal passive across out/common. */
+ * libraries onto Tau's pinned native OTA code model. Four-quadrant
+ * multiplier ports (Help / LTwiki: I = f(G·(Vin+−Vin−−Ref)·V(ncm1)·V(ncm2)))
+ * fold into an effective Vin via a behavioral voltage product — tied ncm
+ * pairs contribute unity (inactive), never zero; never a silent two-port
+ * drop of active multipliers. Asymmetric Isource/Isink (`asym`) and input
+ * `Ref` offset map onto the patched OTA (tanh current limit + series
+ * offset). The LTspice `linear` flag disables current limiting entirely
+ * (`Io = G·Vdiff·…`) — map that by omitting Iout so the native model stays
+ * on its unbounded gm path; never substitute tanh. Finite Vhigh/Vlow
+ * (Help defaults 2/0 when omitted) map as epsilon=0 Rclamp-to-rail load
+ * swap on V(out,common); non-zero `epsilon` still refuses. Cout remains a
+ * literal passive across out/common. */
 function translateLtspiceOta(line: string, subcktName: string): string[] {
   const match = /^\s*(A\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+OTA\b(.*)$/i.exec(line);
   if (!match) return [line];
@@ -305,9 +440,8 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   const params = modelParamMap(tail);
   const refusal = (reason: string) => [`${TAU_MODEL_REFUSAL_MARKER}${subcktName}/${instance} ${reason}`];
 
-  if (mul1p.toLowerCase() !== mul1n.toLowerCase() || mul2p.toLowerCase() !== mul2n.toLowerCase()) {
-    return refusal("uses active four-quadrant multiplier ports; the native two-port OTA is not equivalent.");
-  }
+  const mul1Active = mul1p.toLowerCase() !== mul1n.toLowerCase();
+  const mul2Active = mul2p.toLowerCase() !== mul2n.toLowerCase();
   // Soft epsilon blend is not yet pin-faithful; abrupt (0 / omitted) is.
   if (params.has("epsilon")) {
     const epsilon = parseOtaComplianceLiteral(params.get("epsilon")!);
@@ -382,8 +516,22 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
     translated.push(`V__tau_ota_ref_${safe} ${refNode} ${inn} ${ref}`);
     innNode = refNode;
   }
+  // Active four-quadrant ports: fold V(ncm)·… into an effective Vin so the
+  // pinned two-port OTA still owns tanh / asym / noise. Tied ports stay on
+  // the direct path (unity factor — never multiply by a zero differential).
+  let otaInp = inp;
+  let otaInn = innNode;
+  if (mul1Active || mul2Active) {
+    const veff = `__tau_ota_veff_${safe}`;
+    const factors = [`(V(${inp})-V(${innNode}))`];
+    if (mul1Active) factors.push(`V(${mul1p},${mul1n})`);
+    if (mul2Active) factors.push(`V(${mul2p},${mul2n})`);
+    translated.push(`B__tau_ota_veff_${safe} ${veff} 0 V={${factors.join("*")}}`);
+    otaInp = veff;
+    otaInn = "0";
+  }
   translated.push(
-    `A__tau_ota_${safe} ${inp} ${innNode} ${sink} ${model}`,
+    `A__tau_ota_${safe} ${otaInp} ${otaInn} ${sink} ${model}`,
     `${sensor} ${sink} 0 0`,
     `F__tau_ota_${safe} ${out} ${common} ${sensor} 1`,
   );

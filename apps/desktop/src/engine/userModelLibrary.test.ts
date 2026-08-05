@@ -206,6 +206,44 @@ describe("parseUserModelLibraries", () => {
     expect(block).not.toMatch(/\.model\s+2p\s+sidiode/i);
   });
 
+  it("maps ideal-diode m= parallel and N= series multipliers onto scaled sidiode models", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "D1 3 2 LIM m=2",
+        "D2 4 3 LIM N=3",
+        "D3 5 4 LIM temp=27",
+        ".model LIM D(Ron=10 Roff=1T Vfwd=0.7 Ilimit=1m epsilon=0.1 noiseless)",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain(".model __tau_sidiode_D1 sidiode(Ron=5 Roff=500G Vfwd=0.7 Ilimit=2m epsilon=0.1)");
+    expect(block).toContain("A__tau_D1 3 2 __tau_sidiode_D1");
+    expect(block).toContain(".model __tau_sidiode_D2 sidiode(Ron=30 Roff=3T Vfwd=2.1 Ilimit=1m epsilon=300m)");
+    expect(block).toContain("A__tau_D2 4 3 __tau_sidiode_D2");
+    expect(block).toContain("A__tau_D3 5 4 LIM");
+    expect(block).not.toMatch(/TAU_MODEL_REFUSAL.*ideal-diode/i);
+  });
+
+  it("refuses ideal-diode off= and non-default temp= with explicit reasons", () => {
+    expect(() => resolveUserSubckt(parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2",
+        "D1 1 2 LIM off",
+        ".model LIM D(Ron=1 Roff=1Meg Vfwd=0.5)",
+        ".ends AMP",
+      ].join("\n"),
+    ]), "AMP")).toThrow(/off initial condition is not mapped onto sidiode/i);
+    expect(() => resolveUserSubckt(parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2",
+        "D1 1 2 LIM temp=125",
+        ".model LIM D(Ron=1 Roff=1Meg Vfwd=0.5)",
+        ".ends AMP",
+      ].join("\n"),
+    ]), "AMP")).toThrow(/non-default temp= is not mapped onto sidiode/i);
+  });
+
   it("spells LTspice positional diode area explicitly for scoped ngspice models", () => {
     const block = parseUserModelLibraries([
       [
@@ -436,12 +474,76 @@ describe("parseUserModelLibraries", () => {
     );
   });
 
-  it("refuses active OTA multiplier ports instead of substituting a two-port gain block", () => {
+  it("maps active four-quadrant OTA multiplier ports via effective-Vin product", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        // LT1011-style: mul1 = N003 vs 0, mul2 tied, linear unbounded.
+        "A5 N004 0 N003 0 0 0 N008 0 OTA g=3 linear Vlow=-1e308 Vhigh=1e308 cout=1f rout=1",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain(".model __tau_ota_AMP_A5 ota(gm=3 rout=1e308 rin=1e308)");
+    expect(block).not.toMatch(/\biout=/i);
+    expect(block).toContain("B__tau_ota_veff_AMP_A5 __tau_ota_veff_AMP_A5 0 V={(V(N004)-V(0))*V(N003,0)}");
+    expect(block).toContain("A__tau_ota_AMP_A5 __tau_ota_veff_AMP_A5 0 __tau_ota_sink_AMP_A5 __tau_ota_AMP_A5");
+    expect(block).toContain("F__tau_ota_AMP_A5 N008 0 V__tau_ota_AMP_A5 1");
+    expect(block).toContain("C__tau_ota_AMP_A5 N008 0 1f");
+    expect(block).toContain("R__tau_ota_AMP_A5 N008 0 1");
+    // Must not silently drop the multiplier into a bare two-port on N004/0.
+    expect(block).not.toMatch(/A__tau_ota_AMP_A5 N004 0 /);
+  });
+
+  it("maps tanh four-quadrant OTA with Ref and both multiplier pairs", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A1 INP INN M1P M1N M2P M2N OUT COM OTA g=40u iout=20u ref=.4 Vhigh=1e308 Vlow=-1e308",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("V__tau_ota_ref_AMP_A1 __tau_ota_ref_AMP_A1 INN .4");
+    expect(block).toContain(
+      "B__tau_ota_veff_AMP_A1 __tau_ota_veff_AMP_A1 0 V={(V(INP)-V(__tau_ota_ref_AMP_A1))*V(M1P,M1N)*V(M2P,M2N)}",
+    );
+    expect(block).toContain("iout=20u");
+    expect(block).toContain("A__tau_ota_AMP_A1 __tau_ota_veff_AMP_A1 0 __tau_ota_sink_AMP_A1 __tau_ota_AMP_A1");
+  });
+
+  it("maps asymmetric four-quadrant OTA without dropping Isource/Isink", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        // LT1012-style mul1 active + asym.
+        "A4 0 N004 N010 0 0 0 N003 0 OTA g=40u asym isource=20u isink=-40u vlow=-1e308 vhigh=1e308",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain(
+      ".model __tau_ota_AMP_A4 ota(gm=40u rout=1e308 rin=1e308 isource=20u isink=-40u)",
+    );
+    expect(block).toContain("B__tau_ota_veff_AMP_A4 __tau_ota_veff_AMP_A4 0 V={(V(0)-V(N004))*V(N010,0)}");
+    expect(block).not.toMatch(/\biout=/i);
+  });
+
+  it("keeps tied-multiplier OTAs on the direct two-port path (unity, not ×0)", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A1 0 N004 0 0 0 0 X 0 OTA g=150u Iout=7u Vhigh=1e308 Vlow=-1e308",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).not.toMatch(/B__tau_ota_veff/);
+    expect(block).toContain("A__tau_ota_AMP_A1 0 N004 __tau_ota_sink_AMP_A1 __tau_ota_AMP_A1");
+  });
+
+  it("refuses soft epsilon even when four-quadrant ports are active", () => {
     const registry = parseUserModelLibraries([
-      ".subckt AMP 1 2 3 4 5\nA1 1 2 3 4 0 0 5 0 OTA g=1m Vhigh=1e308 Vlow=-1e308\n.ends AMP",
+      ".subckt AMP 1 2 3 4 5\nA1 1 2 3 4 0 0 5 0 OTA g=1m Vhigh=1e308 Vlow=-1e308 epsilon=20m\n.ends AMP",
     ]);
     expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
-      /Simulation refused: AMP\/A1 uses active four-quadrant multiplier ports.*No approximate or partial circuit was run/,
+      /Simulation refused: AMP\/A1 uses OTA voltage-compliance shaping \(rclamp\/epsilon\) not mapped exactly\..*No approximate or partial circuit was run/,
     );
   });
 
