@@ -1678,7 +1678,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   or creates a folder, and every AI-created schematic is written inside it.
   Disk-backed tabs derive an exact saved-document signature, show an unsaved dot
   after any mutation, and clear it only after a successful save. Tauri now has a
-  resistor-smiley mascot and complete platform icon set, durable named chat
+  resistor mark (faceless Bode; Sparkles retired 2026-08-04) and complete platform icon set, durable named chat
   sessions that can be reopened/deleted, editable user turns with branch-and-
   resend behavior, a shadcn model selector, a concise AI fallibility note, and
   deterministic quick prompts derived from the selected part, schematic, and

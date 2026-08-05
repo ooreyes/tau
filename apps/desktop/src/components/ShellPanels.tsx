@@ -8,7 +8,11 @@ import {
   FolderOpen,
   Folder,
   FolderPlus,
+  FolderInput,
+  FileInput,
+  FoldVertical,
   Pencil,
+  RefreshCw,
   Search,
   Trash2,
   Eraser,
@@ -22,6 +26,11 @@ import {
   Activity,
   Library,
   SlidersHorizontal,
+  Play,
+  Square,
+  Plus,
+  X,
+  ArrowLeft,
 } from "lucide-react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
@@ -70,21 +79,17 @@ import {
 import {
   LOCAL_AI_PRESETS,
   getLocalAiStatus,
+  installLocalAiRuntime,
+  startLocalAi,
   stopLocalAi,
   type LocalAiPresetInfo,
   type LocalAiStatus,
 } from "../lib/localAiRuntime";
 import {
-  ensureLocalAi,
-  studentFacingLocalAiDetail,
-} from "../lib/localAiEnsure";
-import {
   importCustomLocalAiModel,
   loadCustomLocalAiModels,
   removeCustomLocalAiModel,
 } from "../lib/localAiModels";
-import { saveCloudAiConsent } from "../lib/cloudAiConsent";
-import { useCloudAiConsent } from "../lib/cloudAiConsentHooks";
 import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 import { ThemeControl } from "./SettingsPanel";
 
@@ -1198,7 +1203,7 @@ export function EditorToolbar({
       <IconButton title="Delete selection (Delete)" disabled={!hasSelection || readOnly} onClick={deleteSelected}>
         <Trash2 size={16} strokeWidth={1.6} />
       </IconButton>
-      <IconButton title="Clear scratchpad" disabled={readOnly} onClick={onClearScratchpad}>
+      <IconButton title="Clear schematic" disabled={readOnly} onClick={onClearScratchpad}>
         <Eraser size={16} strokeWidth={1.6} />
       </IconButton>
       <span className="toolbar-divider" />
@@ -1213,14 +1218,16 @@ export function EditorToolbar({
       </IconButton>
       <div className="editor-toolbar-spacer" />
       <div className="transport">
-        <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>▶</button>
+        <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>
+          <Play size={14} strokeWidth={1.6} aria-hidden="true" />
+        </button>
         <button
           className="transport-stop"
           title="Clear current simulation result"
           aria-label="Stop simulation"
           onClick={onStop}
         >
-          ■
+          <Square size={12} strokeWidth={1.6} aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -1338,9 +1345,7 @@ export function EditorTabs({
                 role="img"
                 aria-label={`${tab.title} has unsaved changes`}
                 title="Unsaved changes"
-              >
-                ●
-              </span>
+              />
             )}
             <button
               type="button"
@@ -1351,14 +1356,21 @@ export function EditorTabs({
                 onCloseTab(tab.id);
               }}
             >
-              ×
+              <X size={12} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
         );
       })}
-      <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>＋</button>
+      <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>
+        <Plus size={14} strokeWidth={1.6} aria-hidden="true" />
+      </button>
       <div className="editor-tab-spacer" />
-      {mode === "simulator" && <button className="editor-hide" aria-label="Return to schematic editor" onClick={onHideSimulator}>× back to schematic</button>}
+      {mode === "simulator" && (
+        <button className="editor-hide" aria-label="Return to schematic editor" onClick={onHideSimulator}>
+          <ArrowLeft size={12} strokeWidth={1.8} aria-hidden="true" />
+          Schematic
+        </button>
+      )}
     </div>
   );
 }
@@ -1417,7 +1429,7 @@ export function BottomPanel({
           </span>
           <span className="bottom-panel-title">Diagnostics</span>
           <span className="bottom-panel-clear" role="status">
-            {isRunning ? "Running" : isIdle ? "Not run" : "No issues"}
+            {isRunning ? "Running" : isIdle ? "No analysis yet" : "No issues"}
           </span>
         </div>
       ) : (
@@ -1638,7 +1650,7 @@ export function ComponentInspector({
               <p className="property-hint" role="status">
                 {selectedSubcircuit
                   ? `Ready · ${selectedSubcircuit.ports.length} named terminals (${selectedSubcircuit.ports.join(", ")}) from ${selectedSubcircuit.sourceLabel}`
-                  : `Blocked · ${subcircuitInstance?.name || "No subcircuit"} has no attached or document definition; Tau will not guess its pins or behavior.`}
+                  : `Needs a definition · ${subcircuitInstance?.name || "No subcircuit"} isn't in an attached library or this sheet. Run won't invent pins.`}
               </p>
               {selectedSubcircuit?.parameters.map((parameter) => {
                 const parameterLabel = parameter.label ?? parameter.name;
@@ -1743,9 +1755,9 @@ export function ComponentInspector({
               </label>
               <p className="property-hint" role="status">
                 {!selectedModelOption
-                  ? `Blocked · ${selectedModelName || "No model"} is unavailable or incompatible; Run will refuse rather than substitute a generic ${modelKind.toUpperCase()} starter. Attach the exact model or deliberately choose Generic.`
+                  ? `Needs a model · ${selectedModelName || "No model"} isn't available. Run won't substitute a generic ${modelKind.toUpperCase()} — attach the library or choose Generic.`
                   : selectedModelOption.source === "generic"
-                    ? `Generic starter · useful for topology checks, not an exact manufacturer part.`
+                    ? `Generic starter · fine for topology checks; not a manufacturer part.`
                     : `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`}
               </p>
               {visibleFields.filter((field) => {
@@ -1823,8 +1835,8 @@ export function ComponentInspector({
                     {opampStatus?.kind === "ready"
                       ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "Model Libraries" : "this document"}`
                       : opampStatus?.kind === "incompatible"
-                        ? `Blocked · model has ${opampStatus.portCount} terminals; this symbol requires five`
-                        : "Model library required · Tau will not substitute a generic gain block"}
+                        ? `Pin count · model has ${opampStatus.portCount} terminals; this symbol needs five`
+                        : "Needs a library model · Tau will not substitute a generic gain block"}
                   </p>
                   {opampStatus?.kind !== "ready" && onOpenModelLibraries && (
                     <Button
@@ -2110,13 +2122,11 @@ export function SettingsPanel({
     setGeminiKeyInput((current) => (current ? current : hydratedGeminiKey));
   }, [hydratedGeminiKey]);
   const assistantPreferences = useAssistantPreferences();
-  const cloudConsent = useCloudAiConsent();
   const [localAiStatus, setLocalAiStatus] = useState<LocalAiStatus | null>(null);
   const [localAiBusy, setLocalAiBusy] = useState(false);
   const [localAiError, setLocalAiError] = useState<string | null>(null);
   const [customLocalModels, setCustomLocalModels] = useState(loadCustomLocalAiModels);
   const [customModelRepository, setCustomModelRepository] = useState("");
-  const [showAdvancedLocal, setShowAdvancedLocal] = useState(false);
 
   useEffect(() => setApiKeyInput(storedApiKey), [storedApiKey]);
 
@@ -2129,12 +2139,14 @@ export function SettingsPanel({
       if (!cancelled) setLocalAiStatus(status);
     }).catch((error: unknown) => {
       if (!cancelled) {
-        setLocalAiError(userFacingErrorMessage(error, "Could not check on-device AI."));
+        setLocalAiError(userFacingErrorMessage(error, "Could not inspect the local MLX runtime."));
       }
     });
     return () => { cancelled = true; };
   }, [assistantPreferences.provider, assistantPreferences.localModel]);
 
+  // Starting is asynchronous in native code: poll only while weights are
+  // loading, and stop immediately once the endpoint reports ready/error.
   useEffect(() => {
     if (assistantPreferences.provider !== "local-mlx" || localAiStatus?.state !== "starting") return;
     let cancelled = false;
@@ -2142,7 +2154,7 @@ export function SettingsPanel({
       void getLocalAiStatus().then((status) => {
         if (!cancelled) setLocalAiStatus(status);
       }).catch((error: unknown) => {
-        if (!cancelled) setLocalAiError(userFacingErrorMessage(error, "Could not check on-device AI."));
+        if (!cancelled) setLocalAiError(userFacingErrorMessage(error, "Could not inspect the local MLX runtime."));
       });
     }, 900);
     return () => {
@@ -2157,7 +2169,7 @@ export function SettingsPanel({
     try {
       setLocalAiStatus(await action());
     } catch (error) {
-      setLocalAiError(userFacingErrorMessage(error, "On-device AI could not start."));
+      setLocalAiError(userFacingErrorMessage(error, "The local MLX runtime action failed."));
     } finally {
       setLocalAiBusy(false);
     }
@@ -2169,42 +2181,15 @@ export function SettingsPanel({
   ];
   const selectedLocalPreset = localPresets.find((preset) => preset.id === assistantPreferences.localModel)
     ?? LOCAL_AI_PRESETS.find((preset) => preset.id === assistantPreferences.localModel)!;
-
-  const turnOnLocalAi = async () => {
-    setLocalAiBusy(true);
-    setLocalAiError(null);
-    try {
-      const result = await ensureLocalAi({
-        modelId: assistantPreferences.localModel,
-        downloaded: selectedLocalPreset.downloaded,
-        repository: "custom" in selectedLocalPreset ? selectedLocalPreset.repository : undefined,
-        allowDownload: true,
-      });
-      setLocalAiStatus(result.status);
-      if (result.decision.type === "refuse" || result.decision.type === "unavailable") {
-        setLocalAiError(result.decision.detail);
-      }
-    } catch (error) {
-      setLocalAiError(userFacingErrorMessage(error, "On-device AI could not start."));
-    } finally {
-      setLocalAiBusy(false);
-    }
-  };
-
-  const pathChoice: "on-device" | "cloud" = assistantPreferences.provider === "local-mlx" ? "on-device" : "cloud";
   const localStateLabel = localAiStatus
     ? localAiStatus.state === "ready"
       ? "Ready"
       : localAiStatus.state === "starting"
-        ? "Loading"
+        ? "Starting"
         : localAiStatus.state === "error"
-          ? "Needs attention"
-          : "Off"
+          ? "Error"
+          : "Stopped"
     : "Checking";
-  const localStatusDetail = studentFacingLocalAiDetail(localAiStatus, undefined, {
-    modelId: assistantPreferences.localModel,
-    downloading: localAiBusy && !selectedLocalPreset.downloaded,
-  });
 
   const PROBE_SWATCHES = [
     "var(--trace-red)",
@@ -2230,7 +2215,7 @@ export function SettingsPanel({
         <SheetHeader>
           <span className="settings-sheet-kicker">Settings</span>
           <SheetTitle>{title}</SheetTitle>
-          <SheetDescription className="sr-only">Workspace and document settings for this scratchpad.</SheetDescription>
+          <SheetDescription className="sr-only">Workspace and document settings for the active schematic.</SheetDescription>
         </SheetHeader>
         <div className="settings-list">
           <div className="settings-section">
@@ -2240,49 +2225,39 @@ export function SettingsPanel({
           <div className="settings-section">
             <span className="settings-sheet-kicker">Assistant</span>
             <div className="settings-field-grid">
-              <div className="settings-field" role="group" aria-label="Assistant path">
-                <span>Where should Bode run?</span>
-                <div className="settings-path-toggle" role="radiogroup" aria-label="Assistant path">
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={pathChoice === "on-device"}
-                    className={`settings-path-btn${pathChoice === "on-device" ? " active" : ""}`}
-                    onClick={() => saveAssistantPreferences({
-                      ...assistantPreferences,
-                      provider: "local-mlx",
-                    })}
-                  >
-                    On-device
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={pathChoice === "cloud"}
-                    className={`settings-path-btn${pathChoice === "cloud" ? " active" : ""}`}
-                    onClick={() => saveAssistantPreferences({
-                      ...assistantPreferences,
-                      provider: assistantPreferences.provider === "anthropic" ? "anthropic" : "gemini",
-                    })}
-                  >
-                    Cloud
-                  </button>
-                </div>
+              <label className="settings-field" htmlFor="assistant-provider">
+                <span>Provider</span>
+                <select
+                  id="assistant-provider"
+                  className="settings-select"
+                  aria-label="Provider"
+                  value={assistantPreferences.provider}
+                  onChange={(event) => saveAssistantPreferences({
+                    ...assistantPreferences,
+                    provider: event.currentTarget.value as AssistantProviderChoice,
+                  })}
+                >
+                  <option value="local-mlx">Local MLX</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="gemini">Google Gemini</option>
+                </select>
                 <span className="settings-field-hint">
-                  {pathChoice === "on-device"
-                    ? "Stays on this Mac. Tau downloads and loads a small model for you — no account."
-                    : "Uses a free Gemini key or Anthropic key you provide. Circuit questions leave this Mac only after you consent."}
+                  {assistantPreferences.provider === "local-mlx"
+                    ? "On this Mac. Circuit context stays local."
+                    : assistantPreferences.provider === "gemini"
+                      ? "Keychain key · Google AI Studio. Free tier needs no card."
+                      : "Keychain key · api.anthropic.com."}
                 </span>
-              </div>
+              </label>
 
-              {pathChoice === "on-device" ? (
+              {assistantPreferences.provider === "local-mlx" ? (
                 <>
                   <label className="settings-field" htmlFor="assistant-local-model">
                     <span>Model</span>
                     <select
                       id="assistant-local-model"
                       className="settings-select"
-                      aria-label="On-device model"
+                      aria-label="Model"
                       value={assistantPreferences.localModel}
                       onChange={(event) => saveAssistantPreferences({
                         ...assistantPreferences,
@@ -2293,27 +2268,71 @@ export function SettingsPanel({
                         <option key={preset.id} value={preset.id}>{preset.label}</option>
                       ))}
                     </select>
-                    <span className="settings-field-hint">
-                      Start with 1.7B for a quick try (~900 MB). 4B is better for building circuits if you have 8 GB+ memory.
-                    </span>
+                    <span className="settings-field-hint">4B for proposals on 8 GB Macs; 1.7B is lighter.</span>
                   </label>
+
+                  <div className="settings-field" aria-label="Custom local models">
+                    <span>Add a model</span>
+                    <div className="settings-inline-actions">
+                      <Input
+                        value={customModelRepository}
+                        aria-label="Hugging Face model repository"
+                        placeholder="owner/model-name"
+                        onChange={(event) => setCustomModelRepository(event.currentTarget.value)}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!customModelRepository.trim()}
+                        onClick={() => {
+                          try {
+                            const models = importCustomLocalAiModel(customModelRepository);
+                            const imported = models.find((model) => model.repository === customModelRepository.trim());
+                            setCustomLocalModels(models);
+                            setCustomModelRepository("");
+                            if (imported) saveAssistantPreferences({ provider: "local-mlx", localModel: imported.id });
+                            onNotice("Model added. Download & Start to fetch weights.");
+                          } catch (error) {
+                            setLocalAiError(userFacingErrorMessage(error, "Could not import that model."));
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
+                      {selectedLocalPreset && "custom" in selectedLocalPreset && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            if (!window.confirm(`Remove ${selectedLocalPreset.label} from Tau? Downloaded cache files are left untouched.`)) return;
+                            setCustomLocalModels(removeCustomLocalAiModel(selectedLocalPreset.id));
+                            saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
+                            onNotice("Removed custom model.");
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                    <span className="settings-field-hint">Hugging Face repo id. Validated, never passed through a shell.</span>
+                  </div>
 
                   <div className="settings-local-runtime" data-state={localAiStatus?.state ?? "checking"}>
                     <div className="settings-local-runtime-head">
                       <span className="settings-local-state-dot" aria-hidden="true" />
-                      <strong>On-device AI · {localStateLabel}</strong>
+                      <strong>Status · {localStateLabel}</strong>
                     </div>
-                    <p role="status">{localStatusDetail}</p>
+                    <p role="status">
+                      {localAiStatus?.detail ?? "Checking local runtime…"}
+                    </p>
                     {localAiStatus && !selectedLocalPreset.downloaded && localAiStatus.state !== "ready" && (
                       <span className="settings-local-download">
                         {selectedLocalPreset.downloadMb > 0
-                          ? `Download: ${selectedLocalPreset.downloadMb.toLocaleString("en-US")} MB`
-                          : "Download size depends on the imported model."}
+                          ? `${selectedLocalPreset.downloadMb.toLocaleString("en-US")} MB download`
+                          : "Size depends on the imported repository."}
                       </span>
                     )}
-                    {localAiError && (
-                      <span className="settings-local-notice" role="status">{localAiError}</span>
-                    )}
+                    {localAiError && <span className="settings-local-error" role="alert">{localAiError}</span>}
                     {localAiStatus && (
                       <div className="settings-local-actions">
                         {localAiStatus.state === "ready" || localAiStatus.state === "starting" ? (
@@ -2323,198 +2342,106 @@ export function SettingsPanel({
                             disabled={localAiBusy || !localAiStatus.managed}
                             onClick={() => void runLocalAiAction(stopLocalAi)}
                           >
-                            Turn off
+                            Stop
+                          </Button>
+                        ) : !localAiStatus.installed ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={localAiBusy}
+                            onClick={() => void runLocalAiAction(installLocalAiRuntime)}
+                          >
+                            Set up
                           </Button>
                         ) : (
                           <Button
                             size="sm"
+                            variant="outline"
                             disabled={localAiBusy}
-                            onClick={() => void turnOnLocalAi()}
+                            onClick={() => void runLocalAiAction(() => "custom" in selectedLocalPreset
+                              ? startLocalAi(assistantPreferences.localModel, !selectedLocalPreset.downloaded, selectedLocalPreset.repository)
+                              : startLocalAi(assistantPreferences.localModel, !selectedLocalPreset.downloaded))}
                           >
-                            {localAiBusy
-                              ? "Working…"
-                              : !localAiStatus.installed
-                                ? "Turn on"
-                                : selectedLocalPreset.downloaded
-                                  ? "Turn on"
-                                  : "Download & turn on"}
+                            {selectedLocalPreset.downloaded ? "Start" : "Download & Start"}
                           </Button>
                         )}
                       </div>
                     )}
                   </div>
-
-                  <details
-                    className="settings-advanced"
-                    open={showAdvancedLocal || customLocalModels.length > 0}
-                    onToggle={(event) => setShowAdvancedLocal(event.currentTarget.open)}
-                  >
-                    <summary>Advanced</summary>
-                    <div className="settings-field" aria-label="Custom local models">
-                      <span>Import another model</span>
-                      <div className="settings-inline-actions">
-                        <Input
-                          value={customModelRepository}
-                          aria-label="Hugging Face model repository"
-                          placeholder="owner/model-name"
-                          onChange={(event) => setCustomModelRepository(event.currentTarget.value)}
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!customModelRepository.trim()}
-                          onClick={() => {
-                            try {
-                              const models = importCustomLocalAiModel(customModelRepository);
-                              const imported = models.find((model) => model.repository === customModelRepository.trim());
-                              setCustomLocalModels(models);
-                              setCustomModelRepository("");
-                              if (imported) saveAssistantPreferences({ provider: "local-mlx", localModel: imported.id });
-                              onNotice("Model imported. Choose Download & turn on to fetch it.");
-                            } catch (error) {
-                              setLocalAiError(userFacingErrorMessage(error, "Could not import that model."));
-                            }
-                          }}
-                        >
-                          Import
-                        </Button>
-                        {selectedLocalPreset && "custom" in selectedLocalPreset && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              if (!window.confirm(`Remove ${selectedLocalPreset.label} from Tau? Downloaded files stay on disk.`)) return;
-                              setCustomLocalModels(removeCustomLocalAiModel(selectedLocalPreset.id));
-                              saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
-                              onNotice("Removed custom model from Tau.");
-                            }}
-                          >
-                            Remove
-                          </Button>
-                        )}
-                      </div>
-                      <span className="settings-field-hint">
-                        Optional. Paste an MLX model name if you already know one — Tau handles the rest.
-                      </span>
-                    </div>
-                  </details>
                 </>
-              ) : (
+              ) : assistantPreferences.provider === "gemini" ? (
                 <>
-                  <label className="settings-field" htmlFor="assistant-cloud-provider">
-                    <span>Cloud provider</span>
+                  <label className="settings-field" htmlFor="assistant-gemini-model">
+                    <span>Model</span>
                     <select
-                      id="assistant-cloud-provider"
+                      id="assistant-gemini-model"
                       className="settings-select"
-                      aria-label="Cloud provider"
-                      value={assistantPreferences.provider}
+                      aria-label="Gemini model"
+                      value={assistantPreferences.geminiModel}
                       onChange={(event) => saveAssistantPreferences({
                         ...assistantPreferences,
-                        provider: event.currentTarget.value as AssistantProviderChoice,
+                        geminiModel: event.currentTarget.value,
                       })}
                     >
-                      <option value="gemini">Gemini · free tier</option>
-                      <option value="anthropic">Anthropic · your API key</option>
+                      {Object.entries(GEMINI_MODEL_PRESETS).map(([id, preset]) => (
+                        <option key={id} value={id}>
+                          {preset.freeTier ? `${preset.label} (free)` : preset.label}
+                        </option>
+                      ))}
                     </select>
                     <span className="settings-field-hint">
-                      Gemini Flash is free for students (no credit card). Anthropic bills separately from any ChatGPT plan.
+                      Flash is free and fast. Pro needs billing on your Google account.
                     </span>
                   </label>
-
-                  {assistantPreferences.provider === "gemini" && (
-                    <label className="settings-field" htmlFor="assistant-gemini-model">
-                      <span>Gemini model</span>
-                      <select
-                        id="assistant-gemini-model"
-                        className="settings-select"
-                        aria-label="Gemini model"
-                        value={assistantPreferences.geminiModel}
-                        onChange={(event) => saveAssistantPreferences({
-                          ...assistantPreferences,
-                          geminiModel: event.currentTarget.value,
-                        })}
-                      >
-                        {Object.entries(GEMINI_MODEL_PRESETS).map(([id, preset]) => (
-                          <option key={id} value={id}>
-                            {preset.freeTier ? `${preset.label} (free tier)` : preset.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-
-                  <label className="settings-consent" htmlFor="assistant-cloud-consent">
-                    <input
-                      id="assistant-cloud-consent"
-                      type="checkbox"
-                      checked={cloudConsent.consented}
-                      onChange={(event) => saveCloudAiConsent({ consented: event.currentTarget.checked })}
+                  <label className="settings-field" htmlFor="assistant-gemini-key">
+                    <span>API key</span>
+                    <Input
+                      id="assistant-gemini-key"
+                      aria-label="Gemini API key"
+                      type="password"
+                      variant="mono"
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="AIza…"
+                      value={geminiKeyInput}
+                      onChange={(event) => {
+                        const next = event.currentTarget.value;
+                        setGeminiKeyInput(next);
+                        saveGeminiApiKey(next);
+                      }}
                     />
-                    <span>
-                      I understand circuit questions will be sent to{" "}
-                      {assistantPreferences.provider === "gemini" ? "Google" : "Anthropic"} for AI replies.
+                    <span className="settings-field-hint">
+                      Stored in Keychain. Free key at aistudio.google.com/apikey.
                     </span>
                   </label>
-
-                  {assistantPreferences.provider === "gemini" ? (
-                    <label className="settings-field" htmlFor="assistant-gemini-key">
-                      <span>Gemini API key</span>
-                      <Input
-                        id="assistant-gemini-key"
-                        aria-label="Gemini API key"
-                        type="password"
-                        variant="mono"
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="Optional until you chat — AIza…"
-                        value={geminiKeyInput}
-                        onChange={(event) => {
-                          const next = event.currentTarget.value;
-                          setGeminiKeyInput(next);
-                          saveGeminiApiKey(next);
-                        }}
-                      />
-                      <span className="settings-field-hint">
-                        Free key at aistudio.google.com/apikey. Stored in your Mac keychain — never in the schematic file.
-                      </span>
-                    </label>
-                  ) : (
-                    <label className="settings-field" htmlFor="assistant-api-key">
-                      <span>Anthropic API key</span>
-                      <Input
-                        id="assistant-api-key"
-                        aria-label="Anthropic API key"
-                        type="password"
-                        variant="mono"
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="Optional until you chat — sk-ant-…"
-                        value={apiKeyInput}
-                        onChange={(event) => {
-                          const next = event.currentTarget.value;
-                          setApiKeyInput(next);
-                          saveAssistantApiKey(next);
-                        }}
-                      />
-                      <span className="settings-field-hint">
-                        Stored in your Mac keychain. A ChatGPT subscription does not cover this key.
-                      </span>
-                    </label>
-                  )}
-
-                  {!cloudConsent.consented && (
-                    <span className="settings-local-notice" role="status">
-                      Consent is required before cloud chat can send circuit context.
-                    </span>
-                  )}
                 </>
+              ) : (
+                <label className="settings-field" htmlFor="assistant-api-key">
+                  <span>API key</span>
+                  <Input
+                    id="assistant-api-key"
+                    aria-label="Anthropic API key"
+                    type="password"
+                    variant="mono"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="sk-ant-…"
+                    value={apiKeyInput}
+                    onChange={(event) => {
+                      const next = event.currentTarget.value;
+                      setApiKeyInput(next);
+                      saveAssistantApiKey(next);
+                    }}
+                  />
+                  <span className="settings-field-hint">Stored in Keychain. Sent only to api.anthropic.com.</span>
+                </label>
               )}
             </div>
           </div>
-          <SettingsRow label="Command palette" hint="⌘K · F2 · / - search & place parts">
+          <SettingsRow label="Command palette" hint="⌘K">
             <Button size="sm" variant="outline" onClick={onOpenCommandPalette}>Open</Button>
           </SettingsRow>
-          <SettingsRow label="Meter probes" hint={`${probes.length} placed on this schematic`}>
+          <SettingsRow label="Probes" hint={`${probes.length} on this schematic`}>
             <Button
               size="sm"
               variant="outline"
@@ -2550,10 +2477,10 @@ export function SettingsPanel({
               ))}
             </div>
           )}
-          <SettingsRow label="Local autosave" hint="browser localStorage snapshot">
+          <SettingsRow label="Autosave" hint="Recovery snapshot for untitled edits">
             <Button size="sm" variant="outline" onClick={clearAutosave}>Clear</Button>
           </SettingsRow>
-          <SettingsRow label="Document" hint="discard this scratchpad, start blank">
+          <SettingsRow label="Document" hint="Discard untitled work and start blank">
             <Button
               size="sm"
               variant="destructive"
@@ -2594,10 +2521,7 @@ export function MinimizedPanelDock({
     <aside className="minimized-panel-dock" aria-label="Minimized panels">
       {graphHidden && (
         <button className="restore-orb graph" aria-label="Restore graphs panel" title="Restore graphs panel" onClick={onRestoreGraph}>
-          <svg viewBox="0 0 28 28" aria-hidden="true">
-            <path d="M5 19 11 10l4 5 8-11" />
-            <path d="M20 4h4v4" />
-          </svg>
+          <Activity size={16} strokeWidth={1.6} aria-hidden="true" />
           <span>Graphs</span>
         </button>
       )}

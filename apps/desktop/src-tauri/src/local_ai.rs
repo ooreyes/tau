@@ -469,14 +469,14 @@ fn unmanaged_listener_status() -> LocalAiStatus {
         "error",
         false,
         None,
-        "Port 8080 is occupied by a local server Tau did not start. Stop that process before using local AI so circuit context is never sent to an unowned listener.",
+        "Another app is blocking on-device AI that Tau did not start. Quit other local AI tools, then try again so circuit context is never sent to an unowned listener.",
     )
 }
 
 fn reject_unmanaged_listener(listening: bool) -> Result<(), String> {
     if listening {
         Err(
-            "Port 8080 is occupied by a local server Tau did not start. Stop that process before starting local AI."
+            "Another app is blocking on-device AI that Tau did not start. Quit other local AI tools, then try again."
                 .to_string(),
         )
     } else {
@@ -507,9 +507,9 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
                     true,
                     Some(&process.preset),
                     if endpoint_is_listening() {
-                        "Local inference is ready."
+                        "On-device AI is ready."
                     } else {
-                        "Loading model weights into unified memory…"
+                        "Loading on-device AI…"
                     },
                 );
             }
@@ -534,9 +534,9 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
         false,
         None,
         if installed {
-            "MLX LM is installed. Choose a model to start local inference."
+            "On-device AI is installed. Choose Turn on to start."
         } else {
-            "MLX LM is not installed. Choose Install MLX LM - Tau will set up the local runtime on this Mac."
+            "On-device AI is not set up yet. Choose Turn on — Tau will install it on this Mac."
         },
     )
 }
@@ -597,7 +597,7 @@ pub fn start_local_ai(
     }
 
     let executable = mlx_server_executable().ok_or_else(|| {
-        "MLX LM is not installed. Choose Install MLX LM in Settings, or run `uv tool install mlx-lm`."
+        "On-device AI is not installed yet. Choose Turn on in Settings and Tau will set it up."
             .to_string()
     })?;
     let mut slot = state
@@ -648,7 +648,7 @@ pub fn start_local_ai(
         "starting",
         true,
         Some(&preset),
-        "Loading model weights into unified memory…",
+        "Loading on-device AI…",
     ))
 }
 
@@ -674,9 +674,9 @@ pub fn stop_local_ai(state: State<'_, LocalAiState>) -> Result<LocalAiStatus, St
         false,
         None,
         if endpoint_is_listening() {
-            "Port 8080 is occupied by an external process. Tau will not send circuit context to it."
+            "Another app is still using on-device AI. Tau will not send circuit context to it."
         } else {
-            "Local inference is stopped."
+            "On-device AI is off."
         },
     ))
 }

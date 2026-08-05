@@ -16,12 +16,14 @@ import {
 } from "../lib/localAiSetup";
 import {
   getLocalAiStatus,
-  installLocalAiRuntime,
   isNativeDesktopApp,
-  startLocalAi,
   type LocalAiPresetInfo,
   type LocalAiStatus,
 } from "../lib/localAiRuntime";
+import {
+  ensureLocalAi,
+  studentFacingLocalAiDetail,
+} from "../lib/localAiEnsure";
 
 interface LocalAiSetupDialogProps {
   onReady?: () => void;
@@ -48,7 +50,7 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
         setOpen(shouldOfferLocalAiSetup({ isNative: true, dismissed, status: next }));
       }).catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Could not inspect local AI.");
+        setError(err instanceof Error ? err.message : "Could not check on-device AI.");
         const dismissed = loadLocalAiSetupPreferences().dismissed;
         setOpen(shouldOfferLocalAiSetup({ isNative: true, dismissed, status: null }));
       });
@@ -91,40 +93,39 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
     ?? presets[0]
     ?? null;
 
-  const run = async (action: () => Promise<LocalAiStatus>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const next = await action();
-      setStatus(next);
-      if (next.state === "ready") {
-        dismissLocalAiSetup();
-        setOpen(false);
-        onReady?.();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Local AI setup failed.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const primaryLabel = !status?.installed
-    ? "Set up local AI"
-    : selected && !selected.downloaded
-      ? `Download ${selected.label} & Start`
-      : "Start local model";
-
   const onPrimary = () => {
-    if (!status?.installed) {
-      void run(installLocalAiRuntime);
-      return;
-    }
-    const modelId = (selected?.id ?? preferences.localModel) as LocalAiPresetInfo["id"];
-    void run(() => startLocalAi(modelId, !(selected?.downloaded ?? false)));
+    void (async () => {
+      setBusy(true);
+      setError(null);
+      try {
+        const result = await ensureLocalAi({
+          modelId: (selected?.id ?? preferences.localModel) as LocalAiPresetInfo["id"],
+          downloaded: selected?.downloaded ?? false,
+          allowDownload: true,
+        });
+        setStatus(result.status);
+        if (result.decision.type === "refuse" || result.decision.type === "unavailable") {
+          setError(result.decision.detail);
+        } else if (result.status.state === "ready") {
+          dismissLocalAiSetup();
+          setOpen(false);
+          onReady?.();
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "On-device AI setup failed.");
+      } finally {
+        setBusy(false);
+      }
+    })();
   };
 
   if (!isNative) return null;
+
+  const detail = error
+    ?? studentFacingLocalAiDetail(status, undefined, {
+      modelId: preferences.localModel,
+      downloading: busy && !(selected?.downloaded ?? false),
+    });
 
   return (
     <Dialog open={open} onOpenChange={(next) => {
@@ -135,11 +136,10 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
     }}>
       <DialogContent className="max-w-[440px]" showCloseButton={false} aria-describedby="local-ai-setup-desc">
         <DialogHeader>
-          <DialogTitle>Set up local AI</DialogTitle>
+          <DialogTitle>Use on-device AI</DialogTitle>
           <DialogDescription id="local-ai-setup-desc">
-            Apple silicon only. One click installs the on-device runtime, then downloads a
-            small local model. After that, open Assistant and describe a circuit - Tau lays
-            it out and can simulate once you confirm. No account required.
+            One click sets up a small model on this Mac. After that, open Assistant and describe a
+            circuit — Tau lays it out and can simulate once you confirm. No account required.
           </DialogDescription>
         </DialogHeader>
 
@@ -150,19 +150,19 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
               {status?.state === "ready"
                 ? "Ready"
                 : status?.state === "starting"
-                  ? "Starting…"
+                  ? "Loading…"
                   : status?.installed
-                    ? "Runtime installed"
-                    : "Runtime needed"}
+                    ? "Ready to turn on"
+                    : "Needs a quick setup"}
             </strong>
           </div>
-          <p role="status">{status?.detail ?? "Checking this Mac…"}</p>
+          <p role="status">{detail}</p>
           {selected && status?.installed && !selected.downloaded && status.state !== "ready" && (
             <span className="settings-local-download">
-              Download size: {selected.downloadMb.toLocaleString("en-US")} MB
+              Download: {selected.downloadMb.toLocaleString("en-US")} MB
             </span>
           )}
-          {error && <span className="settings-local-error" role="alert">{error}</span>}
+          {error && <span className="settings-local-notice" role="status">{error}</span>}
         </div>
 
         {status?.installed && (
@@ -187,7 +187,7 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
               ))}
             </select>
             <span className="settings-field-hint">
-              Start with 1.7B (~900 MB) for a quick try; switch to 4B for better circuit proposals if you have 8 GB+ RAM.
+              Start with 1.7B (~900 MB) for a quick try; switch to 4B for better circuit proposals if you have 8 GB+ memory.
             </span>
           </label>
         )}
@@ -209,7 +209,7 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
             disabled={busy || status?.state === "starting" || status?.state === "ready"}
             onClick={onPrimary}
           >
-            {busy ? "Working…" : primaryLabel}
+            {busy ? "Working…" : "Turn on"}
           </Button>
         </DialogFooter>
       </DialogContent>
