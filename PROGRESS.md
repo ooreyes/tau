@@ -9,13 +9,13 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-04 23:37 CDT** (Overnight DoD — refuse→exact)
+**Status: DONE - 2026-08-04 23:38 CDT** (Overnight DoD — named-device 15.7%/HF0)
 
-Unit: Raise named-device exact-rate by converting refuse→exact via real plaintext
-library/model resolve. Never silent generic semiconductor substitution; never
-weaken encrypted refusals. No UI/Settings/Assistant.
+Unit: Re-measure + schematic R `noiseless` exact strip + unique `.asy` basename
+resolve. HF=0 (not ≫10). Exact-rate 15.7% — DoD ≥95% unchecked. SHIPPABLE? **NO**.
 
-Baseline (Staff EE / prior stdout):
+**Measured** (`scripts/named-device-fidelity.sh`):
+`NAMED-DEVICE: exact=2 refuse=4 silent=0`
 `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
 hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%`
 
