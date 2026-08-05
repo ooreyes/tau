@@ -78,6 +78,7 @@ const PHASESHIFT_ASC = join(EDU, "phaseshift.asc");
 const PHASESHIFT2_ASC = join(EDU, "phaseshift2.asc");
 const PIERCE_ASC = join(EDU, "Pierce.asc");
 const COLPITS2_ASC = join(EDU, "colpits2.asc");
+const QZTST_ASC = join(EDU, "contrib", "qztst.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
 const UOA_ASC = join(APP, "UniversalOpAmp.asc");
@@ -236,7 +237,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2415,6 +2416,60 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+
+    // --- Educational/contrib/qztst.asc authored .ac (Misc\XTAL param crystal; Lser/Cser/Rser/Cpar) ---
+    // Authored `.ac lin 1001 3.95e6–4.05e6` (Tau remaps lin→dec points like S-param). Probe v(out)
+    // across series resonance; nRms≈0.0024 under 2%; nMax≈0.051 needs maxTol 0.06 (sharp peak).
+    // Stacked on tip pass=66 (varistor/stepnoise + UOA/1/2). dimmer TRIAC v(b) phase-miss deferred.
+    {
+      expect(existsSync(QZTST_ASC), `missing ${QZTST_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(QZTST_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "contrib/qztst.asc must author .ac").toBeTruthy();
+      const params = buildParamScope(dirs);
+      expect(Number(params.scope.fs)).toBeCloseTo(4e6, 5);
+      expect(Number(params.scope.Cs ?? params.scope.cs)).toBeCloseTo(2e-14, 20);
+      expect(Number(params.scope.Ls ?? params.scope.ls)).toBeGreaterThan(0.07);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^LCY1\b/im);
+      expect(deck.netlist).toMatch(/^CCY1\b/im);
+      expect(deck.netlist).toMatch(/^RCY1\b/im);
+      expect(deck.netlist).toMatch(/^CCY1p\b/im);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).toMatch(/^V1\b.*\bAC\b/im);
+      const result = runPairedBatch("diff-qztst-ac", deck.netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!;
+      const ng = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.06,
+      });
+      expect(comparison.pass, `qztst ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "qztst non-hollow").toBeGreaterThan(0.1);
+      cells.push({
+        analysis: "ac",
+        circuit: "qztst",
+        topology: "Educational/contrib/qztst.asc Misc\\XTAL param crystal (authored .ac lin 3.95–4.05 Meg; Lser/Cser/Rser/Cpar)",
+        status: "pass",
+        note: `v(out) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)} (maxTol=0.06)`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2708,9 +2763,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(63);
+    expect(passCount).toBeGreaterThanOrEqual(66);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=66 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=67 sibling=5 gap=0/);
   }, 240_000);
 });

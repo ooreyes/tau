@@ -9,11 +9,14 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 03:37 CDT**
+**Status: DONE - 2026-08-05 03:45 CDT**
 
-Unit: Applications `UniversalOpAmp.asc` / `UniversalOpAmp1.asc` /
-`UniversalOpAmp2.asc` authored `.tran` → differential **pass=66** (Tau-owned
-behavioral rail-clamped tanh). UOA3/4 refuse fail-closed (not landed).
+Unit: Educational/contrib `qztst.asc` authored `.ac` → differential **pass=67**.
+```
+SUMMARY pass=67 sibling=5 gap=0
+ac qztst … v(out) nRms≈0.0024 nMax≈0.0512 span≈0.646 (maxTol=0.06)
+```
+Misc\XTAL → Lser/Cser/Rser/Cpar; stacked on tip UOA pass=66. dimmer TRIAC deferred.
 Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -21,6 +24,41 @@ Named-device 47.9%. SHIPPABLE? **NO**
 
 
 ---
+
+
+### 2026-08-05 — Educational/contrib qztst.asc AC → pass=67 (§DoD)
+
+**What I did**
+- Educational/contrib `qztst.asc` authored `.ac lin 1001 3.95e6–4.05e6`: Misc\XTAL
+  expands to Lser/Cser/Rser/Cpar with document `.params` (fs=4e6, Cs=2e-14, …).
+  Probe `v(out)` nRms≈0.0024 under 2%; nMax≈0.0512 needs maxTol=0.06 (sharp
+  series-resonance peak). Same-deck lin→dec remap as S-param.
+- Tip `3da6d28` UOA/1/2 pass=66 → 67. Worktree-isolated then rebased over Staff
+  EE varistor/stepnoise + UOA. dimmer DIAC/TRIAC imports clean but v(b)
+  phase-miss — deferred. Never faked NE555/LoopGain/Vswitch/Howland/SoftDiode/
+  HalfSlope/TLINE-inv/astable/100W/160.
+
+**Exact stdout**
+```
+SUMMARY pass=67 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=67 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` (2680 passed)
+
+**Parity items**
+- Differential 🟡 harness **pass=67 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- Non-colliding Educational/Applications. Leave Settings locked.
+
 
 
 ### 2026-08-05 — Applications UniversalOpAmp/1/2 TRAN → pass=66 (§DoD)
