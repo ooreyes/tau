@@ -2608,15 +2608,29 @@ body {
   font-weight: 500;
 }
 
-.fft-control-bar select {
+/* FFT Signal/Window use ui/Select; keep full-width dense mono triggers.
+   Use --row-h (not undefined --control-h-sm) so triggers don't collapse. */
+.fft-control-bar .fft-select,
+.fft-control-bar [data-slot="select-trigger"].fft-select {
   width: 100%;
-  height: var(--control-h-sm);
-  padding: 0 var(--sp-2);
+  min-width: 8rem;
+  max-width: none;
+  height: var(--row-h);
+  min-height: var(--row-h);
+  padding-inline: var(--sp-2);
   color: var(--text);
   background: var(--panel-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   font: 500 var(--fs-caption) var(--font-mono);
+}
+
+.fft-control-bar .fft-select [data-slot="select-value"] {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fft-tone-marker circle {
@@ -6032,12 +6046,15 @@ button.bottom-panel-head:focus-visible {
   accent-color: var(--accent);
 }
 
-.property-field select {
+.property-field select,
+.property-field .property-select,
+.property-field [data-slot="select-trigger"].property-select {
   width: 100%;
   max-width: 168px;
   min-width: 0;
   box-sizing: border-box;
   height: var(--row-h);
+  min-height: var(--row-h);
   color: var(--text);
   background: transparent;
   border: 1px solid transparent;
@@ -6050,14 +6067,26 @@ button.bottom-panel-head:focus-visible {
   font: 500 var(--fs-label) var(--font-mono);
 }
 
-.property-field select:hover:not(:focus) {
+.property-field select:hover:not(:focus),
+.property-field .property-select:hover:not(:focus),
+.property-field [data-slot="select-trigger"].property-select:hover:not(:focus-visible) {
   background: var(--overlay-hover-faint);
 }
 
-.property-field select:focus {
+.property-field select:focus,
+.property-field .property-select:focus-visible,
+.property-field [data-slot="select-trigger"].property-select:focus-visible {
   background: var(--panel-3);
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.property-field .property-select [data-slot="select-value"] {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .property-hint {

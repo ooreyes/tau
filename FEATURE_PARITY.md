@@ -2088,11 +2088,15 @@ palette pop): Light is the product default; cool-paper + precision-blue accent
 popped to `#EDF1F6` / `#0068D6` (was `#F5F6F8` / `#0A66C2`); radius scale
 extended (`--r-2xs`/`--r-xs`/`--r-pill`) and raw chrome radii snapped; warning
 chrome stays quiet ochre (soft ≈0.05 — not danger-red for optional empties);
-settings rows simplified. Remaining §10 debt that blocks an honest DoD check:
-Resizable/Command/Toast primitives still deferred; native `<select>`s in
-FFT/op-amp not on `ui/Select`; Assistant/local-AI settings surfaces still
-mid-migration; Cupertino icon chrome still settling; no proof of zero ad-hoc
-drift across every panel at both themes + min window.
+settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model
+native `<select>`s migrated onto shadcn `ui/Select` (Settings locked/untouched);
+unit proof in SimulationPanel/ShellPanels tests (combobox triggers, not native
+`<select>`). Remaining §10 debt that blocks an honest DoD check:
+Resizable/Command/Toast primitives still deferred; other native `<select>`s
+(Simulation setup, EngineeringInput units, semiconductor/subckt model
+choosers, local-AI settings) not yet on `ui/Select`; Assistant/local-AI
+settings surfaces still mid-migration; Cupertino icon chrome still settling;
+no proof of zero ad-hoc drift across every panel at both themes + min window.
 Do **not** flip the AGENTS box until that grep+screenshot proof exists.
 
 **Earlier claim (2026-07-08 Phase 4c) that §10 "closes" AGENTS DoD was premature**
@@ -2289,10 +2293,15 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   HANDOFF MIGRATION" duplicate overrides folded into their single primary
   rule. Net `App.css` **−92 lines**. Screenshot-verified at 1440×900,
   1280×720, and 900×600 (zero clipped controls; same RC-charging trace
-  renders identically — only chrome changed). Left for a later pass: the
-  FFT signal/window `<select>`s and the op-amp model `<select>` (native,
-  not yet ui/ `Select`); native range sliders keep their existing styling
-  per the brief. →
+  renders identically — only chrome changed). **FFT Signal/Window + Op-amp
+  model `ui/Select` (2026-08-05):** the Phase 3c leftover native `<select>`s
+  for FFT signal/window and the library Op-amp model chooser now use
+  `ui/Select` (Settings untouched). Triggers use `--row-h` + ellipsis value
+  truncation (undefined `--control-h-sm` would collapse). Unit tests assert
+  combobox `data-slot=select-trigger` and no native FFT/op-amp `<select>`.
+  Left for a later pass: other native `<select>`s (sim setup, eng-input
+  units, MOSFET/subckt choosers), deferred Resizable/Command/Toast, and
+  min-window screenshot proof for this slice. →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
   same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`

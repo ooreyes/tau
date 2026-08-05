@@ -1972,6 +1972,55 @@ describe("SimulationPanel - Noise Export PNG", { timeout: 20_000 }, () => {
   });
 });
 
+describe("FftView ui/Select migration (§10)", () => {
+  function sineResult(n = 256) {
+    const times = Array.from({ length: n }, (_, i) => i / n);
+    const values = times.map((t) => Math.sin(2 * Math.PI * 8 * t));
+    return {
+      ok: true as const,
+      title: "Transient",
+      times,
+      traces: [
+        { id: "n1", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values },
+        {
+          id: "n2",
+          label: "V(in)",
+          unit: "V" as const,
+          color: "var(--trace-amber)",
+          values: times.map((t) => Math.cos(2 * Math.PI * 8 * t)),
+        },
+      ],
+      currents: [],
+      stats: { netCount: 2, componentCount: 0, sampleCount: n, stopTime: 1, stepSize: 1 / n },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [
+          { id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 },
+          { id: "n2", points: [{ x: 0, y: 16 }, { x: 16, y: 16 }], pins: [], isGround: false, labelCount: 0 },
+        ],
+        components: [],
+      },
+    };
+  }
+
+  it("exposes FFT signal/window as ui/Select comboboxes (not native <select>)", async () => {
+    render(<FftView result={sineResult()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Toggle FFT spectrum" }));
+
+    const signal = await screen.findByRole("combobox", { name: "FFT signal" });
+    const windowFn = screen.getByRole("combobox", { name: "FFT window" });
+    expect(signal.tagName).toBe("BUTTON");
+    expect(windowFn.tagName).toBe("BUTTON");
+    expect(signal.getAttribute("data-slot")).toBe("select-trigger");
+    expect(windowFn.getAttribute("data-slot")).toBe("select-trigger");
+    expect(signal.textContent).toContain("V(out)");
+    expect(windowFn.textContent).toContain("Hann");
+    expect(document.querySelector(".fft-control-bar select")).toBeNull();
+  });
+});
+
 describe("FftView Export PNG", { timeout: 20_000 }, () => {
   it("exports FFT spectrum SVG via waveformSvgsToPng with tag fft", async () => {
     const png = await import("../simulation/plotPng");

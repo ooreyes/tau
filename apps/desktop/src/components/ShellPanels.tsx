@@ -49,6 +49,13 @@ import {
   subcircuitOptions,
 } from "../engine/subcircuitCatalog";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1830,23 +1837,32 @@ export function ComponentInspector({
               ) : (
                 <label className="property-field">
                   <span>Model</span>
-                  <select
-                    className="mono-num"
-                    aria-label="Op-amp model"
+                  <Select
                     value={customOpamp ? "__custom__" : selected.value}
-                    onChange={(event) => {
+                    onValueChange={(next) => {
                       beginParamChange("model");
-                      setValue(selected.id, event.currentTarget.value);
+                      setValue(selected.id, next);
                     }}
                   >
-                    {customOpamp && <option value="__custom__">Universal / behavioral</option>}
-                    {OPAMP_LIBRARY.map((p) => (
-                      <option key={p.part} value={p.part}>
-                        {p.part}
-                        {p.part === "Ideal" ? "" : ` · ${p.manufacturer}`}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      size="sm"
+                      className="property-select mono-num w-full max-w-[168px]"
+                      aria-label="Op-amp model"
+                    >
+                      <SelectValue placeholder="Model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customOpamp && (
+                        <SelectItem value="__custom__">Universal / behavioral</SelectItem>
+                      )}
+                      {OPAMP_LIBRARY.map((p) => (
+                        <SelectItem key={p.part} value={p.part}>
+                          {p.part}
+                          {p.part === "Ideal" ? "" : ` · ${p.manufacturer}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </label>
               )}
               {customOpamp && opamp?.mode === "behavioral" && (

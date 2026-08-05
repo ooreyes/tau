@@ -198,8 +198,11 @@ describe("ComponentInspector - imported op-amp parameters", () => {
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
     render(<ComponentInspector selected={selected} />);
 
-    expect((screen.getByRole("combobox", { name: "Op-amp model" }) as HTMLSelectElement).value)
-      .toBe("__custom__");
+    const model = screen.getByRole("combobox", { name: "Op-amp model" });
+    expect(model.tagName).toBe("BUTTON");
+    expect(model.getAttribute("data-slot")).toBe("select-trigger");
+    expect(model.textContent).toContain("Universal / behavioral");
+    expect(document.querySelector(".property-field select[aria-label='Op-amp model']")).toBeNull();
     const parameters = screen.getByRole("textbox", { name: "Advanced op-amp parameters" }) as HTMLInputElement;
     expect(parameters.value).toBe(selected.value);
 

@@ -20,6 +20,13 @@ import type { Probe, NetLabel, SchematicWire } from "../schematic/types";
 import { netAtPoint } from "../schematic/netlist";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -3596,28 +3603,30 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
           <div className="fft-control-bar">
             <label>
               <span>Signal</span>
-              <select
-                value={chosen}
-                aria-label="FFT signal"
-                onChange={(e) => setSignal(e.currentTarget.value)}
-              >
-                {signals.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              <Select value={chosen || undefined} onValueChange={setSignal} disabled={signals.length === 0}>
+                <SelectTrigger size="sm" className="fft-select w-full min-w-[8rem]" aria-label="FFT signal">
+                  <SelectValue placeholder="Signal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {signals.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
             <label>
               <span>Window</span>
-              <select
-                value={windowFn}
-                aria-label="FFT window"
-                onChange={(e) => setWindowFn(e.currentTarget.value as WindowFn)}
-              >
-                <option value="hann">Hann</option>
-                <option value="hamming">Hamming</option>
-                <option value="blackman">Blackman</option>
-                <option value="rectangular">Rectangular</option>
-              </select>
+              <Select value={windowFn} onValueChange={(v) => setWindowFn(v as WindowFn)}>
+                <SelectTrigger size="sm" className="fft-select w-full min-w-[8rem]" aria-label="FFT window">
+                  <SelectValue placeholder="Window" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hann">Hann</SelectItem>
+                  <SelectItem value="hamming">Hamming</SelectItem>
+                  <SelectItem value="blackman">Blackman</SelectItem>
+                  <SelectItem value="rectangular">Rectangular</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             <Button
               variant={cursorsOn ? "default" : "outline"}

@@ -1,10 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~12:35 CDT**
+**Status: DONE - 2026-08-05 ~12:40 CDT**
 
-Unit: Corpus directives DoD — prove `.tran .ac .op .dc .step .meas .noise
-.tf .param .func .temp .options .model .inc .subckt` via
-`scripts/directives-dod.sh` (15/15); flip AGENTS checkbox.
+Unit: §10 — migrate FFT Signal/Window + Op-amp model native `<select>`s
+onto shadcn `ui/Select` (Settings untouched). AGENTS §10 DoD stays unchecked.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -41,6 +40,36 @@ SHIPPABLE? **NO**
 **Next step**
 - Remaining open DoD: §10 design system, min-window UI, named-device ≥95%,
   broad differential, AI, product gates.
+
+SHIPPABLE? **NO**
+
+---
+
+### 2026-08-05 — FFT + Op-amp ui/Select (§10 slice)
+
+**What I did**
+- Migrated FftView Signal/Window and ComponentInspector Op-amp model from
+  native `<select>` to shadcn `ui/Select` (Settings / other choosers untouched).
+- Dense trigger CSS uses `--row-h` + ellipsis (avoids undefined `--control-h-sm`
+  collapse). Unit tests assert combobox `data-slot=select-trigger`.
+- FEATURE_PARITY §10 notes partial debt remaining; AGENTS §10 DoD **not** flipped.
+
+**Files**
+- `components/SimulationPanel.tsx`, `SimulationPanel.test.tsx`
+- `components/ShellPanels.tsx`, `ShellPanels.test.tsx`
+- `App.css`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` (green)
+- `pnpm -C apps/desktop test` → 2860 passed / 6 skipped
+
+**Parity items**
+- §10 FFT/op-amp Select slice ✅; whole-app §10 DoD still open.
+  SHIPPABLE? **NO**
+
+**Next step**
+- Remaining native `<select>`s / min-window screenshot proof / other DoD boxes.
+  Never Chan/NIGBT/FRA / Settings thrash.
 
 SHIPPABLE? **NO**
 
