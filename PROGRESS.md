@@ -1,14 +1,53 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:30 CDT**
+**Status: DONE - 2026-08-05 ~13:35 CDT**
 
-Unit: **Educational PowerAmp A=0.2..0.7 .tran → pass=107** — TIP sibling
-`.lib` full `.step A` beyond A=0.1 (after astable period-meas pass=106).
-DoD broad box stays open. SHIPPABLE? **NO**
+Unit: **Product gates — first-success learning path** — versioned
+`tau.learning.path.v1`, EmptyState Try RC Charging + contextual coach;
+completes on settled ok. With prior CLI/API on tip, all product-gates
+bullets proven → DoD box ✅. SHIPPABLE? **NO** (other boxes open)
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — First-success learning path (product-gates)
+
+**What I did**
+- Landed versioned `tau.learning.path.v1` first-success path: EmptyState
+  “Try RC Charging” loads flagship `rc.v1` (+ authored `.tran 5m`) into the
+  project; `LearningPathCoach` shows contextual help by UI context; path
+  completes only when a simulation settles ok while `in_progress`; dismiss
+  does not claim success.
+- Rebased onto tip that already had versioned CLI/API (+ pass=107 PowerAmp);
+  together with recovery, external-edit, and run records this closes the
+  product-gates DoD box. SHIPPABLE? **NO** — other DoD boxes remain open.
+
+**Files**
+- `apps/desktop/src/lib/learningPath.ts` (+ test)
+- `apps/desktop/src/components/LearningPathCoach.tsx` (+ test)
+- `apps/desktop/src/components/EmptyState.tsx` (+ learningPath test)
+- `apps/desktop/src/App.tsx`, `apps/desktop/src/App.css`
+- `scripts/product-gates-learning-path.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/product-gates-learning-path.sh` → PRODUCT-GATES-LEARNING-PATH: ok (15)
+- `bash scripts/product-gates-cli-api.sh` → PRODUCT-GATES-CLI-API: ok (re-verified on tip)
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2969 passed / 8 skipped
+
+**Parity items**
+- Product-gates DoD ✅ (recovery + external-edit + run records + CLI/API +
+  learning path). SHIPPABLE? NO
+
+**Next step**
+- Remaining unchecked DoD boxes (§10 design system, named-device ≥95%,
+  broad differential, …). Never claim SHIPPABLE until those close.
+
+SHIPPABLE? **NO**
 
 ---
 
@@ -47,6 +86,7 @@ DoD broad box stays open. SHIPPABLE? **NO**
 SHIPPABLE? **NO**
 
 
+---
 
 ### 2026-08-05 — Versioned CLI/API (product-gates partial)
 
@@ -56,8 +96,8 @@ SHIPPABLE? **NO**
   (0/1/2/3/64), and JSON or text output. No ngspice in this surface.
 - CLI entry `scripts/tau-cli.mjs` (+ `scripts/tau-cli.sh`) via Vite SSR;
   proof `scripts/product-gates-cli-api.sh`.
-- Product-gates DoD box stays unchecked (first-success learning path +
-  contextual help still open). SHIPPABLE? **NO**.
+- Product-gates DoD box stayed unchecked until learning path landed (same
+  session tip). SHIPPABLE? **NO**.
 
 **Files**
 - `apps/desktop/src/cli/tauCliApi.ts` (+ test)
@@ -72,12 +112,11 @@ SHIPPABLE? **NO**
 - `pnpm -C apps/desktop test` → 2954 passed / 8 skipped
 
 **Parity items**
-- Product-gates DoD partial: CLI/API ✅ alongside recovery + external-edit +
-  run records. Box stays ⬜. SHIPPABLE? NO
+- Product-gates DoD partial at land time: CLI/API ✅. Box flipped when
+  learning path closed. SHIPPABLE? NO
 
 **Next step**
-- First-success learning path + contextual help. Never flip whole
-  product-gates box until that lands too.
+- First-success learning path (landed next on tip).
 
 SHIPPABLE? **NO**
 

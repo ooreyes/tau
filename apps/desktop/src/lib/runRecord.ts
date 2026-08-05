@@ -7,8 +7,7 @@
  * measurements, and a bounded summary — enough to re-open or compare runs
  * without shipping full waveform samples.
  *
- * Does not claim the full student/pro/dev product-gates box: first-success
- * learning path and versioned CLI/API remain open.
+ * Does not claim SHIPPABLE — other DoD boxes remain open.
  */
 
 import { diskContentFingerprint } from "./externalEditConflict";

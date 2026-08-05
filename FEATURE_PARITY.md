@@ -2048,13 +2048,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   engine + machine-readable diagnostics + measurements + bounded summary);
   session history ring (`tau.run.history.v1`); Export `.tau-run.json` from the
   analysis panel. Proof: `scripts/product-gates-run-records.sh`. **Versioned
-  CLI/API (2026-08-05, product-gates partial):** stable `tau.cli.v1` with
+  CLI/API (2026-08-05, product-gates):** stable `tau.cli.v1` with
   `tau.cli.diagnose.v1` envelopes (import → validate → `.op` deck; machine-
   readable diagnostic codes; exit 0 ok / 1 warning / 2 error / 3 refused /
   64 usage); `scripts/tau-cli.mjs` entry. Proof:
-  `scripts/product-gates-cli-api.sh`. Still open for the product-gates DoD
-  box: first-success learning path + contextual help. Box stays ⬜.
-  SHIPPABLE? NO.
+  `scripts/product-gates-cli-api.sh`. **First-success learning path +
+  contextual help (2026-08-05, product-gates):** versioned
+  `tau.learning.path.v1`; EmptyState “Try RC Charging” loads flagship `rc.v1`
+  with authored `.tran 5m`; `LearningPathCoach` contextual tips; completes
+  only on settled ok while `in_progress`. Proof:
+  `scripts/product-gates-learning-path.sh`. All student/pro/dev product-gates
+  bullets proven → DoD box ✅. SHIPPABLE? NO — other boxes remain open.
   **Structured LTspice slot editing (2026-08-02):** the App validator now
   preserves/bounds `ltExtraAttrs` instead of dropping it on open. A minimal edit
   wholly inside one joined `Value2`/`SpiceLine` slot is written back to that

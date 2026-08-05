@@ -341,11 +341,11 @@ account and sign/notarize/ship.
       opted in without MLX/keys; `*.live.test.ts` when backends present).
       Umbrella: `scripts/ai-dod.sh`. SHIPPABLE? **NO** — other DoD boxes remain
       open.
-- [ ] **Student, professional, and developer product gates:** a first-success
+- [x] **Student, professional, and developer product gates:** a first-success
       learning path and contextual help; crash-safe unsaved recovery plus safe
       external-edit/conflict handling and reproducible run records; and a stable,
       documented, versioned CLI/API with machine-readable diagnostics.
-      **Partial (2026-08-05):** crash-safe unsaved recovery landed — versioned
+      **Proven 2026-08-05:** crash-safe unsaved recovery landed — versioned
       `tau.unsaved.recovery.v1` envelope, Restore/Discard dialog on launch
       (`unsavedRecovery.ts` + `UnsavedRecoveryDialog`), no silent hydrate into
       the live editor, cleared on successful Save / Discard / Settings clear;
@@ -361,9 +361,13 @@ account and sign/notarize/ship.
       `scripts/product-gates-run-records.sh`. Versioned CLI/API landed —
       `tau.cli.v1` / `tau.cli.diagnose.v1` (import → validate → `.op` deck;
       machine-readable codes; exit 0/1/2/3/64); entry `scripts/tau-cli.mjs`;
-      proof `scripts/product-gates-cli-api.sh`. Still open: first-success
-      learning path + contextual help. DoD box stays unchecked. SHIPPABLE?
-      **NO**.
+      proof `scripts/product-gates-cli-api.sh`. First-success learning path +
+      contextual help landed — versioned `tau.learning.path.v1`, EmptyState
+      “Try RC Charging” CTA loads flagship `rc.v1` + `.tran 5m`, coach tips by
+      UI context, completes only on settled ok while `in_progress`
+      (`learningPath.ts` + `LearningPathCoach`); proof
+      `scripts/product-gates-learning-path.sh`. All student/pro/dev bullets
+      proven. SHIPPABLE? **NO** — other DoD boxes remain open.
 - [x] All gates green; **unsigned release build is production‑ready**:
       `pnpm --filter @tau/desktop tauri build` succeeds, the DMG mounts, the
       built Tau.app launches and stays alive, and bundled ngspice simulates

@@ -1,6 +1,6 @@
 import { useRef, type ChangeEvent } from "react";
 import { BodeMascot } from "./BodeMascot";
-import { FolderOpen, FolderPlus, Import, MessageSquare, Plus } from "lucide-react";
+import { FolderOpen, FolderPlus, Import, MessageSquare, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
@@ -14,6 +14,8 @@ export function EmptyState({
   onAskBode,
   onOpenAscText,
   onNotice,
+  offerFirstSuccess = false,
+  onTryFirstSuccess,
 }: {
   projectOpen?: boolean;
   canCreateProject?: boolean;
@@ -26,6 +28,9 @@ export function EmptyState({
    *  both. Only needed for the no-project Import action below. */
   onOpenAscText?: (path: string, title: string, text: string, extraWarnings?: string[]) => void | Promise<void>;
   onNotice?: (message: string) => void;
+  /** First-success learning path CTA (product-gates slice). */
+  offerFirstSuccess?: boolean;
+  onTryFirstSuccess?: () => void;
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -64,10 +69,22 @@ export function EmptyState({
           <>
             <p>
               Schematics live in this project. Create one, open from Explorer,
-              or ask Bode about the circuit.
+              {offerFirstSuccess
+                ? " try the RC Charging first-success example, or ask Bode about the circuit."
+                : " or ask Bode about the circuit."}
             </p>
             <div className="empty-state-actions">
-              <Button type="button" size="sm" onClick={onNewCircuit}>
+              {offerFirstSuccess && (
+                <Button type="button" size="sm" onClick={onTryFirstSuccess}>
+                  <Sparkles aria-hidden="true" /> Try RC Charging
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant={offerFirstSuccess ? "outline" : "default"}
+                onClick={onNewCircuit}
+              >
                 <Plus aria-hidden="true" /> New schematic
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={onAskBode}>

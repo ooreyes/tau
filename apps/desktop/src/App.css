@@ -864,6 +864,70 @@ body {
   pointer-events: auto;
 }
 
+/* ── First-success learning path coach (product-gates slice) ─────────────── */
+.learning-path-coach {
+  position: fixed;
+  right: var(--sp-4);
+  bottom: calc(var(--status-bar-height, 28px) + var(--sp-4));
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  max-width: min(420px, calc(100vw - 2 * var(--sp-4)));
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--panel-2, var(--panel));
+  box-shadow: var(--shadow-sm, 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent));
+  color: var(--ink);
+  pointer-events: auto;
+}
+
+.learning-path-coach-copy {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.learning-path-coach-title {
+  display: block;
+  font-size: var(--fs-ui, 13px);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.learning-path-coach-body {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-small, 12px);
+  line-height: 1.45;
+  color: var(--muted, var(--ink-2));
+}
+
+.learning-path-coach-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-mini, 11px);
+  color: var(--muted, var(--ink-2));
+}
+
+.learning-path-coach-shortcuts li {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--panel-3, var(--panel));
+}
+
+.learning-path-coach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+}
+
 .tab-dirty-indicator {
   width: 6px;
   height: 6px;

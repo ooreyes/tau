@@ -25,6 +25,7 @@ import {
   ExternalEditConflictDialog,
   type PendingExternalEdit,
 } from "./components/ExternalEditConflictDialog";
+import { LearningPathCoach } from "./components/LearningPathCoach";
 import { CommandPalette } from "./components/CommandPalette";
 import {
   clearAllUnsavedLocalState,
@@ -38,6 +39,20 @@ import {
   classifyExternalEdit,
   diskContentFingerprint,
 } from "./lib/externalEditConflict";
+import {
+  contextualHelpFor,
+  dismissLearningPath,
+  firstSuccessExampleDocument,
+  firstSuccessExampleMeta,
+  loadLearningPathState,
+  recordLearningPathSimulationOutcome,
+  shouldOfferLearningPath,
+  shouldShowLearningPathCoach,
+  startLearningPath,
+  type LearningPathState,
+  type LearningPathUiContext,
+} from "./lib/learningPath";
+import { schematicToAsc } from "./io/ascExport";
 import {
   ActivityRail,
   BottomPanel,
@@ -298,6 +313,9 @@ function App() {
   const [pendingRecovery, setPendingRecovery] = useState<UnsavedRecoverySnapshot | null>(() =>
     peekUnsavedRecoveryOffer(),
   );
+  const [learningPath, setLearningPath] = useState<LearningPathState>(() => loadLearningPathState());
+  /** Hides the post-success coach after "Got it" without clearing completed status. */
+  const [learningPathCoachHidden, setLearningPathCoachHidden] = useState(false);
   const [pendingExternalEdit, setPendingExternalEdit] = useState<PendingExternalEdit | null>(null);
   const pendingExternalEditRef = useRef<PendingExternalEdit | null>(null);
   pendingExternalEditRef.current = pendingExternalEdit;
@@ -1675,6 +1693,88 @@ function App() {
     showNotice(`Created ${basename(path)}`);
   }, [createSchematicInRoot, openDocument, showNotice]);
 
+  /** First-success learning path: load RC Charging + coach; user presses Run. */
+  const startFirstSuccessExample = useCallback(async () => {
+    if (!useProject.getState().rootPath) {
+      showNotice("Open or create a project folder before trying the RC example.");
+      return;
+    }
+    const meta = firstSuccessExampleMeta();
+    const doc = firstSuccessExampleDocument();
+    const path = await createSchematicInRoot(meta.filename);
+    if (!path) {
+      showNotice(useProject.getState().error ?? "Could not create schematic.");
+      return;
+    }
+    const exported = schematicToAsc({
+      components: doc.components,
+      wires: doc.wires,
+      netLabels: doc.netLabels ?? [],
+      directives: doc.directives,
+    });
+    try {
+      await writeSim(path, exported.text);
+    } catch (error) {
+      await deleteProjectNode(path);
+      showNotice(userFacingErrorMessage(error, "Could not write the RC Charging example."));
+      return;
+    }
+    openDocument(doc, basename(path), path, [], {
+      diskFingerprint: diskContentFingerprint(exported.text),
+      notice: `Loaded ${meta.name} — press Run to simulate.`,
+    });
+    setLearningPath(startLearningPath());
+    setLearningPathCoachHidden(false);
+    setGraphOpen(true);
+  }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
+
+  const dismissLearningPathCoach = useCallback(() => {
+    if (learningPath.status === "completed") {
+      setLearningPathCoachHidden(true);
+      return;
+    }
+    setLearningPath(dismissLearningPath());
+    setLearningPathCoachHidden(true);
+  }, [learningPath.status]);
+
+  const learningPathUiContext: LearningPathUiContext = useMemo(() => {
+    if (learningPath.status === "completed") return "success";
+    if (analysisRunning) return "simulating";
+    if (components.length > 0 || wires.length > 0) return "example_ready";
+    return "empty";
+  }, [learningPath.status, analysisRunning, components.length, wires.length]);
+
+  const learningPathTip = useMemo(
+    () => contextualHelpFor(learningPath, learningPathUiContext),
+    [learningPath, learningPathUiContext],
+  );
+
+  // Complete the first-success path when any analysis settles ok while active.
+  useEffect(() => {
+    if (analysisRunning || learningPath.status !== "in_progress") return;
+    const settledOk =
+      (analysis?.ok === true)
+      || (opAnalysis?.ok === true)
+      || (acAnalysis?.ok === true)
+      || (dcAnalysis?.ok === true)
+      || (tfAnalysis?.ok === true)
+      || (noiseAnalysis?.ok === true)
+      || (stepFamily?.ok === true);
+    if (!settledOk) return;
+    setLearningPath(recordLearningPathSimulationOutcome({ ok: true }));
+    setLearningPathCoachHidden(false);
+  }, [
+    analysisRunning,
+    learningPath.status,
+    analysis,
+    opAnalysis,
+    acAnalysis,
+    dcAnalysis,
+    tfAnalysis,
+    noiseAnalysis,
+    stepFamily,
+  ]);
+
   const closeTab = useCallback((id: string, confirmed = false) => {
     const snap = snapshotActive(tabs);
     const idx = snap.findIndex((tab) => tab.id === id);
@@ -2149,6 +2249,8 @@ function App() {
                 onAskBode={openAssistant}
                 onOpenAscText={openAscFromProject}
                 onNotice={showNotice}
+                offerFirstSuccess={shouldOfferLearningPath(learningPath)}
+                onTryFirstSuccess={() => void startFirstSuccessExample()}
               />
             </main>
             <ImportDropOverlay active={importDragActive} />
@@ -2197,6 +2299,8 @@ function App() {
                 projectOpen
                 onNewCircuit={() => void startNewCircuit()}
                 onAskBode={openAssistant}
+                offerFirstSuccess={shouldOfferLearningPath(learningPath)}
+                onTryFirstSuccess={() => void startFirstSuccessExample()}
               />
             )}
           </main>
@@ -2384,6 +2488,24 @@ function App() {
         )}
       </div>
       <StatusBar mode={mode} result={analysis} title={documentTitle} />
+      {shouldShowLearningPathCoach(learningPath)
+        && !learningPathCoachHidden
+        && learningPathTip
+        && (
+        <LearningPathCoach
+          tip={learningPathTip}
+          status={learningPath.status}
+          onDismiss={dismissLearningPathCoach}
+          onPrimary={
+            shouldOfferLearningPath(learningPath)
+              ? () => void startFirstSuccessExample()
+              : undefined
+          }
+          primaryLabel={
+            shouldOfferLearningPath(learningPath) ? "Try RC Charging" : undefined
+          }
+        />
+      )}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}

@@ -8,8 +8,7 @@
  *   - conflict: disk changed and the editor has local edits
  *   - missing: path no longer exists
  *
- * Does not claim the full product-gates box: first-success learning path
- * and versioned CLI/API remain open.
+ * Does not claim SHIPPABLE — other DoD boxes remain open.
  */
 
 export type ExternalEditKind = "in-sync" | "external-only" | "conflict" | "missing";

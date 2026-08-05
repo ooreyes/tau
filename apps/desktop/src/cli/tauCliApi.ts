@@ -7,8 +7,9 @@
  * ngspice (that stays on the native/corpus path); this surface is for scripts
  * and CI that need reproducible, parseable circuit diagnostics.
  *
- * Does not claim the full student/pro/dev product-gates box: first-success
- * learning path + contextual help remain open. SHIPPABLE? NO.
+ * With recovery, external-edit, run records, and the first-success learning
+ * path, this closes the student/pro/dev product-gates DoD box. SHIPPABLE? NO
+ * — other DoD boxes remain open.
  */
 
 import { importAsc, type AscImportOptions } from "../io/ascImport";
@@ -443,7 +444,7 @@ export function formatCliText(result: TauCliResult): string {
       ...result.usage.map((line) => `  ${line}`),
       "",
       "Diagnose emits machine-readable JSON with --json (stable codes + exit status).",
-      "Does not claim full product-gates DoD. SHIPPABLE? NO.",
+      "SHIPPABLE? NO — other DoD boxes remain open.",
       "",
     ].join("\n");
   }
