@@ -193,6 +193,10 @@ export interface LaplaceLines {
   lines: string[];
   /** true when realized exactly as a rational `s_xfer`; false when DC-gain fallback. */
   exact: boolean;
+  /** The constant H(0) the source was reduced to. Present only when `exact` is
+   *  false, so the caller can name the number the user is actually looking at
+   *  instead of reporting the approximation without its value. */
+  dcGain?: number;
 }
 
 /**
@@ -248,5 +252,5 @@ export function laplaceSourceLines(args: {
   const gain = evaluateExpression(transfer, { ...scope, s: 0 }, funcs);
   if (!Number.isFinite(gain)) throw new Error(`Laplace transfer "${transfer}" has no finite DC gain.`);
   const prefix = isCurrent ? "G" : "E";
-  return { lines: [`${prefix}_${base} ${op} ${on} ${cp} ${cn} ${fmt(gain)}`], exact: false };
+  return { lines: [`${prefix}_${base} ${op} ${on} ${cp} ${cn} ${fmt(gain)}`], exact: false, dcGain: gain };
 }

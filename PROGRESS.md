@@ -9,7 +9,75 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-04 14:40 CDT**
+**Status: DONE - 2026-08-04 19:05 CDT**
+
+Unit: two of the three silent substitutions stop being silent. A `Laplace=`
+transfer that was collapsed to its DC gain, and an LTspice `load`/`load2` flag
+that was dropped, now both reach the user on `circuit.warnings`.
+
+Reconciled from the durability rescue branch `auto/ltspice-parity-wip`, which
+held this work plus a third change as an uncommitted blob. Reviewed before
+landing, and deliberately split: see "What was NOT landed" below.
+
+What landed:
+
+- `laplace.ts` carries the constant it fell back to. `LaplaceLines` gains an
+  optional `dcGain`, set on the single `exact: false` return - the DC-gain
+  fallback, whose `gain` is already proven finite there - so the caller can
+  name the number the user is looking at instead of reporting an approximation
+  without its value.
+- Both call sites in `spiceNetlist.ts` consume `exact` instead of discarding
+  it. A VCVS with a non-rational transfer and every VCCS `Laplace=` now push
+  `laplaceApproximationWarning`, which states the transfer, the H(0) that ran,
+  and that any gain or phase from the run is valid at DC only. A current source
+  can never be exact: `s_xfer` is a voltage-in/voltage-out code model, so the
+  G-source path has no rational realization at all.
+- A current source carrying LTspice's `load`/`load2` clamp pushes
+  `clampedLoadSourceWarning`. The flag is still stripped, so the deck is
+  unchanged, but the user is told the ideal source Tau emits will also deliver
+  current, which the clamp forbids.
+
+Evidence:
+
+- Mutation-checked, because a regression test that never failed proves nothing.
+  Commenting out the three `warnings.push` sites while leaving the exported
+  message builders in place fails exactly the three positive tests and neither
+  of the two negative controls (an exactly-realized rational `Laplace=` stays
+  unwarned; a current source with no flag stays unwarned). Restored, 116/116.
+- Traced to a rendered element rather than assumed: `circuit.warnings` reaches
+  `SpiceResult.warnings` through `nativeSpice.ts` and all four TypeScript
+  solvers, and `SimulationPanel.tsx` renders it in a `role="status"` element -
+  including the AC panel at line 2235, which is where a warning about an
+  unsimulated frequency response has to appear.
+- Checked for the "new warning silently becomes a blocker" trap. The one
+  consumer that treats a non-empty warning list as fatal,
+  `assistantActions.ts:204`, calls `extractCircuit` itself and never sees a
+  warning pushed during `buildSpiceDeck`. `project/types.ts:229` reads import
+  warnings, not deck warnings. Neither path changes.
+
+What was NOT landed, and why:
+
+The third substitution - a saturable Chan magnetic core emitted as a plain
+linear `L` - is still silent. It is the worst of the three and it is next, but
+it has to be a refusal rather than a warning, and the refusal has a measured
+corpus cost that does not fit beside these two.
+`examples/Educational/NonLinearTransformer.asc` is the only Chan-core file in
+the canonical 82, so refusing it moves `deckBuilt` and `opConverged` from 80 to
+79 and trips two `>= 80` floors in `acceptanceCorpus.corpus.ts`. That floor has
+to move in the same commit, and the corpus has to be re-run to prove the new
+number - which this tree cannot do, because the staged ngspice resource
+predates the SHA-256 digest map and `build.rs` rejects it before any Tau code
+compiles. The two warning halves have no such cost: `corpus.ts:231` sets
+`row.warnings` from `imported.warnings` alone, so a deck warning cannot move
+`warningClean`, and neither change can turn a converging file into a failing
+one.
+
+Gates: `tsc --noEmit` clean; `spiceNetlist.test.ts` 116/116; full frontend
+suite at `--maxWorkers=2`. The Rust and corpus gates were NOT run and are NOT
+claimed - they die in `build.rs` on the stale staged engine described above,
+which is environment rather than regression, and this change touches no Rust.
+
+Previous completed unit:
 
 Unit: stop redistributing Analog Devices' `AD8541.lib`, and remove every claim
 in shipped text that depends on it.

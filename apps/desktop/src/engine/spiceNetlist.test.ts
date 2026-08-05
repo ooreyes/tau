@@ -6,6 +6,8 @@ import {
   transformerWindings,
   unresolvedLibraryWarning,
   unresolvedSubcktMessage,
+  laplaceApproximationWarning,
+  clampedLoadSourceWarning,
 } from "./spiceNetlist";
 import { buildParamScope } from "../simulation/paramScope";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
@@ -1902,5 +1904,48 @@ describe("unresolvable .include/.lib directives", () => {
     expect(deck.netlist).toContain(".model DX D(Is=1000)");
     expect(deck.netlist).not.toMatch(/^\.(?:include|lib)\b/m);
     expect(deck.circuit.warnings).toContain(unresolvedLibraryWarning("vendor.lib"));
+  });
+});
+
+describe("constructs the engine cannot reproduce are never answered silently", () => {
+  const grounded = component("ground", "", "", 0, 0);
+
+  it("names the DC gain a non-rational Laplace source was reduced to", () => {
+    const e = component("vcvs", "E1", "Laplace=2*exp(-.001*s)/(1+.001*s)", 128, 128);
+    const deck = buildSpiceDeck({ components: [grounded, e], wires: [] }, { kind: "ac", startHz: 1, stopHz: 1e6, pointsPerDecade: 10 });
+    expect(deck.circuit.warnings).toContain(
+      laplaceApproximationWarning("E1", "2*exp(-.001*s)/(1+.001*s)", 2),
+    );
+    expect(deck.circuit.warnings.join(" ")).toMatch(/valid at DC only/);
+  });
+
+  it("warns for a current-source Laplace, which has no exact realization at all", () => {
+    const g = component("vccs", "G1", "Laplace=10/(1+.001*s)", 128, 128);
+    const deck = buildSpiceDeck({ components: [grounded, g], wires: [] }, { kind: "ac", startHz: 1, stopHz: 1e6, pointsPerDecade: 10 });
+    expect(deck.circuit.warnings.some((w) => w.startsWith("G1's Laplace transfer"))).toBe(true);
+  });
+
+  it("leaves an exactly realized rational Laplace source unwarned", () => {
+    const e = component("vcvs", "E1", "Laplace=10/(1+.001*s)", 128, 128);
+    const deck = buildSpiceDeck({ components: [grounded, e], wires: [] }, { kind: "ac", startHz: 1, stopHz: 1e6, pointsPerDecade: 10 });
+    expect(deck.circuit.warnings.some((w) => /Laplace transfer/.test(w))).toBe(false);
+    expect(deck.netlist).toMatch(/s_xfer/);
+  });
+
+  it("reports LTspice's load flag instead of dropping it in silence", () => {
+    for (const flag of ["load", "load2"]) {
+      const i = component("isource", "I1", `1m ${flag}`, 128, 128);
+      const deck = buildSpiceDeck({ components: [grounded, i], wires: [] }, { kind: "op" });
+      expect(deck.circuit.warnings).toContain(clampedLoadSourceWarning("I1", flag));
+      expect(deck.netlist).toMatch(/^I1 \S+ \S+ DC 0\.001$/m);
+    }
+  });
+
+  it("does not warn for a current source with no load flag", () => {
+    const deck = buildSpiceDeck(
+      { components: [grounded, component("isource", "I1", "1m", 128, 128)], wires: [] },
+      { kind: "op" },
+    );
+    expect(deck.circuit.warnings.some((w) => /load/.test(w))).toBe(false);
   });
 });

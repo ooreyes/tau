@@ -5,12 +5,27 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 - P0.1 is closed: Tau now has `LICENSE` and
-`THIRD_PARTY_NOTICES`, ships no GPL code, and redistributes no manufacturer
-model file. Completion remains RETRACTED by the owner. **P0.2 is next: the
-three silent substitutions** (saturable Chan core emitted as a plain linear
-`L`; non-rational and current-source `Laplace=` collapsed to DC gain with
-`exact:false` discarded; `load`/`load2` dropped).
+**Status:** IDLE 2026-08-04 - P0.2 is two thirds closed. A non-rational or
+current-source `Laplace=` now names the DC gain it was collapsed to, and a
+dropped `load`/`load2` flag says so; both ride `circuit.warnings` and both
+render. P0.1 stays closed. Completion remains RETRACTED by the owner.
+
+**The third silent substitution is deliberately NOT landed, and is the next
+unit: the saturable Chan core emitted as a plain linear `L`.** It has to be a
+refusal, not a warning, and the refusal costs a canonical corpus file.
+`examples/Educational/NonLinearTransformer.asc` is the ONLY Chan-core file in
+the canonical 82, so refusing it moves `deckBuilt` and `opConverged` 80 -> 79
+and trips two `>= 80` floors in `acceptanceCorpus.corpus.ts`. Land it with the
+floor correction in the same commit - the gate already sets its floors at 82
+minus its honest refusals, so 79 with a third named refusal follows its own
+design rather than weakening it - and re-run the corpus for real. That needs a
+current staged ngspice, which this tree does not have.
+
+**A deck warning can never move the corpus `warningClean` count.**
+`acceptanceCorpus.corpus.ts:231` sets `row.warnings` from `imported.warnings`
+alone, so anything pushed onto `circuit.warnings` during `buildSpiceDeck` is
+invisible to that floor. This is what made the two warning halves provably
+floor-neutral and separable from the refusal. Do not re-derive it.
 
 Two things a fresh fire needs before it wastes its window:
 
@@ -60,49 +75,10 @@ the local MLX provider so their prompts cannot drift. Per-provider keychain
 entries; CSP pins `generativelanguage.googleapis.com`. Unit-tested against a
 stubbed fetch; **not yet exercised against the live Google API.**
 
-Next up: P0 in THE NEW BAR — third-party attribution, then the three silent
-substitutions, then the transitive `.subckt` closure check, then making the
-corpus gate measure capability instead of message prefixes.
-
-Previous completed unit:
-
-Class-D measurements are menu-first. Imported aggregate and derived `.meas`
-lines decode into named result rows; new rows select analysis, calculation,
-node/component, absorbed or delivered power, derived formula, and optional
-window. Tau derives hidden power expressions from real connectivity. The
-Class-D PS/PL/Efficiency set round-trips, unsupported timing forms stay exact in
-Expert, and malformed/duplicate results are refused. Typecheck, 2,443 tests,
-web build, and the 900x600 live dialog pass. Scheduler remains unloaded.
-
-Previous completed unit:
-
-Transient settings now speak engineer semantics: Circuit duration (ns through
-minutes), Quick/Balanced/Precision waveform detail, measured last-run elapsed
-time, and an Expert-only exact output count. Raw Steps and the opaque Refine
-button are gone from primary UI. AUTOMATIC/DOCUMENT/CUSTOM labels are truthful;
-custom reset restores the imported `.tran`, and document changes clear prior
-manual state. Typecheck, 2,438 frontend tests, web build, and Chrome minimum-
-window containment pass. Scheduler remains unloaded.
-
-Previous completed unit:
-
-Direct transient trace interaction is complete. A trace can be selected and
-recolored from Tau's validated palette beside its plot; C1/C2 glide by mouse,
-touch, or keyboard and show an interpolated colored point plus inline time/value
-chip. Pan remains an explicit mode, exact time fields stay synchronized, and
-the cursor table no longer labels current/power as volts. All frontend/build/
-unsigned-package checks pass. Packaged visual control is deferred only because
-macOS is locked. Scheduler remains unloaded.
-
-Previous completed unit:
-
-Independent-source waveform editing is complete for DC, Sine, Pulse, PWL, EXP,
-SFFM, and AC stimulus. DC operating-point bias is separate; PWL is an editable
-point table; raw function strings no longer appear in Properties or schematic
-labels. Both engines and LTspice ASC round-trip agree. All frontend, Rust,
-real-ngspice, canonical 80/82, Class-D, web-build, unsigned app/DMG, signature,
-checksum, and launch-stability gates pass. Computer Use visual inspection is
-deferred only because macOS is locked. Scheduler remains unloaded.
+Next up, in order: the saturable-core refusal described above (the last of the
+three silent substitutions), then the transitive `.subckt` closure check, then
+making the corpus gate measure capability instead of message prefixes.
+Third-party attribution is done.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
 wrapper.** Known SPICE semantics must appear as named, editable controls in the
@@ -113,66 +89,6 @@ round-trip, unsupported/unknown expert syntax, and an explicit advanced escape
 hatch. Import should decode known syntax into controls; edits must encode it
 back losslessly. Treat a known knob exposed only as a raw string as unfinished
 UI parity.
-
-Previous completed unit:
-
-Native-engine content integrity is complete. The build script records SHA-256
-for the exact staged tree; `build.rs` rejects missing/malformed/stale metadata,
-changed or unrecorded bytes, missing entries, and symlink escapes. The pinned
-engine, app, and DMG were rebuilt; 27/27 packaged resources match, real OP,
-noise, and XSPICE tests pass from the mounted DMG, and launch stays alive. The
-completion verifier now logs outside its read-only mount and compares the whole
-packaged tree before it can notify. Scheduler remains unloaded.
-
-Previous completed unit:
-
-Extended LTspice value-slot editing is complete for unambiguous single-slot
-changes. The real App validator now preserves and bounds `ltExtraAttrs` instead
-of silently dropping it, exporter reconciliation updates only the owning slot,
-and the packaged inspector exposes imported/custom op-amp parameters rather
-than mislabeling them as Ideal. Cross-slot transformations remain blocked. The
-scheduler remains unloaded.
-
-Previous completed unit:
-
-Hierarchical-block save half 2 is complete. A resolved, untouched block keeps
-its original LTspice `SYMBOL`; its flattened simulation-only members carry exact
-owner/fingerprint provenance and are suppressed only when the whole group still
-matches. Edited/deleted/incomplete groups remain blocked by instance name.
-`.sim`, hostile-input, copy/duplicate, canonical Class-D, corpus, packaged-app,
-Chrome minimum-window, and security gates pass. Run no longer rewrites a clean
-imported `.asc`; the disk write begins only after a semantic edit. The scheduler
-is still deliberately unloaded so it cannot race interactive work.
-
-Landed the CONFIRMED `newCircuit` leak from the top of `FIX_BUGS.md`: the reset
-had fallen one field behind, so a new circuit still held the previous file's
-`ascDataFlags` and saving it wrote that file's `DATAFLAG` readouts into one that
-never had them. **The reset is now derived from `blankDoc(): Doc`, so a carried
-field added to `Doc` is a compile error until it is cleared** - a hand-listed
-reset had already leaked model-library attachments once, and this was the second
-time. Do not go back to listing the fields.
-
-**A hierarchical block's record must NOT go on `ascForeignSymbols`.** That set
-feeds `assertSimulationIntegrity` (`App.tsx:578`), which refuses to simulate
-anything in it; a resolved block DOES simulate, so reusing the field would have
-stopped the flagship class-d example running at all. `ascHierarchicalBlocks` is
-a separate field for that reason, and a block nested inside a block's own body
-stays with the child file. The guarded re-export now depends on that separation.
-
-**The last pre-hierarchy-save census over the 4,012 real `.asc` under
-`~/Documents` found 36 blocked files** - 20 `extended symbol attributes`, 17
-`symbol-library identity`, and 0 `unknown LTspice records`. Rerun the exact
-census before quoting a new post-fix total; hierarchy re-export should reduce
-it, but an unmeasured number is not evidence.
-
-A census MUST decode with `decodeSchematicText(readFileSync(f))`, never
-`readFileSync(f, "latin1")` and never `grep`: `DCopPnt.asc` is UTF-16LE, so
-both of those instruments miss it and under-count the category.
-
-All frontend, production web, Rust, native operating-point and native XSPICE
-gates pass, as do the packaged-app and Chrome UI checks. Completion verification
-runs analog and XSPICE smoke tests against the library inside the mounted DMG,
-not merely the pre-package resource.
 
 **Engine build notes, learned the hard way 2026-08-01 - keep these:**
 
@@ -200,9 +116,10 @@ Being killed mid-unit is normal and expected on a Pro plan. It is not a
 failure, and it is not a reason to restart the unit from scratch. Pick up the
 partial work.
 
-No `-wip` rescue ref is outstanding. `45365c4` was inspected and deleted this
-fire: it held only an interrupted heartbeat claim plus a census note, both of
-which are folded into the block above.
+No `-wip` rescue ref is outstanding. `8484a67` was inspected, reconciled and
+deleted this fire: it held all three silent-substitution changes as one blob.
+Two landed through the gates; the saturable-core refusal was held back for the
+corpus reason above, and is restated there rather than left on a rescue ref.
 
 ---
 
@@ -228,6 +145,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - TWO OF THE THREE SILENT SUBSTITUTIONS NOW SPEAK. A `Laplace=` that no rational polynomial can express - which is every current-source `Laplace=`, since `s_xfer` is voltage-in/voltage-out - reports the DC gain H(0) it actually ran and that its frequency response is unsimulated; a dropped LTspice `load`/`load2` flag reports that the source can now deliver as well as draw current. Mutation-checked: reverting the three pushes fails exactly the three positive tests and neither negative control.
 - 2026-08-04 - TAU REDISTRIBUTES NO MANUFACTURER MODEL FILE. ADI's copyrighted `AD8541.lib` is gone, along with the `.sim` that embedded the same netlist verbatim in JSON, its corpus proof, and its paragraphs in four documents; the sanitizer's vendor-macromodel coverage moves to a Tau-authored fixture, and the model-attach walkthrough now teaches the flow with the user's own `.lib`.
 - 2026-08-04 - TAU HAS A `LICENSE` AND `THIRD_PARTY_NOTICES`, AND SHIPS NO GPL CODE. Beyond the known `table.cm`, review found `ivlng.vpi` and `ghdl_vpi.c` (GPL v2+, Icarus Verilog) were also shipping; the unused `d_cosim` tool chain is now dropped at staging and a test reads the staged tree rather than the script text.
 - 2026-08-03 - VERIFIED MULTI-PIN AMPLIFIERS ARE NEVER FORCED THROUGH A FIVE-PIN OP-AMP BANK. AD8235/LT1168/LT1194/LT1795 preserve losslessly and refuse by name, eliminating all remaining extended-corpus hard failures; 522 real decks/op points remain and canonical is still 80/82.

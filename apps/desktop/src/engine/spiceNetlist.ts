@@ -1,7 +1,7 @@
 import { extractCircuit, isResistiveWire, netAtPoint, spiceSafeToken, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { resolveComponentValues, expandDirectiveLines, inlineFuncCalls, substituteKnownBraces, substituteBehavioralBraces, substituteScopeIdentifiers, substituteIdentifierExpressions, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
-import { parseQuantity } from "../simulation/quantity";
+import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
 import { stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
@@ -684,6 +684,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       analysis.kind === "tran" && analysis.startup ? Math.min(20e-6, analysis.stopTime) : undefined,
       currentSwitchSpecs.get(index),
       vendorOpampModels.get(index),
+      circuit.warnings,
     );
     lines.push(...emitted);
     // Read off the lines that were actually emitted rather than off the
@@ -1054,7 +1055,21 @@ export function unresolvedLibraryWarning(file: string): string {
   return `Could not resolve the library file ${file}, so its models and subcircuits are not part of this run. Attach the file under Model Libraries to use its definitions.`;
 }
 
-function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec, vendorOpampModel?: string): string[] {
+/** An LTspice `Laplace=H(s)` that no rational polynomial can express, run as
+ *  its DC gain. The magnitude is right at DC and wrong everywhere else, so the
+ *  user has to be told which number they are looking at. */
+export function laplaceApproximationWarning(ref: string, transfer: string, dcGain: number): string {
+  return `${ref}'s Laplace transfer "${transfer}" is not a rational polynomial, so Tau ran it as its constant DC gain H(0) = ${formatEngineering(dcGain)}. Its frequency response is not simulated: treat any gain or phase from this run as valid at DC only.`;
+}
+
+/** LTspice's `load`/`load2` current-source flags clamp the source so it cannot
+ *  push current backwards. ngspice has no equivalent, and the ideal source Tau
+ *  emits instead will conduct in both directions. */
+export function clampedLoadSourceWarning(ref: string, flag: string): string {
+  return `${ref} carries LTspice's "${flag}" flag, which clamps it so it only ever draws current. Tau's engine has no equivalent, so it ran as an ideal current source that can also deliver current. Results are unaffected while the source stays forward-biased.`;
+}
+
+function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec, vendorOpampModel?: string, warnings: string[] = []): string[] {
   const { component } = entry;
   const node = (pin: string) => requiredNode(entry, pin);
 
@@ -1166,8 +1181,12 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // making V(p) rise for positive current just as the TS solver predicts.
       // LTspice's `load`/`load2` flags (current source acts as a clamped load,
       // CP_PLL's `{gm} load`) have no ngspice equivalent - approximate as the
-      // ideal source by dropping the flag rather than failing the deck.
-      const main = stripSourceModifiers(stripAcSpec(component.value)).replace(/\s+load2?\s*$/i, "");
+      // ideal source by dropping the flag rather than failing the deck, and say
+      // so, because the ideal source conducts in a direction the clamp forbids.
+      const withFlag = stripSourceModifiers(stripAcSpec(component.value));
+      const loadFlag = /\s(load2?)\s*$/i.exec(withFlag);
+      if (loadFlag) warnings.push(clampedLoadSourceWarning(component.label.trim() || name, loadFlag[1].toLowerCase()));
+      const main = withFlag.replace(/\s+load2?\s*$/i, "");
       const ac = acSpecDeckText(component.value);
       const fn = parseSourceFunction(main, "A");
       if (fn) return [`${name} ${node("n")} ${node("p")} ${fn.text}${ac}`];
@@ -1388,11 +1407,15 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // realize it as an XSPICE s_xfer (rational) or its DC gain (otherwise).
       const transfer = laplaceTransfer(component.value);
       if (transfer !== null) {
-        return laplaceSourceLines({
+        const realized = laplaceSourceLines({
           base: safeName(component.label || `E${index + 1}`),
           op: node("op"), on: node("on"), cp: node("cp"), cn: node("cn"),
           transfer, isCurrent: false, scope: params.scope, funcs: params.funcs,
-        }).lines;
+        });
+        if (!realized.exact) {
+          warnings.push(laplaceApproximationWarning(component.label.trim() || name, transfer, realized.dcGain ?? 0));
+        }
+        return realized.lines;
       }
       // VCVS (E): E op on cp cn gain  →  V(op,on) = gain·V(cp,cn)
       return [`${name} ${node("op")} ${node("on")} ${node("cp")} ${node("cn")} ${numberValue(component, "V/V")}`];
@@ -1400,11 +1423,17 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
     case "vccs": {
       const transfer = laplaceTransfer(component.value);
       if (transfer !== null) {
-        return laplaceSourceLines({
+        const realized = laplaceSourceLines({
           base: safeName(component.label || `G${index + 1}`),
           op: node("op"), on: node("on"), cp: node("cp"), cn: node("cn"),
           transfer, isCurrent: true, scope: params.scope, funcs: params.funcs,
-        }).lines;
+        });
+        // Every current-source Laplace takes the DC-gain path: s_xfer is a
+        // voltage-in/voltage-out code model, so a G source has no exact form.
+        if (!realized.exact) {
+          warnings.push(laplaceApproximationWarning(component.label.trim() || name, transfer, realized.dcGain ?? 0));
+        }
+        return realized.lines;
       }
       // VCCS (G): G op on cp cn gm  →  I(op→on) = gm·V(cp,cn)
       return [`${name} ${node("op")} ${node("on")} ${node("cp")} ${node("cn")} ${numberValue(component, "A/V")}`];
