@@ -20,6 +20,14 @@ import {
 } from "../simulation/dcSweep";
 import { formatOutput, unitFor, type TfResult, type TfSpec } from "../simulation/transferFunction";
 import { parseNativeFourier, parseNativeMeasurements } from "../simulation/nativeMeasFour";
+import {
+  assembleNativeStepFamily,
+  canUseNativeStepPath,
+  orderNativeStepPlots,
+  type NativePlotVectors,
+} from "../simulation/nativeStepFamily";
+import type { StepSpec } from "../simulation/paramStep";
+import type { StepFamilyResult } from "../simulation/stepFamily";
 
 interface NativeVector {
   name: string;
@@ -37,7 +45,7 @@ interface NativeSpiceResult {
   vectors: NativeVector[];
   /** Plots the run made besides the current one, which stays in `vectors`. A
    * `.noise` run leaves its integrated totals current and its spectral density
-   * curves here. */
+   * curves here. A native `.step` deck leaves earlier step plots here. */
   extraPlots: NativePlot[];
   messages: string[];
   libraryPath: string;
@@ -83,22 +91,96 @@ export async function runNativeTransient(
 ): Promise<AnalysisResult | null> {
   const execution = await executeNative(schematic, { kind: "tran", ...options });
   if (!execution) return null;
-  const time = vector(execution.result, "time");
+  const converted = transientFromNativePlot(
+    { name: execution.result.plot, vectors: execution.result.vectors },
+    execution.deck,
+    schematic,
+    options,
+    execution.result.messages,
+    { requireOk: true, title: "ngspice transient" },
+  );
+  // P1.6: prefer ngspice's own `.meas` / `.four` printout when the deck
+  // carried those cards. Empty means the UI keeps the TS runners.
+  const nativeMeasurements = parseNativeMeasurements(execution.result.messages);
+  const nativeFourier = parseNativeFourier(execution.result.messages);
+  if (!converted.ok) return converted;
+  return {
+    ...converted,
+    ...(nativeMeasurements.length > 0 ? { nativeMeasurements } : {}),
+    ...(nativeFourier.length > 0 ? { nativeFourier } : {}),
+  };
+}
+
+/**
+ * Single-deck native `.step` (P1.6 slice B): emit `.step` once, consume every
+ * returned plot as a family member. Mutually exclusive with the TypeScript
+ * re-run loop — that path must keep `emitNativeStep` off. Returns null outside
+ * the Tauri runtime so the caller can fall back; refuses (ok:false) when the
+ * specs are not source-kind or plot count mismatches the sweep.
+ */
+export async function runNativeSteppedTransient(
+  schematic: Schematic,
+  options: AnalysisOptions,
+  specs: readonly StepSpec[],
+): Promise<StepFamilyResult | null> {
+  if (!isNativeSpiceRuntime()) return null;
+  if (!canUseNativeStepPath(specs)) return null;
+
+  const execution = await executeNative(
+    schematic,
+    { kind: "tran", ...options },
+    { emitNativeStep: true },
+  );
+  if (!execution) return null;
+
+  const ordered = orderNativeStepPlots(
+    { name: execution.result.plot, vectors: execution.result.vectors },
+    execution.result.extraPlots,
+  );
+  const familyWarnings = [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)];
+  return assembleNativeStepFamily(ordered, specs, (plot, label, value) => ({
+    label,
+    value,
+    result: transientFromNativePlot(plot, execution.deck, schematic, options, [], {
+      requireOk: false,
+      title: `ngspice transient (${label})`,
+      warnings: familyWarnings,
+    }),
+  }));
+}
+
+/**
+ * Convert one ngspice plot's vectors into a Tau transient result. Shared by the
+ * single-run and native-step multi-plot paths so stepped members are not a
+ * parallel, inventable converter.
+ */
+function transientFromNativePlot(
+  plot: NativePlotVectors,
+  deck: NativeExecution["deck"],
+  schematic: Schematic,
+  options: AnalysisOptions,
+  messages: readonly string[],
+  meta: { requireOk: boolean; title: string; warnings?: string[] },
+): AnalysisResult {
+  const lookup = (name: string) => vectorIn(plot.vectors, name);
+  const time = lookup("time");
   if (!time || time.real.length < 2) {
-    const detail = execution.result.messages
+    const detail = messages
       .map((message) => message.trim())
       .filter(Boolean)
       .slice(-4)
       .join(" ");
-    throw new Error(detail
+    const message = detail
       ? `ngspice could not start the transient analysis: ${detail}`
-      : "ngspice could not start the transient analysis and returned no time samples.");
+      : `ngspice step plot “${plot.name}” returned no time samples.`;
+    if (meta.requireOk) throw new Error(message);
+    return { ok: false, title: meta.title, message, warnings: meta.warnings ?? [] };
   }
 
-  const traces: Trace[] = execution.deck.circuit.nets
+  const traces: Trace[] = deck.circuit.nets
     .filter((net) => !net.isGround)
     .flatMap((net, index) => {
-      const values = vector(execution.result, `v(${net.id})`)?.real;
+      const values = lookup(`v(${net.id})`)?.real;
       if (!values || values.length !== time.real.length) return [];
       return [{
         id: net.id,
@@ -109,7 +191,13 @@ export async function runNativeTransient(
       }];
     });
 
-  if (traces.length === 0) throw new Error("ngspice completed, but returned no node-voltage traces.");
+  if (traces.length === 0) {
+    const message = meta.requireOk
+      ? "ngspice completed, but returned no node-voltage traces."
+      : `ngspice step plot “${plot.name}” returned no node-voltage traces.`;
+    if (meta.requireOk) throw new Error(message);
+    return { ok: false, title: meta.title, message, warnings: meta.warnings ?? [] };
+  }
 
   // Branch currents: voltage-source and inductor currents are the ones ngspice
   // returns on its own, as `<ref>#branch`. Resistor and capacitor currents are
@@ -118,13 +206,13 @@ export async function runNativeTransient(
   // in its `.save` card, so it is looked up through the deck's own record of
   // what it asked for.
   const nodeVoltages = new Map<string, number[]>(traces.map((t) => [t.id, t.values]));
-  const deviceCurrents = primaryDeviceCurrents(execution.deck.deviceCurrents);
+  const deviceCurrents = primaryDeviceCurrents(deck.deviceCurrents);
   const currents: CurrentTrace[] = [];
   const seen = new Set<string>();
-  for (const { component } of execution.deck.circuit.components) {
+  for (const { component } of deck.circuit.components) {
     const ref = component.label;
     if (!ref || seen.has(ref.toLowerCase())) continue;
-    const branch = componentCurrentVector(execution.result, deviceCurrents.get(component.id), ref)?.real;
+    const branch = componentCurrentVectorFrom(plot.vectors, deviceCurrents.get(component.id), ref)?.real;
     if (branch && branch.length === time.real.length) {
       currents.push({ ref, label: `I(${ref})`, values: branch });
       seen.add(ref.toLowerCase());
@@ -134,15 +222,15 @@ export async function runNativeTransient(
       // in unflipped, like the primary: ngspice gives the current INTO each
       // terminal, so a BJT's three sum to zero and `Ie(Q1)` reads negative for
       // a forward-active NPN.
-      for (const extra of execution.deck.deviceCurrents) {
+      for (const extra of deck.deviceCurrents) {
         if (extra.componentId !== component.id || !extra.terminal) continue;
-        const values = vector(execution.result, extra.vector)?.real;
+        const values = lookup(extra.vector)?.real;
         if (!values || values.length !== time.real.length) continue;
         currents.push({ ref, label: `I${extra.terminal}(${ref})`, values, terminal: extra.terminal });
       }
     }
   }
-  for (const derived of deriveRcCurrents(execution.deck.circuit.components, nodeVoltages, time.real)) {
+  for (const derived of deriveRcCurrents(deck.circuit.components, nodeVoltages, time.real)) {
     if (seen.has(derived.ref.toLowerCase())) continue;
     currents.push(derived);
     seen.add(derived.ref.toLowerCase());
@@ -155,27 +243,21 @@ export async function runNativeTransient(
   // describes the samples that actually came back, and equals the requested
   // step when the grid is uniform.
   const span = stopTime - (time.real[0] ?? 0);
-  // P1.6: prefer ngspice's own `.meas` / `.four` printout when the deck
-  // carried those cards. Empty means the UI keeps the TS runners.
-  const nativeMeasurements = parseNativeMeasurements(execution.result.messages);
-  const nativeFourier = parseNativeFourier(execution.result.messages);
   return {
     ok: true,
-    title: "ngspice transient",
+    title: meta.title,
     times: time.real,
     traces,
     currents,
     stats: {
-      netCount: execution.deck.circuit.nets.length,
+      netCount: deck.circuit.nets.length,
       componentCount: schematic.components.length,
       sampleCount: time.real.length,
       stopTime,
       stepSize: time.real.length > 1 ? span / (time.real.length - 1) : stopTime,
     },
-    warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
-    circuit: execution.deck.circuit,
-    ...(nativeMeasurements.length > 0 ? { nativeMeasurements } : {}),
-    ...(nativeFourier.length > 0 ? { nativeFourier } : {}),
+    warnings: meta.warnings ?? [...deck.circuit.warnings, ...engineWarnings([...messages])],
+    circuit: deck.circuit,
   };
 }
 
@@ -199,9 +281,17 @@ function componentCurrentVector(
   deviceVector: string | undefined,
   ref: string,
 ): NativeVector | undefined {
+  return componentCurrentVectorFrom(result.vectors, deviceVector, ref);
+}
+
+function componentCurrentVectorFrom(
+  vectors: ReadonlyArray<NativeVector>,
+  deviceVector: string | undefined,
+  ref: string,
+): NativeVector | undefined {
   const candidates = deviceVector ? [deviceVector, `${ref}#branch`] : [`${ref}#branch`, `i(${ref})`];
   for (const candidate of candidates) {
-    const found = vector(result, candidate);
+    const found = vectorIn(vectors, candidate);
     if (found) return found;
   }
   return undefined;
@@ -846,9 +936,13 @@ function deckNodeFor(
   return net.isGround ? "0" : net.id.toLowerCase();
 }
 
-async function executeNative(schematic: Schematic, analysis: SpiceAnalysis): Promise<NativeExecution | null> {
+async function executeNative(
+  schematic: Schematic,
+  analysis: SpiceAnalysis,
+  deckOptions: Parameters<typeof buildSpiceDeck>[2] = {},
+): Promise<NativeExecution | null> {
   if (!isNativeSpiceRuntime()) return null;
-  const deck = buildSpiceDeck(schematic, analysis);
+  const deck = buildSpiceDeck(schematic, analysis, deckOptions);
   // A subcircuit reference with no resolvable definition would make ngspice
   // reject the deck with a cryptic native error. We know the exact missing
   // name(s) here, so fail fast with actionable copy instead of paying a native
@@ -861,8 +955,12 @@ async function executeNative(schematic: Schematic, analysis: SpiceAnalysis): Pro
 }
 
 function vector(result: NativeSpiceResult, name: string): NativeVector | undefined {
+  return vectorIn(result.vectors, name);
+}
+
+function vectorIn(vectors: ReadonlyArray<NativeVector>, name: string): NativeVector | undefined {
   const normalized = nodeVectorName(name);
-  return result.vectors.find((candidate) => nodeVectorName(candidate.name) === normalized);
+  return vectors.find((candidate) => nodeVectorName(candidate.name) === normalized);
 }
 
 function nodeVectorName(name: string): string {

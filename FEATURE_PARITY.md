@@ -984,11 +984,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   transfer curves) wrappers drive the TS `runAcSweep`/`runDcSweep`. 9 hand-computed
   tests: an RC low-pass whose stepped R shifts the −3 dB corner (≥4 dB extra
   attenuation for 2× R), and a divider whose stepped top resistor tracks the ratio
-  (Rt=1k→½·Vsweep, Rt=3k→¼·Vsweep). **NEXT:** native ngspice `.step` emission
-  (still TS re-run loop; `.meas`/`.four` deck emission landed first in P1.6;
-  native log parse into UI landed 2026-08-04 — `.step` still deferred because
-  emitting `.step` under the TS re-run loop would double-step, and multi-plot
-  consumption is a larger slice);
+  (Rt=1k→½·Vsweep, Rt=3k→¼·Vsweep). **P1.6 native `.step` slice B (2026-08-04):**
+  `emitNativeStep` deck flag (default off) + `stepLinesFromDirectives`;
+  `runNativeSteppedTransient` emits once and consumes `extraPlots`+current as a
+  `StepFamilyResult`. **Mutually exclusive** with the TS re-run loop (that path
+  never sets the flag — would double-step). Eligible today: **source**-kind only
+  (param still bakes `{X}` before the deck; temp still needs ngspice-visible
+  tempcos). `MAX_EXTRA_PLOTS` raised to 255 so families are not truncated.
+  Param/temp native + AC/DC native step remain open;
   wire a domain selector into the STEP tab (currently transient-only in the UI);
   per-trace pick in the overlay legend.
 - ✅ `.four` **Fourier analysis** — **parser + solver + UI landed** (`simulation/fourier.ts`):
@@ -1080,9 +1083,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   line (`measFourLinesFromDirectives`); `parseNativeMeasurements` /
   `parseNativeFourier` read ngspice's printed results from the engine message
   log and `App.tsx` prefers those when present (TS runners remain the fallback)
-  for transient, AC, and DC native runs. `.step` remains the TS re-run loop —
-  native `.step` emission deferred (would double-step under that loop;
-  multi-plot consumption is a larger unit).
+  for transient, AC, and DC native runs. **Native `.step` slice B (2026-08-04):**
+  source-kind single-deck emit + multi-plot consume via `emitNativeStep` /
+  `runNativeSteppedTransient`; param/temp stay on the TS re-run loop (mutually
+  exclusive — no emit under that loop).
 - ✅ **DC operating point annotation on schematic** (show node V / device I
   in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels
   every non-ground net with its DC voltage (cyan, at the net's

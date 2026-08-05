@@ -22,8 +22,10 @@ use tauri::{AppHandle, Manager, State};
 const MAX_VECTOR_LENGTH: usize = 2_000_000;
 const MAX_TRANSFER_VALUES: usize = 8_000_000;
 /** Secondary plots share a budget well under the primary one: a `.noise` run
- * needs two small plots, while a `.step` deck can leave dozens behind. */
-const MAX_EXTRA_PLOTS: usize = 8;
+ * needs two small plots, while a `.step` deck can leave dozens behind.
+ * Keep this ≥ `MAX_FAMILY_MEMBERS - 1` in the TypeScript step family so a
+ * native single-deck `.step` is not silently truncated mid-family. */
+const MAX_EXTRA_PLOTS: usize = 255;
 const MAX_EXTRA_PLOT_VALUES: usize = 1_000_000;
 const MAX_PLOT_NAMES: usize = 1_000;
 /** ngspice's always-present plot of named constants, never a run result. */

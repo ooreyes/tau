@@ -484,6 +484,18 @@ describe("buildSpiceDeck", () => {
     expect(measIdx).toBeGreaterThan(tranIdx);
     expect(endIdx).toBeGreaterThan(measIdx);
 
+    // Opt-in native-step path only: default decks must stay step-free so the
+    // TypeScript re-run loop cannot double-step.
+    const nativeStep = buildSpiceDeck(
+      { components, wires, directives },
+      { kind: "tran", stopTime: 0.001, steps: 100 },
+      { emitNativeStep: true },
+    );
+    expect(nativeStep.netlist).toContain(".step param X list 1 2");
+    const stepIdx = nativeStep.netlist.indexOf(".step param X");
+    expect(stepIdx).toBeGreaterThan(nativeStep.netlist.indexOf(".tran "));
+    expect(stepIdx).toBeLessThan(nativeStep.netlist.indexOf(".meas tran peak"));
+
     const ac = buildSpiceDeck(
       { components, wires, directives },
       { kind: "ac", startHz: 10, stopHz: 1e6, pointsPerDecade: 10 },

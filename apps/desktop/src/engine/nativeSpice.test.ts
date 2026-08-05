@@ -13,10 +13,12 @@ import {
   runNativeOperatingPoint,
   runNativeTransferFunction,
   runNativeTransient,
+  runNativeSteppedTransient,
 } from "./nativeSpice";
 import { NO_AC_SOURCE_MESSAGE } from "../simulation/acSweep";
 import { primaryBranches } from "../simulation/operatingPoint";
 import { currentProbeTraces } from "../simulation/currentProbe";
+import { parseStepDirective } from "../simulation/paramStep";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 
 const component = (
@@ -1125,5 +1127,100 @@ describe("native noise analysis", () => {
   it("stays on the TypeScript solver outside a Tauri webview", async () => {
     expect(await runNativeNoise(noiseDividerSchematic(), noiseSpec())).toBeNull();
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("native single-deck .step (P1.6)", () => {
+  const sourceSpec = () => {
+    const spec = parseStepDirective(".step V1 list 1 5");
+    if (!spec) throw new Error("parse failed");
+    return spec;
+  };
+
+  it("does not invoke outside Tauri (caller keeps the TS re-run path)", async () => {
+    await expect(runNativeSteppedTransient(
+      { ...rcSchematic(), directives: [".step V1 list 1 5"] },
+      { stopTime: 0.001, steps: 100 },
+      [sourceSpec()],
+    )).resolves.toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns null for param sweeps so the TS re-run path stays exclusive", async () => {
+    enableNativeRuntime();
+    const param = parseStepDirective(".step param X list 1 2");
+    if (!param) throw new Error("parse failed");
+    await expect(runNativeSteppedTransient(
+      { ...rcSchematic(), directives: [".step param X list 1 2"] },
+      { stopTime: 0.001, steps: 100 },
+      [param],
+    )).resolves.toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("emits .step once and assembles a family from extraPlots + current", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce({
+      plot: "tran2",
+      vectors: [
+        { name: "time", real: [0, 0.001], imaginary: null },
+        { name: "v(n001)", real: [5, 5], imaginary: null },
+        { name: "v(n002)", real: [0, 4], imaginary: null },
+      ],
+      extraPlots: [{
+        name: "tran1",
+        vectors: [
+          { name: "time", real: [0, 0.001], imaginary: null },
+          { name: "v(n001)", real: [1, 1], imaginary: null },
+          { name: "v(n002)", real: [0, 0.8], imaginary: null },
+        ],
+      }],
+      messages: [],
+      libraryPath: "/bundle/libngspice.dylib",
+    });
+
+    const family = await runNativeSteppedTransient(
+      { ...rcSchematic(), directives: [".step V1 list 1 5"] },
+      { stopTime: 0.001, steps: 100 },
+      [sourceSpec()],
+    );
+
+    expect(invoke).toHaveBeenCalledTimes(1);
+    const netlist = invoke.mock.calls[0]![1].request.netlist as string;
+    expect(netlist).toContain(".step V1 list 1 5");
+    expect(netlist).toMatch(/\.tran /);
+
+    expect(family).not.toBeNull();
+    if (!family) return;
+    expect(family.ok).toBe(true);
+    expect(family.members).toHaveLength(2);
+    expect(family.members.map((m) => m.label)).toEqual(["V1=1", "V1=5"]);
+    expect(family.members[0]!.result.ok && family.members[0]!.result.traces.find((t) => t.id === "N001")?.values).toEqual([1, 1]);
+    expect(family.members[1]!.result.ok && family.members[1]!.result.traces.find((t) => t.id === "N001")?.values).toEqual([5, 5]);
+  });
+
+  it("refuses a mismatched plot count instead of inventing waveforms", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce({
+      plot: "tran1",
+      vectors: [
+        { name: "time", real: [0, 0.001], imaginary: null },
+        { name: "v(n001)", real: [1, 1], imaginary: null },
+        { name: "v(n002)", real: [0, 0.8], imaginary: null },
+      ],
+      extraPlots: [],
+      messages: [],
+      libraryPath: "/bundle/libngspice.dylib",
+    });
+
+    const family = await runNativeSteppedTransient(
+      { ...rcSchematic(), directives: [".step V1 list 1 5"] },
+      { stopTime: 0.001, steps: 100 },
+      [sourceSpec()],
+    );
+
+    expect(family?.ok).toBe(false);
+    expect(family?.message).toMatch(/returned 1 step plot.*asks for 2/i);
+    expect(family?.members).toEqual([]);
   });
 });

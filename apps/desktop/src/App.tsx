@@ -92,7 +92,9 @@ import {
   runNativeNoise,
   runNativeTransferFunction,
   runNativeTransient,
+  runNativeSteppedTransient,
 } from "./engine/nativeSpice";
+import { canUseNativeStepPath } from "./simulation/nativeStepFamily";
 import { useProject } from "./store/useProject";
 import { readInstalledLtspiceModel } from "./project/installedLtspiceLibrary";
 import {
@@ -865,6 +867,33 @@ function App() {
     }
     setAnalysisRunning(true);
     try {
+      // P1.6 native single-deck `.step` (source-kind only): one emit, multi-plot
+      // consume. Mutually exclusive with the TS re-run loop below — that path
+      // never passes emitNativeStep, so decks stay step-free.
+      if (isNativeSpiceRuntime() && canUseNativeStepPath(specs)) {
+        const nativeFamily = await runNativeSteppedTransient(
+          {
+            components,
+            wires,
+            netLabels,
+            params,
+            directives,
+            userModelLibraries: userModelLibraryTexts,
+            userModelLibraryNames,
+          },
+          effectiveAnalysisOptions,
+          specs,
+        );
+        if (analysisRequestRef.current !== requestId) return;
+        if (nativeFamily) {
+          setStepFamily({
+            ...nativeFamily,
+            engine: nativeFamily.ok ? "ngspice" : attemptedEngine(),
+          });
+          return;
+        }
+      }
+
       const members: StepFamilyMember[] = [];
       // A family only carries a badge when every member came from the same
       // solver; a mixed family is not attributable to one engine.
@@ -872,7 +901,8 @@ function App() {
       for (const ctx of contexts) {
         // A temp sweep forwards its temperature to native ngspice as `.temp` so
         // its device models shift too (the TS solver already saw the rescaled
-        // resistors via applyTemperature).
+        // resistors via applyTemperature). Never forward the document's `.step`
+        // cards here — that would double-step under this re-run loop.
         const stepDirectives = ctx.temperature !== undefined ? [`.temp ${ctx.temperature}`] : undefined;
         const native = await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }, effectiveAnalysisOptions);
         const result = native

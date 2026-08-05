@@ -5,14 +5,13 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 21:03 CDT - P1.6 native `.meas`/`.four` log
-parse covers transient + AC + DC UI paths; TS fallback when log empty.
-`.step` still TS re-run (no native emit — would double-step). Shippable?
-NO.
+**Status:** IDLE 2026-08-04 21:17 CDT - P1.6 native `.step` slice B
+landed (source-kind single-deck emit + multi-plot consume). Param/temp
+still TS re-run. Shippable? NO.
 
-**Next unit:** P1.6 native `.step` single-deck emission + multi-plot
-consumption (honest; no emit under TS re-run); authored-analysis
-differential parity / full-recursive capability ceilings.
+**Next unit:** P1.6 native `.step` param (unresolved braces + `.param`
+emit) and/or temp; authored-analysis differential parity / §10 /
+named-device / unsigned release proof.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.

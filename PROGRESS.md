@@ -9,6 +9,40 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 21:17 CDT**
+
+Unit: P1.6 native `.step` single-deck emission + multi-plot
+consumption (slice B). Source-kind only: `emitNativeStep` flag
+(default off) + `runNativeSteppedTransient` assembles
+extraPlots+current into `StepFamilyResult`. TS re-run path unchanged
+and mutually exclusive (never emits `.step`). Param/temp native
+deferred (baked braces / inline tc=). `MAX_EXTRA_PLOTS` → 255.
+Shippable? NO.
+
+What landed this unit:
+
+- `BuildSpiceDeckOptions.emitNativeStep` + `stepLinesFromDirectives`
+- `simulation/nativeStepFamily.ts` (+ tests) eligibility/labels/assemble
+- `runNativeSteppedTransient` + App prefers it for source-kind
+- Rust `MAX_EXTRA_PLOTS` 8 → 255
+
+Next unit: P1.6 native `.step` param (unresolved `{X}` + `.param`
+emission) and/or temp; authored-analysis differential parity; §10.
+
+Previous completed unit:
+
+**Status: IN PROGRESS - 2026-08-04 21:06 CDT**
+
+Unit: P1.6 native `.step` single-deck emission + multi-plot
+consumption (slice B). Emit `.step` only under an explicit
+`emitNativeStep` deck flag / native-step path; keep the TS re-run
+loop mutually exclusive (no emit under that loop — would double-step).
+Source-kind first (param needs unresolved `{X}` + `.param` emission;
+temp needs ngspice tempco path). Raise `MAX_EXTRA_PLOTS` so stepped
+families are not truncated. Shippable? NO until proven.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 21:03 CDT**
 
 Unit: P1.6 AC/DC native `.meas` log parse into UI. Reused

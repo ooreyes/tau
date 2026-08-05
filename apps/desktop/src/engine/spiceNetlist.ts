@@ -192,7 +192,25 @@ function importedSymbolLeaf(component: SchematicComponent): string {
   return segments[segments.length - 1]?.toLowerCase() ?? "";
 }
 
-export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): SpiceDeck {
+/**
+ * Optional deck-build knobs that must not ride on {@link SpiceAnalysis}: an
+ * analysis card describes *what* to run; these decide *how* Tau packages it.
+ */
+export type BuildSpiceDeckOptions = {
+  /**
+   * When true, emit authored `.step` cards so ngspice produces one multi-plot
+   * family from a single deck. Default **false**: the UI's TypeScript re-run
+   * loop already expands each step itself, and emitting here would double-step.
+   * Only the dedicated native-step path passes true.
+   */
+  emitNativeStep?: boolean;
+};
+
+export function buildSpiceDeck(
+  schematic: Schematic,
+  analysis: SpiceAnalysis,
+  options: BuildSpiceDeckOptions = {},
+): SpiceDeck {
   assertSimulationIntegrity(schematic.components, schematic.ascForeignSymbols);
   const paramScope = schematic.params ?? EMPTY_SCOPE;
   // Behavioral (V=/I=/R=) expressions may legitimately reference run-time
@@ -803,7 +821,12 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // them only in TypeScript and never emitted them, so ngspice never saw
   // the user's measurements or Fourier request. Domain-filtered so an AC
   // deck does not carry `.meas tran …` (and vice versa).
+  // `.step` is opt-in only ({@link BuildSpiceDeckOptions.emitNativeStep}): the
+  // default TS re-run family path must never see it in the deck.
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc));
+  if (options.emitNativeStep) {
+    lines.push(...stepLinesFromDirectives(flatDirectives));
+  }
   lines.push(...measFourLinesFromDirectives(flatDirectives, analysis.kind, paramScope));
   lines.push(".end");
 
@@ -1739,6 +1762,26 @@ function icLinesFromDirectives(
     if (voltageAssignments.length > 0) lines.push(`.ic ${voltageAssignments.join(" ")}`);
   }
   return { lines, hasIc, inductorCurrents, warnings };
+}
+
+/**
+ * Authoritative `.step` cards for the native single-deck path (P1.6). Emits
+ * cleaned `.step …` lines in document order. Callers must only request this
+ * when they will consume multi-plot results and will **not** also expand the
+ * sweep in TypeScript (double-step). Param-kind honesty is the caller's job:
+ * Tau still bakes `{param}` into element values, so a native `.step param`
+ * without unresolved braces would not actually vary the circuit.
+ */
+export function stepLinesFromDirectives(directives: ReadonlyArray<string>): string[] {
+  const out: string[] = [];
+  for (const directive of directives) {
+    const trimmed = directive.trim();
+    if (!trimmed) continue;
+    const bare = trimmed.replace(/^[.!]+/, "");
+    if (!/^step\b/i.test(bare)) continue;
+    out.push(`.${bare}`.replace(/µ/g, "u"));
+  }
+  return out;
 }
 
 /**
