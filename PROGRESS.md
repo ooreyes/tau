@@ -9,21 +9,57 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:15 CDT**
+**Status: DONE - 2026-08-05 04:20 CDT**
 
-Unit: Documents/LTspice `Draft1.asc` authored `.tran` → differential **pass=73**.
+Unit: Educational `BandGaps.asc` authored `.dc temp` → differential **pass=74**.
 ```
-SUMMARY pass=73 sibling=5 gap=0
-tran draft1 … v(n002)/v(n003) nRms≈0 nMax≈1e-4 span≈0.37
+SUMMARY pass=74 sibling=5 gap=0
+dc bandgaps … v(a..d) nRms≈0.046–0.058 @ rmsTol=0.06 maxTol=0.07
 ```
-Series diode–L–R; tip Draft2 pass=72 → 73. Draft8 Laplace / Draft6 AD823 /
-Draft10 UOA2 same-deck deferred. Named-device 48.0%. SHIPPABLE? **NO**
+Four BJT bandgap refs; tip Draft1 pass=73 → 74. Left Draft* / Staff EE
+named-device alone. Named-device 48.0%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+
 ---
+
+### 2026-08-05 — Educational BandGaps.asc DC-temp → pass=74 (§DoD)
+
+**What I did**
+- Educational `BandGaps.asc` authored `.dc temp -55 125 .1`: four BJT
+  bandgap refs A/B/C/D with document `.model N NPN` / `.model P PNP`.
+  Default 2%/5% misses (nRms≈0.046–0.058 BJT tempco vs LTspice); lands at
+  rmsTol=0.06 / maxTol=0.07 — same honesty class as elip_grd/varistor
+  elevated peak tol. Absolute |Δ|≈20–27 mV on ~0.4 V span. Zero unresolved /
+  modelSubstitutions.
+- Tip `83af258` Draft1 pass=73 → 74. Collision-avoid: left Draft* and
+  plaintext named-device to Staff EE. Avoid-list untouched.
+
+**Exact stdout**
+
+```
+SUMMARY pass=74 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/differential-parity.sh` → SUMMARY pass=74 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green
+
+**Parity items**
+- Differential 🟡 harness **pass=74 · sibling=5 · gap=0**. Named-device 🟡
+  **48.0%**. SHIPPABLE? NO
+
+**Next step**
+- Continue non-Draft Educational/Applications outside Staff EE Draft* /
+  named-device claim. Leave Draft5/9 alone.
+
 
 
 ### 2026-08-05 — Documents/LTspice Draft1.asc TRAN → pass=73 (§DoD)
