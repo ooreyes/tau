@@ -9,13 +9,6 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-<<<<<<< HEAD
-**Status: DONE - 2026-08-05 05:36 CDT**
-
-Unit: Waveform DoD — LTspice **`.plt` plot settings** parse + apply
-(panes/traces/X). Open .plt in Advanced plot tools.
-Base tip `31d66d8` pass=84. SHIPPABLE? **NO**
-=======
 **Status: DONE - 2026-08-05 05:38 CDT**
 
 Unit: Circuit_testing_v1 `04_dc_diode_curve.asc` authored `.dc` → differential **pass=85**.
@@ -24,41 +17,12 @@ SUMMARY pass=85 sibling=5 gap=0
 dc ct-diode-dc … v(anode) nRms≈0 span=0.547; i(v1) nRms≈0 span≈4.3e-4
 ```
 Exact 1N4148. Named-device 48.1%. Left 100W/IRFP alone. SHIPPABLE? **NO**
->>>>>>> a756969 (auto: Circuit_testing 04_dc_diode_curve DC → pass=85 (§DoD))
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
-
-
-### 2026-08-05 — LTspice .plt import/apply (§waveform DoD)
-
-**What I did**
-- Pure `parsePlt` / `applyPltSection` for Educational-style `.plt` files
-  (multi-pane, ratio expressions, Log flags; never mid-line `Y[0]`).
-  Advanced **Open .plt** applies Transient/AC/DC via expression-bar traces +
-  pane layout + X window. Replaced durability `wip:` checkpoint with named commit.
-- Left 100W/IRFP, Chan/NIGBT/FRA, Settings alone. Continue 23 owns next differential.
-
-**Files**
-- `apps/desktop/src/simulation/plotSettings.ts` (+ test)
-- `apps/desktop/src/components/SimulationPanel.tsx` (+ Open .plt test)
-- `FEATURE_PARITY.md`, `PROGRESS.md`
-
-**Tests**
-- `pnpm -C apps/desktop typecheck` + `test` green
-- plotSettings + Educational smoke + SimulationPanel Open .plt wiring
-
-**Parity items**
-- Waveform viewer 🟡 (`.plt` import landed; dual-axis / step exprs / save NEXT).
-  Differential pass=84 · named-device 48.1% · SHIPPABLE? NO
-
-**Next step**
-- Continue 22 waveform: dual-axis Y or step-pane expressions. Continue 23 owns differential.
-
-
 
 
 
@@ -70,7 +34,7 @@ Exact 1N4148. Named-device 48.1%. Left 100W/IRFP alone. SHIPPABLE? **NO**
   (nRms≈7e-7 / ≈3e-6). Distinct from synthetic resistive divider DC and
   IGBTeq nested DC. Avoided Staff EE 100W/IRFP/named-device maps and
   ISO7637/sinh/.machine. Tip ct-rlc pass=84 → **85**. Worktree
-  `Tau-wt-dod-draft`.
+  `Tau-wt-dod-draft` (rebased over `.plt` tip `2f39ef5`).
 
 **Exact stdout**
 
@@ -93,6 +57,33 @@ dc ct-diode-dc … v(anode) nRms=0.0000 nMax=0.0000 span=0.547; i(v1) nRms=0.000
 **Next step**
 - Continue honest differential (ct AC/noise/TF or other non-colliding ASC).
   Avoid ISO7637/sinh/Documents Draft* / Staff EE maps.
+
+
+
+### 2026-08-05 — LTspice .plt import/apply (§waveform DoD)
+
+**What I did**
+- Pure `parsePlt` / `applyPltSection` for Educational-style `.plt` files
+  (multi-pane, ratio expressions, Log flags; never mid-line `Y[0]`).
+  Advanced **Open .plt** applies Transient/AC/DC via expression-bar traces +
+  pane layout + X window. Replaced durability `wip:` checkpoint with named commit.
+- Left 100W/IRFP, Chan/NIGBT/FRA, Settings alone. Continue 23 owns next differential.
+
+**Files**
+- `apps/desktop/src/simulation/plotSettings.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ Open .plt test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- plotSettings + Educational smoke + SimulationPanel Open .plt wiring
+
+**Parity items**
+- Waveform viewer 🟡 (`.plt` import landed; dual-axis / step exprs / save NEXT).
+  Differential pass=84 (then 85 via ct diode) · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue 22 waveform: dual-axis Y or step-pane expressions. Continue 23 owns differential.
 
 
 
