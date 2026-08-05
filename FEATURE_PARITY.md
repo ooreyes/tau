@@ -226,8 +226,8 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     fail-closed deck: missing named models block Run rather than promising a
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
-    `NAMED-DEVICE-RECURSIVE: unencrypted=2641 exact=399 refuse=2139 silent=0
-    hard-failure=103 encrypted-excluded=1371 exact-rate=15.1%` (2026-08-04).
+    `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
+    hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` (2026-08-04 23:20).
     Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise
     recursive exact-model floor to ≥95% with hard-failure=0; a shared five-pin
     shape does not prove pin fidelity for those parts.
@@ -1797,15 +1797,16 @@ QA (STEP 3.5 pipeline) before/after every panel — never a big-bang rewrite,
 never a broken intermediate state on the branch.
 
 **Status: foundation + panel migrations landed (Phases 1–4c), but AGENTS.md §10
-DoD stays UNCHECKED.** Overnight 2026-08-04 (Tokens + Cupertino): Light is now
-the product default; Anduril Light cool-paper + precision-blue accent
-(`#F5F6F8` / `#0A66C2`); radius scale extended (`--r-2xs`/`--r-xs`/`--r-pill`)
-and raw chrome radii snapped; warning chrome quieted (soft/glow + idle/has-warning
-panels flat, errors still vivid); settings rows simplified. Remaining §10 debt
-that blocks an honest DoD check: Resizable/Command/Toast primitives still
-deferred; native `<select>`s in FFT/op-amp not on `ui/Select`; Assistant/local-AI
-settings surfaces still mid-migration; Cupertino icon chrome still settling;
-no proof of zero ad-hoc drift across every panel at both themes + min window.
+DoD stays UNCHECKED.** Overnight 2026-08-04 (Tokens + Cupertino + Anduril Light
+palette pop): Light is the product default; cool-paper + precision-blue accent
+popped to `#EDF1F6` / `#0068D6` (was `#F5F6F8` / `#0A66C2`); radius scale
+extended (`--r-2xs`/`--r-xs`/`--r-pill`) and raw chrome radii snapped; warning
+chrome stays quiet ochre (soft ≈0.05 — not danger-red for optional empties);
+settings rows simplified. Remaining §10 debt that blocks an honest DoD check:
+Resizable/Command/Toast primitives still deferred; native `<select>`s in
+FFT/op-amp not on `ui/Select`; Assistant/local-AI settings surfaces still
+mid-migration; Cupertino icon chrome still settling; no proof of zero ad-hoc
+drift across every panel at both themes + min window.
 Do **not** flip the AGENTS box until that grep+screenshot proof exists.
 
 **Earlier claim (2026-07-08 Phase 4c) that §10 "closes" AGENTS DoD was premature**

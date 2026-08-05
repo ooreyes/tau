@@ -9,17 +9,33 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:20 CDT**
+**Status: IN PROGRESS - 2026-08-04 23:21 CDT**
 
-Unit: Anduril Light palette + Lucide explorer icons + quieter Settings (§10).
+Unit: Raise recursive named-device exact-rate (stdout currently **15.7%**) toward
+≥95% — triage top refuse classes; prefer exact model attach / library resolve;
+refuse-over-fake for unsupported devices. Do **not** claim ≥95% unless measured.
+Shippable? **NO**.
 
+**Measured 2026-08-04 23:20 CDT** (`scripts/named-device-fidelity.sh`):
+`NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
+hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%`
+Prior: HF 103 → **0** (Cpar/Rpar, `;` strip, Rload±, quote sentinels, paren-less PWL).
+
+**Active product lanes (collision lock — do not cross-edit):**
+- **Overnight DoD + Staff EE** — `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus (this unit).
+- **Design lead / Cupertino** — `ShellPanels.tsx` · `App.css` chrome · `DESIGN_SYSTEM.md`. LOCKED.
+- **AI platform / Freshman** — `localAiEnsure*` / `cloudAiConsent*` /
+  `LocalAiSetupDialog*` / Settings AI / `localMlx*` / AssistantPanel AI paths. LOCKED.
+- **Bench** — help/warning copy strings only.
+- **QA** — gates + morning-status numbers.
+
+**SHIPPABLE?** **NO** — exact-rate 15.7% (need ≥95%), §10, broad differential, other DoD open.
 
 ### Ownership board (ENFORCED overnight 2026-08-04)
 
 | Lane | Owns (edit only these) |
 |------|------------------------|
 | Design lead | `ShellPanels.tsx` icons · `App.css` chrome · `DESIGN_SYSTEM.md` |
-| Anduril Light (palette) | `App.css` light token blocks · `DESIGN_SYSTEM.md` token tables · optional `tokens.css` aliases — DONE this unit |
 | Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus scripts |
 | AI platform / Freshman | `lib/localAiEnsure*` · `lib/cloudAiConsent*` · `LocalAiSetupDialog*` · Settings AI only |
 | Bench | help/warning copy strings only — coordinate; no ShellPanels structure |
@@ -31,31 +47,26 @@ Unit: Anduril Light palette + Lucide explorer icons + quieter Settings (§10).
 
 ---
 
-### 2026-08-04 — Anduril Light palette pop (§10)
+### 2026-08-04 — Named-device hard-failure 103→0 (exact deck fixes)
 
 **What I did**
-- Strengthened light neutrals to cooler blue-gray paper (`#EDF1F6` / `#E2E8F0` /
-  `#D4DCE6`), deeper cool ink (`#0B1017` / `#4E5C6E`), precision blue accent
-  `#0068D6` (~5.3:1 white-on-blue). Quiet warning stays ochre soft≈0.05 — not
-  danger-red. Documented before/after in `DESIGN_SYSTEM.md`; tiny
-  `--color-paper`/`ink`/`precision` aliases in `tokens.css`.
-- Did not touch ShellPanels / AssistantPanel / engine / io. §10 DoD unchecked.
+- Finished interrupted triage: Cpar/Rpar expand, source `;` comment strip,
+  Rload+/− `safeName`, LT3956 quote-sentinel Value2/SpiceLine normalize,
+  paren-less PWL (LT8708-1). Triage mode on recursive corpus.
+- Re-measured; **hard-failure=0**. exact-rate still 15.7% — DoD ≥95% unchecked.
 
 **Files**
-- `apps/desktop/src/App.css` (both light blocks)
-- `DESIGN_SYSTEM.md`, `FEATURE_PARITY.md` (§10 note only), `apps/desktop/src/styles/tokens.css`
+- `spiceNetlist.ts` / `acSpec.ts` / `ascImport.ts` / `sourceFunction.ts` (+ tests)
+- `namedDeviceRecursive.corpus.ts` (NAMED_DEVICE_TRIAGE)
 
-**Tests**
-- CSS/docs only; typecheck red on unrelated Design-lead `ShellPanels` → missing
-  `VscodeExplorerIcons` (not this unit).
+**Tests / proof**
+- Targeted engine/io tests green; `scripts/named-device-fidelity.sh` stdout above
 
 **Parity items**
-- §10 still 🟡; AGENTS §10 box unchecked. SHIPPABLE=NO.
+- Named-device: 🟡 HF=0 silent=0; exact-rate 15.7% (not ≥95%)
 
 **Next step**
-- Design QA: light screenshots at min + 1440; verify paper reads cool (not gray),
-  accent pops, optional-key warnings stay quiet ochre.
-
+- Raise exact-rate (refuse→exact where libraries resolve); or differential gaps.
 
 ### 2026-08-04 — Tokens: light default + quiet warning chrome (§10)
 

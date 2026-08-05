@@ -163,9 +163,9 @@ account and sign/notarize/ship.
       **Partial (2026-08-04):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
       `NAMED-DEVICE-RECURSIVE: unencrypted=2641 exact=399 refuse=2139 silent=0
-      hard-failure=103 encrypted-excluded=1371 exact-rate=15.1%` — silent=0
-      held; ≥95% floor and zero hard-failure **not** met; DoD box stays
-      unchecked.
+      hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` — silent=0
+      and hard-failure=0 held (2026-08-04 23:20); ≥95% exact-rate **not** met;
+      DoD box stays unchecked.
 - [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs
