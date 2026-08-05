@@ -72,6 +72,8 @@ const P2_ASC = join(EDU, "P2.asc");
 const STEPAC_ASC = join(EDU, "stepAC.asc");
 const LOGAMP_ASC = join(EDU, "logamp.asc");
 const MONTECARLO_ASC = join(EDU, "MonteCarlo.asc");
+const VARACTOR_ASC = join(EDU, "varactor.asc");
+const VARACTOR2_ASC = join(EDU, "varactor2.asc");
 const ORDER2_LOWPASS_ASC = join(APP, "2ndOrderLowpass.asc");
 const ORDER2_BANDPASS_ASC = join(APP, "2ndOrderBandpass.asc");
 const ORDER2_HIGHPASS_ASC = join(APP, "2ndOrderHighpass.asc");
@@ -225,7 +227,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1989,6 +1991,81 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+
+    // --- Educational varactor.asc / varactor2.asc authored .ac (MV2201 bundled in standardModels) ---
+    // tip 65e05ce thrash: message claimed varactor but corpus had MonteCarlo only — land real cells here.
+    // phono=LT1028; relax=LT1001; SampleAndHold v(b) nMax≈0.0512 @5% — deferred.
+    for (const fixture of [
+      {
+        path: VARACTOR_ASC,
+        circuit: "varactor",
+        topology: "Educational varactor.asc MV2201 varactors + K-coupled L (authored .ac oct 1–50 Meg; .step Vtune→0)",
+        probes: ["v(out)"] as const,
+        id: "diff-varactor-ac",
+        minSpan: 0.1,
+      },
+      {
+        path: VARACTOR2_ASC,
+        circuit: "varactor2",
+        topology: "Educational varactor2.asc MV2201 cascade A/B/C (authored .ac oct 1–100 Meg)",
+        probes: ["v(a)", "v(b)", "v(c)"] as const,
+        id: "diff-varactor2-ac",
+        minSpan: 0.1,
+      },
+    ] as const) {
+      expect(existsSync(fixture.path), `missing ${fixture.path}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(fixture.path)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, `${fixture.circuit} must author .ac`).toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+MV2201\s+D\b/i);
+      expect(deck.netlist).not.toMatch(/type\s*=\s*varactor/i);
+      const dLines = deck.netlist.split(/\r?\n/).filter((line) => /^D\w*\b/i.test(line.trim()));
+      expect(dLines.length).toBeGreaterThanOrEqual(4);
+      for (const line of dLines) {
+        expect(line, line).toMatch(/\bMV2201\b/);
+        expect(line, line).not.toMatch(/\bTAU_DIODE\b|\bTAU_ZENER\b/);
+      }
+      const result = runPairedBatch(fixture.id, deck.netlist, [...fixture.probes]);
+      const memberNotes: string[] = [];
+      for (const probe of fixture.probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${fixture.circuit} ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `${probe} non-hollow`).toBeGreaterThan(fixture.minSpan);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "ac",
+        circuit: fixture.circuit,
+        topology: fixture.topology,
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2282,9 +2359,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(55);
+    expect(passCount).toBeGreaterThanOrEqual(57);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=55 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=57 sibling=5 gap=0/);
   }, 240_000);
 });
