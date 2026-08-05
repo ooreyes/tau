@@ -217,10 +217,153 @@ export function makePltTraceResolver(
   };
 }
 
+/** Canonical LTspice section header for a Tau analysis kind. */
+export function headerForPltKind(kind: PltAnalysisKind): string {
+  switch (kind) {
+    case "transient":
+      return "Transient Analysis";
+    case "ac":
+      return "AC Analysis";
+    case "dc":
+      return "DC transfer characteristic";
+    case "noise":
+      return "Noise Spectral Density - (V/Hz½ or A/Hz½)";
+    case "fft":
+      return "FFT of time domain data";
+    default:
+      return "Transient Analysis";
+  }
+}
+
+/**
+ * Serialize a parsed `.plt` document back to LTspice-compatible ASCII.
+ * Round-trips the durable fields Tau understands (Npanes, Active Pane, traces,
+ * X/Y[0]/Y[1], Log). Volts/Amps/GridStyle chrome from foreign files is not
+ * reinvented — Open→Save preserves what we parse.
+ */
+export function serializePlt(file: PltFile): string {
+  if (file.sections.length === 0) {
+    throw new Error("Cannot save an empty .plt file.");
+  }
+  return file.sections.map(serializeSection).join("\n");
+}
+
+/**
+ * Build one `.plt` section from Tau's current pane/expression state so Save
+ * round-trips with Open .plt. Trace color ids are stable 524290+i (Educational
+ * convention); unused right Y uses LTspice's `_` / ±1e308 sentinel.
+ */
+export function buildPltSection(args: {
+  kind: PltAnalysisKind;
+  /** Per-pane ordered plot expressions (`V(out)`, `I(R1)`, `V(a)-V(b)`, …). */
+  panes: ReadonlyArray<{ expressions: ReadonlyArray<string> }>;
+  xWindow?: { xMin: number; xMax: number } | null;
+  yWindow?: { yMin: number; yMax: number } | null;
+  xLog?: boolean;
+  yLog?: boolean;
+  activePane?: number | null;
+}): PltSection {
+  const panesIn = args.panes.length > 0 ? args.panes : [{ expressions: [] as string[] }];
+  const x = axisFromWindow(args.xWindow ?? null, " ");
+  const y0 = axisFromWindow(args.yWindow ?? null, " ");
+  const y1: PltAxis = { prefix: "_", flag: 0, min: 1e308, tick: 0, max: -1e308 };
+  const log: [number, number, number] = [
+    args.xLog ? 1 : 0,
+    args.yLog ? 1 : 0,
+    0,
+  ];
+
+  let color = 524290;
+  const panes: PltPane[] = panesIn.map((pane) => {
+    const exprs = pane.expressions.map((e) => e.trim()).filter(Boolean);
+    const traces: PltTrace[] = exprs.map((expression) => {
+      const tr = { colorId: color, flag: 0, expression };
+      color += 1;
+      return tr;
+    });
+    return { traces, x, y0, y1, log };
+  });
+
+  return {
+    header: headerForPltKind(args.kind),
+    kind: args.kind,
+    npanes: panes.length,
+    activePane: args.activePane ?? null,
+    panes,
+  };
+}
+
+/** Map a Tau trace id to a `.plt` expression (`expr:V(a)-V(b)` → `V(a)-V(b)`). */
+export function expressionFromTraceId(
+  traceId: string,
+  labelForId: (id: string) => string | null,
+): string | null {
+  if (traceId.startsWith("expr:")) {
+    const expr = traceId.slice("expr:".length).trim();
+    return expr || null;
+  }
+  if (traceId.startsWith("ref:")) return null; // reference overlays are not .plt traces
+  const label = labelForId(traceId);
+  return label?.trim() || null;
+}
+
 // ── internals ──────────────────────────────────────────────────────────────
 
 function normalizeSignalKey(s: string): string {
   return s.trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function axisFromWindow(
+  window: { xMin: number; xMax: number } | { yMin: number; yMax: number } | null,
+  prefix: string,
+): PltAxis | null {
+  if (!window) return null;
+  const min = "xMin" in window ? window.xMin : window.yMin;
+  const max = "xMax" in window ? window.xMax : window.yMax;
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max === min) return null;
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  const tick = (hi - lo) / 5;
+  return { prefix, flag: 0, min: lo, tick, max: hi };
+}
+
+function serializeSection(section: PltSection): string {
+  const lines: string[] = [];
+  lines.push(`[${section.header}]`);
+  lines.push("{");
+  lines.push(`   Npanes: ${section.panes.length || section.npanes}`);
+  if (section.activePane !== null && section.activePane !== undefined) {
+    lines.push(`   Active Pane: ${section.activePane}`);
+  }
+  section.panes.forEach((pane, i) => {
+    lines.push("   {");
+    lines.push(`      traces: ${pane.traces.length}${serializeTraces(pane.traces)}`);
+    if (pane.x) lines.push(`      X: ${serializeAxis(pane.x)}`);
+    if (pane.y0) lines.push(`      Y[0]: ${serializeAxis(pane.y0)}`);
+    if (pane.y1) lines.push(`      Y[1]: ${serializeAxis(pane.y1)}`);
+    if (pane.log) lines.push(`      Log: ${pane.log[0]} ${pane.log[1]} ${pane.log[2]}`);
+    lines.push(i < section.panes.length - 1 ? "   }," : "   }");
+  });
+  lines.push("}");
+  lines.push("");
+  return lines.join("\n");
+}
+
+function serializeTraces(traces: ReadonlyArray<PltTrace>): string {
+  if (traces.length === 0) return "";
+  return traces
+    .map((t) => ` {${t.colorId},${t.flag},"${t.expression.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"}`)
+    .join("");
+}
+
+function serializeAxis(axis: PltAxis): string {
+  return `('${axis.prefix}',${axis.flag},${fmtNum(axis.min)},${fmtNum(axis.tick)},${fmtNum(axis.max)})`;
+}
+
+function fmtNum(n: number): string {
+  if (!Number.isFinite(n)) return String(n);
+  // Prefer compact form; keep enough digits for Educational µs windows.
+  return String(n);
 }
 
 function parseSection(header: string, body: string): PltSection {

@@ -1487,8 +1487,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Open .plt** applies Transient/AC/DC settings (expression-bar traces so
   panes do not depend on probes; X window forced on the transient scope).
   11 pure + Educational corpus smoke + 1 SimulationPanel wiring test.
+  **`.plt` save/export landed** (2026-08-05): `serializePlt` / `buildPltSection`
+  round-trip durable panes/traces/X/Y/Log; Advanced **Save .plt** downloads
+  current Transient/AC/DC panes. 5 round-trip + 1 Save wiring tests.
   **Dual-axis Y landed** (see expressions item). **Step-pane expressions
-  landed** (see expressions item). **NEXT:** `.plt` save.
+  landed** (see expressions item). **NEXT:** (waveform CSV/PNG/plt/expressions
+  /dual-axis covered — remaining: right-click math).
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy

@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   applyPltSection,
+  buildPltSection,
   classifyPltHeader,
+  expressionFromTraceId,
   makePltTraceResolver,
   parsePlt,
   pltKindForMode,
   selectPltSection,
+  serializePlt,
 } from "./plotSettings";
 
 const HARTLY = `[Transient Analysis]
@@ -219,5 +222,64 @@ describe("parsePlt against Educational .plt corpus (when present)", () => {
         expect(section.panes.some((p) => p.traces.length > 0), name).toBe(true);
       }
     }
+  });
+});
+
+describe("serializePlt / buildPltSection round-trip", () => {
+  it("round-trips Hartly durable fields through serialize → parse", () => {
+    const original = parsePlt(HARTLY);
+    const text = serializePlt(original);
+    const again = parsePlt(text);
+    expect(again.sections).toHaveLength(1);
+    const s = again.sections[0];
+    expect(s.kind).toBe("transient");
+    expect(s.panes).toHaveLength(1);
+    expect(s.panes[0].traces.map((t) => t.expression)).toEqual(["V(out)"]);
+    expect(s.panes[0].x).toMatchObject({ min: 0, max: 0.00025 });
+    expect(s.panes[0].y0).toMatchObject({ min: -2.5, max: 2.5 });
+    expect(s.panes[0].log).toEqual([0, 0, 0]);
+  });
+
+  it("round-trips multi-pane Transformer2 traces and Active Pane", () => {
+    const original = parsePlt(TRANSFORMER2);
+    const again = parsePlt(serializePlt(original));
+    const s = again.sections[0];
+    expect(s.activePane).toBe(1);
+    expect(s.panes.map((p) => p.traces[0]?.expression)).toEqual(["V(b)", "V(a)", "V(in)"]);
+  });
+
+  it("round-trips Linkwitz ratio expression and log flags", () => {
+    const again = parsePlt(serializePlt(parsePlt(LINKWITZ)));
+    expect(again.sections[0].panes[0].traces.map((t) => t.expression)).toEqual([
+      "V(out)",
+      "V(out)/V(eq)",
+    ]);
+    expect(again.sections[0].panes[0].log).toEqual([1, 2, 0]);
+  });
+
+  it("buildPltSection + serialize produces Open-compatible panes from Tau state", () => {
+    const section = buildPltSection({
+      kind: "transient",
+      panes: [
+        { expressions: ["V(out)"] },
+        { expressions: ["V(in)", "V(out)-V(in)"] },
+      ],
+      xWindow: { xMin: 0, xMax: 1e-3 },
+      yWindow: { yMin: -1, yMax: 1 },
+      activePane: 0,
+    });
+    const file = parsePlt(serializePlt({ sections: [section] }));
+    expect(file.sections[0].panes.map((p) => p.traces.map((t) => t.expression))).toEqual([
+      ["V(out)"],
+      ["V(in)", "V(out)-V(in)"],
+    ]);
+    expect(file.sections[0].panes[0].x).toMatchObject({ min: 0, max: 1e-3 });
+    expect(file.sections[0].activePane).toBe(0);
+  });
+
+  it("expressionFromTraceId strips expr: and skips ref overlays", () => {
+    expect(expressionFromTraceId("expr:V(a)-V(b)", () => null)).toBe("V(a)-V(b)");
+    expect(expressionFromTraceId("n1", (id) => (id === "n1" ? "V(out)" : null))).toBe("V(out)");
+    expect(expressionFromTraceId("ref:V(out)", () => "V(out)")).toBeNull();
   });
 });

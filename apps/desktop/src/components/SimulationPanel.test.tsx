@@ -765,6 +765,99 @@ describe("SimulationPanel - Open .plt plot settings", { timeout: 20_000 }, () =>
     expect(chipText.some((t) => t.includes("V(in)"))).toBe(true);
     expect(chipText.some((t) => t.includes("V(mid)"))).toBe(true);
   });
+
+  it("Save .plt exports panes that Open .plt can re-parse", async () => {
+    const result = {
+      ok: true as const,
+      title: "Transient",
+      times: [0, 1e-3, 2e-3],
+      traces: [
+        { id: "n1", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values: [0, 1, 0] },
+        { id: "n2", label: "V(in)", unit: "V" as const, color: "var(--trace-green)", values: [1, 1, 1] },
+      ],
+      currents: [],
+      stats: { netCount: 2, componentCount: 0, sampleCount: 3, stopTime: 2e-3, stepSize: 1e-3 },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [
+          { id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 },
+          { id: "n2", points: [{ x: 0, y: 32 }, { x: 16, y: 32 }], pins: [], isGround: false, labelCount: 0 },
+        ],
+        components: [],
+      },
+    };
+
+    const capturedBlobs: Blob[] = [];
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = ((blob: Blob) => {
+      capturedBlobs.push(blob);
+      return "blob:mock-plt";
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    try {
+      useSchematic.setState({
+        wires: [
+          { id: "w1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }] },
+          { id: "w2", points: [{ x: 0, y: 32 }, { x: 16, y: 32 }] },
+        ],
+        probes: [
+          { id: "p1", x: 0, y: 0, netId: "n1", color: "var(--trace-cyan)" },
+          { id: "p2", x: 0, y: 32, netId: "n2", color: "var(--trace-green)" },
+        ],
+      });
+      renderPanel({ result });
+      fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+      // Seed expression traces via .plt open so Save has expr: panes.
+      const openInput = document.querySelector('input[accept=".plt"]') as HTMLInputElement;
+      fireEvent.change(openInput, {
+        target: {
+          files: [
+            new File(
+              [
+                `[Transient Analysis]
+{
+   Npanes: 1
+   {
+      traces: 2 {524290,0,"V(out)"} {524291,0,"V(in)"}
+      X: (' ',0,0,0.0004,0.002)
+      Y[0]: (' ',0,-1,0.2,1)
+      Y[1]: ('_',0,1e+308,0,-1e+308)
+      Log: 0 0 0
+   }
+}
+`,
+              ],
+              "seed.plt",
+              { type: "text/plain" },
+            ),
+          ],
+        },
+      });
+      expect(await screen.findByRole("button", { name: "Open .plt ✓" })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Save .plt" }));
+      expect(capturedBlobs.length).toBeGreaterThanOrEqual(1);
+      const saved = await capturedBlobs[capturedBlobs.length - 1].text();
+      expect(saved).toMatch(/\[Transient Analysis\]/);
+      expect(saved).toMatch(/V\(out\)/);
+      expect(saved).toMatch(/V\(in\)/);
+      // Round-trip: re-parse saved text.
+      const { parsePlt: parseAgain } = await import("../simulation/plotSettings");
+      const again = parseAgain(saved);
+      expect(again.sections[0].panes[0].traces.map((t) => t.expression)).toEqual(
+        expect.arrayContaining(["V(out)", "V(in)"]),
+      );
+    } finally {
+      clickSpy.mockRestore();
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+    }
+  });
 });
 
 describe("StepPlot measurements", () => {

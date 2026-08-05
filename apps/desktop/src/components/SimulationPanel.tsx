@@ -52,10 +52,13 @@ import { stabilityMargins } from "../simulation/stability";
 import { seriesToCsv, stepFamilyToCsv } from "../simulation/waveformCsv";
 import {
   applyPltSection,
+  buildPltSection,
+  expressionFromTraceId,
   makePltTraceResolver,
   parsePlt,
   pltKindForMode,
   selectPltSection,
+  serializePlt,
 } from "../simulation/plotSettings";
 import { downloadWaveformPng, waveformSvgsToPng } from "../simulation/plotPng";
 import { runWaveformFft, type WindowFn } from "../simulation/fft";
@@ -462,6 +465,77 @@ export function SimulationPanel({
       setPltError(err instanceof Error ? err.message : "Could not read the .plt file.");
     } finally {
       if (pltInputRef.current) pltInputRef.current.value = "";
+    }
+  };
+
+  /** Save current panes/expressions/X as an LTspice-compatible `.plt`. */
+  const savePlotSettings = () => {
+    try {
+      const kind = pltKindForMode(mode, stepDomain);
+      if (kind !== "transient" && kind !== "ac" && kind !== "dc") {
+        throw new Error("Save .plt supports Transient, AC, and DC plot settings only.");
+      }
+
+      const labelById = new Map<string, string>();
+      if (result?.ok) {
+        for (const t of result.traces) labelById.set(t.id, t.label);
+        for (const c of result.currents) labelById.set(`I(${c.ref})`, c.label);
+      }
+      for (const t of exprTraces) labelById.set(t.id, t.label);
+      if (acResult?.ok) {
+        for (const t of acResult.traces) labelById.set(t.id, t.label);
+      }
+      for (const t of acExprTraces) labelById.set(t.id, t.label);
+      if (dcResult?.ok) {
+        for (const n of dcResult.nets) labelById.set(n.id, n.label);
+      }
+      for (const t of dcExprTraces) labelById.set(t.id, t.label);
+
+      const labelForId = (id: string) => labelById.get(id) ?? null;
+
+      let panes: { expressions: string[] }[];
+      if (kind === "transient") {
+        panes = paneLayout.map((pane) => ({
+          expressions: pane.traceIds
+            .map((id) => expressionFromTraceId(id, labelForId))
+            .filter((e): e is string => Boolean(e)),
+        }));
+        // If panes are empty but expression bar has entries, emit one pane.
+        if (panes.every((p) => p.expressions.length === 0) && exprList.length > 0) {
+          panes = [{ expressions: [...exprList] }];
+        }
+      } else if (kind === "ac") {
+        const exprs = acExprList.length > 0
+          ? [...acExprList]
+          : (acResult?.ok ? acResult.traces.map((t) => t.label) : []);
+        panes = [{ expressions: exprs }];
+      } else {
+        const exprs = dcExprList.length > 0
+          ? [...dcExprList]
+          : (dcResult?.ok ? dcResult.nets.filter((n) => !n.ground).map((n) => n.label) : []);
+        panes = [{ expressions: exprs }];
+      }
+
+      if (!panes.some((p) => p.expressions.length > 0)) {
+        throw new Error("Nothing to save — add a probe or plot expression first.");
+      }
+
+      const xWindow =
+        pltXWindow
+        ?? (kind === "transient" && result?.ok
+          ? { xMin: 0, xMax: result.times[result.times.length - 1] || 1 }
+          : null);
+
+      const section = buildPltSection({
+        kind,
+        panes,
+        xWindow,
+        activePane: 0,
+      });
+      downloadText(serializePlt({ sections: [section] }), "plot", "plt", "text/plain");
+      setPltError(null);
+    } catch (err) {
+      setPltError(err instanceof Error ? err.message : "Could not save the .plt file.");
     }
   };
 
@@ -936,6 +1010,19 @@ export function SimulationPanel({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Apply LTspice .plt plot settings (panes, traces, X window)</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={savePlotSettings}
+                          disabled={mode !== "tran" && mode !== "ac" && mode !== "dc"}
+                        >
+                          Save .plt
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export current panes/expressions as an LTspice .plt</TooltipContent>
                     </Tooltip>
                     {pltLoadedName && (
                       <Tooltip>

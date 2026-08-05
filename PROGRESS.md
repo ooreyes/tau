@@ -9,20 +9,46 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:50 CDT**
+**Status: DONE - 2026-08-05 05:52 CDT**
 
-Unit: Circuit_testing_v1 `05_step_loaded_divider.asc` authored `.dc` + `.step param LOAD` → differential **pass=86**.
-```
-SUMMARY pass=86 sibling=5 gap=0
-dc ct-step-loaded … LOAD=1k/4k/7k/10k v(out) nRms=0
-```
-Named-device 48.1%. Left 100W/IRFP/diode-dc alone. Rebased over waveform tip `81deff3`. SHIPPABLE? **NO**
+Unit: Waveform DoD — LTspice **`.plt` save/export** (round-trip with Open .plt).
+Base tip `10e7c58` pass=86. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — LTspice .plt save/export (§waveform DoD)
+
+**What I did**
+- `serializePlt` / `buildPltSection` / `expressionFromTraceId` round-trip
+  durable panes/traces/X/Y/Log with Open .plt. Advanced **Save .plt** exports
+  current Transient/AC/DC panes/expressions.
+- Left 100W/IRFP, ct step/diode/RLC, Settings, Chan/NIGBT/FRA alone.
+  Continue 25 owns next differential.
+
+**Files**
+- `apps/desktop/src/simulation/plotSettings.ts` (+ round-trip tests)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ Save .plt test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- serialize/build round-trip 5 + Save .plt wiring
+
+**Parity items**
+- Waveform viewer 🟡 (`.plt` save landed). Differential pass=86 · named-device
+  48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue 22: right-click math, or non-wall named-device leftovers.
+
+
+
+
 
 ### 2026-08-05 — ct 05_step_loaded_divider DC+step → pass=86 (§DoD)
 
@@ -55,6 +81,7 @@ dc ct-step-loaded … LOAD=1000/4000/7000/10000 v(out) nRms=0.0000
 **Next step**
 - Next honest differential (ct 03/06/07/11 or other non-colliding fixture). Leave
   Staff EE stashes; Settings locked.
+
 
 
 
