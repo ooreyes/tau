@@ -1524,12 +1524,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   AcFamilyPlot / DcFamilyPlot **Export PNG** (`tau-ac-step-….png` /
   `tau-dc-step-….png`). 2 wiring tests. **NEXT:** (waveform
   CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/cursor-CSV/step-PNG
-  covered — remaining: richer right-click ops, Y log, phase pane).
-- 🟡 Right-click trace → math/operations — **abs / negate / dB landed**
-  (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`, `-(…)`,
-  or `db(…)` and adds it via the existing expression overlay path; transient
-  legend ContextMenu. 3 pure + 1 SimulationPanel wiring tests. Still ⬜:
-  derivative/`avg`/`rms` ops, AC/DC/step legend menus.
+  covered — remaining: derivative/avg/rms right-click, Y log, phase pane).
+- 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn
+  landed** (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`,
+  `-(…)`, `db(…)`, `uramp(…)`, or `sgn(…)` and adds it via the existing
+  expression overlay path; transient legend ContextMenu. 3 pure + 1
+  SimulationPanel wiring tests. Still ⬜: derivative/`avg`/`rms` ops,
+  AC/DC/step legend menus.
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`
 - ✅ Interim TS MNA solver (linear) for browser/tests

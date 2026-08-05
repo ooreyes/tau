@@ -1,15 +1,40 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:35 CDT**
+**Status: DONE - 2026-08-05 06:37 CDT**
 
-Unit: Waveform DoD — **AC/DC step-family Export PNG** (`waveformSvgsToPng`).
-Base tip `9e0a005` pass=91. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **richer right-click math** (uramp / sgn on legend ContextMenu).
+Base tip `307456b` pass=91. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — richer right-click uramp/sgn (§waveform DoD)
+
+**What I did**
+- Extended `traceMath` unary ops with `uramp(…)` and `sgn(…)` (expr builtins);
+  legend ContextMenu picks them up via `traceMathMenuItems`.
+- ND wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC, Educational
+  (continue 30), Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/traceMath.ts` (+ test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2738 passed)
+- traceMath 3
+
+**Parity items**
+- Waveform viewer 🟡 (right-click uramp/sgn landed). Differential pass=91 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Y log / phase pane / derivative right-click. Leave Educational/IRFP/Settings alone.
+
 
 
 ### 2026-08-05 — AC/DC step-family Export PNG (§waveform DoD)
