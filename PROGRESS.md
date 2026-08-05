@@ -9,20 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:01 CDT**
+**Status: DONE - 2026-08-05 05:08 CDT**
 
-Unit: Educational `100W.asc` TRAN + bundled IRFP240/IRFP9240 → differential **pass=80**.
+Unit: LTspice.app help `ACstep.asc` AC (≠ Educational stepAC) → differential **pass=81**.
 ```
-SUMMARY pass=80 sibling=5 gap=0
-tran edu-100w … v(out)/v(out1) nRms=0.0001 span=80.43
+SUMMARY pass=81 sibling=5 gap=0
+ac help-acstep … v(z) nRms=0.0000 span=4779.4 (list→band; C=20p)
 ```
-Named-device 48.1% unchanged (Chan/NIGBT/FRA). SHIPPABLE? **NO**
+Named-device 48.1%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — help ACstep.asc AC → pass=81 (§DoD)
+
+**What I did**
+- LTspice.app help `ACstep.asc` authored `.ac list 1Meg` + `.step oct param C
+  20p…` (first member C=20p). Tau lacks `.ac list` → same-deck dec 100k–10Meg
+  stand-in (stepnoise list→band precedent). Series RLC to Z; v(z) matches
+  LTspice (nRms≈0 span≈4779). Distinct from Educational/`stepAC.asc`.
+- Left Resources Draft1 / Butterworth / 100W / ISO / IGBTeq / waveout / BandGaps
+  alone. Named-device Chan/NIGBT/FRA untouched.
+
+**Exact stdout**
+
+```
+SUMMARY pass=81 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- differential corpus → pass=81
+
+**Parity items**
+- Differential 🟡 **pass=81**. Named-device 🟡 **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Continue 22; Staff EE help NoiseStep or other non-colliding Resources/help.
+
+
 
 
 ### 2026-08-05 — Educational 100W.asc TRAN + IRFP240/9240 → pass=80 (§DoD)

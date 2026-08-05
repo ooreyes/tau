@@ -95,6 +95,11 @@ const HELP_BUTTERWORTH_ASC = join(
   "/Applications/LTspice.app/Contents/Resources/LTspice.help/Contents/Resources/English.lproj",
   "Butterworth.asc",
 );
+/** LTspice.app help RLC `.ac list`+`.step C` — ≠ Educational/stepAC.asc (oct 5–10Meg). */
+const HELP_ACSTEP_ASC = join(
+  "/Applications/LTspice.app/Contents/Resources/LTspice.help/Contents/Resources/English.lproj",
+  "ACstep.asc",
+);
 /** LTspice.app Resources BV demo — soft `_exp` (≠ Documents/LTspice/Draft1.asc diode–L–R). */
 const RESOURCES_DRAFT1_ASC = join("/Applications/LTspice.app/Contents/Resources", "Draft1.asc");
 const EDU_100W_ASC = join(EDU, "100W.asc");
@@ -257,7 +262,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -3237,6 +3242,60 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- LTspice.app help ACstep.asc authored .ac list + .step C (≠ Educational stepAC) ---
+    // Authored `.ac list 1Meg` (Tau lacks list) → same-deck dec 100k–10Meg stand-in like
+    // stepnoise list→band. `.step oct param C 20p…` → first member C=20p via buildParamScope.
+    // Series RLC to Z: I1 AC 1 + C{C} + L=90µ + R=5k. v(z) nRms≈1e-9 span≈4.8k @ 2%/5%.
+    // Left Resources Draft1 / Butterworth / 100W / ISO / IGBTeq alone. Tip 100W pass=80 → 81.
+    {
+      expect(existsSync(HELP_ACSTEP_ASC), `missing ${HELP_ACSTEP_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(HELP_ACSTEP_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      expect(dirs.some((d) => /\.ac\s+list\s+1\s*meg\b/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.step\s+oct\s+param\s+C\b/i.test(d))).toBe(true);
+      const params = buildParamScope(dirs);
+      expect(Number(params.scope.C ?? params.scope.c)).toBeCloseTo(20e-12, 20);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: 100e3,
+        stopHz: 10e6,
+        pointsPerDecade: 20,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^C5\b.+\b2e-11\b/im);
+      expect(deck.netlist).toMatch(/^L2\b/im);
+      expect(deck.netlist).toMatch(/^R2\b.+\b5000\b/im);
+      expect(deck.netlist).toMatch(/^I1\b.+\bAC\b/im);
+      expect(deck.netlist).toMatch(/\.ac\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      const result = runPairedBatch("diff-help-acstep-ac", deck.netlist, ["v(z)"]);
+      const lt = result.ltspice.get("v(z)")!;
+      const ng = result.ngspice.get("v(z)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `help-ACstep ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "help-ACstep non-hollow").toBeGreaterThan(100);
+      expect(comparison.samples, "help-ACstep samples").toBeGreaterThan(20);
+      cells.push({
+        analysis: "ac",
+        circuit: "help-acstep",
+        topology: "LTspice.app help ACstep.asc series RLC (.ac list 1Meg→dec 100k–10Meg; .step C first=20p; ≠ Educational stepAC)",
+        status: "pass",
+        note: `v(z) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(1)} (list→band; C=20p)`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3533,6 +3592,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=80 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=81 sibling=5 gap=0/);
   }, 240_000);
 });
