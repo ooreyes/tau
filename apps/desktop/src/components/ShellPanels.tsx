@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import { userFacingErrorMessage } from "../lib/errorMessage";
+import { clearAllUnsavedLocalState } from "../lib/unsavedRecovery";
 import {
   ChevronRight,
   Copy,
@@ -2118,7 +2119,7 @@ export function SettingsPanel({
 
   const clearAutosave = () => {
     try {
-      localStorage.removeItem("tau.schematic.v1");
+      clearAllUnsavedLocalState();
       onNotice("Local autosave cleared.");
     } catch {
       onNotice("Local autosave could not be cleared in this webview.");

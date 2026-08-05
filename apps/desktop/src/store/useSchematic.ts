@@ -18,7 +18,6 @@ import type {
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { canCurrentProbe } from "../simulation/analysisSetup";
-import { validateSchematicDocument } from "../schematic/documentValidation";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { getComponentPins, rotatePoint, transformPoint } from "../schematic/pins";
 import { withOpampModel } from "../engine/opampModel";
@@ -523,16 +522,14 @@ function copyHistoryEntry(entry: Doc): Doc {
   };
 }
 
+/**
+ * Legacy silent hydrate is intentionally disabled. Dirty work is offered
+ * through `peekUnsavedRecoveryOffer` / UnsavedRecoveryDialog so a project-first
+ * open cannot overwrite recovered edits without an explicit Restore.
+ * The autosave blob is still written by {@link persist} for Settings clear +
+ * one-shot migrate of older installs.
+ */
 function loadPersisted(): SchematicDocument | null {
-  if (typeof localStorage === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    // Validate fully so stale or corrupt autosave data never reaches the renderer.
-    return validateSchematicDocument(JSON.parse(raw));
-  } catch {
-    // Corrupt, stale, or incompatible autosave - discard silently.
-  }
   return null;
 }
 

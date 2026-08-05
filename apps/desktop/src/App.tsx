@@ -20,7 +20,16 @@ import { EmptyState } from "./components/EmptyState";
 import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
 import { ModelLibrariesDialog } from "./components/ModelLibrariesDialog";
 import { SimulationSetupDialog } from "./components/SimulationSetupDialog";
+import { UnsavedRecoveryDialog } from "./components/UnsavedRecoveryDialog";
 import { CommandPalette } from "./components/CommandPalette";
+import {
+  clearAllUnsavedLocalState,
+  clearUnsavedRecovery,
+  documentHasRecoverableContent,
+  peekUnsavedRecoveryOffer,
+  saveUnsavedRecovery,
+  type UnsavedRecoverySnapshot,
+} from "./lib/unsavedRecovery";
 import {
   ActivityRail,
   BottomPanel,
@@ -275,6 +284,9 @@ function App() {
       ? "document" as const
       : "automatic" as const;
   const [analysis, setAnalysis] = useState<(AnalysisResult & EngineProvenance) | null>(null);
+  const [pendingRecovery, setPendingRecovery] = useState<UnsavedRecoverySnapshot | null>(() =>
+    peekUnsavedRecoveryOffer(),
+  );
   const [schematicReadoutTime, setSchematicReadoutTime] = useState<number | null>(null);
   /** Animate schematic V/I through real `.tran` samples (EveryCircuit-style live). */
   const [liveSchematicPlayback, setLiveSchematicPlayback] = useState(true);
@@ -476,6 +488,15 @@ function App() {
     (activeFilePath || activeTab?.detached)
     && activeTab?.savedSignature
     && activeTab.savedSignature !== currentSignature,
+  );
+  // Crash recovery tracks any recoverable document that is not identical to the
+  // last successful disk open/save - including untitled scratchpads that never
+  // received a savedSignature. Skip while the launch dialog is still open so
+  // we do not overwrite the offered snapshot with a blank starter.
+  const needsCrashRecovery = Boolean(
+    !pendingRecovery
+    && documentHasRecoverableContent(currentDocument)
+    && (!activeTab?.savedSignature || activeTab.savedSignature !== currentSignature),
   );
   const normalizedRoot = projectRootPath?.replace(/\\/g, "/").replace(/\/+$/, "") ?? null;
   const visibleTabs = tabs
@@ -1151,8 +1172,12 @@ function App() {
     title: string,
     filePath?: string | null,
     rewriteRisks: string[] = [],
+    options?: { dirty?: boolean; notice?: string },
   ) => {
     const snap = snapshotActive(tabs);
+    const markDirty = Boolean(options?.dirty);
+    const signature = schematicDocumentSignature(doc);
+    const recoveredDetached = markDirty && !filePath;
     const existing = snap.find((tab) => (filePath ? tab.filePath === filePath : tab.title === title));
     if (existing) {
       setTabs(snap.map((tab) =>
@@ -1162,8 +1187,13 @@ function App() {
               doc,
               history: emptyHistory(),
               filePath: filePath ?? tab.filePath,
-              dirty: false,
-              savedSignature: schematicDocumentSignature(doc),
+              detached: recoveredDetached || tab.detached,
+              dirty: markDirty,
+              // Recovered dirty work must keep a clean signature that differs
+              // from the live document so the unsaved badge stays honest.
+              savedSignature: markDirty
+                ? `${signature}::recovered`
+                : signature,
               ascRewriteRisks: rewriteRisks,
             }
           : tab,
@@ -1184,8 +1214,9 @@ function App() {
           doc,
           history: emptyHistory(),
           filePath: filePath ?? null,
-          dirty: false,
-          savedSignature: schematicDocumentSignature(doc),
+          detached: recoveredDetached,
+          dirty: markDirty,
+          savedSignature: markDirty ? `${signature}::recovered` : signature,
           ascRewriteRisks: rewriteRisks,
         }]);
         setActiveId(snap[0].id);
@@ -1198,8 +1229,9 @@ function App() {
           doc,
           history: emptyHistory(),
           filePath: filePath ?? null,
-          dirty: false,
-          savedSignature: schematicDocumentSignature(doc),
+          detached: recoveredDetached,
+          dirty: markDirty,
+          savedSignature: markDirty ? `${signature}::recovered` : signature,
           ascRewriteRisks: rewriteRisks,
         }]);
         setActiveId(id);
@@ -1210,7 +1242,7 @@ function App() {
     invalidateAnalysis();
     setMode("schematic");
     setFitSignal((n) => n + 1);
-    showNotice(`Opened ${title}`);
+    showNotice(options?.notice ?? `Opened ${title}`);
   }, [tabs, snapshotActive, loadCircuit, adoptDirectiveOptions, invalidateAnalysis, showNotice, components.length, wires.length]);
 
   const openSimFromProject = useCallback((path: string, title: string, json: string) => {
@@ -1511,6 +1543,7 @@ function App() {
         return false;
       }
       await writeSim(savePath, serialized.contents);
+      clearUnsavedRecovery();
       setTabs((list) => list.map((t) => (
         t.id === targetId
           ? {
@@ -1636,6 +1669,47 @@ function App() {
   useEffect(() => {
     invalidateAnalysis();
   }, [components, wires, directives, invalidateAnalysis]);
+
+  // Persist a versioned dirty snapshot so a crash can offer Restore next launch.
+  useEffect(() => {
+    if (pendingRecovery) return;
+    if (!needsCrashRecovery) {
+      clearUnsavedRecovery();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      saveUnsavedRecovery({
+        title: documentTitle,
+        filePath: activeFilePath,
+        signature: currentSignature,
+        document: currentDocument,
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    pendingRecovery,
+    needsCrashRecovery,
+    documentTitle,
+    activeFilePath,
+    currentSignature,
+    currentDocument,
+  ]);
+
+  const restorePendingRecovery = useCallback(() => {
+    if (!pendingRecovery) return;
+    const snap = pendingRecovery;
+    setPendingRecovery(null);
+    openDocument(snap.document, snap.title, snap.filePath, [], {
+      dirty: true,
+      notice: `Restored unsaved edits to ${snap.title}`,
+    });
+  }, [pendingRecovery, openDocument]);
+
+  const discardPendingRecovery = useCallback(() => {
+    clearAllUnsavedLocalState();
+    setPendingRecovery(null);
+    showNotice("Discarded unsaved recovery copy.");
+  }, [showNotice]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -2133,6 +2207,13 @@ function App() {
       <ModelLibrariesDialog open={modelLibrariesOpen} onOpenChange={setModelLibrariesOpen} />
       <SimulationSetupDialog open={simulationSetupOpen} onOpenChange={setSimulationSetupOpen} />
       <LocalAiSetupDialog onReady={() => showNotice("Local AI is ready on this Mac.")} />
+      {pendingRecovery && (
+        <UnsavedRecoveryDialog
+          snapshot={pendingRecovery}
+          onRestore={restorePendingRecovery}
+          onDiscard={discardPendingRecovery}
+        />
+      )}
       {settingsOpen && (
         <SettingsPanel
           title={documentTitle}

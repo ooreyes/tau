@@ -1,15 +1,51 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~12:50 CDT**
+**Status: DONE - 2026-08-05 ~13:20 CDT**
 
-Unit: **AI credentials out of renderer** — Tauri `cloud_ai_proxy` +
-presence-only hydration (`has_*_api_key`); Anthropic/Gemini never receive
-raw keychain secrets in the webview for cloud HTTPS. AI DoD box stays ⬜
-(OAuth/evals still open). Consent untouched. SHIPPABLE? **NO**
+Unit: **Product gates — crash-safe unsaved recovery** — versioned recovery
+envelope + Restore/Discard dialog; no silent hydrate. Product-gates DoD box
+stays ⬜ (learning path / external-edit / run records / CLI still open).
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — Crash-safe unsaved recovery (product-gates partial)
+
+**What I did**
+- Picked finishable product-gates slice: crash-safe unsaved recovery (not
+  first-success path or CLI/API this unit).
+- Versioned `tau.unsaved.recovery.v1` dirty snapshots; launch Restore/Discard
+  dialog; stop silent autosave hydrate into the live editor; clear on Save /
+  Discard / Settings. Legacy `tau.schematic.v1` still migrates into the offer.
+- External-edit conflict handling, reproducible run records, first-success
+  learning path, and versioned CLI/API remain open — product-gates box stays
+  unchecked. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/lib/unsavedRecovery.ts` (+ test)
+- `apps/desktop/src/components/UnsavedRecoveryDialog.tsx` (+ test)
+- `apps/desktop/src/App.tsx`, `ShellPanels.tsx`, `store/useSchematic.ts`
+- `scripts/product-gates-unsaved-recovery.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/product-gates-unsaved-recovery.sh` → 13/13
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2897 passed / 6 skipped
+
+**Parity items**
+- Product-gates DoD partial: crash-safe unsaved recovery. Box stays ⬜.
+  SHIPPABLE? NO
+
+**Next step**
+- First-success learning path, external-edit conflicts, run records, or
+  versioned CLI/API; remaining open DoD boxes.
+
+SHIPPABLE? **NO**
 
 ---
 
@@ -49,8 +85,6 @@ raw keychain secrets in the webview for cloud HTTPS. AI DoD box stays ⬜
 - Tau OAuth/backend or release-gated live evals; never weaken consent.
 
 SHIPPABLE? **NO**
-
-
 
 ---
 

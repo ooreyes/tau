@@ -322,6 +322,14 @@ account and sign/notarize/ship.
       learning path and contextual help; crash-safe unsaved recovery plus safe
       external-edit/conflict handling and reproducible run records; and a stable,
       documented, versioned CLI/API with machine-readable diagnostics.
+      **Partial (2026-08-05):** crash-safe unsaved recovery landed — versioned
+      `tau.unsaved.recovery.v1` envelope, Restore/Discard dialog on launch
+      (`unsavedRecovery.ts` + `UnsavedRecoveryDialog`), no silent hydrate into
+      the live editor, cleared on successful Save / Discard / Settings clear;
+      proof `scripts/product-gates-unsaved-recovery.sh`. Still open: first-
+      success learning path + contextual help; external-edit/conflict handling;
+      reproducible run records; versioned CLI/API diagnostics. DoD box stays
+      unchecked. SHIPPABLE? **NO**.
 - [x] All gates green; **unsigned release build is production‑ready**:
       `pnpm --filter @tau/desktop tauri build` succeeds, the DMG mounts, the
       built Tau.app launches and stays alive, and bundled ngspice simulates

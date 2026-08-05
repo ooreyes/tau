@@ -2014,6 +2014,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   hydrates raw keychain secrets into the webview session for API use
   (`scripts/ai-credentials-out-of-renderer.sh`). Tau OAuth/backend and
   release-gated live evals remain open — AI DoD stays unchecked.
+  **Crash-safe unsaved recovery (2026-08-05, product-gates partial):** dirty
+  edits persist to versioned `tau.unsaved.recovery.v1`; launch offers
+  Restore/Discard (`UnsavedRecoveryDialog`) instead of silently hydrating into
+  the live store; successful Save / Discard / Settings clear wipe the envelope
+  (+ legacy `tau.schematic.v1`). Proof: `scripts/product-gates-unsaved-recovery.sh`.
+  Still open for the product-gates DoD box: first-success learning path,
+  external-edit conflict handling, reproducible run records, versioned CLI/API.
+  Box stays ⬜. SHIPPABLE? NO.
   **Structured LTspice slot editing (2026-08-02):** the App validator now
   preserves/bounds `ltExtraAttrs` instead of dropping it on open. A minimal edit
   wholly inside one joined `Value2`/`SpiceLine` slot is written back to that
