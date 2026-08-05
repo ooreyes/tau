@@ -52,40 +52,63 @@ a raw color value - see §7.
 
 | Token | Dark | Light | Role |
 |---|---|---|---|
-| `--bg` | `#000000` | `#F5F6F8` | Instrument face / app ground |
-| `--panel` | `#1c1c1e` | `#EBEEF2` | Panel fill |
-| `--panel-2` | `#2c2c2e` | `#E0E4EA` | Recessed / secondary fill |
-| `--panel-3` | `#161617` | `#F0F2F5` | Sidebar, toolbar underlay |
+| `--bg` | `#000000` | `#EDF1F6` | Instrument face / app ground |
+| `--panel` | `#1c1c1e` | `#E2E8F0` | Panel fill |
+| `--panel-2` | `#2c2c2e` | `#D4DCE6` | Recessed / secondary fill |
+| `--panel-3` | `#161617` | `#E8EDF3` | Sidebar, toolbar underlay |
 | `--panel-4` | `#3a3a3c` | `#FFFFFF` | Elevated control, popover |
-| `--canvas-bg` | `#000000` | `#F5F6F8` | Schematic ground |
-| `--canvas-surface` | `#0a0a0a` | `#FAFBFC` | Schematic sheet |
-| `--scope-surface` | `#0c0c0e` | `#F7F8FA` | Plot face |
+| `--canvas-bg` | `#000000` | `#EDF1F6` | Schematic ground |
+| `--canvas-surface` | `#0a0a0a` | `#F7F9FC` | Schematic sheet |
+| `--scope-surface` | `#0c0c0e` | `#F0F4F8` | Plot face |
 
 Light neutrals carry a cool blue-gray undertone (Apple/Anduril paper), not a warm cream
 bias. Pure `#808080` greys still read as unconsidered next to the precision-blue accent.
+
+#### Anduril Light palette pop (2026-08-04) — before → after
+
+Token-value delta only (both `@media (prefers-color-scheme: light)` and
+`:root[data-theme="light"]` in `apps/desktop/src/App.css`). Design-shot not
+re-run this unit; Design QA should capture light empty/schematic/dialog at
+min + 1440.
+
+| Token | Before | After |
+|---|---|---|
+| `--bg` / `--canvas-bg` | `#F5F6F8` | `#EDF1F6` |
+| `--panel` | `#EBEEF2` | `#E2E8F0` |
+| `--panel-2` | `#E0E4EA` | `#D4DCE6` |
+| `--panel-3` | `#F0F2F5` | `#E8EDF3` |
+| `--canvas-surface` | `#FAFBFC` | `#F7F9FC` |
+| `--scope-surface` | `#F7F8FA` | `#F0F4F8` |
+| `--text` / `--canvas-label` | `#111418` | `#0B1017` |
+| `--muted` | `#5F6B7C` | `#4E5C6E` (~6.0:1 on paper) |
+| `--faint` | `#8F99A8` | `#7B8798` |
+| `--accent` | `#0A66C2` | `#0068D6` (~5.3:1 white-on-blue) |
+| `--accent-hover` | `#0856A5` | `#0057B8` |
+| `--diagnostic-warning` (-text) | `#b25000` | `#A34A00` |
+| `--diagnostic-warning-soft` | `0.06` ochre | `0.05` ochre (stays quiet; not danger-red) |
 
 ### 1.2 Separators and fills
 
 | Token | Dark | Light |
 |---|---|---|
-| `--border` | `rgba(84, 84, 88, 0.65)` | `rgba(17, 20, 24, 0.12)` |
-| `--border-strong` | `rgba(142, 142, 147, 0.45)` | `rgba(17, 20, 24, 0.22)` |
-| `--border-subtle` | `rgba(84, 84, 88, 0.36)` | `rgba(17, 20, 24, 0.08)` |
-| `--overlay-hover` | `rgba(120, 120, 128, 0.24)` | `rgba(17, 20, 24, 0.06)` |
-| `--overlay-hover-faint` | `rgba(120, 120, 128, 0.14)` | `rgba(17, 20, 24, 0.035)` |
-| `--scrim` | `rgba(0, 0, 0, 0.36)` | `rgba(11, 18, 32, 0.22)` |
-| `--scrim-strong` | `rgba(0, 0, 0, 0.55)` | `rgba(11, 18, 32, 0.36)` |
+| `--border` | `rgba(84, 84, 88, 0.65)` | `rgba(11, 16, 23, 0.13)` |
+| `--border-strong` | `rgba(142, 142, 147, 0.45)` | `rgba(11, 16, 23, 0.24)` |
+| `--border-subtle` | `rgba(84, 84, 88, 0.36)` | `rgba(11, 16, 23, 0.09)` |
+| `--overlay-hover` | `rgba(120, 120, 128, 0.24)` | `rgba(11, 16, 23, 0.06)` |
+| `--overlay-hover-faint` | `rgba(120, 120, 128, 0.14)` | `rgba(11, 16, 23, 0.035)` |
+| `--scrim` | `rgba(0, 0, 0, 0.36)` | `rgba(8, 16, 32, 0.24)` |
+| `--scrim-strong` | `rgba(0, 0, 0, 0.55)` | `rgba(8, 16, 32, 0.40)` |
 
 ### 1.3 Ink
 
 | Token | Dark | Light |
 |---|---|---|
-| `--text` | `#f5f5f7` | `#111418` |
-| `--muted` | `rgba(235, 235, 245, 0.60)` | `#5F6B7C` |
-| `--faint` | `rgba(235, 235, 245, 0.30)` | `#8F99A8` |
+| `--text` | `#f5f5f7` | `#0B1017` |
+| `--muted` | `rgba(235, 235, 245, 0.60)` | `#4E5C6E` |
+| `--faint` | `rgba(235, 235, 245, 0.30)` | `#7B8798` |
 
-Light `--muted` is a solid (Palantir GRAY1), not a translucent mix: body text must clear
-WCAG AA 4.5:1 on paper (~5.0:1 measured).
+Light `--muted` is a solid cool slate, not a translucent mix: body text must clear
+WCAG AA 4.5:1 on paper (~6.0:1 measured on `#EDF1F6`).
 
 ### 1.4 Accent - precision blue (light) / warm ice (dark)
 
@@ -95,13 +118,13 @@ compete with a trace hue.
 
 | Token | Dark | Light |
 |---|---|---|
-| `--accent` | `#d6d3ca` | `#0A66C2` |
-| `--accent-hover` | `#ebe8df` | `#0856A5` |
+| `--accent` | `#d6d3ca` | `#0068D6` |
+| `--accent-hover` | `#ebe8df` | `#0057B8` |
 | `--accent-ink` | `#121214` | `#FFFFFF` |
-| `--accent-soft` | `rgba(214, 211, 202, 0.10)` | `rgba(10, 102, 194, 0.08)` |
-| `--accent-line` | `rgba(214, 211, 202, 0.38)` | `rgba(10, 102, 194, 0.36)` |
+| `--accent-soft` | `rgba(214, 211, 202, 0.10)` | `rgba(0, 104, 214, 0.09)` |
+| `--accent-line` | `rgba(214, 211, 202, 0.38)` | `rgba(0, 104, 214, 0.40)` |
 
-Light filled primary is white ink on `#0A66C2` (~5.7:1). Dark filled primary remains cream
+Light filled primary is white ink on `#0068D6` (~5.3:1). Dark filled primary remains cream
 ink on warm ice - the inverse weight relationship of the dark instrument metaphor.
 
 ### 1.5 Traces - the instrument palette
@@ -152,19 +175,20 @@ lamp and is **status, not a series** - never assign it to a trace.
 | `--danger` | `#e6564b` | `#c02718` |
 | `--success` | `#4fae6b` | `#248a3d` |
 | `--diagnostic-ok` | `#30d158` | `#248a3d` |
-| `--diagnostic-warning` | `#ff9f0a` | `#b25000` |
+| `--diagnostic-warning` | `#ff9f0a` | `#A34A00` |
 | `--diagnostic-error` | `#ff453a` | `#d70015` |
 
 Each has `-soft` (≤11% tint), `-line` (≈0.42 hairline) and `-glow` variants. Diagnostics are
 deliberately brighter than the general semantic pair so status is glanceable, and are
-constrained to lamps, hairlines and shallow glass tint.
+constrained to lamps, hairlines and shallow glass tint. Light warning chrome stays **quiet
+ochre** (`-soft` ≈0.05) — empty optional keys must never paint danger-red.
 
 ### 1.7 Grid
 
 | Token | Dark | Light |
 |---|---|---|
-| `--grid-dot` | `rgba(235, 235, 245, 0.08)` | `rgba(60, 60, 67, 0.12)` |
-| `--grid-dot-major` | `rgba(235, 235, 245, 0.13)` | `rgba(60, 60, 67, 0.20)` |
+| `--grid-dot` | `rgba(235, 235, 245, 0.08)` | `rgba(11, 16, 23, 0.10)` |
+| `--grid-dot-major` | `rgba(235, 235, 245, 0.13)` | `rgba(11, 16, 23, 0.16)` |
 
 The grid must stay clearly below wires and components in contrast. If the grid competes with
 the circuit, the grid is wrong.

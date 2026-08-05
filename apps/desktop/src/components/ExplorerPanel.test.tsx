@@ -69,7 +69,7 @@ function dataTransferStub(): DataTransfer {
   } as unknown as DataTransfer;
 }
 
-describe("ExplorerPanel VS Code action row", () => {
+describe("ExplorerPanel action row", () => {
   it("exposes New File, New Folder, Refresh, and Collapse as working controls", async () => {
     const { onNotice } = renderExplorer();
     for (const name of [
@@ -81,11 +81,11 @@ describe("ExplorerPanel VS Code action row", () => {
     ]) {
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
-    expect(screen.getByRole("button", { name: "Refresh explorer" }).querySelector(".vscode-refresh")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Collapse folders in explorer" }).querySelector(".vscode-collapse-all")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "New schematic file" }).querySelector(".vscode-new-file")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "New folder" }).querySelector(".vscode-new-folder")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import circuit" }).querySelector(".vscode-import-file")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Refresh explorer" }).querySelector("svg")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse folders in explorer" }).querySelector("svg")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New schematic file" }).querySelector("svg")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New folder" }).querySelector("svg")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import circuit" }).querySelector("svg")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Open Schematics folder" })).toBeNull();
 
     expect(useProject.getState().expanded.length).toBeGreaterThan(0);

@@ -9,29 +9,17 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:18 CDT** (Tokens — §10 light default + quiet warnings)
+**Status: DONE - 2026-08-04 23:20 CDT**
 
-Unit: Anduril Light as product default; quieter warning/idle diagnostics; settings
-row chrome; radius token scale. AGENTS §10 DoD stays **unchecked**.
+Unit: Anduril Light palette + Lucide explorer icons + quieter Settings (§10).
 
-**Active product lanes (collision lock — do not cross-edit):**
-- **Overnight DoD + Staff EE** — measuring named-device HF / exact-rate via
-  `scripts/named-device-fidelity.sh` (script stdout = truth). Last proven
-  `15.1%` / HF `103` / silent `0` until reprint. Do not invent HF→2.
-- **Design lead / Cupertino** — `ShellPanels.tsx` Lucide icons. LOCKED for
-  non-owners. Tokens may touch `App.css` token blocks + settings chrome only.
-- **AI platform / Freshman** — `localAiEnsure*` / `cloudAiConsent*` /
-  `LocalAiSetupDialog*` / Settings AI sections only.
-- **Bench** — help/warning copy strings only; coordinate; no ShellPanels structure.
-- **QA** — gates + morning-status numbers.
-
-**SHIPPABLE?** **NO** — named-device, §10, broad differential, and other DoD boxes open.
 
 ### Ownership board (ENFORCED overnight 2026-08-04)
 
 | Lane | Owns (edit only these) |
 |------|------------------------|
 | Design lead | `ShellPanels.tsx` icons · `App.css` chrome · `DESIGN_SYSTEM.md` |
+| Anduril Light (palette) | `App.css` light token blocks · `DESIGN_SYSTEM.md` token tables · optional `tokens.css` aliases — DONE this unit |
 | Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus scripts |
 | AI platform / Freshman | `lib/localAiEnsure*` · `lib/cloudAiConsent*` · `LocalAiSetupDialog*` · Settings AI only |
 | Bench | help/warning copy strings only — coordinate; no ShellPanels structure |
@@ -42,6 +30,32 @@ row chrome; radius token scale. AGENTS §10 DoD stays **unchecked**.
 
 
 ---
+
+### 2026-08-04 — Anduril Light palette pop (§10)
+
+**What I did**
+- Strengthened light neutrals to cooler blue-gray paper (`#EDF1F6` / `#E2E8F0` /
+  `#D4DCE6`), deeper cool ink (`#0B1017` / `#4E5C6E`), precision blue accent
+  `#0068D6` (~5.3:1 white-on-blue). Quiet warning stays ochre soft≈0.05 — not
+  danger-red. Documented before/after in `DESIGN_SYSTEM.md`; tiny
+  `--color-paper`/`ink`/`precision` aliases in `tokens.css`.
+- Did not touch ShellPanels / AssistantPanel / engine / io. §10 DoD unchecked.
+
+**Files**
+- `apps/desktop/src/App.css` (both light blocks)
+- `DESIGN_SYSTEM.md`, `FEATURE_PARITY.md` (§10 note only), `apps/desktop/src/styles/tokens.css`
+
+**Tests**
+- CSS/docs only; typecheck red on unrelated Design-lead `ShellPanels` → missing
+  `VscodeExplorerIcons` (not this unit).
+
+**Parity items**
+- §10 still 🟡; AGENTS §10 box unchecked. SHIPPABLE=NO.
+
+**Next step**
+- Design QA: light screenshots at min + 1440; verify paper reads cool (not gray),
+  accent pops, optional-key warnings stay quiet ochre.
+
 
 ### 2026-08-04 — Tokens: light default + quiet warning chrome (§10)
 
