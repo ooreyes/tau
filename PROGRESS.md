@@ -9,22 +9,56 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:12 CDT**
+**Status: DONE - 2026-08-05 04:15 CDT**
 
-Unit: Documents/LTspice `Draft2.asc` authored `.tran` → differential **pass=72**.
+Unit: Documents/LTspice `Draft1.asc` authored `.tran` → differential **pass=73**.
 ```
-SUMMARY pass=72 sibling=5 gap=0
-tran draft2 … v(vout) nRms=0.0062 nMax=0.0207 span=0.198
+SUMMARY pass=73 sibling=5 gap=0
+tran draft1 … v(n002)/v(n003) nRms≈0 nMax≈1e-4 span≈0.37
 ```
-Series C–R highpass; tip `543ddba` OTA 48.0% / Draft7 pass=71 → 72.
-Left 3725-3726 / PLL / dimmer / avoid-list alone. Named-device **48.0%**.
-SHIPPABLE? **NO**
+Series diode–L–R; tip Draft2 pass=72 → 73. Draft8 Laplace / Draft6 AD823 /
+Draft10 UOA2 same-deck deferred. Named-device 48.0%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — Documents/LTspice Draft1.asc TRAN → pass=73 (§DoD)
+
+**What I did**
+- Documents/LTspice `Draft1.asc` authored `.tran 0 1000m`: V1 SINE(0 1 1) +
+  unnamed D + L=50m + R=1k. Probes `v(n002)` / `v(n003)` exact LT↔ng
+  (nRms≈0 / nMax≈1e-4, span≈0.37). Default `TAU_DIODE` same-deck; zero
+  unresolved / modelSubstitutions.
+- Tip `463ac9f` Draft2 pass=72 → 73. Left Draft2/3/7 alone. Deferred: Draft8
+  Laplace (s_xfer brace-mangle), Draft6 AD823 unresolved, Draft10 UOA2
+  LTspice same-deck fail, 3725-3726 fail-closed. Named-device plaintext climb
+  still encrypted wall at 48.0%.
+
+**Exact stdout**
+
+```
+SUMMARY pass=73 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/differential-parity.sh` → pass=73
+
+**Parity items**
+- Differential 🟡 **pass=73**. Named-device 48.0%. SHIPPABLE? NO
+
+**Next step**
+- Continue 18 differential; Staff EE next plaintext refuse or Draft9/6 only if
+  exact path appears.
+
 
 
 ### 2026-08-05 — Documents/LTspice Draft2.asc TRAN → pass=72 (§DoD)

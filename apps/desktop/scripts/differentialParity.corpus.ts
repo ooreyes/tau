@@ -81,6 +81,7 @@ const PIERCE_ASC = join(EDU, "Pierce.asc");
 const COLPITS2_ASC = join(EDU, "colpits2.asc");
 const QZTST_ASC = join(EDU, "contrib", "qztst.asc");
 const ELIP_GRD_ASC = join(EDU, "contrib", "elip_grd.asc");
+const DRAFT1_ASC = join(DOC_LTSPICE, "Draft1.asc");
 const DRAFT2_ASC = join(DOC_LTSPICE, "Draft2.asc");
 const DRAFT3_ASC = join(DOC_LTSPICE, "Draft3.asc");
 const DRAFT7_ASC = join(DOC_LTSPICE, "Draft7.asc");
@@ -243,7 +244,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2734,6 +2735,63 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Documents/LTspice/Draft1.asc authored .tran (series diode–L–R; V1 SINE 1 Hz) ---
+    // Unnamed D + L=50m + R=1k load; V1 SINE(0 1 1). Authored `.tran 0 1000m`.
+    // Probes v(n002)/v(n003) (diode–L junction / R top) exact LT↔ng (nRms≈0 /
+    // nMax≈1e-4, span≈0.37). Default TAU_DIODE same-deck (no named-model sub).
+    // Stacked on tip Draft2 pass=72. Left Draft8 Laplace / Draft6 AD823 /
+    // Draft10 UOA2 same-deck fail / 3725 alone.
+    {
+      expect(existsSync(DRAFT1_ASC), `missing ${DRAFT1_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(DRAFT1_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "Draft1.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^D1\b.+\bTAU_DIODE\b/im);
+      expect(deck.netlist).toMatch(/^L1\b.+\s0\.05\b/im);
+      expect(deck.netlist).toMatch(/^R1\b/im);
+      expect(deck.netlist).toMatch(/^V1\b.*\bSIN\b/im);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      const memberNotes: string[] = [];
+      for (const probe of ["v(n002)", "v(n003)"] as const) {
+        const result = runPairedBatch(`diff-draft1-${probe}`, deck.netlist, [probe]);
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `Draft1 ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `Draft1 ${probe} non-hollow`).toBeGreaterThan(0.2);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "draft1",
+        topology: "Documents/LTspice/Draft1.asc series diode–L–R (authored .tran 0 1000m; V1 SINE 1 Hz)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3030,6 +3088,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=72 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=73 sibling=5 gap=0/);
   }, 240_000);
 });

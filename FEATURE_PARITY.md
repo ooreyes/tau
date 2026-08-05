@@ -1576,15 +1576,18 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=72 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=73 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
   nRms=0 / nMax=0 span≈1.04) plus Documents/LTspice/**Draft7.asc** authored
   `.ac` (series C + neg-R; v(vo) nRms=0 / nMax=0 span≈0.99) plus
   Documents/LTspice/**Draft2.asc** authored `.tran` (series C–R highpass;
-  v(vout) nRms≈0.0062 nMax≈0.021 span≈0.20). gr_del deferred (all-pass |V|≈1
-  hollow). TwoTau / Draft8 Laplace brace-mangle deferred. tip 65e05ce thrash
+  v(vout) nRms≈0.0062 nMax≈0.021 span≈0.20) plus Documents/LTspice/**Draft1.asc**
+  authored `.tran` (series diode–L–R; v(n002)/v(n003) nRms≈0 nMax≈1e-4
+  span≈0.37). gr_del deferred (all-pass |V|≈1
+  hollow). TwoTau / Draft8 Laplace brace-mangle deferred. Draft6 AD823 /
+  Draft10 UOA2 same-deck not landed. tip 65e05ce thrash
   corrected. phono/relax blocked. HalfSlope Laplace stripped;
   SoftDiodeRecovery deferred; BandGaps dc-temp miss; LoopGain/Electrometer
   LT1001 OTA wall; MC1648 deferred; dimmer TRIAC deferred. Harness-slice gaps
