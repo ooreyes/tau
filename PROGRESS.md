@@ -1,15 +1,45 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:26 CDT**
+**Status: DONE - 2026-08-05 06:27 CDT**
 
-Unit: Waveform DoD — **cursor readout CSV export** (`cursorReadoutToCsv` + Export CSV).
-Base tip `55ec762` pass=90. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `02_tran_rc_pulse_meas.asc` authored `.tran` + `.meas` → differential **pass=91**.
+```
+SUMMARY pass=91 sibling=5 gap=0
+tran ct-rc-pulse-meas … v(out) nRms=0.0001 nMax=0.0003; Vmax/Vavg match LTspice
+```
+Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over cursor CSV tip `a39ba9f`. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — ct 02_tran_rc_pulse_meas .tran → pass=91 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `02_tran_rc_pulse_meas.asc` authored `.tran 10u 30m`
+  (V1 PULSE 0→5 / R=1k / C=1u τ=1 ms) + `.meas Vmax/Vavg`: v(out)/v(in)
+  vs LTspice nRms≈1e-4 / 0; Tau measure.ts Vmax/Vavg match LTspice log
+  (≈4.9666 / ≈2.5005). Distinct from synthetic RC_TRAN and ct 08 RLC.
+  Avoided Staff EE 100W/IRFP, Documents Draft*, Settings/palette thrash.
+  Rebased over Noise PNG + cursor CSV tips (`55ec762` / `a39ba9f`).
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=91 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green
+
+**Parity items**
+- Differential **pass=91** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue: non-wall Educational leftovers or Step PNG.
+  Leave IRFP/Draft*/Settings alone.
 
 
 ### 2026-08-05 — cursor readout CSV export (§waveform DoD)
@@ -38,7 +68,6 @@ Base tip `55ec762` pass=90. Named-device 48.1%. Settings locked. SHIPPABLE? **NO
   IRFP/Draft*/Settings alone.
 
 
-
 ### 2026-08-05 — Noise Export PNG (§waveform DoD)
 
 **What I did**
@@ -62,8 +91,6 @@ Base tip `55ec762` pass=90. Named-device 48.1%. Settings locked. SHIPPABLE? **NO
 **Next step**
 - Cursor CSV, richer right-click, or continue 29 differential. Leave
   IRFP/Draft*/Settings alone.
-
-
 
 
 ### 2026-08-05 — ct 01_op_voltage_divider .op → pass=90 (§DoD)

@@ -56,6 +56,8 @@ const CT_AC_RC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "03_ac_rc_lowpass.asc
 const CT_TF_DIVIDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "06_tf_voltage_divider.asc");
 /** Tau Circuit_testing_v1 — 2:1 resistive divider authored .op (≠ synthetic DIVIDER_OP 1:1). */
 const CT_OP_DIVIDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "01_op_voltage_divider.asc");
+/** Tau Circuit_testing_v1 — RC pulse + authored .meas (≠ synthetic RC_TRAN / ct RLC ringing). */
+const CT_TRAN_RC_PULSE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "02_tran_rc_pulse_meas.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -3876,6 +3878,92 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/02_tran_rc_pulse_meas.asc authored .tran + .meas ---
+    // Tau-owned ASC: V1 PULSE(0 5 0 1u 1u 5m 10m) + R=1k + C=1u (τ=1 ms).
+    // Authored `.tran 10u 30m` + `.meas Vmax MAX V(out)` / `Vavg AVG … FROM=20m TO=30m`.
+    // Distinct from synthetic RC_TRAN (1 V / 5 ms / no ASC), RC .meas hand-netlist,
+    // and ct 08 RLC ringing — proves importAsc → buildSpiceDeck → paired TRAN +
+    // Tau measure.ts vs LTspice log on authored ASC .meas. Left 100W/IRFP /
+    // Documents Draft* / Settings alone. Tip ct-op pass=90 → **pass=91**.
+    {
+      expect(existsSync(CT_TRAN_RC_PULSE_ASC), `missing ${CT_TRAN_RC_PULSE_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_TRAN_RC_PULSE_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "02_tran_rc_pulse_meas.asc must author .tran").toBeTruthy();
+      const measLines = dirs.filter((d) => /^\.meas\b/i.test(d.trim()));
+      expect(measLines.length, "02_tran_rc_pulse_meas.asc must author .meas").toBeGreaterThanOrEqual(2);
+      expect(measLines.some((d) => /\bvmax\b/i.test(d))).toBe(true);
+      expect(measLines.some((d) => /\bvavg\b/i.test(d))).toBe(true);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 3000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^V1\b.+\bPULSE\b/im);
+      expect(deck.netlist).toMatch(/^R1\b.+\b1000\b/im);
+      expect(deck.netlist).toMatch(/^C1\b.+\b0\.000001\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).not.toMatch(/^\.model\b/im);
+      const probes = ["v(out)", "v(in)"] as const;
+      const result = runPairedBatch("diff-ct-rc-pulse-tran", deck.netlist, [...probes], {
+        measurements: measLines,
+      });
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `ct-rc-pulse ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `ct-rc-pulse ${probe} non-hollow`).toBeGreaterThan(1);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      const out = result.ngspice.get("v(out)")!;
+      const tauMeas = runMeasurements(measLines, {
+        times: out.axis,
+        traces: [{ id: "out", label: "V(out)", values: out.values }],
+      });
+      const byName = (name: string) =>
+        tauMeas.find((row) => row.name.toLowerCase() === name.toLowerCase())?.value;
+      const ltVmax = measurementValue(result.ltspiceLog, "vmax");
+      const ltVavg = measurementValue(result.ltspiceLog, "vavg");
+      const ngVmax = byName("vmax");
+      const ngVavg = byName("vavg");
+      expect(ngVmax, JSON.stringify(tauMeas)).toEqual(expect.any(Number));
+      expect(ngVavg, JSON.stringify(tauMeas)).toEqual(expect.any(Number));
+      expect(relativeError(ngVmax!, ltVmax), `ct-rc-pulse Vmax lt=${ltVmax} ng=${ngVmax}`).toBeLessThanOrEqual(0.02);
+      expect(relativeError(ngVavg!, ltVavg), `ct-rc-pulse Vavg lt=${ltVavg} ng=${ngVavg}`).toBeLessThanOrEqual(0.02);
+      memberNotes.push(
+        `Vmax lt=${ltVmax.toFixed(4)} ng=${ngVmax!.toFixed(4)}; Vavg lt=${ltVavg.toFixed(4)} ng=${ngVavg!.toFixed(4)}`,
+      );
+      cells.push({
+        analysis: "tran",
+        circuit: "ct-rc-pulse-meas",
+        topology: "Circuit_testing_v1/02_tran_rc_pulse_meas.asc R=1k C=1u PULSE 5 V (authored .tran 10u–30m; .meas Vmax/Vavg)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4172,6 +4260,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=90 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=91 sibling=5 gap=0/);
   }, 240_000);
 });
