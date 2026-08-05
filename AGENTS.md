@@ -162,10 +162,11 @@ account and sign/notarize/ship.
       document, user-installed, user-attached, or Tau-owned compatible models.
       **Partial (2026-08-04):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
-      `NAMED-DEVICE-RECURSIVE: unencrypted=2641 exact=399 refuse=2139 silent=0
-      hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` — silent=0
-      and hard-failure=0 held (2026-08-04 23:20); ≥95% exact-rate **not** met;
-      DoD box stays unchecked.
+      `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
+      hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` — QA re-proved
+      HF=0 (2026-08-04 23:25); vs prior 2641/HF103/encrypted1371 the −103/+103
+      is encrypted reclassification (exact unchanged), not 103 deck fixes; ≥95%
+      exact-rate **not** met; DoD box stays unchecked. SHIPPABLE? **NO**.
 - [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs

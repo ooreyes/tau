@@ -17,11 +17,12 @@ stays **unchecked**. SHIPPABLE? **NO**.
 **Tokens:** **DONE** (`58b13c6` light default + honest §10; Anduril pop + aliases
 `1d6ebef` / Design QA `1250dbc`).
 
-**Measured (Overnight):** `scripts/named-device-fidelity.sh` @ 23:20 —
+**Measured (QA re-prove 23:25):** `scripts/named-device-fidelity.sh` —
 `NAMED-DEVICE: exact=2 refuse=4 silent=0` ·
 `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` (raise exact-rate next;
-do not invent ≥95%).
+hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%`. HF=0 is −103/+103
+encrypted reclass vs prior 2641/103/1371 (exact unchanged) — not 103 deck fixes.
+Raise exact-rate next; do not invent ≥95%. SHIPPABLE? NO.
 
 **Active product lanes (collision lock — do not cross-edit):**
 - **Overnight DoD + Staff EE** — measuring / raising named-device exact-rate via

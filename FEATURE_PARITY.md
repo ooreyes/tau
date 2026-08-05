@@ -227,10 +227,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
     `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-    hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` (2026-08-04 23:20).
-    Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise
-    recursive exact-model floor to ≥95% with hard-failure=0; a shared five-pin
-    shape does not prove pin fidelity for those parts.
+    hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` (QA 2026-08-04
+    23:25; HF=0 is −103/+103 encrypted reclass vs prior 2641/103/1371 — exact
+    unchanged; SHIPPABLE? NO). Still open: import arbitrary user-supplied
+    multi-pin `.asy` banks; raise recursive exact-model floor to ≥95% with
+    hard-failure=0; a shared five-pin shape does not prove pin fidelity for
+    those parts.
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware). Now covers passives,
