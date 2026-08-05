@@ -1,9 +1,11 @@
 /**
  * Op-amp parts library for Tau.
  *
- * All parts use the ideal (nullor) model in simulation for now.
- * The metadata here drives the part chooser and allows future real-model
- * substitution when the ngspice engine ships.
+ * "Ideal" is the only behavioral catalog choice that intentionally uses Tau's
+ * ideal/rail-clamped stamp. Named manufacturer entries become vendor identities
+ * and require an exact five-terminal `.subckt` (document or Model Libraries);
+ * missing models refuse every analysis — including preview transient — rather
+ * than silently substituting the ideal nullor.
  *
  * Specs are sourced from manufacturer datasheets; descriptions are original.
  *

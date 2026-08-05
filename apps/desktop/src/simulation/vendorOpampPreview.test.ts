@@ -3,6 +3,7 @@ import type { SchematicComponent } from "../schematic/types";
 import { runOperatingPoint } from "./operatingPoint";
 import { runAcSweep } from "./acSweep";
 import { runNoiseAnalysis } from "./noise";
+import { runTransientAnalysis } from "./linearTransient";
 
 const vendor: SchematicComponent = {
   id: "u1",
@@ -33,6 +34,15 @@ describe("named vendor op-amp preview integrity", () => {
         expect(result.message).toMatch(/named vendor op-amp model/i);
         expect(result.message).toMatch(/will not substitute/i);
       }
+    }
+  });
+
+  it("refuses transient instead of applying the ideal nullor stamp", async () => {
+    const result = await runTransientAnalysis(schematic, { stopTime: 1e-3, steps: 16 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toMatch(/named vendor op-amp model/i);
+      expect(result.message).toMatch(/will not substitute/i);
     }
   });
 });

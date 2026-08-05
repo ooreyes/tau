@@ -12,6 +12,7 @@ import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVo
 import { primaryBranches, runOperatingPoint } from "./operatingPoint";
 import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
 import { previewChargeDefinedCapacitorMessage, previewNegativeCapacitorMessage } from "../schematic/behavioralCapacitor";
+import { previewVendorOpampMessage } from "../engine/opampModel";
 import type { FourierResult } from "./fourier";
 import type { MeasResult } from "./measure";
 
@@ -214,6 +215,10 @@ export async function runTransientAnalysis(
     // Resolve {param} expressions in component values before extraction so the
     // solver sees concrete numbers (LTspice substitutes braces the same way).
     const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+    // Named vendor op-amps must not silently receive the ideal nullor stamp.
+    // OP / AC / noise already refuse; transient had the same gap until this guard.
+    const vendorOpampMessage = previewVendorOpampMessage(components);
+    if (vendorOpampMessage) return fail("Native engine required", vendorOpampMessage, circuit);
     const negativeCapacitorMessage = previewNegativeCapacitorMessage(components);
     if (negativeCapacitorMessage) return fail("Native engine required", negativeCapacitorMessage, circuit);
     circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);

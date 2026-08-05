@@ -219,9 +219,15 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     document or a user-attached library executes through Tau's native worker;
     a missing or incompatible model refuses atomically instead of using the
     generic gain block. Part / Simulation model / status are named inspector
-    controls and exact `Value2` model identity round-trips. Still open: import
-    arbitrary user-supplied multi-pin `.asy` banks; a shared five-pin shape does
-    not prove pin fidelity for those parts.
+    controls and exact `Value2` model identity round-trips. **Preview transient
+    closed (2026-08-04):** `runTransientAnalysis` now refuses named vendor
+    op-amps with the same "will not substitute" copy as OP/AC/noise (previously
+    stamped the ideal nullor). Semiconductor Properties copy matches the
+    fail-closed deck: missing named models block Run rather than promising a
+    generic starter. Proof: `scripts/named-device-fidelity.sh` →
+    `NAMED-DEVICE: exact=2 refuse=4 silent=0`. Still open: import arbitrary
+    user-supplied multi-pin `.asy` banks; recursive ≥95% exact-model floor;
+    a shared five-pin shape does not prove pin fidelity for those parts.
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware). Now covers passives,

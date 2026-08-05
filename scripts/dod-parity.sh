@@ -9,6 +9,7 @@ specs=(
   "scripts/waveformParity.corpus.ts"
   "scripts/specialDeviceParity.corpus.ts"
   "scripts/differentialParity.corpus.ts"
+  "scripts/namedDeviceFidelity.corpus.ts"
 )
 
 for spec in "${specs[@]}"; do

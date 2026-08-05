@@ -5,13 +5,12 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 22:36 CDT - Differential gaps closed
-(pass=15 · sibling=5 · gap=2) + unsigned release smoke PASS (DoD
-unsigned-release box checked). Broad-differential / §10 / named-device still
-open. Shippable? NO.
+**Status:** IDLE 2026-08-04 22:43 CDT - Named-device slice landed:
+transient preview refuses vendor op-amps; NAMED-DEVICE exact=2 refuse=4
+silent=0. ≥95% DoD box still open. Shippable? NO.
 
-**Next unit:** Educational steptemp/stepmodelparam/step_expand differential /
-Class-D AC·DC·noise·tf / §10 / named-device.
+**Next unit:** Recursive ≥95% exact-model measurement / Educational
+steptemp/stepmodelparam / Class-D AC·DC·noise·tf / §10.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -103,14 +102,12 @@ corpus reason above, and is restated there rather than left on a rescue ref.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Eliminate the remaining named-vendor-op-amp model substitution.** A
-   decoded census finds 683 named `Opamps/...` instances across 475 files and
-   432 distinct part names (generic opamp/universal symbols excluded). Ordinary
-   five-pin parts currently retain the right shared pin topology but still run
-   Tau's generic rail-clamped gain block, not their vendor macromodel. Build a
-   user-supplied symbol/model attachment path with a named Model control in the
-   Value UI, then atomically refuse any part whose real model is absent. Do not
-   preserve the 80/82 metric by simulating a different amplifier.
+1. **Measure recursive named-device ≥95% (exact vs refuse).** Transient preview
+   vendor-opamp silence and Properties "use generic" lie are closed this fire
+   (`NAMED-DEVICE: exact=2 refuse=4 silent=0`). Next: instrument the recursive
+   unencrypted corpus for exact-model authored-analysis %, keep silent=0 /
+   hard-failure=0, and only then consider the DoD box. Still open: multi-pin
+   `.asy` banks and broad exact macromodel coverage.
 
 ---
 
@@ -120,6 +117,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - NAMED-DEVICE SLICE: transient preview refuses vendor op-amps; Properties refuse copy; named-device-fidelity.sh exact=2 refuse=4 silent=0. ≥95% unproven.
 - 2026-08-04 - DoD CORPUS METRIC HONESTY: ≥80/82 deck/op retired; checked floor is success ≥79 + refusal-only remainder + leak/failure 0; soft asserts added; no refusal weakening.
 - 2026-08-04 - P1.6 `.meas`/`.four` DECK EMISSION: domain-matched cards reach ngspice after the analysis line; UI still TS; `.step` still re-run loop.
 - 2026-08-04 - P1.5 NESTED CONFINED `.include`/`.lib`: `importProjectAsc` BFS-follows nested file refs through project + installed-LTspice confinement; Royer leak-to-op wording corrected (already deck refusal); canonical still 82/81/79/79.

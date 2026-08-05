@@ -9,22 +9,54 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 22:36 CDT**
+**Status: DONE - 2026-08-04 22:43 CDT**
 
-Unit: Unsigned release smoke — `tauri build` / packaged Tau.app + bundled
-ngspice end-to-end. AGENTS DoD unsigned-release box → checked. Shippable? NO
-(other DoD boxes still open).
+Unit: Named-device fidelity slice — close transient-preview silent ideal-stamp
+for vendor op-amps + refuse-vs-exact proof. DoD ≥95% box stays open.
+Shippable? NO.
 
 What landed this unit:
 
-- Fresh `pnpm --filter @tau/desktop tauri build` → Tau.app + aarch64 DMG
-- codesign verify, hdiutil verify VALID, resource tree == staged ngspice
-- 10/10 ignored cargo tests on mounted libngspice; packaged-engine-smoke
-  336 samples; stay-alive ≥5s
-- Differential unit earlier this session: **pass=15 · sibling=5 · gap=2**
+- Transient preview refuses named vendor op-amps (same as OP/AC/noise)
+- Semiconductor Properties: Blocked/refuse copy (no “use generic starter” lie)
+- `scripts/named-device-fidelity.sh` stdout: **NAMED-DEVICE: exact=2 refuse=4 silent=0**
+- Wired into `dod-parity.sh`; AGENTS named-device box stays unchecked (Partial note)
 
-Next unit: Educational steptemp/stepmodelparam / Class-D AC·DC·noise·tf /
-§10 / named-device. Shippable stays NO.
+Next unit: recursive ≥95% exact-model measurement / Educational
+steptemp/stepmodelparam / Class-D AC·DC·noise·tf / §10. Shippable stays NO.
+
+---
+
+### 2026-08-04 — Named-device refuse-vs-exact slice (silent transient closed)
+
+**What I did**
+- Audited silent substitution paths: deck already refuse-closed for named
+  semiconductors/switches/vendor op-amps; OP/AC/noise preview already refused
+  vendor op-amps; **transient preview still stamped the ideal nullor**.
+- Closed that path in `linearTransient.ts`; aligned semiconductor inspector
+  copy with fail-closed Run behavior; added corpus + shell proof.
+
+**Files**
+- `apps/desktop/src/simulation/linearTransient.ts`
+- `apps/desktop/src/simulation/vendorOpampPreview.test.ts`
+- `apps/desktop/src/components/ShellPanels.tsx` (+ test)
+- `apps/desktop/src/library/opamps.ts` (comment honesty)
+- `apps/desktop/scripts/namedDeviceFidelity.corpus.ts`
+- `scripts/named-device-fidelity.sh`, `scripts/dod-parity.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `STATE.md`, `PROGRESS.md`
+
+**Tests / proof**
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2611 passed / 6 skipped
+- `scripts/named-device-fidelity.sh` → `NAMED-DEVICE: exact=2 refuse=4 silent=0`
+
+**Parity items**
+- Named-device DoD: 🟡 Partial (silent transient closed; ≥95% unproven)
+- Broad differential: unchanged (pass=15 · sibling=5 · gap=2 last measured)
+
+**Next step**
+- Measure recursive unencrypted exact-model %; or close differential gaps /
+  §10.
 
 ---
 

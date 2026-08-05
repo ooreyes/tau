@@ -310,7 +310,7 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
 
     expect((screen.getByRole("combobox", { name: "Simulation model" }) as HTMLSelectElement).value).toBe("IRF540");
-    expect(screen.getByRole("status").textContent).toMatch(/Substitution warning.*generic NMOS starter/);
+    expect(screen.getByRole("status").textContent).toMatch(/Blocked ·.*will refuse rather than substitute a generic NMOS starter/);
     fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });

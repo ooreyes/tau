@@ -1747,7 +1747,7 @@ export function ComponentInspector({
               </label>
               <p className="property-hint" role="status">
                 {!selectedModelOption
-                  ? `Substitution warning · ${selectedModelName || "No model"} is unavailable or incompatible; Tau will report and use its generic ${modelKind.toUpperCase()} starter.`
+                  ? `Blocked · ${selectedModelName || "No model"} is unavailable or incompatible; Run will refuse rather than substitute a generic ${modelKind.toUpperCase()} starter. Attach the exact model or deliberately choose Generic.`
                   : selectedModelOption.source === "generic"
                     ? `Generic starter · useful for topology checks, not an exact manufacturer part.`
                     : `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`}
