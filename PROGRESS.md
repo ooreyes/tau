@@ -9,18 +9,45 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:44 CDT**
+**Status: DONE - 2026-08-05 02:49 CDT**
 
-Unit: Educational `S-param.asc` authored `.ac` RF ladder + `.net` ports → differential **pass=45**.
+Unit: Educational `P2.asc` authored `.tran` parametric amp → differential **pass=46**.
 ```
-SUMMARY pass=45 sibling=5 gap=0
-ac s-param … v(out1..5) nRms=0
+SUMMARY pass=46 sibling=5 gap=0
+tran p2 … v(out) nRms≈0.0065 span≈2.17
 ```
-Collision-avoided Staff EE LM78XX/100W/P2/160. NE555 phase miss. LoopGain LT1001 wall. Named-device 47.9%. SHIPPABLE? **NO**
+100W IRFP not bundled (refuse). Left continue-10 stepAC alone. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+---
+
+### 2026-08-05 — P2.asc parametric amp TRAN → pass=46 (§DoD)
+
+**What I did**
+- Educational `P2.asc` authored `.tran 1.2m`: exact schematic models
+  2N344/2N274/2N597 + V47/1N2326/1N484 (`type=silicon` stripped). Probe
+  v(out) vs LTspice nRms≈0.0065 span≈2.17 (non-hollow; dense .raw uses
+  referenceRange, not Math.max spread).
+- Deferred: 100W (IRFP240/IRFP9240 VDMOS not in bundled standardModels —
+  fail-closed refuse, not silent TAU_*); 160 digital; ISO16750/7637 Bad .sav;
+  NE555 phase miss; LoopGain LT1001 wall.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=46 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test`
+
+**Parity items**
+- Differential matrix climb 45→46; DoD broad-differential box still open.
+- Named-device 47.9%; SHIPPABLE? **NO**
+
+**Next step**
+- Bundle IRFP240/9240 for 100W, or other non-colliding Educational authored analysis.
 
 ---
 
