@@ -521,6 +521,10 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     // model rather than substituting a resistor/BJT.
     diac: "subckt",
     triac: "subckt",
+    // Educational/PAsystem darlingtons: ASC uses `SYMATTR Prefix X` + authored
+    // `.lib TIP121.LIB` / `.lib TIP127.LIB` with exact `.SUBCKT tip121`/`tip127`.
+    tip121: "subckt",
+    tip127: "subckt",
     // Varistor (SpecialFunctions\\varistor): a 4-terminal behavioral voltage-
     // controlled clamp. The two primary terminals (invin/noninvin, SpiceOrder 1/2)
     // are represented by a four-terminal behavioral subcircuit carrier. The
@@ -1886,19 +1890,24 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     const tauKind = isComponentKind(symbol.attrs.TauKind) ? symbol.attrs.TauKind : null;
     const mappedKind = ltspiceTypeToKind(symbol.type);
     const installedPrefixX = symbolMetadata?.attrs.Prefix?.trim().toUpperCase() === "X"
-      && symbolMetadata.pins.length > 0;
+      && (symbolMetadata?.pins.length ?? 0) > 0;
+    // ASC may override `.asy` Prefix QN→X (PAsystem TIP121/TIP127) while the
+    // sibling `.lib` supplies the exact darlington `.subckt` — honor that.
+    const instancePrefixX = symbol.attrs.Prefix?.trim().toUpperCase() === "X"
+      && (symbolMetadata?.pins.length ?? 0) > 0;
+    const prefixX = installedPrefixX || instancePrefixX;
     // Opamps/ maps to the five-terminal `opamp` kind for the ordinary single-
     // output family. Prefix-X symbols whose .asy exposes a different pin count
     // (disable pin, instrumentation, FDA, …) must keep exact SpiceOrder ports
     // as a `subckt` — forcing the five-pin contract refused exact 6-port models
     // like AD8029 and silently dropped unused .asy pins.
     const nonFivePinOpamp = mappedKind === "opamp"
-      && installedPrefixX
+      && prefixX
       && symbolMetadata!.pins.length !== 5;
     const kind = tauKind
       ?? (nonFivePinOpamp ? "subckt" : null)
       ?? mappedKind
-      ?? (installedPrefixX ? "subckt" : null);
+      ?? (prefixX ? "subckt" : null);
     const instName = symbol.attrs.InstName ?? "";
     if (!kind) {
       // No built-in kind: try resolving the symbol as a hierarchical block and

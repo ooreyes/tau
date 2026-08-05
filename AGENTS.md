@@ -162,9 +162,9 @@ account and sign/notarize/ship.
       document, user-installed, user-attached, or Tau-owned compatible models.
       **Partial (2026-08-05):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
-      `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1220 refuse=1321 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%` — tip after
-      PAsystem discrete aliases + sibling `.asy` pins (+1 vs prior 1219;
-      HandsFreeLayout). OTA `±1e309` (+2 vs 47.9%). Encrypted bare SYMBOL stay
+      `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%` — tip after
+      TIP121/TIP127 Prefix-X + sibling `.lib` (+2 vs 1220; PowerAmpLayout).
+      PAsystem discrete aliases (+1 HandsFree). Encrypted bare SYMBOL stay
       refuse. Full unique-leaf probe 33.4%/enc=2781 remains retracted
       (denominator game). Never silent substitution. ≥95% exact-rate **not**
       met; DoD box stays unchecked. SHIPPABLE? **NO**.

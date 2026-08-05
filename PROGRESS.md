@@ -9,17 +9,56 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:25 CDT**
+**Status: DONE - 2026-08-05 04:30 CDT**
 
-Unit: Named-device PAsystem discrete aliases → exact **1220** (rate stdout 48.0%).
+Unit: PowerAmpLayout TIP121/TIP127 exact Prefix-X + sibling `.lib` → **48.1%**.
 ```
-NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1220 refuse=1321 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
 ```
-Maps 2N3904/2N3906/2N5458/SMcap/MylarCap/coaxCap7 + sibling `.asy` pins
-(+1 HandsFreeLayout vs 1219). PowerAmpLayout still TIP121/TIP127 refuse.
-Left BandGaps alone. Differential pass=74. SHIPPABLE? **NO**
+Authored `.lib TIP121.LIB` / `.lib TIP127.LIB` darlington subckts (+2 exact vs
+1220). Draft5 AD823 `.tf` blocked. Left BandGaps alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
+
+
+
+---
+
+
+### 2026-08-05 — TIP121/TIP127 Prefix-X + sibling .lib → named-device 48.1% (§DoD)
+
+**What I did**
+- Track A: map `TIP121`/`TIP127` → subckt; honor ASC `Prefix X` override of
+  `.asy` Prefix QN; load sibling `.lib`/`.include` named by directives into the
+  named-device corpus (same relative-only rule as projectAscImport). Exact
+  `.SUBCKT tip121`/`tip127` from authored libs — never a silent darlington BJT.
+- PowerAmpLayout (+ peer) climbs refuse→exact (+2). Draft5 AD823 `.tf` still
+  blocked. Left BandGaps alone.
+
+**Exact stdout**
+
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
+```
+
+**Files**
+- `apps/desktop/src/io/ascImport.ts` (+ test)
+- `apps/desktop/scripts/namedDeviceRecursive.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/named-device-fidelity.sh` → 48.1%
+
+**Parity items**
+- Named-device 🟡 exact **1222** / rate **48.1%** (≥95% not met). Differential
+  pass=74. SHIPPABLE? NO
+
+**Next step**
+- Continue 19 differential; next plaintext refuse leftover.
+
+
 
 
 

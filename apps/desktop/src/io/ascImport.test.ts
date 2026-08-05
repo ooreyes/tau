@@ -244,6 +244,8 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("SMcap")).toBe("capacitor");
     expect(ltspiceTypeToKind("MylarCap")).toBe("capacitor");
     expect(ltspiceTypeToKind("coaxCap7")).toBe("capacitor");
+    expect(ltspiceTypeToKind("TIP121")).toBe("subckt");
+    expect(ltspiceTypeToKind("TIP127")).toBe("subckt");
   });
 
   it("maps ordinary five-pin opamps but refuses verified multi-pin amplifiers", () => {

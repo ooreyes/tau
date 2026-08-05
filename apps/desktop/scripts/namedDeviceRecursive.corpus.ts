@@ -29,7 +29,9 @@ import { homedir } from "node:os";
 import { describe, it, expect } from "vitest";
 import { importAsc, makeSubcircuitResolver, decodeSchematicText, parseAsy, type AsySymbol } from "../src/io/ascImport";
 import { buildParamScope } from "../src/simulation/paramScope";
-import { buildSpiceDeck, unresolvedSubcktMessage } from "../src/engine/spiceNetlist";
+import { buildSpiceDeck, unresolvedSubcktMessage, includedFileName, libraryFileKey } from "../src/engine/spiceNetlist";
+import { modelLibLinesFromDirectives } from "../src/engine/modelDirectives";
+import { bundledLibraryText } from "../src/engine/bundledSubcircuits";
 import { validateSchematicDocument } from "../src/schematic/documentValidation";
 import {
   classifyCorpusCapability,
@@ -135,6 +137,37 @@ function siblingResolver(parentDir: string) {
     if (!asy && !asc) return null;
     return { asy, asc };
   });
+}
+
+/**
+ * Load plaintext `.lib`/`.include` files named by the schematic that sit beside
+ * it (PowerAmpLayout → TIP121.LIB). Same relative-only confinement as
+ * projectAscImport; never decrypt; bundled names stay for the deck builder.
+ */
+function siblingDirectiveLibraries(
+  parentDir: string,
+  directives: readonly string[],
+): { texts: string[]; names: string[] } {
+  const texts: string[] = [];
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const line of modelLibLinesFromDirectives(directives)) {
+    const fileRef = /^\.(include|lib)\s+(.+)$/i.exec(line.trim());
+    if (!fileRef) continue;
+    const file = includedFileName(fileRef[2]);
+    if (!file || bundledLibraryText(file)) continue;
+    const leaf = basename(file.replace(/\\/g, "/"));
+    if (!leaf || leaf.includes("..") || isAbsolute(leaf)) continue;
+    const key = libraryFileKey(leaf);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const path = join(parentDir, leaf);
+    const rel = relative(parentDir, path);
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+    texts.push(decodeSchematicText(readFileSync(path)));
+    names.push(leaf);
+  }
+  return { texts, names };
 }
 
 function installedSymbolMetadata(symbolType: string): AsySymbol | null {
@@ -331,7 +364,10 @@ function runFile(file: CorpusFile): { row: CorpusRow; encryptedDependent: boolea
 
   try {
     const params = buildParamScope(imported.directives);
+    const parentDir = join(file.path, "..");
+    const siblingLibs = siblingDirectiveLibraries(parentDir, imported.directives);
     const userModelLibraries = [
+      ...siblingLibs.texts,
       ...attachedInstalledModelBlocks(imported.components),
       ...INSTALLED_STANDARD_MODEL_LIBRARIES,
     ];
@@ -343,6 +379,7 @@ function runFile(file: CorpusFile): { row: CorpusRow; encryptedDependent: boolea
         params,
         directives: imported.directives,
         userModelLibraries,
+        userModelLibraryNames: siblingLibs.names,
         ascForeignSymbols: imported.foreignSymbols,
       },
       { kind: "op" },
