@@ -9,19 +9,55 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 03:00 CDT**
+**Status: DONE - 2026-08-05 03:10 CDT**
 
-Unit: Applications 2ndOrder{LP,BP,HP,Notch,AP,CZ}.asc authored `.ac` → differential **pass=54**.
+Unit: Educational `MonteCarlo.asc` authored `.ac` mc→nominal → differential **pass=55**.
 ```
-SUMMARY pass=54 sibling=5 gap=0
-ac 2ndorder-lp/bp/hp/notch/ap/cz … v(2) nRms=0
+SUMMARY pass=55 sibling=5 gap=0
+ac montecarlo … v(out) nRms=0 span≈0.499
 ```
-Corrects tip `a0d6080` docs thrash (claimed Lowpass, corpus was logamp). Named-device 47.9%. SHIPPABLE? **NO**
+Tip `65e05ce` commit message claimed MV2201/varactor pass=56 but corpus/AGENTS carry **MonteCarlo pass=55** (+ bundled MV2201 unused by cells yet). Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
 ---
+
+
+### 2026-08-05 — MonteCarlo.asc RLC AC mc→nominal → pass=55 (§DoD)
+
+**What I did**
+- Educational `MonteCarlo.asc` authored `.ac oct 100 300k–10Meg`: RLC filter;
+  `mc(val,tol)`→nominal center (Tau `expr.ts`); same-deck LTspice+ngspice.
+  Probe v(out) nRms≈0 span≈0.499. Zero X-subckts / modelSubstitutions.
+- Tip commit `65e05ce` message thrash (claimed varactor/56) corrected here —
+  corpus cell + AGENTS/FEATURE already name MonteCarlo pass=55. MV2201 model
+  line also landed in that tip commit ahead of varactor cells (no cells yet).
+- Collision-avoided Staff EE 2ndOrder*. Never faked NE555/LoopGain/Vswitch/
+  Howland/SoftDiode/HalfSlope/TLINE-inv/astable.
+
+**Exact stdout**
+```
+SUMMARY pass=55 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts` (on tip `65e05ce`)
+- `AGENTS.md`, `FEATURE_PARITY.md` (on tip; already accurate)
+- `PROGRESS.md`, `~/Desktop/TAU-MORNING-STATUS.md` (this docs fix)
+
+**Tests**
+- vitest corpus differentialParity → pass=55; typecheck; apps/desktop test (prior)
+
+**Parity items**
+- Differential 🟡 harness **pass=55 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- Land varactor/varactor2 cells using tip MV2201 (54→55 already MonteCarlo;
+  varactor would be 55→57). Leave 100W/160 alone.
+
 
 ### 2026-08-05 — Applications 2ndOrder* AC family → pass=54 (§DoD)
 
