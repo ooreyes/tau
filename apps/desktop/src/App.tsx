@@ -1729,13 +1729,9 @@ function App() {
   }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
 
   const dismissLearningPathCoach = useCallback(() => {
-    if (learningPath.status === "completed") {
-      setLearningPathCoachHidden(true);
-      return;
-    }
     setLearningPath(dismissLearningPath());
     setLearningPathCoachHidden(true);
-  }, [learningPath.status]);
+  }, []);
 
   const learningPathUiContext: LearningPathUiContext = useMemo(() => {
     if (learningPath.status === "completed") return "success";

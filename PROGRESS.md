@@ -1,14 +1,44 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:40 CDT**
+**Status: DONE - 2026-08-05 ~13:36 CDT**
 
-Unit: **§10 AnalysisSetupForms + circuit-duration → ui/Select** — SourceSelect /
-Step kind / Circuit duration unit onto shadcn `ui/Select`; analysis-setup +
-duration trigger token drift. AGENTS §10 stays UNCHECKED. SHIPPABLE? **NO**
+Unit: **Product gates — first-success learning path polish** — persist
+success-coach ack via `dismissedAt`; proof script claims closed box.
+Product-gates DoD ✅. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — First-success learning path polish (product-gates)
+
+**What I did**
+- Success-coach “Got it” now persists `dismissedAt` while keeping
+  `completed` (no forever re-show on launch). Proof script header updated
+  to the closed product-gates claim. Re-verified all five product-gates
+  proofs + full desktop suite. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/lib/learningPath.ts` (+ test)
+- `apps/desktop/src/App.tsx`
+- `scripts/product-gates-learning-path.sh`
+- `PROGRESS.md`
+
+**Tests**
+- `bash scripts/product-gates-learning-path.sh` → PRODUCT-GATES-LEARNING-PATH: ok (16)
+- All five product-gates proofs green
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2970 passed / 8 skipped
+
+**Parity items**
+- Product-gates DoD ✅. SHIPPABLE? NO
+
+**Next step**
+- Remaining unchecked DoD boxes (§10, named-device ≥95%, broad differential).
+
+SHIPPABLE? **NO**
 
 ---
 
@@ -69,10 +99,10 @@ SHIPPABLE? **NO**
 - `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
 
 **Tests**
-- `bash scripts/product-gates-learning-path.sh` → PRODUCT-GATES-LEARNING-PATH: ok (15)
+- `bash scripts/product-gates-learning-path.sh` → PRODUCT-GATES-LEARNING-PATH: ok (16)
 - `bash scripts/product-gates-cli-api.sh` → PRODUCT-GATES-CLI-API: ok (re-verified on tip)
 - `pnpm -C apps/desktop typecheck` green
-- `pnpm -C apps/desktop test` → 2969 passed / 8 skipped
+- `pnpm -C apps/desktop test` → 2970 passed / 8 skipped
 
 **Parity items**
 - Product-gates DoD ✅ (recovery + external-edit + run records + CLI/API +

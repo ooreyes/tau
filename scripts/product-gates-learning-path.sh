@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Prove first-success learning path + contextual help (product-gates DoD partial).
-# Does NOT claim the full student/pro/dev product-gates box (CLI/API still open).
+# Prove first-success learning path + contextual help (product-gates DoD).
+# Together with unsaved-recovery / external-edit / run-records / cli-api proofs,
+# this closes the student/pro/dev product-gates box. SHIPPABLE? NO — other
+# DoD boxes remain open.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

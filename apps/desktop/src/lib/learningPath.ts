@@ -146,9 +146,14 @@ export function shouldOfferLearningPath(state: LearningPathState): boolean {
   return state.status === "pending" || state.status === "in_progress";
 }
 
-/** Show the coach banner while the user is mid-path or just completed. */
+/**
+ * Show the coach while mid-path, or after success until the user acks
+ * (`dismissedAt` set while status stays `completed`).
+ */
 export function shouldShowLearningPathCoach(state: LearningPathState): boolean {
-  return state.status === "in_progress" || state.status === "completed";
+  if (state.status === "in_progress") return true;
+  if (state.status === "completed" && state.dismissedAt == null) return true;
+  return false;
 }
 
 export function isLearningPathActive(state: LearningPathState): boolean {
@@ -172,12 +177,23 @@ export function startLearningPath(
   return next;
 }
 
+/**
+ * Dismiss the coach. Mid-path / pending → `dismissed` (path abandoned).
+ * Completed → keep `completed` but set `dismissedAt` so the success coach
+ * does not reappear on every launch.
+ */
 export function dismissLearningPath(
   now = Date.now(),
   storage: Pick<Storage, "getItem" | "setItem"> | null = typeof localStorage !== "undefined" ? localStorage : null,
 ): LearningPathState {
   const prev = loadLearningPathState(storage);
-  if (prev.status === "completed") return prev;
+  if (prev.status === "completed") {
+    if (prev.dismissedAt != null) return prev;
+    const next: LearningPathState = { ...prev, dismissedAt: now };
+    saveLearningPathState(next, storage);
+    return next;
+  }
+  if (prev.status === "dismissed") return prev;
   const next: LearningPathState = {
     ...prev,
     status: "dismissed",

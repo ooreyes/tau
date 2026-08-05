@@ -99,6 +99,16 @@ describe("start / dismiss / complete", () => {
     expect(recordLearningPathSimulationOutcome({ ok: false }).status).toBe("completed");
   });
 
+  it("acks the success coach without abandoning completed status", () => {
+    startLearningPath(10);
+    recordLearningPathSimulationOutcome({ ok: true });
+    const acked = dismissLearningPath(30);
+    expect(acked.status).toBe("completed");
+    expect(acked.dismissedAt).toBe(30);
+    expect(shouldShowLearningPathCoach(acked)).toBe(false);
+    expect(contextualHelpFor(acked, "empty")?.id).toBe("first-success");
+  });
+
   it("does not complete from pending without start", () => {
     expect(recordLearningPathSimulationOutcome({ ok: true }).status).toBe("pending");
   });
