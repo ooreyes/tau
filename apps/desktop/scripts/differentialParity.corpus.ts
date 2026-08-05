@@ -418,7 +418,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, HandsFreeLayout TRAN, contrib/gr_del AC, PowerAmpLayout TRAN, Resources-sinh DC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, HandsFreeLayout TRAN, contrib/gr_del AC, PowerAmpLayout TRAN, PowerAmpLayout A=0.2..0.7 TRAN, Resources-sinh DC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -5543,7 +5543,10 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     // `.tran 0 10m 0 1u` (≠ PowerAmp.asc `.tran 5m`). Expand `.step param A
     // .1 .7 .1` for **A=0.1** (strip .step + .four; bake `.param A=0.1`).
     // Speaker nets nRms=0 @ 5%/15%. Never Chan/NIGBT/FRA. Tip pass=110 →
-    // **pass=111**. Left SoftDiode Vp>0 / Fc / ISO7637 / TLINE-inv / Draft10 alone.
+    // **pass=111** (A=0.1). Tip Resources/sinh was pass=112; Higher-A A=0.2..0.7 → **pass=113**.
+    // Left SoftDiode Vp>0 / Fc / ISO7637 / TLINE-inv / Draft10 UOA2 alone
+    // (Draft10 same-deck B_U* triangle fails LTspice timestep; TLINE nRms≈0.28;
+    // Applications non-vendor leftovers=0; contrib gd outs hollow).
     {
       expect(existsSync(POWERAMP_LAYOUT_ASC), `missing ${POWERAMP_LAYOUT_ASC}`).toBe(true);
       const layoutDir = dirname(POWERAMP_LAYOUT_ASC);
@@ -5624,6 +5627,76 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         topology: "Educational/PAsystem/PowerAmpLayout.asc TIP121/TIP127 layout + sibling .lib A=0.1 (authored .tran 10m; ≠ PowerAmp.asc 5m)",
         status: "pass",
         note: `A=0.1 ${memberNotes.join("; ")} (TIP sibling .lib)`,
+      });
+
+      // Higher-A step members (A=0.2..0.7): same layout TIP + sibling .lib path;
+      // authored `.tran 10m` (≠ PowerAmp.asc A=0.2..0.7 `.tran 5m` cell). Probe
+      // proven A=0.2 / A=0.7 speaker nRms=0 @ 5%/15% with growing span. Tip
+      // pass=112 (sinh) → **pass=113**. Never Chan/NIGBT/FRA / Draft10 / TLINE fakes.
+      const aHiMembers = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7] as const;
+      const aHiNotes: string[] = [];
+      for (const A of aHiMembers) {
+        const withA = [
+          ...dirs.filter((d) => !/^\.step\b/i.test(d.trim()) && !/^\.four\b/i.test(d.trim())),
+          `.param A=${A}`,
+        ];
+        const paramsA = buildParamScope(withA);
+        expect(Number(paramsA.scope.A ?? paramsA.scope.a), `layout A=${A}`).toBeCloseTo(A, 12);
+        const deckA = buildSpiceDeck({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          directives: withA,
+          params: paramsA,
+          userModelLibraries: [tip121, tip127],
+          userModelLibraryNames: ["TIP121.lib", "TIP127.lib"],
+        }, {
+          kind: "tran",
+          stopTime: parsed.tran!.stopTime,
+          steps: Math.max(parsed.tran!.steps ?? 240, 5000),
+          startTime: parsed.tran!.startTime,
+          maxStep: parsed.tran!.maxStep ?? 1e-6,
+        });
+        expect(deckA.unresolvedSubckts ?? [], `poweramp-layout A=${A}`).toEqual([]);
+        expect(deckA.modelSubstitutions ?? [], `poweramp-layout A=${A}`).toEqual([]);
+        expect(deckA.netlist).not.toMatch(/^[DQ]\w+\b.+\bTAU_/im);
+        expect(deckA.netlist).not.toMatch(/^X\w+\b.+\bTAU_/im);
+        const speakerA = /^RSpeaker\s+(\S+)\s+(\S+)\s+/im.exec(deckA.netlist);
+        expect(speakerA, `RSpeaker layout A=${A}`).toBeTruthy();
+        const probesA = [`v(${speakerA![1]})`, `v(${speakerA![2]})`] as const;
+        const resultA = runPairedBatch(
+          `diff-poweramp-layout-a${String(A).replace(".", "")}`,
+          deckA.netlist,
+          [...probesA],
+        );
+        const probeNotes: string[] = [];
+        for (const probe of probesA) {
+          const lt = resultA.ltspice.get(probe)!;
+          const ng = resultA.ngspice.get(probe)!;
+          const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+            rmsTolerance: 0.05,
+            maxTolerance: 0.15,
+          });
+          expect(
+            comparison.pass,
+            `poweramp-layout A=${A} ${probe} ${JSON.stringify(comparison)}`,
+          ).toBe(true);
+          expect(
+            comparison.referenceRange,
+            `poweramp-layout A=${A} ${probe} non-hollow`,
+          ).toBeGreaterThan(0.5);
+          probeNotes.push(
+            `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+          );
+        }
+        aHiNotes.push(`A=${A} ${probeNotes.join("; ")}`);
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "poweramp-layout-ahi",
+        topology: "Educational/PAsystem/PowerAmpLayout.asc TIP121/TIP127 layout + sibling .lib A=0.2..0.7 (authored .tran 10m; ≠ PowerAmp.asc 5m A-step)",
+        status: "pass",
+        note: `${aHiNotes.join(" | ")} (TIP sibling .lib)`,
       });
     }
 
@@ -5994,6 +6067,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=112 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=113 sibling=5 gap=0/);
   }, 600_000);
 });

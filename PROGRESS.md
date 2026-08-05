@@ -1,14 +1,51 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~14:35 CDT**
+**Status: DONE - 2026-08-05 ~14:45 CDT**
 
-Unit: **LTspice.app Resources/sinh.asc domain-safe .dc → pass=112** — BV
-atanh≡½log ±0.99 (authored ±1.01 poles deferred). DoD broad-differential
-box stays open. SHIPPABLE? **NO**
+Unit: **Educational PowerAmpLayout A=0.2..0.7 → pass=113** — layout TIP121/TIP127
++ sibling `.lib` `.tran 10m` higher-A step members (≠ PowerAmp.asc A-step 5m).
+Tip had Resources/sinh as pass=112. DoD broad-differential box stays open.
+SHIPPABLE? **NO** (named-device ≥95%, broad differential still open).
 
 **SHIPPABLE?** **NO**
 
+---
 
+### 2026-08-05 — PowerAmpLayout A=0.2..0.7 TRAN → pass=113 (§DoD)
+
+**What I did**
+- Dug Applications/Documents/contrib for non-blocked cells: Applications
+  non-vendor leftovers=0; Documents Draft10 UOA2 same-deck B_U* triangle
+  fails LTspice timestep; TLINE-inv nRms≈0.28; HalfSlope Laplace stripped to
+  G=1; TwoTau s_xfer same-deck rejected; contrib exhausted (gd outs hollow).
+- Landed Educational `PAsystem/PowerAmpLayout.asc` authored `.tran 0 10m` +
+  `.step param A` members **A=0.2..0.7** (strip `.step`/`.four`; bake
+  `.param A=`). Same layout TIP121/TIP127 + sibling `.lib` as A=0.1; ≠
+  PowerAmp.asc Prefix-X / `.tran 5m` A-step cell. Speaker nets nRms=0 @
+  5%/15% (A=0.2 span≈3.8; A=0.7 span≈11). Tip Resources/sinh was pass=112 →
+  this cell is **pass=113**.
+- Evaluated AGENTS broad-differential box: still **unchecked** — remaining
+  deferred classes (LT1001 OTA wall, Draft10 UOA2, TLINE, SoftDiode Vp>0,
+  HalfSlope Laplace, ISO7637, Chan/NIGBT/FRA, ct19 INA, sinh authored ±1.01
+  poles, …) mean the representative matrix is not complete. SHIPPABLE? **NO**
+  until ND≥95% also proven.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` green
+- `scripts/differential-parity.sh` → SUMMARY pass=113 sibling=5 gap=0
+
+**Parity items**
+- Differential 🟡 **pass=113 · sibling=5 · gap=0**; DoD broad box unchecked.
+  SHIPPABLE? **NO**
+
+**Next step**
+- SoftDiode Vp>0 / Fc / ISO7637 / TLINE-inv / Draft10 / LT1001 walls; never
+  Chan/NIGBT/FRA. Named-device ≥95% remains Omar plaintext wall.
 
 ---
 
