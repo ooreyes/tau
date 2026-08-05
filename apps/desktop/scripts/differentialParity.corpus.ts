@@ -48,6 +48,8 @@ const CT_RLC_RINGING_ASC = join(REPO_ROOT, "Circuit_testing_v1", "08_tran_rlc_ri
 const CT_DIODE_DC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "04_dc_diode_curve.asc");
 /** Tau Circuit_testing_v1 — stepped RLOAD divider DC (≠ synthetic divider / source-step OP). */
 const CT_STEP_LOADED_ASC = join(REPO_ROOT, "Circuit_testing_v1", "05_step_loaded_divider.asc");
+/** Tau Circuit_testing_v1 — RC lowpass thermal .noise (≠ synthetic resistive divider noise). */
+const CT_NOISE_RC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "07_noise_rc_lowpass.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -275,7 +277,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -3641,6 +3643,67 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/07_noise_rc_lowpass.asc authored .noise (RC thermal) ---
+    // Tau-owned ASC: V1 AC 1 + R1=10k + C1=10n to GND. Authored
+    // `.noise V(out) V1 dec 16 10 1Meg`. Pure RC; zero models/subckts.
+    // Probe V(onoise) only — ideal V1 makes inoise hollow (span≈0), same as
+    // synthetic DIVIDER_NOISE which also extracts onoise alone. Distinct from
+    // resistive divider noise (no C; 1–1k), NoiseFigure/noise.asc/stepnoise
+    // (BJT), and help NoiseStep (.step R). Left step-loaded / 100W/IRFP /
+    // Documents Draft* / ISO7637 alone. Tip ct-step-loaded pass=86 → **pass=87**.
+    {
+      expect(existsSync(CT_NOISE_RC_ASC), `missing ${CT_NOISE_RC_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_NOISE_RC_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.noise, "07_noise_rc_lowpass.asc must author .noise").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "noise",
+        output: { node: parsed.noise!.output.pos, refNode: parsed.noise!.output.neg },
+        source: parsed.noise!.source,
+        startHz: parsed.noise!.sweep.startHz,
+        stopHz: parsed.noise!.sweep.stopHz,
+        pointsPerDecade: parsed.noise!.sweep.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^R1\b.+\b10000\b/im);
+      expect(deck.netlist).toMatch(/^C1\b.+\b1e-8\b/im);
+      expect(deck.netlist).toMatch(/\.noise\s+v\(out\)\s+V1\s+dec\s+16\s+10\s+1000000\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).not.toMatch(/^\.model\b/im);
+      const result = runPairedBatch("diff-ct-noise-rc", deck.netlist, [], {
+        skipSave: true,
+        extract: ["V(onoise)"],
+        ngspiceAliases: { "V(onoise)": "onoise_spectrum" },
+      });
+      const lt = result.ltspice.get("V(onoise)")!;
+      const ng = result.ngspice.get("V(onoise)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `ct-noise-rc ${JSON.stringify(comparison)}`).toBe(true);
+      // Thermal roll-off across 10–1Meg; absolute density ~nV/√Hz so span is tiny.
+      expect(comparison.referenceRange, "ct-noise-rc onoise non-hollow").toBeGreaterThan(1e-12);
+      cells.push({
+        analysis: "noise",
+        circuit: "ct-noise-rc",
+        topology: "Circuit_testing_v1/07_noise_rc_lowpass.asc R=10k C=10n (authored .noise V(out) V1 dec 16 10–1Meg)",
+        status: "pass",
+        note: `V(onoise) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toExponential(2)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3937,6 +4000,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=86 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=87 sibling=5 gap=0/);
   }, 240_000);
 });

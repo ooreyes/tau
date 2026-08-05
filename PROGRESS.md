@@ -9,16 +9,46 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:52 CDT**
+**Status: DONE - 2026-08-05 05:55 CDT**
 
-Unit: Waveform DoD — LTspice **`.plt` save/export** (round-trip with Open .plt).
-Base tip `10e7c58` pass=86. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `07_noise_rc_lowpass.asc` authored `.noise` → differential **pass=87**.
+```
+SUMMARY pass=87 sibling=5 gap=0
+noise ct-noise-rc … V(onoise) nRms=0
+```
+Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over waveform `.plt` tip `0a3f6c0`. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+### 2026-08-05 — ct 07_noise_rc_lowpass .noise → pass=87 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `07_noise_rc_lowpass.asc` authored
+  `.noise V(out) V1 dec 16 10 1Meg` (R=10k + C=10n): V(onoise) vs LTspice
+  nRms=0. Ideal V1 makes inoise hollow — probe onoise only (same as synthetic
+  DIVIDER_NOISE). Distinct from resistive divider noise, BJT NoiseFigure /
+  noise.asc / stepnoise, and help NoiseStep. Avoided Staff EE 100W/IRFP,
+  Documents Draft*, Settings/palette thrash. Rebased over `.plt` save tip.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2715 passed)
+- `scripts/differential-parity.sh` → SUMMARY pass=87 sibling=5 gap=0
+
+**Parity items**
+- Differential **pass=87** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Next honest differential (e.g. ct TF / OP) or non-wall named-device leftovers.
+  Leave IRFP/Draft*/ISO7637/Settings alone.
+
 
 
 ### 2026-08-05 — LTspice .plt save/export (§waveform DoD)
@@ -45,8 +75,6 @@ Base tip `10e7c58` pass=86. SHIPPABLE? **NO**
 
 **Next step**
 - Continue 22: right-click math, or non-wall named-device leftovers.
-
-
 
 
 
