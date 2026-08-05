@@ -2,19 +2,14 @@
 
 **Status: DONE - 2026-08-05 ~09:45 CDT**
 
-<<<<<<< HEAD
-Unit: Educational **dimmer.asc** authored `.tran` + `.step Rdim` → differential
-**pass=103** (DIAC/TRIAC load-power; gate v(b) / Rdim≥200k deferred).
-Worktree `Tau-wt-diff-103` rebased over EveryCircuit/waveform tip. Left SoftDiode /
-PowerAmp / Staff EE / Settings / EveryCircuit fills alone. SHIPPABLE? **NO**
-=======
 Unit: EveryCircuit library — **push-button** + **SPDT** + **photodiode**
 (honest R / dual-R / D+Iph). Worktree `Tau-wt-ec-lib`. Not full EC parity.
 SHIPPABLE? **NO**
 
->>>>>>> f6c7128 (auto: push-button + SPDT + photodiode palette (§EveryCircuit))
 
 **SHIPPABLE?** **NO**
+
+
 
 
 ---
