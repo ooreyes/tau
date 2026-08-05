@@ -173,8 +173,8 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-04):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=22 · sibling=5 · gap=1 on stdout: prior RC/divider/curvetrace/
-      NoiseFigure + Educational noise.asc, expanded `.step` families,
+      pass=23 · sibling=5 · gap=1 on stdout: prior RC/divider/curvetrace/
+      NoiseFigure + Educational noise.asc + Cohn.asc AC, expanded `.step` families,
       steptemp/stepmodelparam, native emitNativeStep `.step` card, Colpitts
       AC, Class-D AC/OP/DC (V1 rail). Sibling TRAN/meas proofs remain
       Colpitts/Class-D/Efficiency/special devices. Remaining gap: Class-D

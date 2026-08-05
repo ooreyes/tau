@@ -1576,7 +1576,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-04):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure pass → **pass=22 · sibling=5 · gap=1**: prior cells
+  (truth). Gap-closure pass → **pass=23 · sibling=5 · gap=1**: prior cells
   plus Educational noise.asc, steptemp/stepmodelparam, native step_expand,
   Colpitts AC, Class-D AC/OP/DC. Remaining gap: Class-D noise/tf (synthetic
   probes pass; fixture authored .tran/.meas only). DoD broad-differential

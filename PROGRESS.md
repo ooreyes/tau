@@ -9,18 +9,31 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 01:14 CDT**
+**Status: DONE - 2026-08-05 01:16 CDT**
 
-Unit: Nested `.lib` attach (AD8310→UniversalOpAmp2/level2) → named-device **47.3%**.
+Unit: Educational Cohn.asc authored `.ac` differential → **pass=23**.
 ```
-NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1201 refuse=1340 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.3%
+SUMMARY pass=23 sibling=5 gap=1
 ```
-Before 46.9%/1191 → +10 exact. Corpus matches product nested-lib walk. Soft
-epsilon / encrypted bare SYMBOL stay refuse. SHIPPABLE? **NO**
+Class-D noise/tf stays gap (no authored .noise/.tf). Named-device tip **47.3%**.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Cohn.asc AC differential → pass=23 (§DoD)
+
+**What I did**
+- Educational Cohn RLC filter authors `.ac oct 1000 10Meg 22Meg` with V(out);
+  paired LTspice/ngspice |V(out)| nRms=0. Class-D noise/tf remains gap.
+
+**Proof**
+- vitest differentialParity → SUMMARY pass=23 sibling=5 gap=1
+
+**Next**
+- Broaden matrix further; named-device soft epsilon / encrypted REF
+
 
 ### 2026-08-05 — Nested installed `.lib` attach → exact-rate 47.3% (§DoD)
 

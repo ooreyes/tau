@@ -46,6 +46,7 @@ const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
 const NOISEFIGURE_ASC = join(EDU, "NoiseFigure.asc");
 const NOISE_ASC = join(EDU, "noise.asc");
+const COHN_ASC = join(EDU, "Cohn.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -193,7 +194,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Class-D AC/OP/DC", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Cohn AC, Class-D AC/OP/DC", () => {
     let classDNoiseTfGapNote: string | undefined;
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
@@ -801,6 +802,45 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational Cohn.asc authored .ac (RLC filter; V1 already AC 2) ---
+    {
+      expect(existsSync(COHN_ASC), `missing ${COHN_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(COHN_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.ac, "Cohn.asc must author .ac").toBeTruthy();
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts).toEqual([]);
+      expect(deck.netlist).toMatch(/^V1\b.*\bAC\b/im);
+      const result = runPairedBatch("diff-cohn-ac", deck.netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!;
+      const ng = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, JSON.stringify(comparison)).toBe(true);
+      cells.push({
+        analysis: "ac",
+        circuit: "cohn",
+        topology: "Educational Cohn.asc RLC filter (authored .ac oct 10Meg–22Meg)",
+        status: "pass",
+        note: `|V(out)| nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -1087,7 +1127,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(22);
+    expect(passCount).toBeGreaterThanOrEqual(23);
     expect(gapCount).toBeGreaterThanOrEqual(1);
   }, 240_000);
 });
