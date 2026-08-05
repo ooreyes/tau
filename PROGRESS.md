@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:35 CDT**
+**Status: DONE - 2026-08-05 08:40 CDT**
 
-Unit: Waveform DoD — **DC sweep manual Y limits**.
-Worktree `Tau-wt-wave-dc-ylim` over `af00021` (pass=100). Settings locked.
+Unit: Waveform DoD — **Bode phase manual Y limits**.
+Worktree `Tau-wt-wave-phase-ylim` over `d8fc0d0` (pass=100). Settings locked.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -13,6 +13,29 @@ SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — Bode phase manual Y limits (§waveform DoD)
+
+**What I did**
+- AcPlot lower-pane Ymin/Ymax + Apply φY / Autoscale φY via
+  `parseManualYLimits` / `applyManualYToDomain`; Phase↔Group delay clears
+  manual (unit change). Worktree `Tau-wt-wave-phase-ylim` over `d8fc0d0`. Left
+  MC1648 / continue 39 Educational ASC, ct 19 OP, Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ axes wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2789 passed)
+- AcPlot Apply/Autoscale φY wiring
+
+**Parity items**
+- Waveform viewer 🟡 (Bode phase manual Y limits landed; transient pending).
+  Differential pass=100 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Transient numeric Y limits / non-wall ND. Leave Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — DC sweep manual Y limits (§waveform DoD)
 

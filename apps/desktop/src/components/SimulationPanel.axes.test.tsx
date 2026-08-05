@@ -346,6 +346,25 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(limits).toBeTruthy();
   });
 
+  it("Apply φY locks Bode phase axis; Autoscale φY restores autorange", () => {
+    const freqs = [10, 100, 1000, 10000];
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20, -40], phaseDeg: [0, -45, -90, -135] }],
+      warnings: [],
+    };
+    render(<AcPlot result={result} />);
+    expect(screen.getByLabelText("Bode phase Y limits")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Bode phase Y min"), { target: { value: "-90" } });
+    fireEvent.change(screen.getByLabelText("Bode phase Y max"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply Bode phase Y limits" }));
+    const autoscale = screen.getByRole("button", { name: "Autoscale Bode phase Y" });
+    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(autoscale);
+    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("Group delay toggle swaps the lower Bode pane to τ (s)", () => {
     // Linear phase φ = −360·f·τ0 → constant group delay τ0.
     const tau0 = 1e-3;

@@ -3736,6 +3736,10 @@ export function AcPlot({
   const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
   const [yLimitsError, setYLimitsError] = useState<string | null>(null);
+  const [phaseYMinDraft, setPhaseYMinDraft] = useState("");
+  const [phaseYMaxDraft, setPhaseYMaxDraft] = useState("");
+  const [phaseManualY, setPhaseManualY] = useState<ManualAxisLimits | null>(null);
+  const [phaseYLimitsError, setPhaseYLimitsError] = useState<string | null>(null);
   const magTicks = tickCountsFromSize(magSize);
   const phaseTicks = tickCountsFromSize(phaseSize);
   const detachedPhaseClipId = useId();
@@ -3797,13 +3801,17 @@ export function AcPlot({
     [plot, manualY],
   );
   const phaseDomain = useMemo<Viewport>(
-    () => ({
-      xMin: plot ? 10 ** plot.f0 : 1,
-      xMax: plot ? 10 ** plot.f1 : 10,
-      yMin: plot ? (lowerMode === "groupDelay" ? plot.tauYMin : plot.minPh) : -180,
-      yMax: plot ? (lowerMode === "groupDelay" ? plot.tauYMax : plot.maxPh) : 180,
-    }),
-    [plot, lowerMode],
+    () =>
+      applyManualYToDomain(
+        {
+          xMin: plot ? 10 ** plot.f0 : 1,
+          xMax: plot ? 10 ** plot.f1 : 10,
+          yMin: plot ? (lowerMode === "groupDelay" ? plot.tauYMin : plot.minPh) : -180,
+          yMax: plot ? (lowerMode === "groupDelay" ? plot.tauYMax : plot.maxPh) : 180,
+        },
+        phaseManualY,
+      ),
+    [plot, lowerMode, phaseManualY],
   );
   const magVp = usePlotViewport({
     domain: magDomain,
@@ -3820,7 +3828,7 @@ export function AcPlot({
     domain: phaseDomain,
     xScale: freqScale,
     resetKey: plot && success
-      ? `${freqScale}:${lowerMode}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
+      ? `${freqScale}:${lowerMode}:${phaseManualY ? `${phaseManualY.yMin}:${phaseManualY.yMax}` : "auto"}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
       : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
@@ -3830,7 +3838,7 @@ export function AcPlot({
     domain: phaseDomain,
     xScale: freqScale,
     resetKey: plot && success
-      ? `detached:${freqScale}:${lowerMode}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
+      ? `detached:${freqScale}:${lowerMode}:${phaseManualY ? `${phaseManualY.yMin}:${phaseManualY.yMax}` : "auto"}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
       : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
@@ -4204,7 +4212,13 @@ export function AcPlot({
             size="sm"
             variant={lowerMode === "phase" ? "default" : "outline"}
             aria-pressed={lowerMode === "phase"}
-            onClick={() => setLowerMode("phase")}
+            onClick={() => {
+              setLowerMode("phase");
+              setPhaseManualY(null);
+              setPhaseYLimitsError(null);
+              setPhaseYMinDraft("");
+              setPhaseYMaxDraft("");
+            }}
           >
             Phase
           </Button>
@@ -4212,7 +4226,13 @@ export function AcPlot({
             size="sm"
             variant={lowerMode === "groupDelay" ? "default" : "outline"}
             aria-pressed={lowerMode === "groupDelay"}
-            onClick={() => setLowerMode("groupDelay")}
+            onClick={() => {
+              setLowerMode("groupDelay");
+              setPhaseManualY(null);
+              setPhaseYLimitsError(null);
+              setPhaseYMinDraft("");
+              setPhaseYMaxDraft("");
+            }}
           >
             Group delay
           </Button>
@@ -4336,6 +4356,87 @@ export function AcPlot({
       {yLimitsError && (
         <div className="expr-error" role="alert">
           {yLimitsError}
+        </div>
+      )}
+      <div className="meter-row analysis-meter" aria-label="Bode phase Y limits">
+        <label className="axis-limit-field">
+          Ymin
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={phaseYMinDraft}
+            aria-label="Bode phase Y min"
+            placeholder={
+              plot
+                ? String(lowerMode === "groupDelay" ? plot.tauYMin : plot.minPh)
+                : lowerMode === "groupDelay"
+                  ? "0"
+                  : "-180"
+            }
+            onChange={(e) => {
+              setPhaseYMinDraft(e.currentTarget.value);
+              if (phaseYLimitsError) setPhaseYLimitsError(null);
+            }}
+          />
+        </label>
+        <label className="axis-limit-field">
+          Ymax
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={phaseYMaxDraft}
+            aria-label="Bode phase Y max"
+            placeholder={
+              plot
+                ? String(lowerMode === "groupDelay" ? plot.tauYMax : plot.maxPh)
+                : lowerMode === "groupDelay"
+                  ? "1e-3"
+                  : "180"
+            }
+            onChange={(e) => {
+              setPhaseYMaxDraft(e.currentTarget.value);
+              if (phaseYLimitsError) setPhaseYLimitsError(null);
+            }}
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label="Apply Bode phase Y limits"
+          disabled={!plot}
+          onClick={() => {
+            const parsed = parseManualYLimits(phaseYMinDraft, phaseYMaxDraft);
+            if (!parsed.ok) {
+              setPhaseYLimitsError(parsed.error);
+              return;
+            }
+            setPhaseManualY(parsed.limits);
+            setPhaseYLimitsError(null);
+          }}
+        >
+          Apply φY
+        </Button>
+        <Button
+          size="sm"
+          variant={phaseManualY ? "default" : "outline"}
+          aria-label="Autoscale Bode phase Y"
+          aria-pressed={!phaseManualY}
+          disabled={!plot}
+          onClick={() => {
+            setPhaseManualY(null);
+            setPhaseYLimitsError(null);
+            setPhaseYMinDraft("");
+            setPhaseYMaxDraft("");
+          }}
+        >
+          Autoscale φY
+        </Button>
+      </div>
+      {phaseYLimitsError && (
+        <div className="expr-error" role="alert">
+          {phaseYLimitsError}
         </div>
       )}
       {cursorsOn && (
