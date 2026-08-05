@@ -302,6 +302,31 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/D1 \S+ \S+ TAU_DIODE/);
   });
 
+  it("maps top-level document ideal D(Ron=/Ilimit=) onto sidiode A-instances", () => {
+    // HandsFreePreamp ElectretMic path: on-schematic ideal diode must not stay
+    // as Berkeley D (ngspice ignores Ron/Ilimit → waveform miss).
+    const components = [
+      component("isource", "I1", "1u", 0, 32),
+      component("diode", "D2", "ElectretMic", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const directives = [".model ElectretMic D(Ron=1.15K Ilimit=400u)"];
+    const ng = buildSpiceDeck({ components, wires, directives }, { kind: "op" });
+    expect(ng.netlist).toMatch(/\.model\s+ElectretMic\s+sidiode\(Ron=1\.15K Ilimit=400u\)/i);
+    expect(ng.netlist).toMatch(/^A__tau_D2\s+\S+\s+\S+\s+ElectretMic\b/m);
+    expect(ng.netlist).not.toMatch(/^D2\s+/m);
+    expect(ng.netlist).not.toMatch(/@d2\[id\]/i);
+    const lt = buildSpiceDeck(
+      { components, wires, directives },
+      { kind: "op" },
+      { idealDiodeAsSidiode: false },
+    );
+    expect(lt.netlist).toMatch(/\.model\s+ElectretMic\s+D\(Ron=1\.15K Ilimit=400u\)/i);
+    expect(lt.netlist).toMatch(/^D2\s+\S+\s+\S+\s+ElectretMic\b/m);
+  });
+
   it("refuses an unknown diode part name rather than plotting the generic diode", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

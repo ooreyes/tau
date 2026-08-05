@@ -34,7 +34,7 @@ import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductorRefusalMessage, isCoreInductor } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
 import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
-import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL_REFUSAL_MARKER, TAU_NOISE_REFUSAL_MARKER, translateSwitchModelCard } from "./userModelLibrary";
+import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL_REFUSAL_MARKER, TAU_NOISE_REFUSAL_MARKER, translateIdealDiodeDeckLines, translateSwitchModelCard } from "./userModelLibrary";
 import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 import { assertSimulationIntegrity } from "../simulation/simulationIntegrity";
@@ -219,6 +219,13 @@ export type BuildSpiceDeckOptions = {
    * Only the dedicated native-step path passes true.
    */
   emitNativeStep?: boolean;
+  /**
+   * Map LTspice ideal/soft diodes (`D(Ron=/Ilimit=/Vfwd=…)`) onto ngspice
+   * `sidiode` + `A…` instances. Default **true** (Tau's ngspice path). Pass
+   * **false** for dual-deck LTspice comparison that must keep authored
+   * `D(Ron=…)` cards byte-stable.
+   */
+  idealDiodeAsSidiode?: boolean;
 };
 
 export function buildSpiceDeck(
@@ -838,6 +845,25 @@ export function buildSpiceDeck(
     const ohms = parseWireResistanceOhms(wire.resistance ?? "0");
     if (!(ohms > 0)) continue;
     lines.push(`RWIRE${wireRIndex} ${nodeA} ${nodeB} ${ohms}`);
+  }
+
+  // Top-level ideal/soft diodes: document `.model ElectretMic D(Ron=… Ilimit=…)`
+  // must become ngspice `sidiode` + `A…` the same way vendor-subckt interiors
+  // already do. Without this, Ron/Ilimit are ignored on Berkeley D and circuits
+  // like Educational/PAsystem/HandsFreePreamp.asc diverge from LTspice.
+  if (options.idealDiodeAsSidiode !== false) {
+    const rewritten = translateIdealDiodeDeckLines(lines);
+    lines.length = 0;
+    lines.push(...rewritten);
+    const instanceNames = new Set(
+      lines
+        .map((line) => line.trim().split(/\s+/)[0]?.toLowerCase())
+        .filter((name): name is string => Boolean(name) && !name.startsWith("*") && !name.startsWith(".")),
+    );
+    for (let i = deviceCurrents.length - 1; i >= 0; i -= 1) {
+      const ref = /^@([^\[]+)/.exec(deviceCurrents[i]!.vector)?.[1]?.toLowerCase();
+      if (ref && !instanceNames.has(ref)) deviceCurrents.splice(i, 1);
+    }
   }
 
   // A semiconductor's own current exists only if the deck asks for it by name.

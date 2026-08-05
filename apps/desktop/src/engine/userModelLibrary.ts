@@ -228,8 +228,10 @@ function parseIdealDiodeInstanceTail(tail: string): {
 /** LTspice's piecewise-linear diode and ngspice's bundled `sidiode` code
  * model implement the same Ron/Roff/Vfwd/Vrev/Rrev/current-limit/quadratic-
  * shoulder contract. Rename the model type and its instances; do not feed the
- * parameters to ngspice's unrelated Berkeley diode and accept its warnings. */
-function translateIdealDiodes(lines: string[]): string[] {
+ * parameters to ngspice's unrelated Berkeley diode and accept its warnings.
+ * Exported so top-level document `.model … D(Ron=/Ilimit=…)` cards get the same
+ * rewrite as vendor-subckt interiors ({@link normalizeSubcktInterior}). */
+export function translateIdealDiodeDeckLines(lines: string[]): string[] {
   const usedModelNames = new Set<string>();
   for (const line of lines) {
     const name = /^\s*\.model\s+(\S+)/i.exec(line)?.[1];
@@ -732,7 +734,7 @@ function normalizeSubcktInterior(block: string): string {
       return translateLtspiceOta(out, subcktName)
         .flatMap((translated) => translatePassiveParasitics(translated, subcktName));
     });
-  return translateIdealDiodes(normalized)
+  return translateIdealDiodeDeckLines(normalized)
     .join("\n");
 }
 

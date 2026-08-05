@@ -1703,7 +1703,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=100 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=101 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
@@ -1778,7 +1778,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Educational/**MC1648.asc** authored `.tran` (ECL VCO; on-schematic NP/DD;
   v(out)/v(bias)/v(agc) nRms≈0.138/0.006/0.007 @ rmsTol=0.15/0.02 maxTol=0.30/0.05
   startup-envelope; tank LC phase-skew deferred; ≠ phaseshift AC /
-  SampleAndHold / ct digital).
+  SampleAndHold / ct digital) plus
+  Educational/PAsystem/**HandsFreePreamp.asc** authored `.tran` (ElectretMic
+  on-schematic ideal D↔sidiode dual-deck + 2N5458 NJF + bundled 2N3906;
+  v(out) nRms≈0.0005 nMax≈0.0014 span≈0.41; top-level
+  `translateIdealDiodeDeckLines`; ≠ SoftDiodeRecovery / PowerAmp TIP / audioamp).
   ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
   gr_del
   deferred (all-pass |V|≈1

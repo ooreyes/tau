@@ -1,9 +1,15 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:40 CDT**
+**Status: DONE - 2026-08-05 08:42 CDT**
 
-Unit: Waveform DoD — **Bode phase manual Y limits**.
-Worktree `Tau-wt-wave-phase-ylim` over `d8fc0d0` (pass=100). Settings locked.
+Unit: Educational/PAsystem `HandsFreePreamp.asc` authored `.tran` → differential **pass=101**.
+```
+SUMMARY pass=101 sibling=5 gap=0
+tran handsfree-preamp … v(out) nRms≈0.0005
+```
+Top-level ideal D→sidiode (`translateIdealDiodeDeckLines`); dual-deck LT↔NG.
+Worktree `Tau-wt-diff-101` rebased onto `5448a9f`. Left SoftDiodeRecovery /
+PowerAmp / Staff EE transient-Y WIP / Settings alone.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -11,6 +17,36 @@ SHIPPABLE? **NO**
 
 
 ---
+
+### 2026-08-05 — Educational HandsFreePreamp .tran → pass=101 (§DoD)
+
+**What I did**
+- Educational/PAsystem `HandsFreePreamp.asc` authored `.tran 10m`: ElectretMic
+  on-schematic ideal `D(Ron=/Ilimit=)` + `2N5458` NJF + bundled `2N3906`.
+- Engine: top-level document ideal diodes now get the same `sidiode`/`A…`
+  rewrite as vendor-subckt interiors (`translateIdealDiodeDeckLines` in
+  `buildSpiceDeck`; `idealDiodeAsSidiode:false` for dual-deck LTspice).
+- Prior miss was Berkeley-D ignoring Ron/Ilimit (nRms≈0.34) — not a topology wall.
+  Worktree `Tau-wt-diff-101` over `d152c64`. Left SoftDiodeRecovery / PowerAmp
+  TIP / Staff EE / Settings / Draft* alone.
+
+**Files**
+- `apps/desktop/src/engine/userModelLibrary.ts`
+- `apps/desktop/src/engine/spiceNetlist.ts` (+ unit test)
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=101 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2782 passed)
+
+**Parity items**
+- Differential **pass=101** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Educational non-wall leftovers (Electrometer LT1001 / ISO7637 / Fc /
+  gr_del / walls) or transient numeric Y limits. Leave Staff EE transient-Y /
+  Settings alone.
 
 
 
