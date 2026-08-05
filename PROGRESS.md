@@ -9,10 +9,40 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:12 CDT**
+**Status: DONE - 2026-08-04 23:15 CDT**
 
-Unit: Cupertino HIG chrome icons + quiet warning chrome (defer light palette tokens to Anduril Light). Not whole-app shippable.
+Unit: PM overnight priority stack (docs only). Product SHIPPABLE = NO. Next product P0 = Design unblock ShellPanels Lucide typecheck.
 
+
+---
+
+### 2026-08-04 — PM overnight priority stack (DoD vs student UX)
+
+**What I did**
+- Rewrote `~/Desktop/TAU-MORNING-STATUS.md` with a cut-scope overnight stack.
+- Enforced: never DONE SHIPPABLE without full AGENTS DoD; unsigned smoke ✅ ≠ shippable;
+  named-device last proven **15.1% / HF 103** until new script stdout; morning success =
+  typecheck + honest blockers + Tau openable — not fake 95% exact-rate.
+
+**Priority stack**
+- **P0 Design** — unblock typecheck (ShellPanels Lucide half-migration)
+- **P0 Overnight DoD** — re-measure named-device HF (script stdout); Staff EE only if HF ≫10 after
+- **P1 AI platform** — Student AI seamless (auto-download / cloud consent, ZERO localhost port UX)
+- **P1 Design** — Anduril light visual QA
+- **P2 Bench** — EE trust copy (no collision with Settings AI)
+- **P3** — differential gaps / directives — only if engine free
+
+**Files**
+- `~/Desktop/TAU-MORNING-STATUS.md`, `PROGRESS.md` (this entry)
+
+**Tests / proof**
+- Docs only. Live `tsc` still red on ShellPanels missing Lucide symbols (P0).
+
+**Parity items**
+- No DoD box flipped. Shippable remains NO.
+
+**Next step**
+- Design lands typecheck green; Overnight reprints `named-device-fidelity.sh`.
 
 ---
 
