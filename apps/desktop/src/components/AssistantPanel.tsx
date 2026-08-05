@@ -39,8 +39,14 @@ import type { AssistantRunMetrics } from "../lib/assistantProvider";
 import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "../lib/localMlxAssistant";
 import { GeminiAssistant, GEMINI_MODEL_PRESETS } from "../lib/geminiAssistant";
 import { useGeminiApiKey } from "../lib/providerApiKey";
-import { getLocalAiStatus, startLocalAi, LOCAL_AI_PRESETS, type LocalAiStatus } from "../lib/localAiRuntime";
+import { getLocalAiStatus, LOCAL_AI_PRESETS, type LocalAiStatus } from "../lib/localAiRuntime";
+import {
+  ensureLocalAi,
+  studentFacingLocalAiDetail,
+} from "../lib/localAiEnsure";
 import { loadCustomLocalAiModels } from "../lib/localAiModels";
+import { hasCloudAiConsent, cloudAiConsentRefusal } from "../lib/cloudAiConsent";
+import { useCloudAiConsent } from "../lib/cloudAiConsentHooks";
 import { renderMiniMarkdown } from "../lib/miniMarkdown";
 import {
   clearAssistantRecovery,
@@ -299,15 +305,18 @@ export function AssistantPanel({
   persistRef.current = { memoryKey, activeConversationId, messages };
   const memoryKeyRef = useRef(memoryKey);
 
-  // First-run local AI onboarding: proactively surface setup instead of
-  // letting the first send() fail. Only tracked for the local-mlx provider -
-  // switching to Anthropic drops the status so the card never lingers.
+  // First-run local AI: auto install → download → load so chat just works.
+  const cloudConsent = useCloudAiConsent();
   const [localAiStatus, setLocalAiStatus] = useState<LocalAiStatus | null>(null);
   const [localAiBusy, setLocalAiBusy] = useState(false);
+  const [localAiNotice, setLocalAiNotice] = useState<string | null>(null);
+  const autoEnsureKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (preferences.provider !== "local-mlx") {
       setLocalAiStatus(null);
+      setLocalAiNotice(null);
+      autoEnsureKeyRef.current = null;
       return;
     }
     let cancelled = false;
@@ -319,8 +328,6 @@ export function AssistantPanel({
     return () => { cancelled = true; };
   }, [preferences.provider, preferences.localModel]);
 
-  // Weights load asynchronously in native code - poll only while starting,
-  // matching the Settings sheet's own local-runtime polling (ShellPanels.tsx).
   useEffect(() => {
     if (preferences.provider !== "local-mlx" || localAiStatus?.state !== "starting") return;
     let cancelled = false;
@@ -343,39 +350,57 @@ export function AssistantPanel({
   const selectedLocalAiPreset = localAiPresets.find((preset) => preset.id === preferences.localModel)
     ?? LOCAL_AI_PRESETS.find((preset) => preset.id === preferences.localModel)
     ?? LOCAL_AI_PRESETS[1];
-  // Do not send project/circuit context until the native lifecycle boundary
-  // confirms this exact process is one Tau started. A different process can
-  // bind the fixed loopback port and return a perfectly plausible `/models`
-  // response; reachability alone is not an ownership/authentication proof.
   const localAiCanSend = preferences.provider !== "local-mlx"
     || (localAiStatus?.state === "ready" && localAiStatus.managed);
-  // Native start/download can fail synchronously (e.g. a non-Tauri browser
-  // runtime - see localAiRuntime.startLocalAi) as well as via a returned
-  // "error" status; installed stays false in both the browser fallback and a
-  // native Mac without the MLX runtime present, so gate the button on it
-  // rather than only on state to avoid offering a button that can only throw.
   const showLocalAiSetup = preferences.provider === "local-mlx" && localAiStatus !== null && localAiStatus.state !== "ready";
   const showLocalAiStartButton = showLocalAiSetup
-    && localAiStatus!.installed
-    && (localAiStatus!.state === "stopped" || localAiStatus!.state === "error");
+    && !localAiBusy
+    && localAiStatus!.state !== "starting"
+    && (localAiStatus!.installed || localAiStatus!.state === "error" || localAiStatus!.state === "stopped");
+  const localSetupDetail = localAiNotice
+    ?? studentFacingLocalAiDetail(localAiStatus, undefined, {
+      modelId: preferences.localModel,
+      downloading: localAiBusy && !selectedLocalAiPreset.downloaded,
+    });
 
   const startLocalAiSetup = useCallback(async () => {
     setLocalAiBusy(true);
+    setLocalAiNotice(null);
     try {
-      const next = "custom" in selectedLocalAiPreset
-        ? await startLocalAi(preferences.localModel, !selectedLocalAiPreset.downloaded, selectedLocalAiPreset.repository)
-        : await startLocalAi(preferences.localModel, !selectedLocalAiPreset.downloaded);
-      setLocalAiStatus(next);
+      const result = await ensureLocalAi({
+        modelId: preferences.localModel,
+        downloaded: selectedLocalAiPreset.downloaded,
+        repository: "custom" in selectedLocalAiPreset ? selectedLocalAiPreset.repository : undefined,
+        allowDownload: true,
+      });
+      setLocalAiStatus(result.status);
+      if (result.decision.type === "refuse" || result.decision.type === "unavailable") {
+        setLocalAiNotice(result.decision.detail);
+      }
     } catch (error) {
-      setLocalAiStatus((prev) => (prev ? {
-        ...prev,
-        state: "error",
-        detail: error instanceof Error ? error.message : "Could not start the local MLX runtime.",
-      } : prev));
+      const message = error instanceof Error ? error.message : "Could not start on-device AI.";
+      setLocalAiStatus((prev) => (prev ? { ...prev, state: "error", detail: message } : prev));
+      setLocalAiNotice(message);
     } finally {
       setLocalAiBusy(false);
     }
   }, [preferences.localModel, selectedLocalAiPreset]);
+
+  useEffect(() => {
+    if (preferences.provider !== "local-mlx" || !localAiStatus || localAiBusy) return;
+    if (localAiStatus.state === "ready" || localAiStatus.state === "starting") return;
+    if (!localAiStatus.installed && !localAiStatus.managed && localAiStatus.state === "stopped") {
+      const key = `unavailable:${preferences.localModel}`;
+      if (autoEnsureKeyRef.current === key) return;
+      autoEnsureKeyRef.current = key;
+      setLocalAiNotice("Open the Tau Mac app to use on-device AI. No account or API key needed.");
+      return;
+    }
+    const key = `${preferences.localModel}:${localAiStatus.state}:${localAiStatus.installed}`;
+    if (autoEnsureKeyRef.current === key) return;
+    autoEnsureKeyRef.current = key;
+    void startLocalAiSetup();
+  }, [preferences.provider, preferences.localModel, localAiStatus, localAiBusy, startLocalAiSetup]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -486,8 +511,8 @@ export function AssistantPanel({
       return;
     }
     if (!text || streaming || !localAiCanSend
-      || (preferences.provider === "anthropic" && !apiKey)
-      || (preferences.provider === "gemini" && !geminiAssistant)) return;
+      || (preferences.provider === "anthropic" && (!apiKey || !hasCloudAiConsent()))
+      || (preferences.provider === "gemini" && (!geminiAssistant || !hasCloudAiConsent()))) return;
     setError(null);
     setRetryPrompt(null);
 
@@ -798,7 +823,10 @@ export function AssistantPanel({
   };
   const needsCloudKey = (preferences.provider === "anthropic" && !apiKey)
     || (preferences.provider === "gemini" && !geminiKey);
+  const needsCloudConsent = (preferences.provider === "anthropic" || preferences.provider === "gemini")
+    && !cloudConsent.consented;
   const missingKeyProvider = preferences.provider === "gemini" ? "Gemini" : "Anthropic";
+  const cloudBlocked = needsCloudKey || needsCloudConsent;
 
   return (
     <aside
@@ -924,12 +952,16 @@ export function AssistantPanel({
         </div>
       </header>
 
-      {needsCloudKey ? (
+      {cloudBlocked ? (
         <div className="assistant-body">
           <div className="panel-empty">
             <div className="panel-empty-glyph" aria-hidden="true" />
-            <strong>No API Key</strong>
-            <span>{`Add a${missingKeyProvider === "Anthropic" ? "n" : ""} ${missingKeyProvider} API key in Settings to ask questions about this circuit.`}</span>
+            <strong>{needsCloudConsent ? "Cloud consent needed" : "API key needed"}</strong>
+            <span>
+              {needsCloudConsent
+                ? (cloudAiConsentRefusal() ?? "Open Settings, choose Cloud, and confirm you’re okay sending circuit questions to the cloud provider.")
+                : `Add a${missingKeyProvider === "Anthropic" ? "n" : ""} ${missingKeyProvider} API key in Settings to ask questions about this circuit.`}
+            </span>
             <Button size="sm" variant="outline" onClick={onOpenSettings}>Open Settings</Button>
           </div>
         </div>
@@ -944,7 +976,7 @@ export function AssistantPanel({
                   <span>{selectedLocalAiPreset.downloadMb.toLocaleString("en-US")} MB</span>
                 </div>
               </div>
-              <p className="assistant-setup-detail" role="status">{localAiStatus.detail}</p>
+              <p className="assistant-setup-detail" role="status">{localSetupDetail}</p>
               {showLocalAiStartButton && (
                 <div className="assistant-setup-actions">
                   <Button
@@ -953,7 +985,7 @@ export function AssistantPanel({
                     disabled={localAiBusy}
                     onClick={() => void startLocalAiSetup()}
                   >
-                    {selectedLocalAiPreset.downloaded ? "Start" : "Download & start"}
+                    {localAiBusy ? "Working…" : "Turn on"}
                   </Button>
                 </div>
               )}
