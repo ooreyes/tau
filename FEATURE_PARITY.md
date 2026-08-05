@@ -1636,7 +1636,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=91 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=92 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
@@ -1681,7 +1681,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   V(out)≈3.333 relErr≤1e-6; ≠ synthetic DIVIDER_OP 1:1 / ct 06_tf) plus
   Circuit_testing_v1/**02_tran_rc_pulse_meas.asc** authored `.tran` (R=1k C=1u
   PULSE 5 V; v(out)/v(in) nRms≈1e-4 / 0; .meas Vmax/Vavg vs LTspice
-  relErr≤2%; ≠ synthetic RC_TRAN / ct RLC ringing).
+  relErr≤2%; ≠ synthetic RC_TRAN / ct RLC ringing) plus
+  Circuit_testing_v1/**11_stress_rc_ladder.asc** authored `.ac` (8×R=1k
+  8×C=10n; v(out) nRms=0 / nMax=0 span≈1.00; ≠ ct 03 single-pole RC AC /
+  synthetic RC_AC).
   gr_del
   deferred (all-pass |V|≈1
   hollow). TwoTau / Draft8 Laplace brace-mangle deferred. Draft6 AD823 /

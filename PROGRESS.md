@@ -1,15 +1,48 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:37 CDT**
+**Status: DONE - 2026-08-05 06:39 CDT**
 
-Unit: Waveform DoD — **richer right-click math** (uramp / sgn on legend ContextMenu).
-Base tip `307456b` pass=91. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `11_stress_rc_ladder.asc` authored `.ac` → differential **pass=92**.
+```
+SUMMARY pass=92 sibling=5 gap=0
+ac ct-stress-rc-ladder … v(out) nRms=0.0000 nMax=0.0000 span=1.000
+```
+Named-device 48.1%. Worktree `Tau-wt-diff-92` — rebased over Staff EE AC/DC
+step PNG + uramp/sgn tips (`307456b` / `a06e149`). Left Settings alone.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — ct 11_stress_rc_ladder .ac → pass=92 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `11_stress_rc_ladder.asc` authored `.ac dec 12 10 1Meg`
+  (8×R=1k + 8×C=10n ladder; V1 AC 1): v(out) vs LTspice nRms=0 / nMax=0
+  span≈1.00. Distinct from ct 03 single-pole RC AC and synthetic RC_AC.
+  Educational leftovers (Wien/LT1001, Chan NonLinearTransformer, UOA3 refuse)
+  deferred. Rebased over Staff EE AC/DC step PNG + uramp/sgn. Left
+  IRFP/Draft*/Settings alone.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=92 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2736 passed)
+
+**Parity items**
+- Differential **pass=92** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue: Educational non-wall leftovers, ct 16/19, or waveform Y-log /
+  phase. Leave IRFP/Draft*/Settings alone.
+
 
 
 ### 2026-08-05 — richer right-click uramp/sgn (§waveform DoD)
@@ -59,7 +92,6 @@ Base tip `307456b` pass=91. Named-device 48.1%. Settings locked. SHIPPABLE? **NO
 
 **Next step**
 - Richer right-click / Y log / phase pane. Leave IRFP/Educational/Settings alone.
-
 
 
 

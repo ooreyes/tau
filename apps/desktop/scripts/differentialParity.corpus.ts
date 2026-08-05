@@ -58,6 +58,8 @@ const CT_TF_DIVIDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "06_tf_voltage_d
 const CT_OP_DIVIDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "01_op_voltage_divider.asc");
 /** Tau Circuit_testing_v1 — RC pulse + authored .meas (≠ synthetic RC_TRAN / ct RLC ringing). */
 const CT_TRAN_RC_PULSE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "02_tran_rc_pulse_meas.asc");
+/** Tau Circuit_testing_v1 — eight-pole RC ladder (≠ ct 03 single-pole RC AC). */
+const CT_STRESS_RC_LADDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "11_stress_rc_ladder.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -285,7 +287,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -3964,6 +3966,62 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/11_stress_rc_ladder.asc authored .ac (eight-pole RC) ---
+    // Tau-owned ASC: V1 PULSE+AC 1 + R1…R8=1k series + C1…C8=10n to GND.
+    // Authored `.ac dec 12 10 1Meg` (also authors .op/.tran — this cell proves AC).
+    // Distinct from ct 03 single-pole R=1k C=100n and synthetic RC_AC (C=1u).
+    // Pure R/C — zero models/subckts. Left Staff EE step-PNG / 100W/IRFP /
+    // Documents Draft* / Settings alone. Tip ct-rc-pulse pass=91 → **pass=92**.
+    {
+      expect(existsSync(CT_STRESS_RC_LADDER_ASC), `missing ${CT_STRESS_RC_LADDER_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_STRESS_RC_LADDER_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "11_stress_rc_ladder.asc must author .ac").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^V1\b.*\bAC\b/im);
+      expect(deck.netlist).toMatch(/^R1\b.+\b1000\b/im);
+      expect(deck.netlist).toMatch(/^R8\b.+\b1000\b/im);
+      expect(deck.netlist).toMatch(/^C1\b.+\b1(?:\.0+0*1)?e-8\b/im);
+      expect(deck.netlist).toMatch(/^C8\b.+\b1(?:\.0+0*1)?e-8\b/im);
+      expect(deck.netlist).toMatch(/\.ac\s+dec\s+12\s+10\s+1000000\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).not.toMatch(/^\.model\b/im);
+      // Probe v(out) only — v(in) is flat AC stimulus (hollow span).
+      const result = runPairedBatch("diff-ct-stress-rc-ladder-ac", deck.netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!;
+      const ng = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `ct-stress-rc-ladder ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "ct-stress-rc-ladder v(out) non-hollow").toBeGreaterThan(0.1);
+      cells.push({
+        analysis: "ac",
+        circuit: "ct-stress-rc-ladder",
+        topology: "Circuit_testing_v1/11_stress_rc_ladder.asc 8×R=1k 8×C=10n (authored .ac dec 12 10–1Meg)",
+        status: "pass",
+        note: `v(out) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4260,6 +4318,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=91 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=92 sibling=5 gap=0/);
   }, 240_000);
 });
