@@ -9,6 +9,18 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-04 20:58 CDT**
+
+Unit: P1.6 parse native ngspice `.meas`/`.four` log lines into the UI
+measurement/Fourier tables. Native `.step` emission deferred this unit:
+emitting `.step` while the TS re-run loop still drives each native deck
+would double-step, and consuming stepped multi-plots needs a larger
+transfer/UI slice than one run. Prefer native-parsed results when
+present; fall back to TS runners when the log has none. No fabricated
+numbers. Shippable? NO.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 20:54 CDT**
 
 Unit: Honest DoD corpus metric reframe + P1.6 `.meas`/`.four` deck

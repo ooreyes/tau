@@ -535,18 +535,24 @@ function App() {
     [directives, params],
   );
 
-  // Evaluate the document's `.meas` directives against the latest transient
-  // result. Recomputed only when the result or directives change; measurements
-  // chain by name through a scope seeded with the circuit's `.param` values.
+  // Prefer ngspice's own `.meas` printout when the native deck carried those
+  // cards and the engine log parsed cleanly (P1.6). Otherwise keep the TS
+  // runner against the returned waveform — never invent numbers.
   const measurements = useMemo<MeasResult[]>(() => {
     if (!analysis || !analysis.ok || directives.length === 0) return [];
+    if (analysis.nativeMeasurements && analysis.nativeMeasurements.length > 0) {
+      return analysis.nativeMeasurements;
+    }
     return runMeasurements(directives, analysis, params.scope, params.funcs);
   }, [analysis, directives, params]);
 
-  // Evaluate the document's `.four` directive against the latest transient result
-  // (DC + harmonics + THD over the last period). Recomputed only on change.
+  // Prefer ngspice `.four` tables from the engine log when present (P1.6).
   const fourier = useMemo<FourierResult[]>(() => {
-    if (!analysis || !analysis.ok || directives.length === 0) return [];
+    if (!analysis || !analysis.ok) return [];
+    if (analysis.nativeFourier && analysis.nativeFourier.length > 0) {
+      return analysis.nativeFourier;
+    }
+    if (directives.length === 0) return [];
     const { four } = analysesFromDirectives(directives);
     if (!four) return [];
     return runFourier(analysis, four);

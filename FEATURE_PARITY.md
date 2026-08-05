@@ -985,7 +985,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   tests: an RC low-pass whose stepped R shifts the −3 dB corner (≥4 dB extra
   attenuation for 2× R), and a divider whose stepped top resistor tracks the ratio
   (Rt=1k→½·Vsweep, Rt=3k→¼·Vsweep). **NEXT:** native ngspice `.step` emission
-  (still TS re-run loop; `.meas`/`.four` deck emission landed first in P1.6);
+  (still TS re-run loop; `.meas`/`.four` deck emission landed first in P1.6;
+  native log parse into UI landed 2026-08-04 — `.step` still deferred because
+  emitting `.step` under the TS re-run loop would double-step, and multi-plot
+  consumption is a larger slice);
   wire a domain selector into the STEP tab (currently transient-only in the UI);
   per-trace pick in the overlay legend.
 - ✅ `.four` **Fourier analysis** — **parser + solver + UI landed** (`simulation/fourier.ts`):
@@ -1001,9 +1004,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   last-period selection, signal resolution). `App.tsx` memoizes `runFourier` off
   the transient result; a **`FourierTable`** under the transient scope shows each
   output's THD + DC/fundamental/harmonic magnitudes (normalized to the fundamental).
-  **NEXT:** native ngspice `.four` result parsing into the UI table (deck
-  emission landed 2026-08-04 — cards now reach ngspice; TS `runFourier`
-  remains the displayed path until native log/vectors are consumed).
+  **P1.6 native path (2026-08-04):** deck emission + `parseNativeFourier` log
+  parse — UI prefers ngspice's printed table when present; TS `runFourier`
+  remains the fallback when the log has none.
 - 🟡 `.temp` **temperature set** — used 4× — `parseTempDirective` (°C, leading
   `.`/`!` + SI/negative tolerated, first value) in `io/directiveAnalysis.ts`;
   surfaced on `DirectiveAnalyses.temp`. `buildSpiceDeck` emits `.temp <°C>` from
@@ -1072,10 +1075,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   round-trips exactly. Optional windows are named fields; invalid or duplicate
   rows block Apply. Unsupported WHEN/TRIG/TARG forms and unrelated directives
   remain byte-for-byte in Expert until their dedicated controls land.
-  **P1.6 deck emission (2026-08-04):** domain-matched `.meas`/`.measure` cards
-  now ride in the native netlist after the analysis line (`measFourLinesFromDirectives`);
-  UI still evaluates via the TS runners until native measure log/vectors are
-  parsed. `.step` remains the TS re-run loop (next P1.6 slice).
+  **P1.6 deck emission + native log parse (2026-08-04):** domain-matched
+  `.meas`/`.measure`/`.four` cards ride in the native netlist after the analysis
+  line (`measFourLinesFromDirectives`); `parseNativeMeasurements` /
+  `parseNativeFourier` read ngspice's printed results from the engine message
+  log and `App.tsx` prefers those when present (TS runners remain the fallback).
+  `.step` remains the TS re-run loop — native `.step` emission deferred (would
+  double-step under that loop; multi-plot consumption is a larger unit).
 - ✅ **DC operating point annotation on schematic** (show node V / device I
   in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels
   every non-ground net with its DC voltage (cyan, at the net's

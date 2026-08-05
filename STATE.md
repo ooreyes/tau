@@ -5,14 +5,16 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 20:54 CDT - DoD corpus metric honesty landed
-(success ≥79 + refusal-only remainder; no fake 80). P1.6 `.meas`/`.four`
-deck emission landed; UI still TS; `.step` still re-run loop. Canonical
-82/81/79/79; CAPABILITY 79/3/0/0. Completion RETRACTED. Shippable? NO.
+**Status:** IDLE 2026-08-04 21:00 CDT - P1.6 native `.meas`/`.four` log
+parse into UI landed (`parseNativeMeasurements`/`parseNativeFourier`);
+App prefers ngspice printout when present, TS fallback otherwise.
+Native `.step` emission still deferred (TS re-run would double-step;
+multi-plot consumption larger). Canonical still 82/81/79/79 expected.
+Completion RETRACTED. Shippable? NO.
 
-**Next unit:** P1.6 native `.step` emission and/or parse native `.meas`/
-`.four` into UI; authored-analysis differential parity / full-recursive
-capability ceilings.
+**Next unit:** P1.6 native `.step` single-deck emission + multi-plot
+consumption (honest; no emit under TS re-run); authored-analysis
+differential parity / full-recursive capability ceilings.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.

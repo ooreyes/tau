@@ -12,6 +12,8 @@ import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVo
 import { primaryBranches, runOperatingPoint } from "./operatingPoint";
 import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
 import { previewChargeDefinedCapacitorMessage, previewNegativeCapacitorMessage } from "../schematic/behavioralCapacitor";
+import type { FourierResult } from "./fourier";
+import type { MeasResult } from "./measure";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -87,6 +89,17 @@ export type AnalysisResult =
       stats: AnalysisStats;
       warnings: string[];
       circuit: ExtractedCircuit;
+      /**
+       * `.meas` rows parsed from ngspice's message log when the native deck
+       * carried those cards (P1.6). Absent/empty means the UI should keep using
+       * the TypeScript measurement runner against the returned waveform.
+       */
+      nativeMeasurements?: MeasResult[];
+      /**
+       * `.four` tables parsed from ngspice's message log (P1.6). Absent/empty
+       * keeps the TypeScript Fourier path as the displayed source.
+       */
+      nativeFourier?: FourierResult[];
     }
   | {
       ok: false;

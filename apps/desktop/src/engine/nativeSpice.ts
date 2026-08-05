@@ -19,6 +19,7 @@ import {
   type DcSweepSpec,
 } from "../simulation/dcSweep";
 import { formatOutput, unitFor, type TfResult, type TfSpec } from "../simulation/transferFunction";
+import { parseNativeFourier, parseNativeMeasurements } from "../simulation/nativeMeasFour";
 
 interface NativeVector {
   name: string;
@@ -154,6 +155,10 @@ export async function runNativeTransient(
   // describes the samples that actually came back, and equals the requested
   // step when the grid is uniform.
   const span = stopTime - (time.real[0] ?? 0);
+  // P1.6: prefer ngspice's own `.meas` / `.four` printout when the deck
+  // carried those cards. Empty means the UI keeps the TS runners.
+  const nativeMeasurements = parseNativeMeasurements(execution.result.messages);
+  const nativeFourier = parseNativeFourier(execution.result.messages);
   return {
     ok: true,
     title: "ngspice transient",
@@ -169,6 +174,8 @@ export async function runNativeTransient(
     },
     warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
     circuit: execution.deck.circuit,
+    ...(nativeMeasurements.length > 0 ? { nativeMeasurements } : {}),
+    ...(nativeFourier.length > 0 ? { nativeFourier } : {}),
   };
 }
 
