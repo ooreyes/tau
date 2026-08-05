@@ -31,6 +31,7 @@ import { summarizeCorpus, formatCorpusReport, summarizeCorpusCapability, formatC
 import { opampIdentity } from "../src/engine/opampModel";
 import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
 import { ltspiceLibRoots } from "./ltspiceLibRoot";
+import { resolveInstalledAsyPath } from "../src/io/ltspiceSymbolResolve";
 import { nativeWorkerPaths, runNativeSpiceWorker } from "./nativeSpiceWorker";
 
 const HOME = homedir();
@@ -148,6 +149,16 @@ function siblingResolver(parentDir: string) {
 /** Read only the user's installed/staged LTspice `.asy` metadata. The ASC text
  * usually omits Value2/SpiceModel defaults, but those fields select the real
  * vendor subcircuit and file. No third-party bytes are copied into Tau. */
+function cacheSymbolMetadata(relativeSymbol: string, parsed: AsySymbol | null): AsySymbol | null {
+  const key = relativeSymbol.toLowerCase();
+  symbolMetadataCache.set(key, parsed);
+  const leafKey = basename(relativeSymbol).toLowerCase();
+  if (leafKey !== key && !symbolMetadataCache.has(leafKey)) {
+    symbolMetadataCache.set(leafKey, parsed);
+  }
+  return parsed;
+}
+
 function installedSymbolMetadata(symbolType: string): AsySymbol | null {
   const relativeSymbol = normalize(symbolType.replace(/[\\/]+/g, sep));
   if (
@@ -162,16 +173,10 @@ function installedSymbolMetadata(symbolType: string): AsySymbol | null {
     ...EXTRA_SYMBOL_ROOTS,
     ...ltspiceLibRoots().map((root) => join(root, "sym")),
   ];
-  for (const root of roots) {
-    const path = join(root, `${relativeSymbol}.asy`);
-    const rel = relative(root, path);
-    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
-    const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
-    symbolMetadataCache.set(key, parsed);
-    return parsed;
-  }
-  symbolMetadataCache.set(key, null);
-  return null;
+  const path = resolveInstalledAsyPath(roots, symbolType);
+  if (!path) return cacheSymbolMetadata(relativeSymbol, null);
+  const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
+  return cacheSymbolMetadata(relativeSymbol, parsed);
 }
 
 /** Extract only the selected vendor block from the user's model file. Parsing

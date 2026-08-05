@@ -232,6 +232,29 @@ describe("named-device recursive fidelity classification", () => {
     }), { skipNgspice: true })).toBe("hard_failure");
   });
 
+  it("never hides hard_failure behind encryptedDependent (fail-closed)", () => {
+    // encryptedDependent may only rebucket capability_refusal → encrypted.
+    // Import/validate/unexpected deck failures stay hard_failure even when the
+    // schematic also names an encrypted ModelFile — otherwise HF→0 can be faked.
+    expect(classifyNamedDeviceBucket(row({
+      deckBuilt: false,
+      opConverged: false,
+      error: "deck: unexpected boom",
+    }), { encryptedDependent: true, skipNgspice: true })).toBe("hard_failure");
+    expect(classifyNamedDeviceBucket(row({
+      imported: false,
+      validated: false,
+      deckBuilt: false,
+      opConverged: false,
+      error: "import: boom",
+    }), { encryptedDependent: true, skipNgspice: true })).toBe("hard_failure");
+    expect(classifyNamedDeviceBucket(row({
+      deckBuilt: false,
+      opConverged: false,
+      error: "op: singular matrix",
+    }), { encryptedDependent: true, skipNgspice: true })).toBe("hard_failure");
+  });
+
   it("summarizes the unencrypted rate and formats the stdout truth line", () => {
     const summary = summarizeNamedDeviceFidelity([
       { row: row({ file: "exact.asc" }), encryptedDependent: false },

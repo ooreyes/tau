@@ -34,6 +34,7 @@ import {
 import { opampIdentity } from "../src/engine/opampModel";
 import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
 import { ltspiceLibRoots } from "./ltspiceLibRoot";
+import { resolveInstalledAsyPath } from "../src/io/ltspiceSymbolResolve";
 import type { SchematicComponent } from "../src/schematic/types";
 
 const HOME = homedir();
@@ -128,6 +129,16 @@ function siblingResolver(parentDir: string) {
   });
 }
 
+function cacheSymbolMetadata(relativeSymbol: string, parsed: AsySymbol | null): AsySymbol | null {
+  const key = relativeSymbol.toLowerCase();
+  symbolMetadataCache.set(key, parsed);
+  const leafKey = basename(relativeSymbol).toLowerCase();
+  if (leafKey !== key && !symbolMetadataCache.has(leafKey)) {
+    symbolMetadataCache.set(leafKey, parsed);
+  }
+  return parsed;
+}
+
 function installedSymbolMetadata(symbolType: string): AsySymbol | null {
   const relativeSymbol = normalize(symbolType.replace(/[\\/]+/g, sep));
   if (
@@ -142,16 +153,10 @@ function installedSymbolMetadata(symbolType: string): AsySymbol | null {
     ...EXTRA_SYMBOL_ROOTS,
     ...ltspiceLibRoots().map((root) => join(root, "sym")),
   ];
-  for (const root of roots) {
-    const path = join(root, `${relativeSymbol}.asy`);
-    const rel = relative(root, path);
-    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
-    const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
-    symbolMetadataCache.set(key, parsed);
-    return parsed;
-  }
-  symbolMetadataCache.set(key, null);
-  return null;
+  const path = resolveInstalledAsyPath(roots, symbolType);
+  if (!path) return cacheSymbolMetadata(relativeSymbol, null);
+  const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
+  return cacheSymbolMetadata(relativeSymbol, parsed);
 }
 
 /** True when the relative ModelFile resolves to encrypted/binary installed bytes. */
@@ -392,6 +397,83 @@ describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () 
           console.log(`      e.g. ${sample}`);
         }
       }
+    }
+
+    if (process.env.NAMED_DEVICE_ENCRYPTED_AUDIT === "1") {
+      // CEO red-flag audit: encrypted-excluded must be capability_refusal ∩
+      // encryptedDependent only. Clearing the flag must yield refuse, never
+      // hard_failure — otherwise HF was hidden behind encrypted-excluded.
+      const encrypted = entries.filter((e) =>
+        classifyNamedDeviceBucket(e.row, {
+          encryptedDependent: e.encryptedDependent,
+          skipNgspice: true,
+        }) === "encrypted"
+      );
+      let wouldRefuse = 0;
+      let wouldHard = 0;
+      let wouldOther = 0;
+      const buckets = new Map<string, { count: number; samples: string[] }>();
+      const unresolvedStems = new Map<string, number>();
+      for (const entry of encrypted) {
+        const without = classifyNamedDeviceBucket(entry.row, {
+          encryptedDependent: false,
+          skipNgspice: true,
+        });
+        if (without === "refuse") wouldRefuse += 1;
+        else if (without === "hard_failure") wouldHard += 1;
+        else wouldOther += 1;
+        for (const name of entry.row.unresolvedSubckts ?? []) {
+          const stem = name.replace(/\\/g, "/").split("/").pop()!.toLowerCase();
+          unresolvedStems.set(stem, (unresolvedStems.get(stem) ?? 0) + 1);
+        }
+        const err = entry.row.error ?? "(no error)";
+        let key = err;
+        if (err.startsWith("deck: ")) {
+          const body = err.slice(6);
+          key = `deck: ${body
+            .replace(/"[^"]+"/g, '"…"')
+            .replace(/\b[A-Z][A-Za-z0-9]*\d+\b/g, "REF")
+            .replace(/\b[A-Za-z0-9_./\\-]{24,}\b/g, "…")
+            .slice(0, 140)}`;
+        } else {
+          key = err.slice(0, 140);
+        }
+        const slot = buckets.get(key) ?? { count: 0, samples: [] };
+        slot.count += 1;
+        if (slot.samples.length < 2) slot.samples.push(entry.row.file);
+        buckets.set(key, slot);
+      }
+      const ranked = [...buckets.entries()].sort((a, b) => b[1].count - a[1].count);
+      const topStems = [...unresolvedStems.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20);
+      // eslint-disable-next-line no-console
+      console.log(
+        `\nENCRYPTED-EXCLUSION AUDIT (${encrypted.length} files): without-flag refuse=${wouldRefuse} hard_failure=${wouldHard} other=${wouldOther}`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `  integrity: hard_failure-with-flag-cleared must be 0 (got ${wouldHard}) — HF cannot hide in encrypted-excluded\n`,
+      );
+      for (const [key, info] of ranked.slice(0, 25)) {
+        // eslint-disable-next-line no-console
+        console.log(`  ${info.count}× ${key}`);
+        for (const sample of info.samples) {
+          // eslint-disable-next-line no-console
+          console.log(`      e.g. ${sample}`);
+        }
+      }
+      if (topStems.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log("\n  top unresolved stems among encrypted-excluded:");
+        for (const [stem, count] of topStems) {
+          // eslint-disable-next-line no-console
+          console.log(`    ${count}× ${stem}`);
+        }
+      }
+      expect(
+        wouldHard,
+        "encryptedDependent must not rebucket hard_failure → encrypted",
+      ).toBe(0);
+      expect(wouldRefuse).toBe(encrypted.length);
     }
 
     // Integrity guards only — never assert the ≥95% floor here. Claiming that
