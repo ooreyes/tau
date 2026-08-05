@@ -9,18 +9,45 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:55 CDT**
+**Status: DONE - 2026-08-05 02:57 CDT**
 
-Unit: Applications `2ndOrderLowpass.asc` authored `.ac` G-source RLC → differential **pass=48**.
+Unit: Educational `logamp.asc` authored `.tran` + opamp.sub → differential **pass=48**.
 ```
 SUMMARY pass=48 sibling=5 gap=0
-ac 2ndorder-lp … v(2) nRms=0 span=1.144
+tran logamp … v(out)/v(in) nRms=0 span≈4.22/20.08
 ```
-Collision-avoided Staff EE 100W/P2/160. NE555/LoopGain/HalfSlope untouched. Named-device 47.9%. SHIPPABLE? **NO**
+Note: tip `a0d6080` message said 2ndOrderLowpass but corpus cell is logamp — docs corrected.
+Pierce/phaseshift phase miss. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+---
+
+### 2026-08-05 — logamp.asc + opamp.sub TRAN → pass=48 (§DoD)
+
+**What I did**
+- Educational `logamp.asc` authored `.tran 10` + `.include opamp.sub`: exact
+  inlined opamp subckt; probes v(out)/v(in) vs LTspice nRms=0 (spans ≈4.22/20).
+- Fallbacks blocked: Pierce/phaseshift/phaseshift2 oscillator phase miss;
+  TwoTau LTspice token fail; colpits2 LTspice fail; 100W IRFP refuse.
+- Docs fix: prior tip commit message claimed 2ndOrderLowpass but corpus carries
+  this logamp cell.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts` (already on tip)
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=48 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test`
+
+**Parity items**
+- Differential matrix climb 47→48; DoD broad-differential box still open.
+- Named-device 47.9%; SHIPPABLE? **NO**
+
+**Next step**
+- Non-colliding Educational authored analysis (not Pierce/phaseshift phase miss).
 
 ---
 
