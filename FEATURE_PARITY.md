@@ -1295,8 +1295,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   amps on the right when a pane holds exactly those two units; other mixes stay
   single-axis (honest blank/`V` fallback). `PlotAxes` draws optional right-hand
   ticks + caption; `TranScopePane` maps each trace onto its axis (left zoomable,
-  right data-fit). 6 pure + 2 PlotAxes tests. **NEXT:** expression traces in the
-  step pane.
+  right data-fit). 6 pure + 2 PlotAxes tests. **Step-pane expression traces
+  landed** (2026-08-05): `evaluateStepPlotExpression` runs any plot expression
+  against every successful `.step` member; StepPlot expression bar selects the
+  family SIGNAL (Use probe restores the probe pick). 4 pure + 1 StepPlot test.
+  **NEXT:** (none on this expressions item — AC/DC/TRAN/STEP covered).
 - 🟡 Multiple plot panes and autorange — **landed for the
   transient scope** (`plotPanes.ts` pure pane model + per-pane Y autorange,
   with manual pane add/remove/move removed from the default UI so plots remain
@@ -1484,8 +1487,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Open .plt** applies Transient/AC/DC settings (expression-bar traces so
   panes do not depend on probes; X window forced on the transient scope).
   11 pure + Educational corpus smoke + 1 SimulationPanel wiring test.
-  **Dual-axis Y landed** (see expressions item). **NEXT:** step-pane expression
-  bar; `.plt` save.
+  **Dual-axis Y landed** (see expressions item). **Step-pane expressions
+  landed** (see expressions item). **NEXT:** `.plt` save.
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy

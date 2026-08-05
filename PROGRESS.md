@@ -9,16 +9,45 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:44 CDT**
+**Status: DONE - 2026-08-05 05:48 CDT**
 
-Unit: Waveform DoD — **dual-axis Y** for mixed V+A on the transient scope.
-Tip base `511fb91` pass=85. SHIPPABLE? **NO**
+Unit: Waveform DoD — **step-pane expression traces** (+ PROGRESS `.plt` entry
+conflict-marker cleanup). Base tip `66231ca` / pass=85. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — step-pane expression traces (§waveform DoD)
+
+**What I did**
+- `evaluateStepPlotExpression` evaluates any plot expression across every
+  successful `.step` member; StepPlot expression bar drives the family SIGNAL
+  (Use probe restores the probe pick). Housekeeping: removed leftover
+  `=======` marker before the `.plt` dated PROGRESS entry.
+- Left 100W/IRFP, ct diode/RLC, Settings, Chan/NIGBT/FRA alone. Continue 24
+  owns differential.
+
+**Files**
+- `apps/desktop/src/simulation/plotExpressionStep.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ StepPlot expr test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- plotExpressionStep 4 + StepPlot expression wiring
+
+**Parity items**
+- Waveform viewer 🟡 (step expressions landed; `.plt` save NEXT).
+  Differential pass=85 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue 22: `.plt` save, or non-wall named-device leftovers.
+
+
 
 
 ### 2026-08-05 — dual-axis Y for mixed V+A (§waveform DoD)
@@ -85,7 +114,7 @@ dc ct-diode-dc … v(anode) nRms=0.0000 nMax=0.0000 span=0.547; i(v1) nRms=0.000
 
 
 
-=======### 2026-08-05 — LTspice .plt import/apply (§waveform DoD)
+### 2026-08-05 — LTspice .plt import/apply (§waveform DoD)
 
 **What I did**
 - Pure `parsePlt` / `applyPltSection` for Educational-style `.plt` files

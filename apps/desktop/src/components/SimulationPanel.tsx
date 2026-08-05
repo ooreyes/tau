@@ -44,6 +44,7 @@ import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { evaluateAcPlotExpression } from "../simulation/plotExpressionAc";
 import { evaluateDcPlotExpression } from "../simulation/plotExpressionDc";
+import { evaluateStepPlotExpression } from "../simulation/plotExpressionStep";
 import { commonTraceUnit } from "../simulation/exprUnit";
 import { partitionTracesByAxis, planDualAxisY } from "../simulation/dualAxis";
 import { groupDelay } from "../simulation/groupDelay";
@@ -3587,8 +3588,30 @@ const STEP_COLORS = [
 export function StepPlot({ result, probes, wires }: { result: StepFamilyResult | null; probes: Probe[]; wires: SchematicWire[] }) {
   const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
-  // Members whose run succeeded, paired with the chosen trace for each.
-  const family = useMemo(() => {
+  const [exprInput, setExprInput] = useState("");
+  const [exprList, setExprList] = useState<string[]>([]);
+  const [activeExpr, setActiveExpr] = useState<string | null>(null);
+  const [exprError, setExprError] = useState<string | null>(null);
+
+  const exprFamily = useMemo(() => {
+    if (!activeExpr) return null;
+    const evaluated = evaluateStepPlotExpression(activeExpr, result);
+    if (!evaluated.ok) return evaluated;
+    const { min, max } = waveformBounds(evaluated.series.map((s) => s.trace));
+    const tMax = evaluated.series.reduce((acc, s) => Math.max(acc, s.times[s.times.length - 1] || 0), 0) || 1;
+    return {
+      ok: true as const,
+      series: evaluated.series,
+      min,
+      max,
+      tMax,
+      signal: evaluated.expression,
+      unit: evaluated.unit,
+    };
+  }, [activeExpr, result]);
+
+  // Members whose run succeeded, paired with the chosen probe trace for each.
+  const probeFamily = useMemo(() => {
     if (!result?.ok) return null;
     const ok = result.members.filter((m) => m.result.ok);
     if (ok.length === 0) return null;
@@ -3608,8 +3631,30 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
     const { min, max } = waveformBounds(series.map((s) => s.trace));
     const tMax = series.reduce((acc, s) => Math.max(acc, s.times[s.times.length - 1] || 0), 0) || 1;
     const signal = first.traces.find((t) => t.id === traceId)?.label ?? "V";
-    return { series, min, max, tMax, signal };
+    const unit = first.traces.find((t) => t.id === traceId)?.unit ?? "V";
+    return { series, min, max, tMax, signal, unit };
   }, [result, probes, wires]);
+
+  const family =
+    activeExpr && exprFamily && exprFamily.ok
+      ? exprFamily
+      : !activeExpr
+        ? probeFamily
+        : null;
+
+  const addExpression = () => {
+    const expr = exprInput.trim();
+    if (!expr) return;
+    const probe = evaluateStepPlotExpression(expr, result);
+    if (!probe.ok) {
+      setExprError(probe.error);
+      return;
+    }
+    setExprList((prev) => (prev.includes(expr) ? prev : [...prev, expr]));
+    setActiveExpr(expr);
+    setExprInput("");
+    setExprError(null);
+  };
 
   const exportStepCsv = () => {
     if (!family) return;
@@ -3628,10 +3673,95 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
 
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message ?? "No step sweep to show."}</div>;
-  if (!family) return <div className="analysis-empty">Step ran, but the selected signal has no data. Probe a node or check the sweep.</div>;
+  if (activeExpr && exprFamily && !exprFamily.ok) {
+    return (
+      <div className="analysis-empty" role="alert">
+        {exprFamily.error}
+      </div>
+    );
+  }
+  if (!family) {
+    return (
+      <div className="analysis-empty">
+        Step ran, but the selected signal has no data. Probe a node, check the sweep, or add a plot expression.
+      </div>
+    );
+  }
 
   return (
     <>
+      <div className="expr-bar" style={{ marginBottom: 8 }}>
+        <Input
+          variant="mono"
+          size="sm"
+          className="flex-1 min-w-40"
+          type="text"
+          value={exprInput}
+          placeholder="Plot an expression across steps, e.g. V(out)-V(in)"
+          aria-label="Step plot expression"
+          onChange={(e) => {
+            setExprInput(e.currentTarget.value);
+            if (exprError) setExprError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") addExpression();
+          }}
+        />
+        <Button size="sm" onClick={addExpression} disabled={!exprInput.trim()}>
+          Add trace
+        </Button>
+        {activeExpr && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setActiveExpr(null);
+              setExprError(null);
+            }}
+          >
+            Use probe
+          </Button>
+        )}
+      </div>
+      {exprError && <div className="expr-error" role="alert">{exprError}</div>}
+      {exprList.length > 0 && (
+        <div className="expr-list" style={{ marginBottom: 8 }}>
+          {exprList.map((expr) => (
+            <span
+              key={expr}
+              className="expr-chip"
+              style={{
+                borderColor: activeExpr === expr ? "var(--trace-cyan)" : undefined,
+                cursor: "pointer",
+              }}
+            >
+              <button
+                type="button"
+                className="expr-chip-select"
+                aria-pressed={activeExpr === expr}
+                aria-label={`Plot ${expr} across steps`}
+                onClick={() => {
+                  setActiveExpr(expr);
+                  setExprError(null);
+                }}
+                style={{ background: "transparent", border: 0, color: "inherit", cursor: "pointer", padding: 0 }}
+              >
+                {expr}
+              </button>
+              <button
+                type="button"
+                aria-label={`Remove ${expr}`}
+                onClick={() => {
+                  setExprList((prev) => prev.filter((e) => e !== expr));
+                  setActiveExpr((cur) => (cur === expr ? null : cur));
+                }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="scope-shell">
         <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Step family plot">
           <PlotAxes
@@ -3643,7 +3773,8 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
             yMin={family.min}
             yMax={family.max}
             xUnit="s"
-            yUnit="V"
+            yUnit={family.unit || "V"}
+            yAxisTitle={family.unit === "A" ? "Current" : family.unit === "W" ? "Power" : "Voltage"}
             targetXTicks={targetXTicks}
             targetYTicks={targetYTicks}
           />

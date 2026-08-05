@@ -854,6 +854,56 @@ describe("StepPlot measurements", () => {
       URL.revokeObjectURL = originalRevokeObjectURL;
     }
   });
+
+  it("plots a step-family expression and labels SIGNAL with the expression", () => {
+    function memberWithMid(label: string, value: number, out: number[], mid: number[]) {
+      const base = member(label, value, undefined, [0, 1e-3], out);
+      if (!base.result.ok) throw new Error("expected ok");
+      return {
+        ...base,
+        result: {
+          ...base.result,
+          traces: [
+            ...base.result.traces,
+            { id: "n_mid", label: "V(mid)", values: mid, unit: "V" as const, color: "var(--trace-green)" },
+          ],
+          circuit: {
+            ...base.result.circuit,
+            nets: [
+              ...base.result.circuit.nets,
+              { id: "n_mid", label: "mid", isGround: false, points: [], pins: [], labelCount: 0 },
+            ],
+          },
+        },
+      };
+    }
+
+    render(
+      <StepPlot
+        result={{
+          ok: true,
+          spec: { kind: "param", name: "RL", values: [1, 2] },
+          members: [
+            memberWithMid("RL=1", 1, [2, 4], [1, 1]),
+            memberWithMid("RL=2", 2, [3, 5], [1, 2]),
+          ],
+          warnings: [],
+        }}
+        probes={[]}
+        wires={[]}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Step plot expression"), {
+      target: { value: "V(out)-V(mid)" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add trace" }));
+    expect(screen.getByRole("button", { name: "Plot V(out)-V(mid) across steps" })).toBeTruthy();
+    // SIGNAL meter shows the expression (chip also carries the same text).
+    const signalMeter = screen.getByText("SIGNAL").parentElement;
+    expect(signalMeter?.textContent).toContain("V(out)-V(mid)");
+    expect(screen.getByRole("button", { name: "Use probe" })).toBeTruthy();
+  });
 });
 
 describe("SimulationPanel - trace color choice and cursor seek", () => {
