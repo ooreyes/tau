@@ -38,7 +38,7 @@ Prior: HF 103 → **0** (Cpar/Rpar, `;` strip, Rload±, quote sentinels, paren-l
 | Lane | Owns (edit only these) |
 |------|------------------------|
 | Cupertino | **DONE** `6aa5f98` — Lucide / light default; no further icon thrash |
-| Anduril Light | `App.css` light tokens · `DESIGN_SYSTEM.md` palette only — **not** ShellPanels icons |
+| Anduril Light | **DONE** — light tokens `#EDF1F6`/`#0068D6` + aliases; Design QA handoff |
 | Design QA | Screenshot review · typecheck green · test one-liners |
 | Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus — **no UI** |
 | AI platform / Freshman | `localAiEnsure*` · `cloudAiConsent*` · `localMlxAssistant*` · LocalAiSetupDialog · Settings AI; AssistantPanel **ensure/consent only** |
@@ -55,6 +55,26 @@ AI wording = `98ffd2d`.
 
 
 ---
+
+### 2026-08-04 — Anduril Light palette pop (§10)
+
+**What I did**
+- Light neutrals → cooler paper `#EDF1F6` / `#E2E8F0` / `#D4DCE6`; ink
+  `#0B1017` / `#4E5C6E`; precision blue `#0068D6` (~5.3:1). Quiet warning
+  ochre soft≈0.05 (not danger-red). Before/after in `DESIGN_SYSTEM.md`.
+  Tailwind aliases `--color-paper` / `--color-ink` / `--color-precision`.
+- App.css light blocks scooped into Design QA `1250dbc`; aliases sealed in
+  `1d6ebef`. This commit is the palette-pop handoff. §10 DoD **unchecked**.
+  SHIPPABLE=NO.
+
+**Files**
+- `apps/desktop/src/App.css` (light blocks; on branch via `1250dbc`)
+- `DESIGN_SYSTEM.md`, `apps/desktop/src/styles/tokens.css` (`1d6ebef`)
+
+**Next step (Design QA)**
+- Light screenshots at min + 1440: paper cool (not gray), accent pops,
+  optional-key warnings stay quiet ochre.
+
 
 ### 2026-08-04 — HR/ops: three-lane split (engine + AI landed)
 
