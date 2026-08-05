@@ -9,18 +9,49 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 03:45 CDT**
+**Status: DONE - 2026-08-05 03:48 CDT**
 
-Unit: Educational `SampleAndHold.asc` authored `.tran` → differential
-**pass=68** (dual SAMPLE; maxTol=0.055 hold-edge on v(b)). PLL/PLL2 deferred
-(LTspice XSPICE MODULATE same-deck reject). Tip `d243adc`. Named-device 47.9%.
-SHIPPABLE? **NO**
+Unit: Educational/contrib `elip_grd.asc` authored `.ac` → differential
+**pass=69** (elliptic S11/S21; maxTol=0.10 peak). gr_del/TwoTau deferred.
+Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — Educational/contrib elip_grd.asc AC → pass=69 (§DoD)
+
+**What I did**
+- Educational/contrib `elip_grd.asc` authored `.ac lin 401 1µ–3Meg`: elliptic
+  RLC filter with K1 L1 L2; S21/S11 probes. nRms≈0.0057/0.0039 under 2%;
+  nMax≈0.098/0.075 needs maxTol=0.10 (elliptic peak; span≈1 — not hollow).
+- `gr_del.asc` deferred: all-pass |V|≈1 → magnitude compare hollow/blow-up.
+- `TwoTau.asc` deferred: LTspice rejects Tau `s_xfer` same-deck (brace mangling).
+- Tip `fe98cf2`/`d243adc` SampleAndHold pass=68 → 69. Left SampleAndHold/qztst/
+  UOA* alone.
+
+**Exact stdout**
+```
+SUMMARY pass=69 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=69 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test`
+
+**Parity items**
+- Differential 🟡 harness **pass=69 · sibling=5 · gap=0**. SHIPPABLE? NO
+
+**Next**
+- Continue 15 non-colliding Educational. Leave Settings locked.
 
 
 ### 2026-08-05 — Educational SampleAndHold.asc TRAN → pass=68 (§DoD)

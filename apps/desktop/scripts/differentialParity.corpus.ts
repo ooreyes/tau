@@ -79,6 +79,7 @@ const PHASESHIFT2_ASC = join(EDU, "phaseshift2.asc");
 const PIERCE_ASC = join(EDU, "Pierce.asc");
 const COLPITS2_ASC = join(EDU, "colpits2.asc");
 const QZTST_ASC = join(EDU, "contrib", "qztst.asc");
+const ELIP_GRD_ASC = join(EDU, "contrib", "elip_grd.asc");
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
@@ -238,7 +239,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2526,6 +2527,60 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational/contrib elip_grd.asc authored .ac (elliptic filter + S11/S21 ports) ---
+    // Pure RLC + K1 L1 L2; param-baked Zo/F*/A*. v(s21)/v(s11) nRms≈0.0057/0.0039 under 2%;
+    // nMax≈0.098/0.075 needs maxTol=0.10 (elliptic peak). gr_del deferred (all-pass |V|≈1
+    // hollow for magnitude). TwoTau deferred (LTspice rejects Tau s_xfer same-deck).
+    {
+      expect(existsSync(ELIP_GRD_ASC), `missing ${ELIP_GRD_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(ELIP_GRD_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "elip_grd.asc must author .ac").toBeTruthy();
+      const params = buildParamScope(dirs);
+      expect(Number(params.scope.Zo ?? params.scope.zo)).toBeCloseTo(50, 10);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^K1\b.+\bL1\b.+\bL2\b/im);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      const probes = ["v(s21)", "v(s11)"] as const;
+      const result = runPairedBatch("diff-elip-grd-ac", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.10,
+        });
+        expect(comparison.pass, `elip_grd ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `${probe} non-hollow`).toBeGreaterThan(0.5);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "ac",
+        circuit: "elip-grd",
+        topology: "Educational/contrib/elip_grd.asc elliptic filter S11/S21 (authored .ac lin 1µ–3Meg; K1; maxTol=0.10 peak)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (maxTol=0.10)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2819,9 +2874,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(67);
+    expect(passCount).toBeGreaterThanOrEqual(68);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=68 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=69 sibling=5 gap=0/);
   }, 240_000);
 });

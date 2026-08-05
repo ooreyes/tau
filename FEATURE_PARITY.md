@@ -1576,12 +1576,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=68 · sibling=5 · gap=0**: prior cells through
-  contrib/qztst plus Educational **SampleAndHold.asc** authored `.tran` (dual
-  SAMPLE; v(a)/v(b) nRms≈0.0014/0.0028; v(b) nMax≈0.0515 @ maxTol=0.055
-  hold-edge; span≈2). PLL/PLL2 deferred (LTspice rejects Tau XSPICE MODULATE
-  same-deck). tip 65e05ce thrash corrected (claimed varactor, corpus was
-  MonteCarlo). phono/relax blocked. HalfSlope Laplace stripped;
+  (truth). Gap-closure → **pass=69 · sibling=5 · gap=0**: prior cells through
+  SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
+  (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak). gr_del
+  deferred (all-pass |V|≈1 hollow). TwoTau deferred (LTspice s_xfer reject).
+  tip 65e05ce thrash corrected. phono/relax blocked. HalfSlope Laplace stripped;
   SoftDiodeRecovery deferred; BandGaps dc-temp miss; LoopGain/Electrometer
   LT1001 OTA wall; MC1648 deferred; dimmer TRIAC deferred. Harness-slice gaps closed; DoD broad-differential box
   remains open — see AGENTS.md.
