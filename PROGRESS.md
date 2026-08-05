@@ -9,11 +9,22 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+<<<<<<< HEAD
 **Status: DONE - 2026-08-05 05:36 CDT**
 
 Unit: Waveform DoD — LTspice **`.plt` plot settings** parse + apply
 (panes/traces/X). Open .plt in Advanced plot tools.
 Base tip `31d66d8` pass=84. SHIPPABLE? **NO**
+=======
+**Status: DONE - 2026-08-05 05:38 CDT**
+
+Unit: Circuit_testing_v1 `04_dc_diode_curve.asc` authored `.dc` → differential **pass=85**.
+```
+SUMMARY pass=85 sibling=5 gap=0
+dc ct-diode-dc … v(anode) nRms≈0 span=0.547; i(v1) nRms≈0 span≈4.3e-4
+```
+Exact 1N4148. Named-device 48.1%. Left 100W/IRFP alone. SHIPPABLE? **NO**
+>>>>>>> a756969 (auto: Circuit_testing 04_dc_diode_curve DC → pass=85 (§DoD))
 
 **SHIPPABLE?** **NO**
 
@@ -48,6 +59,40 @@ Base tip `31d66d8` pass=84. SHIPPABLE? **NO**
 - Continue 22 waveform: dual-axis Y or step-pane expressions. Continue 23 owns differential.
 
 
+
+
+
+### 2026-08-05 — ct 04_dc_diode_curve DC → pass=85 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `04_dc_diode_curve.asc` authored `.dc V1 0 1 20m`:
+  series 1k + exact standardModels `1N4148`. v(anode)/i(v1) match LTspice
+  (nRms≈7e-7 / ≈3e-6). Distinct from synthetic resistive divider DC and
+  IGBTeq nested DC. Avoided Staff EE 100W/IRFP/named-device maps and
+  ISO7637/sinh/.machine. Tip ct-rlc pass=84 → **85**. Worktree
+  `Tau-wt-dod-draft`.
+
+**Exact stdout**
+
+```
+SUMMARY pass=85 sibling=5 gap=0
+dc ct-diode-dc … v(anode) nRms=0.0000 nMax=0.0000 span=0.547; i(v1) nRms=0.0000 nMax=0.0000 span=0.000
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2689)
+- `bash scripts/differential-parity.sh` → pass=85
+
+**Parity items**
+- Differential 🟡 **pass=85**. Named-device exact **1222** / **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Continue honest differential (ct AC/noise/TF or other non-colliding ASC).
+  Avoid ISO7637/sinh/Documents Draft* / Staff EE maps.
 
 
 
