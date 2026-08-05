@@ -1497,8 +1497,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   toggle — two time markers with t1/t2/@C1/@C2/Δ on the family SIGNAL (first
   member grid) via `cursorReadout`. **AC/DC step-family cursor readout landed**
   (2026-08-05): AcFamilyPlot / DcFamilyPlot **Cursors** — log-f / linear-sweep
-  markers with f1/f2 or x1/x2 + @C1/@C2/Δ on the family SIGNAL. Pending:
-  per-trace selection.
+  markers with f1/f2 or x1/x2 + @C1/@C2/Δ on the family SIGNAL.
+  **Step-family per-trace selection landed** (2026-08-05): StepPlot legend
+  member chips toggle draw (`aria-pressed`); refuses hiding the last visible
+  curve; STEPS meter shows visible/total; axes reframe to visible members.
+  Pending: AC/DC family per-trace selection.
 - 🟡 Save plot settings (`.plt`), export image/CSV — **CSV + PNG export landed**
   (`simulation/waveformCsv.ts` `seriesToCsv`): an **Export CSV** button on the
   transient scope writes a table of `time` + every node-voltage trace + branch

@@ -4735,6 +4735,8 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
+  /** Legend click hides a step member; never allow hiding the last visible curve. */
+  const [hiddenLabels, setHiddenLabels] = useState<string[]>([]);
 
   const exprFamily = useMemo(() => {
     if (!activeExpr) return null;
@@ -4785,25 +4787,53 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
         ? probeFamily
         : null;
 
-  // Two time cursors on the family SIGNAL (first member's grid) — LTspice-style
-  // step-plot readout; sliders span [0, tMax] shared by the overlay frame.
+  const hiddenSet = useMemo(() => new Set(hiddenLabels), [hiddenLabels]);
+  const visibleSeries = useMemo(() => {
+    if (!family) return [];
+    return family.series.filter((s) => !hiddenSet.has(s.label));
+  }, [family, hiddenSet]);
+
+  // Autorange Y/t to the visible members so hiding a tall step re-frames.
+  const visibleFrame = useMemo(() => {
+    if (visibleSeries.length === 0) return null;
+    const { min, max } = waveformBounds(visibleSeries.map((s) => s.trace));
+    const tMax = visibleSeries.reduce((acc, s) => Math.max(acc, s.times[s.times.length - 1] || 0), 0) || 1;
+    return { min, max, tMax };
+  }, [visibleSeries]);
+
+  const toggleStepMember = (label: string) => {
+    setHiddenLabels((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+        return [...next];
+      }
+      if (!family) return prev;
+      const visibleCount = family.series.filter((s) => !next.has(s.label)).length;
+      if (visibleCount <= 1) return prev;
+      next.add(label);
+      return [...next];
+    });
+  };
+
+  // Two time cursors on the family SIGNAL (first *visible* member's grid).
   const stepCursors = useMemo(() => {
-    if (!cursorsOn || !family || family.series.length === 0 || !(family.tMax > 0)) return null;
-    const first = family.series[0];
-    const x1 = cf1 * family.tMax;
-    const x2 = cf2 * family.tMax;
+    if (!cursorsOn || !visibleFrame || visibleSeries.length === 0 || !(visibleFrame.tMax > 0)) return null;
+    const first = visibleSeries[0];
+    const x1 = cf1 * visibleFrame.tMax;
+    const x2 = cf2 * visibleFrame.tMax;
     if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
     try {
       return cursorReadout(
         first.times,
-        [{ label: family.signal, values: first.trace.values, unit: family.unit || "V" }],
+        [{ label: family!.signal, values: first.trace.values, unit: family!.unit || "V" }],
         x1,
         x2,
       );
     } catch {
       return null;
     }
-  }, [cursorsOn, family, cf1, cf2]);
+  }, [cursorsOn, visibleFrame, visibleSeries, family, cf1, cf2]);
 
   const stepCursorPixelX = (t: number, tMax: number): number | null => {
     if (!(tMax > 0) || !Number.isFinite(t)) return null;
@@ -4872,6 +4902,13 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
     return (
       <div className="analysis-empty">
         Step ran, but the selected signal has no data. Probe a node, check the sweep, or add a plot expression.
+      </div>
+    );
+  }
+  if (!visibleFrame || visibleSeries.length === 0) {
+    return (
+      <div className="analysis-empty">
+        Step ran, but no step members are visible. Click a legend chip to show a curve.
       </div>
     );
   }
@@ -4957,26 +4994,29 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
             height={PLOT_HEIGHT}
             pad={PLOT_PAD}
             xMin={0}
-            xMax={family.tMax}
-            yMin={family.min}
-            yMax={family.max}
+            xMax={visibleFrame.tMax}
+            yMin={visibleFrame.min}
+            yMax={visibleFrame.max}
             xUnit="s"
             yUnit={family.unit || "V"}
             yAxisTitle={family.unit === "A" ? "Current" : family.unit === "W" ? "Power" : "Voltage"}
             targetXTicks={targetXTicks}
             targetYTicks={targetYTicks}
           />
-          {family.series.map((s, i) => (
-            <path
-              key={s.label}
-              className="scope-trace"
-              stroke={STEP_COLORS[i % STEP_COLORS.length]}
-              d={tracePath(s.trace, s.times, 0, family.tMax, family.min, family.max)}
-            />
-          ))}
+          {family.series.map((s, i) => {
+            if (hiddenSet.has(s.label)) return null;
+            return (
+              <path
+                key={s.label}
+                className="scope-trace"
+                stroke={STEP_COLORS[i % STEP_COLORS.length]}
+                d={tracePath(s.trace, s.times, 0, visibleFrame.tMax, visibleFrame.min, visibleFrame.max)}
+              />
+            );
+          })}
           {stepCursors &&
             [stepCursors.x1, stepCursors.x2].map((t, i) => {
-              const x = stepCursorPixelX(t, family.tMax);
+              const x = stepCursorPixelX(t, visibleFrame.tMax);
               if (x === null) return null;
               return (
                 <g key={`sc${i}`} className="plot-cursor">
@@ -5013,12 +5053,22 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
               ))}
             </ContextMenuContent>
           </ContextMenu>
-          {family.series.map((s, i) => (
-            <span key={s.label} className="bode-legend-chip">
-              <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
-              {s.label}
-            </span>
-          ))}
+          {family.series.map((s, i) => {
+            const shown = !hiddenSet.has(s.label);
+            return (
+              <button
+                key={s.label}
+                type="button"
+                className="bode-legend-chip step-member-chip"
+                aria-pressed={shown}
+                aria-label={`${shown ? "Hide" : "Show"} step ${s.label}`}
+                onClick={() => toggleStepMember(s.label)}
+              >
+                <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
+                {s.label}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="meter-row analysis-meter">
@@ -5032,7 +5082,11 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
           Cursors
         </Button>
         <Metric label="SIGNAL" value={family.signal} tone="green" />
-        <Metric label="STEPS" value={String(family.series.length)} tone="cyan" />
+        <Metric
+          label="STEPS"
+          value={`${visibleSeries.length}/${family.series.length}`}
+          tone="cyan"
+        />
         <Metric label="SWEEP" value={result.spec?.name ?? "--"} tone="cream" />
         <Button variant="outline" size="sm" onClick={exportStepCsv}>
           Export CSV

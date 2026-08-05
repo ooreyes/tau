@@ -1699,6 +1699,14 @@ body {
   cursor: context-menu;
 }
 
+/* Step-family member chips: click toggles draw; pressed=visible. */
+.bode-legend-chip.step-member-chip {
+  cursor: pointer;
+}
+.bode-legend-chip.step-member-chip[aria-pressed="false"] {
+  opacity: 0.35;
+}
+
 /* A trace is an interactive instrument channel, not a passive legend row.
    Selecting it reveals the validated color-safe palette and makes C1/C2 glide
    over that exact series. All colors remain token-backed. */

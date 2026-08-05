@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:15 CDT**
+**Status: DONE - 2026-08-05 08:20 CDT**
 
-Unit: Waveform DoD — **AC/DC step-family measurement cursors**.
-Worktree `Tau-wt-wave-ac-step-cur` over `1ba7823`. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **step-family per-trace selection**.
+Worktree `Tau-wt-wave-step-sel` over `74004f7`. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -12,6 +12,31 @@ Worktree `Tau-wt-wave-ac-step-cur` over `1ba7823`. Settings locked. SHIPPABLE? *
 ---
 
 
+
+### 2026-08-05 — step-family per-trace selection (§waveform DoD)
+
+**What I did**
+- StepPlot legend member chips toggle draw (click hide/show); refuses hiding
+  the last visible curve; STEPS meter `visible/total`; axes reframe to visible
+  members. Worktree `Tau-wt-wave-step-sel` over `74004f7`. Left Educational
+  continue 38 ASC, landed ct cells, ct 19 OP, Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `apps/desktop/src/App.css`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2781 passed)
+- StepPlot legend hide/show + last-visible refuse
+
+**Parity items**
+- Waveform viewer 🟡 (step-family per-trace selection landed; AC/DC pending).
+  Differential pass=99 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- AC/DC family per-trace selection / manual axis limits / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — AC/DC step-family measurement cursors (§waveform DoD)
 

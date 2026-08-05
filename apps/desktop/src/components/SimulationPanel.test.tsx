@@ -1076,6 +1076,40 @@ describe("StepPlot measurements", () => {
     expect(readout.textContent).toMatch(/Δ/);
     expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
   });
+
+  it("legend click hides a step member and refuses to hide the last one", () => {
+    const { container } = render(
+      <StepPlot
+        result={{
+          ok: true,
+          spec: { kind: "param", name: "RL", values: [1, 2] },
+          members: [
+            member("RL=1", 1, undefined, [0, 1e-3], [0, 1]),
+            member("RL=2", 2, undefined, [0, 1e-3], [0, 2]),
+          ],
+          warnings: [],
+        }}
+        probes={[]}
+        wires={[]}
+      />,
+    );
+    expect(container.querySelectorAll(".scope-trace").length).toBe(2);
+    expect(screen.getByText("STEPS").parentElement?.textContent).toMatch(/2\/2/);
+    const hideRl1 = screen.getByRole("button", { name: "Hide step RL=1" });
+    expect(hideRl1.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(hideRl1);
+    expect(hideRl1.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelectorAll(".scope-trace").length).toBe(1);
+    expect(screen.getByText("STEPS").parentElement?.textContent).toMatch(/1\/2/);
+    // Last visible cannot be hidden.
+    const hideRl2 = screen.getByRole("button", { name: "Hide step RL=2" });
+    fireEvent.click(hideRl2);
+    expect(hideRl2.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelectorAll(".scope-trace").length).toBe(1);
+    // Restore RL=1.
+    fireEvent.click(screen.getByRole("button", { name: "Show step RL=1" }));
+    expect(container.querySelectorAll(".scope-trace").length).toBe(2);
+  });
 });
 
 describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
