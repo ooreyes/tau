@@ -4154,6 +4154,7 @@ function pickFamilyTraceId(
 export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | null }) {
   const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  const [exportError, setExportError] = useState<string | null>(null);
   const overlay = useMemo(() => acFamilyOverlaySeries(family), [family]);
   const plot = useMemo(() => {
     if (!overlay) return null;
@@ -4196,6 +4197,18 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
   }
   if (!overlay || !plot) return null;
 
+  const exportAcStepPng = async () => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    try {
+      const blob = await waveformSvgsToPng([svg]);
+      downloadWaveformPng(blob, "ac-step");
+      setExportError(null);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Could not export the AC step PNG.");
+    }
+  };
+
   return (
     <>
       <div className="scope-shell">
@@ -4236,7 +4249,11 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
         <Metric label="SIGNAL" value={overlay.signal} tone="green" />
         <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
+        <Button variant="outline" size="sm" onClick={() => void exportAcStepPng()}>
+          Export PNG
+        </Button>
       </div>
+      {exportError && <div className="expr-error" role="alert">{exportError}</div>}
     </>
   );
 }
@@ -4249,6 +4266,7 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
 export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult> | null }) {
   const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  const [exportError, setExportError] = useState<string | null>(null);
   const overlay = useMemo(() => dcFamilyOverlaySeries(family), [family]);
   const plot = useMemo(() => {
     if (!overlay) return null;
@@ -4285,6 +4303,18 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
     return <div className="analysis-empty">{family.message ?? memberError ?? "The .step sweep could not run."}</div>;
   }
   if (!overlay || !plot) return null;
+
+  const exportDcStepPng = async () => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    try {
+      const blob = await waveformSvgsToPng([svg]);
+      downloadWaveformPng(blob, "dc-step");
+      setExportError(null);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Could not export the DC step PNG.");
+    }
+  };
 
   return (
     <>
@@ -4324,7 +4354,11 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
         <Metric label="SIGNAL" value={overlay.signal} tone="green" />
         <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
+        <Button variant="outline" size="sm" onClick={() => void exportDcStepPng()}>
+          Export PNG
+        </Button>
       </div>
+      {exportError && <div className="expr-error" role="alert">{exportError}</div>}
     </>
   );
 }

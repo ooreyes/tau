@@ -1496,7 +1496,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `.step` member's own time grid (no forced resample); StepPlot **Export CSV**
   downloads it. 4 pure + 1 StepPlot wiring tests. **Step-family Export PNG
   landed** (2026-08-05): same `waveformSvgsToPng` path for the step family
-  plot (`tau-step-….png`). **`.plt` import/apply landed**
+  plot (`tau-step-….png`). **AC/DC step-family Export PNG landed**
+  (2026-08-05): AcFamilyPlot / DcFamilyPlot Export PNG. **`.plt` import/apply landed**
   (2026-08-05): `simulation/plotSettings.ts` parses LTspice plot settings
   (analysis sections, panes, traces, X/Y, Log flags — never mid-line `Y[0]`),
   `applyPltSection` maps panes → Tau layout + expression ids, and Advanced
@@ -1517,11 +1518,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   same path for the noise spectrum pane (`tau-noise-….png`). 1 wiring test.
   **Cursor readout CSV landed** (2026-08-05): `cursorReadoutToCsv` writes
   `signal,unit,c1,c2,delta,slope` (time row + traces); Cursors panel **Export
-  CSV**. 2 pure tests. **Step-family Export PNG landed** (2026-08-05): StepPlot
+  CSV**. 2 pure tests.   **Step-family Export PNG landed** (2026-08-05): StepPlot
   **Export PNG** rasters the family SVG via `waveformSvgsToPng` (`tau-step-….png`).
-  1 wiring test. **NEXT:** (waveform CSV/PNG/plt/FFT/expressions/dual-axis/
-  right-click/Bode-X/cursor-CSV/step-PNG covered — remaining: richer right-click
-  ops, Y log, phase pane, AC/DC step-family PNG).
+  1 wiring test. **AC/DC step-family Export PNG landed** (2026-08-05):
+  AcFamilyPlot / DcFamilyPlot **Export PNG** (`tau-ac-step-….png` /
+  `tau-dc-step-….png`). 2 wiring tests. **NEXT:** (waveform
+  CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/cursor-CSV/step-PNG
+  covered — remaining: richer right-click ops, Y log, phase pane).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB landed**
   (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`, `-(…)`,
   or `db(…)` and adds it via the existing expression overlay path; transient

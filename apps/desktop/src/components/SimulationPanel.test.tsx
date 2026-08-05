@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { SimulationPanel, StepPlot, WaveformPlot } from "./SimulationPanel";
+import { SimulationPanel, StepPlot, WaveformPlot, AcFamilyPlot, DcFamilyPlot } from "./SimulationPanel";
 import { visibleTransientTraces } from "../simulation/visibleTraces";
 import {
   defaultDcSetup,
@@ -1024,6 +1024,77 @@ describe("StepPlot measurements", () => {
     const signalMeter = screen.getByText("SIGNAL").parentElement;
     expect(signalMeter?.textContent).toContain("V(out)-V(mid)");
     expect(screen.getByRole("button", { name: "Use probe" })).toBeTruthy();
+  });
+});
+
+describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
+  it("exports AC step-family SVG via waveformSvgsToPng with tag ac-step", async () => {
+    const png = await import("../simulation/plotPng");
+    const toPng = vi.spyOn(png, "waveformSvgsToPng").mockResolvedValue(new Blob(["png"]));
+    const download = vi.spyOn(png, "downloadWaveformPng").mockImplementation(() => {});
+    try {
+      const acMember = (label: string, magDb: number[]) => ({
+        label,
+        value: 1,
+        result: {
+          ok: true as const,
+          freqs: [10, 100, 1000],
+          traces: [{ id: "n1", label: "V(out)", magDb, phaseDeg: [0, -45, -90] }],
+          warnings: [],
+        },
+      });
+      render(
+        <AcFamilyPlot
+          family={{
+            ok: true,
+            spec: { kind: "param", name: "R", values: [1, 2] },
+            members: [acMember("R=1", [0, -3, -20]), acMember("R=2", [0, -6, -40])],
+            warnings: [],
+          }}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Export PNG" }));
+      await waitFor(() => expect(toPng).toHaveBeenCalled());
+      expect(download).toHaveBeenCalledWith(expect.any(Blob), "ac-step");
+    } finally {
+      toPng.mockRestore();
+      download.mockRestore();
+    }
+  });
+
+  it("exports DC step-family SVG via waveformSvgsToPng with tag dc-step", async () => {
+    const png = await import("../simulation/plotPng");
+    const toPng = vi.spyOn(png, "waveformSvgsToPng").mockResolvedValue(new Blob(["png"]));
+    const download = vi.spyOn(png, "downloadWaveformPng").mockImplementation(() => {});
+    try {
+      const dcMember = (label: string, voltages: number[]) => ({
+        label,
+        value: 1,
+        result: {
+          ok: true as const,
+          source: "V1",
+          sweep: [0, 1, 2],
+          nets: [{ id: "n1", label: "V(out)", voltages, ground: false }],
+          warnings: [],
+        },
+      });
+      render(
+        <DcFamilyPlot
+          family={{
+            ok: true,
+            spec: { kind: "param", name: "R", values: [1, 2] },
+            members: [dcMember("R=1", [0, 0.5, 1]), dcMember("R=2", [0, 0.25, 0.5])],
+            warnings: [],
+          }}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Export PNG" }));
+      await waitFor(() => expect(toPng).toHaveBeenCalled());
+      expect(download).toHaveBeenCalledWith(expect.any(Blob), "dc-step");
+    } finally {
+      toPng.mockRestore();
+      download.mockRestore();
+    }
   });
 });
 

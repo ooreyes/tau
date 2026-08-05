@@ -1,15 +1,40 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:30 CDT**
+**Status: DONE - 2026-08-05 06:35 CDT**
 
-Unit: Waveform DoD — **step-family Export PNG** (`waveformSvgsToPng` + StepPlot Export PNG).
-Base tip `22f976a` pass=91 (ct 02_tran). Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **AC/DC step-family Export PNG** (`waveformSvgsToPng`).
+Base tip `9e0a005` pass=91. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — AC/DC step-family Export PNG (§waveform DoD)
+
+**What I did**
+- AcFamilyPlot / DcFamilyPlot **Export PNG** rasters each family SVG via the
+  same `waveformSvgsToPng` path (`tau-ac-step-….png` / `tau-dc-step-….png`).
+- ND wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC, Educational
+  (continue 30), Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ 2 wiring tests)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- AcFamilyPlot + DcFamilyPlot Export PNG 2
+
+**Parity items**
+- Waveform viewer 🟡 (AC/DC step PNG landed). Differential pass=91 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Richer right-click / Y log / phase pane. Leave IRFP/Educational/Settings alone.
+
 
 
 
