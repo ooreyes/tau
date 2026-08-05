@@ -1,13 +1,55 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~11:15 CDT**
+**Status: DONE - 2026-08-05 ~11:20 CDT**
 
-Unit: Editor DoD — **Shift+click mixed multi-select** + first-gesture
-wire drag (rubber-band wire moves). Hardens already-checked Editor box.
-SHIPPABLE? **NO**
+Unit: Named-device DoD — **wall doc** (exact-rate 48.1% blocked on
+encrypted ADI/LTC bare SYMBOL; no honest map cluster left).
+SHIPPABLE? **NO** — DoD named-device box stays unchecked.
 
 **SHIPPABLE?** **NO**
 
+
+
+
+---
+
+### 2026-08-05 — Named-device wall doc (§DoD)
+
+**What I did**
+- Ran `NAMED_DEVICE_REFUSE_TRIAGE=1 scripts/named-device-fidelity.sh` on tip
+  `9d29932` (rebased onto `34d081f`): exact-rate **48.1%** held
+  (`exact=1222` / `refuse=1319` / `silent=0` / `hard-failure=0` /
+  `encrypted-excluded=1471`).
+- Triaged refuse: bulk = encrypted Applications bare SYMBOL (AD4000,
+  ADA4523-1, ADM/ADP/LTC families). Educational plaintext leftovers already
+  exact; sibling-`.lib` climb candidates in Downloads/Docs = **0**.
+- No honest Tau-owned/sibling map cluster left without silent substitution
+  or weakening Chan/NIGBT/FRA. Wrote Omar-visible wall with install steps.
+
+**Exact stdout**
+
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0
+  hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
+```
+
+**Files**
+- `NAMED-DEVICE-WALL.md` (repo) + `~/Desktop/TAU-NAMED-DEVICE-WALL.md`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md` (pointer; DoD box still ⬜)
+
+**Tests**
+- `bash scripts/named-device-fidelity.sh` (above)
+- `pnpm -C apps/desktop typecheck` + `test` (docs-only; App.workspace /
+  AssistantPanel flakes pre-exist on tip)
+
+**Parity items**
+- Named-device 🟡 **48.1%** — wall documented; ≥95% needs Omar plaintext
+  vendor libs. SHIPPABLE? NO
+
+**Next step**
+- Omar installs plaintext ADI/LTC macromodels per wall doc, then re-measure.
+- Parallel non-ND DoD — never Chan/NIGBT/FRA.
 
 
 

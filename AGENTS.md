@@ -185,7 +185,9 @@ account and sign/notarize/ship.
       PAsystem discrete aliases (+1 HandsFree). Encrypted bare SYMBOL stay
       refuse. Full unique-leaf probe 33.4%/enc=2781 remains retracted
       (denominator game). Never silent substitution. ≥95% exact-rate **not**
-      met; DoD box stays unchecked. SHIPPABLE? **NO**.
+      met without Omar installing plaintext ADI/LTC macromodels — wall:
+      `NAMED-DEVICE-WALL.md` / `~/Desktop/TAU-NAMED-DEVICE-WALL.md`. DoD box
+      stays unchecked. SHIPPABLE? **NO**.
 - [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs

@@ -227,12 +227,15 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
     `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0
-    hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%` (tip 2026-08-05
-    ~04:30). TIP121/TIP127 Prefix-X + sibling `.lib` (+2 exact vs 1220;
-    PowerAmpLayout). PAsystem discrete aliases (+1 HandsFree). Encrypted bare
-    SYMBOL stay honest refuse.
+    hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%` (re-measured
+    2026-08-05 ~11:00 on tip ~9d29932). TIP121/TIP127 Prefix-X + sibling
+    `.lib` (+2 exact vs 1220; PowerAmpLayout). PAsystem discrete aliases
+    (+1 HandsFree). Encrypted bare SYMBOL stay honest refuse.
     Harness skips encrypted-only leaves (no 33.4% denominator game). Never
-    silent substitution. SHIPPABLE? NO.
+    silent substitution. **Wall (2026-08-05):** no further honest
+    Tau-owned/sibling map cluster; ≥95% blocked on Omar installing
+    **plaintext** ADI/LTC macromodels — see `NAMED-DEVICE-WALL.md` and
+    `~/Desktop/TAU-NAMED-DEVICE-WALL.md`. DoD box stays ⬜. SHIPPABLE? NO.
     Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise
     recursive exact-model floor to ≥95% with hard-failure=0; a shared five-pin
     shape does not prove pin fidelity for those parts.
