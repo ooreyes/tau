@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { nanoid } from "nanoid";
-import { Check, Cpu, FilePlus2, History, MessageSquarePlus, Pencil, RefreshCw, Square, Trash2, X } from "lucide-react";
+import { Check, FilePlus2, History, MessageSquarePlus, Pencil, RefreshCw, Sparkles, Square, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -486,8 +486,8 @@ export function AssistantPanel({
       return;
     }
     if (!text || streaming || !localAiCanSend
-      || (preferences.provider === "anthropic" && (!apiKey || !hasCloudAiConsent()))
-      || (preferences.provider === "gemini" && (!geminiAssistant || !hasCloudAiConsent()))) return;
+      || (preferences.provider === "anthropic" && !apiKey)
+      || (preferences.provider === "gemini" && !geminiAssistant)) return;
     setError(null);
     setRetryPrompt(null);
 
@@ -798,10 +798,7 @@ export function AssistantPanel({
   };
   const needsCloudKey = (preferences.provider === "anthropic" && !apiKey)
     || (preferences.provider === "gemini" && !geminiKey);
-  const needsCloudConsent = (preferences.provider === "anthropic" || preferences.provider === "gemini")
-    && !cloudConsent.consented;
   const missingKeyProvider = preferences.provider === "gemini" ? "Gemini" : "Anthropic";
-  const cloudBlocked = needsCloudKey || needsCloudConsent;
 
   return (
     <aside
@@ -927,16 +924,12 @@ export function AssistantPanel({
         </div>
       </header>
 
-      {cloudBlocked ? (
+      {needsCloudKey ? (
         <div className="assistant-body">
           <div className="panel-empty">
             <div className="panel-empty-glyph" aria-hidden="true" />
-            <strong>{needsCloudConsent ? "Cloud consent needed" : "API key needed"}</strong>
-            <span>
-              {needsCloudConsent
-                ? "Open Settings, choose Cloud, and confirm you’re okay sending circuit questions to the cloud provider."
-                : `Add a${missingKeyProvider === "Anthropic" ? "n" : ""} ${missingKeyProvider} API key in Settings to ask questions about this circuit.`}
-            </span>
+            <strong>No API Key</strong>
+            <span>{`Add a${missingKeyProvider === "Anthropic" ? "n" : ""} ${missingKeyProvider} API key in Settings to ask questions about this circuit.`}</span>
             <Button size="sm" variant="outline" onClick={onOpenSettings}>Open Settings</Button>
           </div>
         </div>
@@ -945,27 +938,22 @@ export function AssistantPanel({
           {showLocalAiSetup && localAiStatus && (
             <div className="assistant-setup-card" data-state={localAiStatus.state}>
               <div className="assistant-setup-head">
-                <Cpu size={14} strokeWidth={1.6} aria-hidden="true" />
+                <Sparkles size={14} strokeWidth={1.7} aria-hidden="true" />
                 <div className="assistant-setup-copy">
                   <strong>{selectedLocalAiPreset.label}</strong>
-                  {!selectedLocalAiPreset.downloaded && selectedLocalAiPreset.downloadMb > 0 && (
-                    <span>{selectedLocalAiPreset.downloadMb.toLocaleString("en-US")} MB</span>
-                  )}
+                  <span>{selectedLocalAiPreset.downloadMb.toLocaleString("en-US")} MB</span>
                 </div>
               </div>
-              <p className="assistant-setup-detail" role="status">{localSetupDetail}</p>
-              {(localAiStatus.state === "error" || localAiNotice) && (
+              <p className="assistant-setup-detail" role="status">{localAiStatus.detail}</p>
+              {showLocalAiStartButton && (
                 <div className="assistant-setup-actions">
                   <Button
                     type="button"
                     size="sm"
                     disabled={localAiBusy}
-                    onClick={() => {
-                      autoEnsureKeyRef.current = null;
-                      void startLocalAiSetup();
-                    }}
+                    onClick={() => void startLocalAiSetup()}
                   >
-                    {localAiBusy ? "Working…" : "Try again"}
+                    {selectedLocalAiPreset.downloaded ? "Start" : "Download & start"}
                   </Button>
                 </div>
               )}
@@ -975,7 +963,7 @@ export function AssistantPanel({
             {messages.length === 0 && !error && (
               <div className="assistant-intro">
                 <BodeMascot className="assistant-intro-mascot" aria-hidden="true" />
-                <p>Ask about this circuit or describe one to create. Bode can read the schematic and latest simulation results.</p>
+                <p>Ask about this circuit or describe one to create - I can see the schematic and latest simulation results.</p>
               </div>
             )}
             {messages.map((message, index) => (

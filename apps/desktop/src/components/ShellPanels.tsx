@@ -8,11 +8,7 @@ import {
   FolderOpen,
   Folder,
   FolderPlus,
-  FolderInput,
-  FileInput,
-  FoldVertical,
   Pencil,
-  RefreshCw,
   Search,
   Trash2,
   Eraser,
@@ -26,12 +22,15 @@ import {
   Activity,
   Library,
   SlidersHorizontal,
-  Play,
-  Square,
-  Plus,
-  X,
-  ArrowLeft,
 } from "lucide-react";
+import {
+  VscodeCollapseAllIcon,
+  VscodeImportFileIcon,
+  VscodeImportFolderIcon,
+  VscodeNewFileIcon,
+  VscodeNewFolderIcon,
+  VscodeRefreshIcon,
+} from "./VscodeExplorerIcons";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
@@ -597,7 +596,7 @@ export function ExplorerPanel({
                 if (ok) onNotice("Opened Schematics folder.");
               }}
             >
-              <FolderInput size={16} strokeWidth={1.6} aria-hidden="true" />
+              <VscodeImportFolderIcon />
             </button>
             {capability === "tauri" && (
               <button
@@ -609,7 +608,7 @@ export function ExplorerPanel({
                   if (ok) onNotice("Created Schematics folder.");
                 }}
               >
-                <FolderPlus size={16} strokeWidth={1.6} aria-hidden="true" />
+                <VscodeNewFolderIcon />
               </button>
             )}
             <button
@@ -618,7 +617,7 @@ export function ExplorerPanel({
               aria-label={IMPORT_BUTTON_LABEL}
               onClick={() => ascInputRef.current?.click()}
             >
-              <FileInput size={16} strokeWidth={1.6} aria-hidden="true" />
+              <VscodeImportFileIcon />
             </button>
           </div>
         </div>
@@ -1203,7 +1202,7 @@ export function EditorToolbar({
       <IconButton title="Delete selection (Delete)" disabled={!hasSelection || readOnly} onClick={deleteSelected}>
         <Trash2 size={16} strokeWidth={1.6} />
       </IconButton>
-      <IconButton title="Clear schematic" disabled={readOnly} onClick={onClearScratchpad}>
+      <IconButton title="Clear scratchpad" disabled={readOnly} onClick={onClearScratchpad}>
         <Eraser size={16} strokeWidth={1.6} />
       </IconButton>
       <span className="toolbar-divider" />
@@ -1218,16 +1217,14 @@ export function EditorToolbar({
       </IconButton>
       <div className="editor-toolbar-spacer" />
       <div className="transport">
-        <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>
-          <Play size={14} strokeWidth={1.6} aria-hidden="true" />
-        </button>
+        <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>▶</button>
         <button
           className="transport-stop"
           title="Clear current simulation result"
           aria-label="Stop simulation"
           onClick={onStop}
         >
-          <Square size={12} strokeWidth={1.6} aria-hidden="true" />
+          ■
         </button>
       </div>
     </div>
@@ -1345,7 +1342,9 @@ export function EditorTabs({
                 role="img"
                 aria-label={`${tab.title} has unsaved changes`}
                 title="Unsaved changes"
-              />
+              >
+                ●
+              </span>
             )}
             <button
               type="button"
@@ -1356,21 +1355,14 @@ export function EditorTabs({
                 onCloseTab(tab.id);
               }}
             >
-              <X size={12} strokeWidth={1.8} aria-hidden="true" />
+              ×
             </button>
           </div>
         );
       })}
-      <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>
-        <Plus size={14} strokeWidth={1.6} aria-hidden="true" />
-      </button>
+      <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>＋</button>
       <div className="editor-tab-spacer" />
-      {mode === "simulator" && (
-        <button className="editor-hide" aria-label="Return to schematic editor" onClick={onHideSimulator}>
-          <ArrowLeft size={12} strokeWidth={1.8} aria-hidden="true" />
-          Schematic
-        </button>
-      )}
+      {mode === "simulator" && <button className="editor-hide" aria-label="Return to schematic editor" onClick={onHideSimulator}>× back to schematic</button>}
     </div>
   );
 }
@@ -1429,7 +1421,7 @@ export function BottomPanel({
           </span>
           <span className="bottom-panel-title">Diagnostics</span>
           <span className="bottom-panel-clear" role="status">
-            {isRunning ? "Running" : isIdle ? "No analysis yet" : "No issues"}
+            {isRunning ? "Running" : isIdle ? "Not run" : "No issues"}
           </span>
         </div>
       ) : (
@@ -1650,7 +1642,7 @@ export function ComponentInspector({
               <p className="property-hint" role="status">
                 {selectedSubcircuit
                   ? `Ready · ${selectedSubcircuit.ports.length} named terminals (${selectedSubcircuit.ports.join(", ")}) from ${selectedSubcircuit.sourceLabel}`
-                  : `Needs a definition · ${subcircuitInstance?.name || "No subcircuit"} isn't in an attached library or this sheet. Run won't invent pins.`}
+                  : `Blocked · ${subcircuitInstance?.name || "No subcircuit"} has no attached or document definition; Tau will not guess its pins or behavior.`}
               </p>
               {selectedSubcircuit?.parameters.map((parameter) => {
                 const parameterLabel = parameter.label ?? parameter.name;
@@ -1755,9 +1747,9 @@ export function ComponentInspector({
               </label>
               <p className="property-hint" role="status">
                 {!selectedModelOption
-                  ? `Needs a model · ${selectedModelName || "No model"} isn't available. Run won't substitute a generic ${modelKind.toUpperCase()} — attach the library or choose Generic.`
+                  ? `Blocked · ${selectedModelName || "No model"} is unavailable or incompatible; Run will refuse rather than substitute a generic ${modelKind.toUpperCase()} starter. Attach the exact model or deliberately choose Generic.`
                   : selectedModelOption.source === "generic"
-                    ? `Generic starter · fine for topology checks; not a manufacturer part.`
+                    ? `Generic starter · useful for topology checks, not an exact manufacturer part.`
                     : `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`}
               </p>
               {visibleFields.filter((field) => {
@@ -2215,7 +2207,7 @@ export function SettingsPanel({
         <SheetHeader>
           <span className="settings-sheet-kicker">Settings</span>
           <SheetTitle>{title}</SheetTitle>
-          <SheetDescription className="sr-only">Workspace and document settings for the active schematic.</SheetDescription>
+          <SheetDescription className="sr-only">Workspace and document settings for this scratchpad.</SheetDescription>
         </SheetHeader>
         <div className="settings-list">
           <div className="settings-section">
@@ -2444,7 +2436,7 @@ export function SettingsPanel({
           <SettingsRow label="Command palette" hint="⌘K · F2 · / - search & place parts">
             <Button size="sm" variant="outline" onClick={onOpenCommandPalette}>Open</Button>
           </SettingsRow>
-          <SettingsRow label="Waveform probes" hint={`${probes.length} placed on this schematic`}>
+          <SettingsRow label="Meter probes" hint={`${probes.length} placed on this schematic`}>
             <Button
               size="sm"
               variant="outline"
@@ -2480,10 +2472,10 @@ export function SettingsPanel({
               ))}
             </div>
           )}
-          <SettingsRow label="Local autosave" hint="Emergency recovery snapshot for untitled edits">
+          <SettingsRow label="Local autosave" hint="browser localStorage snapshot">
             <Button size="sm" variant="outline" onClick={clearAutosave}>Clear</Button>
           </SettingsRow>
-          <SettingsRow label="Document" hint="Discard this untitled schematic and start blank">
+          <SettingsRow label="Document" hint="discard this scratchpad, start blank">
             <Button
               size="sm"
               variant="destructive"
@@ -2524,7 +2516,10 @@ export function MinimizedPanelDock({
     <aside className="minimized-panel-dock" aria-label="Minimized panels">
       {graphHidden && (
         <button className="restore-orb graph" aria-label="Restore graphs panel" title="Restore graphs panel" onClick={onRestoreGraph}>
-          <Activity size={16} strokeWidth={1.6} aria-hidden="true" />
+          <svg viewBox="0 0 28 28" aria-hidden="true">
+            <path d="M5 19 11 10l4 5 8-11" />
+            <path d="M20 4h4v4" />
+          </svg>
           <span>Graphs</span>
         </button>
       )}

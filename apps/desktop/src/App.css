@@ -896,7 +896,7 @@ body {
 
 .empty-brand {
   color: var(--accent);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .empty-kicker i {
@@ -5610,9 +5610,17 @@ body {
 .bottom-panel.is-idle {
   --diagnostic-color: var(--muted);
   --diagnostic-text: var(--muted);
-  --diagnostic-soft: var(--overlay-hover-faint);
+  --diagnostic-soft: transparent;
   --diagnostic-line: var(--border-subtle);
-  --diagnostic-glow: var(--overlay-hover-faint);
+  --diagnostic-glow: transparent;
+  background: var(--panel);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.bottom-panel.is-idle::before {
+  background: linear-gradient(90deg, transparent, var(--border) 20%, var(--border-subtle) 60%, transparent 92%);
 }
 
 .bottom-panel.is-running {
@@ -8111,9 +8119,14 @@ button.bottom-panel-head:focus-visible {
   display: grid;
   gap: var(--sp-2);
   padding: var(--sp-3);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--r-md);
-  background: var(--panel-2);
+  background: var(--panel-4);
+}
+
+.settings-local-runtime[data-state="error"] {
+  border-color: var(--danger-line);
+  background: color-mix(in srgb, var(--danger-soft) 40%, var(--panel-4));
 }
 
 .settings-local-runtime-head {
