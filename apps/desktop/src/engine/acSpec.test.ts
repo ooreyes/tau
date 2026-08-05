@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { parseAcSpec, stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
+import {
+  parseAcSpec,
+  stripAcSpec,
+  acSpecDeckText,
+  stripSourceModifiers,
+  stripLtspiceInlineComment,
+} from "./acSpec";
 
 describe("parseAcSpec", () => {
   it("returns null when there is no AC keyword", () => {
@@ -85,5 +91,15 @@ describe("stripSourceModifiers", () => {
     expect(stripSourceModifiers("5")).toBe("5");
     expect(stripSourceModifiers("SINE(0 1 1k)")).toBe("SINE(0 1 1k)");
     expect(stripSourceModifiers("")).toBe("");
+  });
+});
+
+describe("stripLtspiceInlineComment", () => {
+  it("keeps the DC level and drops a trailing ;PULSE comment (ADG1519)", () => {
+    expect(stripLtspiceInlineComment("5;PULSE(0 5 0 20n 20n 10u 20u)")).toBe("5");
+  });
+  it("is a no-op when there is no semicolon", () => {
+    expect(stripLtspiceInlineComment("SINE(0 1 1k)")).toBe("SINE(0 1 1k)");
+    expect(stripLtspiceInlineComment("5")).toBe("5");
   });
 });
