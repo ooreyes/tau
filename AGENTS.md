@@ -164,8 +164,8 @@ account and sign/notarize/ship.
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
       `NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=729 refuse=1810 silent=0
       hard-failure=0 encrypted-excluded=1473 exact-rate=28.7%` — tip after
-      OTA finite-V Rclamp-to-rail (+179 vs 21.7% linear tip; LTspice `linear`
-      disables tanh, not hard-clip). Finite-V linear/incomplete asym stay refuse.
+      OTA finite-V epsilon=0 Rclamp→rail (+179 vs 21.7% linear tip). Soft
+      epsilon / four-quadrant multipliers / incomplete asym stay refuse.
       Full unique-leaf probe 33.4%/enc=2781 remains retracted (denominator
       game). Never silent substitution. ≥95% exact-rate **not** met; DoD box
       stays unchecked. SHIPPABLE? **NO**.

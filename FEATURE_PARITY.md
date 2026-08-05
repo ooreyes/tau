@@ -228,8 +228,9 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
     `NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=729 refuse=1810 silent=0
     hard-failure=0 encrypted-excluded=1473 exact-rate=28.7%` (tip 2026-08-05
-    00:25). OTA `linear` (unbounded Io=G·Vdiff, infinite-V) + prior asym/Ref
-    finite-V Rclamp (+179 exact vs 21.7% tip); soft epsilon stays refuse.
+    00:33). Finite-V OTA epsilon=0 Rclamp→rail load swap (+179 exact vs 21.7%
+    linear tip; prior linear unbounded + asym/Ref). Soft epsilon / multipliers /
+    incomplete asym stay honest refuse.
     Harness skips encrypted-only leaves (no 33.4% denominator game). Never
     silent substitution. SHIPPABLE? NO.
     Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise

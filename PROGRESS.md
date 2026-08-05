@@ -9,14 +9,20 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:34 CDT**
+**Status: DONE - 2026-08-05 00:34 CDT** (Overnight DoD — finite-V OTA)
 
-Unit: Exact OTA finite-V Rclamp-to-rail compliance → named-device **28.7%**.
+Unit: LTspice OTA finite-V epsilon=0 Rclamp→rail load swap → named-device
+**28.7%**. Pin-faithful refuse→exact. Never silent unclamp. Never fake ≥95%.
+
+**Measured tip stdout (truth):**
 ```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
 NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=729 refuse=1810 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=28.7%
 ```
-Before 21.7%/550 → after +179 exact. Soft epsilon / non-literal rails refuse.
-Freshman AI untouched. SHIPPABLE? **NO**
+Before: 550/21.7%. After: +179 exact. Soft epsilon / multipliers / incomplete
+asym stay refuse. Encrypted bare SYMBOL stays refuse. SHIPPABLE? **NO**
+
+**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
 
 **SHIPPABLE?** **NO**
 
@@ -40,7 +46,8 @@ NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=729 refuse=1810 silent=0 hard-fai
 - Named-device 🟡 HF=0 silent=0 exact-rate **28.7%** (not ≥95%). SHIPPABLE? NO
 
 **Next**
-- Vendor REF maps (~740); multipliers; ideal-diode options
+- ~63× four-quadrant OTA multipliers / ~54× ideal-diode instance options /
+  ~7× incomplete asym / ~3× soft epsilon; encrypted bare SYMBOL stays refuse.
 
 ### 2026-08-05 — Educational noise.asc differential → pass=22 (§DoD)
 
