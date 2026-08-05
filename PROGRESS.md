@@ -1,19 +1,42 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:15 CDT**
+**Status: DONE - 2026-08-05 06:16 CDT**
 
-Unit: Circuit_testing_v1 `06_tf_voltage_divider.asc` authored `.tf` → differential **pass=89**.
-```
-SUMMARY pass=89 sibling=5 gap=0
-tf ct-tf-divider … gain/Rin/Rout relErr<=1e-6 (gain≈0.5, Rin≈2000, Rout≈500)
-```
-Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over Bode X tip `4558027`. SHIPPABLE? **NO**
+Unit: Waveform DoD — **AC Bode Export PNG** (`waveformSvgsToPng` + Advanced Export PNG).
+Base tip `e60b15b` pass=89. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — AC Bode Export PNG (§waveform DoD)
+
+**What I did**
+- AC Advanced **Export PNG** rasters Bode mag+phase `svg.scope-svg` panes via
+  the same `waveformSvgsToPng` path as transient (`tau-ac-….png`).
+- ND wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC (continue 28),
+  Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2731 passed)
+- AC Bode Export PNG 1
+
+**Parity items**
+- Waveform viewer 🟡 (AC Bode PNG landed). Differential pass=89 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- DC/noise PNG, richer right-click, or continue 28 differential.
+  Leave IRFP/Draft*/Settings alone.
+
+
 
 
 ### 2026-08-05 — ct 06_tf_voltage_divider .tf → pass=89 (§DoD)

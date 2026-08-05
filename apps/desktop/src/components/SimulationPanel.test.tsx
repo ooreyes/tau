@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { SimulationPanel, StepPlot, WaveformPlot } from "./SimulationPanel";
 import { visibleTransientTraces } from "../simulation/visibleTraces";
@@ -1241,5 +1241,33 @@ describe("SimulationPanel - right-click trace math", { timeout: 20_000 }, () => 
     const absItem = await screen.findByRole("menuitem", { name: /Plot abs\(V\(out\)\)/i });
     fireEvent.click(absItem);
     expect(onPlotExpression).toHaveBeenCalledWith("abs(V(out))");
+  });
+});
+
+describe("SimulationPanel - AC Bode Export PNG", { timeout: 20_000 }, () => {
+  it("exports Bode SVGs via waveformSvgsToPng with tag ac", async () => {
+    const png = await import("../simulation/plotPng");
+    const toPng = vi.spyOn(png, "waveformSvgsToPng").mockResolvedValue(new Blob(["png"]));
+    const download = vi.spyOn(png, "downloadWaveformPng").mockImplementation(() => {});
+    try {
+      const acResult = {
+        ok: true as const,
+        freqs: [10, 100, 1000],
+        traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20], phaseDeg: [0, -45, -90] }],
+        warnings: [],
+      };
+      renderPanel({ preferredMode: "ac", acResult });
+      fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+      const btn = screen.getByRole("button", { name: "Export PNG" });
+      expect((btn as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(btn);
+      await waitFor(() => expect(toPng).toHaveBeenCalled());
+      const svgs = toPng.mock.calls[0]![0] as SVGSVGElement[];
+      expect(svgs.length).toBeGreaterThanOrEqual(2);
+      expect(download).toHaveBeenCalledWith(expect.any(Blob), "ac");
+    } finally {
+      toPng.mockRestore();
+      download.mockRestore();
+    }
   });
 });

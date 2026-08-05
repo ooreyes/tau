@@ -1483,7 +1483,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   helper. **Export PNG** rasterizes every visible transient SVG pane into one
   two-column, 2× image; computed theme/trace styles are inlined so the file is
   faithful outside the app, and a multi-pane dashboard is never reduced to its
-  first plot. 6 hand-computed/DOM tests. **Step-family CSV landed**
+  first plot. 6 hand-computed/DOM tests. **AC Bode Export PNG landed**
+  (2026-08-05): same raster path for Bode magnitude + phase panes
+  (`downloadWaveformPng(…, "ac")`). Still ⬜: DC/noise PNG. **Step-family CSV landed**
   (`stepFamilyToCsv`, 2026-08-05): long-format `step,time,<signal>` keeps each
   `.step` member's own time grid (no forced resample); StepPlot **Export CSV**
   downloads it. 4 pure + 1 StepPlot wiring tests. **`.plt` import/apply landed**
@@ -1499,9 +1501,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **FFT spectrum CSV landed** (see FFT item). **Dual-axis Y landed** (see
   expressions item). **Step-pane expressions landed** (see expressions item).
   **Right-click math (slice) landed** (see right-click item). **Bode Log/Lin X
-  landed** (see group-delay / axes item). **NEXT:** (waveform
-  CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X covered —
-  remaining: richer right-click ops, Y log, phase pane).
+  landed** (see group-delay / axes item). **AC Bode Export PNG landed**
+  (2026-08-05): Advanced **Export PNG** rasters Bode mag+phase SVGs via the
+  same `waveformSvgsToPng` path as transient (`tau-ac-….png`). 1 wiring test.
+  **NEXT:** (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X
+  covered — remaining: richer right-click ops, Y log, DC/noise PNG, phase pane).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB landed**
   (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`, `-(…)`,
   or `db(…)` and adds it via the existing expression overlay path; transient
