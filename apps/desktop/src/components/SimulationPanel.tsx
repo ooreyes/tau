@@ -258,7 +258,6 @@ export function SimulationPanel({
     () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => library.name),
     [installedLtspiceModelLibraries, userModelLibraries],
   );
-  const warnings = result?.warnings ?? [];
 
   const [mode, setMode] = useState<AnalysisMode>(preferredMode);
   // Each analysis tab collapses its power-user controls behind ONE Advanced
@@ -594,7 +593,7 @@ export function SimulationPanel({
       : runStatus === "error"
         ? "Simulation failed - details below"
         : runStatus === "idle"
-          ? "No analysis yet — press Run, or select an analysis tab to run it"
+          ? "No analysis yet — press Run"
           : null;
 
   // Selecting an analysis tab both switches the visible pane and kicks off
@@ -1221,13 +1220,7 @@ export function SimulationPanel({
         </>
       )}
 
-      {warnings.length > 0 && (
-        <div className="warning-list">
-          {warnings.slice(0, 3).map((warning) => (
-            <div key={warning}>{warning}</div>
-          ))}
-        </div>
-      )}
+      {/* Run warnings live in Diagnostics — avoid a duplicate banner here. */}
       </div>
     </aside>
   );
@@ -1438,8 +1431,8 @@ export function WaveformPlot({
       {success && allTraces.length === 0 && (
         <div className="scope-empty-state">
           <Crosshair size={20} strokeWidth={1.5} aria-hidden="true" />
-          <strong>No probed or labeled nets</strong>
-          <span>Place a voltage probe or name a net to plot it. Unlabeled nets are not shown.</span>
+          <strong>Nothing to plot yet</strong>
+          <span>Place a probe or label a net. Unlabeled nets stay off the plot.</span>
         </div>
       )}
 
@@ -3865,9 +3858,9 @@ function ResolutionControl({
 
 const formatCount = (value: number) => value.toLocaleString("en-US");
 const formatSamples = (value: number) => Number(value.toPrecision(3)).toString();
-const detailLabel = (detail: TransientDetailLevel) => detail === "quick" ? "Quick" : detail === "balanced" ? "Balanced" : "Precision";
+const detailLabel = (detail: TransientDetailLevel) => detail === "quick" ? "Coarse" : detail === "balanced" ? "Default" : "Fine";
 const detailDescription = (detail: TransientDetailLevel) =>
-  detail === "quick" ? "Coarse sampling" : detail === "balanced" ? "Default sampling" : "Fine sampling";
+  detail === "quick" ? "Fewer samples" : detail === "balanced" ? "Usual sampling" : "More samples";
 const formatElapsed = (milliseconds: number) => milliseconds < 1_000
   ? `${Math.max(1, Math.round(milliseconds))} ms`
   : `${Number((milliseconds / 1_000).toPrecision(3))} s`;

@@ -2241,7 +2241,7 @@ export function SettingsPanel({
             <ThemeControl />
           </div>
           <div className="settings-section">
-            <span className="settings-sheet-kicker">Assistant</span>
+            <span className="settings-sheet-kicker">Circuit assistant</span>
             <div className="settings-field-grid">
               <div className="settings-field" role="group" aria-label="Assistant path">
                 <span>Where should Bode run?</span>
@@ -2335,60 +2335,63 @@ export function SettingsPanel({
               )}
             </div>
           </div>
-          <SettingsRow label="Command palette" hint="⌘K">
+          <SettingsRow label="Find parts" hint="⌘K · search symbols and commands">
             <Button size="sm" variant="outline" onClick={onOpenCommandPalette}>Open</Button>
           </SettingsRow>
-          <SettingsRow label="Probes" hint={`${probes.length} on this schematic`}>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                clearProbes();
-                onNotice(probes.length > 0 ? "Cleared all probes." : "No probes to clear.");
-              }}
-            >
-              Clear
-            </Button>
-          </SettingsRow>
-          {probes.length > 0 && (
-            <div className="probe-swatch-list" aria-label="Probe colors">
-              {probes.map((probe, index) => (
-                <div key={probe.id} className="probe-swatch-row">
-                  <span className="probe-swatch-label">
-                    {probe.componentId ? `I(${probe.componentId})` : `V${index + 1}`}
-                  </span>
-                  <div className="probe-swatches" role="group" aria-label={`Color for probe ${index + 1}`}>
-                    {PROBE_SWATCHES.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        className={`probe-swatch${probe.color === color ? " active" : ""}`}
-                        style={{ background: color }}
-                        aria-label={color.replace("var(--", "").replace(")", "")}
-                        aria-pressed={probe.color === color}
-                        onClick={() => setProbeColor(probe.id, color)}
-                      />
-                    ))}
+          <details className="settings-more">
+            <summary>Workspace</summary>
+            <SettingsRow label="Probes" hint={`${probes.length} on this schematic`}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  clearProbes();
+                  onNotice(probes.length > 0 ? "Cleared all probes." : "No probes to clear.");
+                }}
+              >
+                Clear
+              </Button>
+            </SettingsRow>
+            {probes.length > 0 && (
+              <div className="probe-swatch-list" aria-label="Probe colors">
+                {probes.map((probe, index) => (
+                  <div key={probe.id} className="probe-swatch-row">
+                    <span className="probe-swatch-label">
+                      {probe.componentId ? `I(${probe.componentId})` : `V${index + 1}`}
+                    </span>
+                    <div className="probe-swatches" role="group" aria-label={`Color for probe ${index + 1}`}>
+                      {PROBE_SWATCHES.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`probe-swatch${probe.color === color ? " active" : ""}`}
+                          style={{ background: color }}
+                          aria-label={color.replace("var(--", "").replace(")", "")}
+                          aria-pressed={probe.color === color}
+                          onClick={() => setProbeColor(probe.id, color)}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <SettingsRow label="Autosave" hint="Recovery snapshot for untitled edits">
-            <Button size="sm" variant="outline" onClick={clearAutosave}>Clear</Button>
-          </SettingsRow>
-          <SettingsRow label="Document" hint="Discard untitled work and start blank">
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => {
-                onNewCircuit();
-                onClose();
-              }}
-            >
-              New blank
-            </Button>
-          </SettingsRow>
+                ))}
+              </div>
+            )}
+            <SettingsRow label="Autosave" hint="Recovery snapshot for untitled edits">
+              <Button size="sm" variant="outline" onClick={clearAutosave}>Clear</Button>
+            </SettingsRow>
+            <SettingsRow label="Document" hint="Start a blank schematic">
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  onNewCircuit();
+                  onClose();
+                }}
+              >
+                New blank
+              </Button>
+            </SettingsRow>
+          </details>
         </div>
       </SheetContent>
     </Sheet>
