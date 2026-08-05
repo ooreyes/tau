@@ -9,6 +9,64 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 22:33 CDT**
+
+Unit: Close remaining differential gaps — move gap→pass/sibling with
+honest LTspice↔ngspice compares. Script stdout is truth. DoD
+broad-differential box stays open. Shippable? NO.
+
+What landed this unit:
+
+- `.step` temp (tc1 + `.temp`), source (V1 list), nested R×C Cartesian —
+  expanded paired compares (stock ngspice has no `.step` card)
+- Educational Colpitts AC: Tau AC deck + AC stim on V1; |V(drain)| match
+- Class-D OP: L1 is linear 225µH; prior “behavioral L @device[param]” was a
+  MOSFET `.save` wrap misread — harness now strips `+ @…` save continuations
+- Proven this run: **pass=15 · sibling=5 · gap=2**
+- Remaining gaps: Educational steptemp/stepmodelparam/native step_expand;
+  Class-D AC/DC/noise/tf
+
+Next unit: unsigned release smoke / §10 / named-device / remaining gaps.
+
+---
+
+### 2026-08-04 — Close differential gaps (pass=15 · sibling=5 · gap=2)
+
+**What I did**
+- Closed the three prior differential gaps with honest LTspice↔ngspice
+  numeric compares (expanded `.step` temp/source/nested; Colpitts AC with
+  explicit AC stimulus; Class-D OP node voltages).
+- Corrected the Class-D OP gap diagnosis: L1 is linear 225µH; `@device[param]`
+  vectors are MOSFET/diode saves. `parityHarness.prepareDeck` now drops
+  `.save` wrap `+` lines so LTspice does not see orphan continuations.
+- Left two explicit gaps so the DoD broad-differential box stays honest.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `apps/desktop/scripts/parityHarness.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `STATE.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=15 sibling=5 gap=2
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2610 passed | 6 skipped
+
+**Parity items**
+- Broad differential DoD: still unchecked (matrix not complete)
+- Acceptance corpus / Class-D Efficiency / waveform parity: unchanged
+
+**Next step**
+- Unsigned release smoke (`tauri build` / packaged ngspice) if time; else
+  Educational steptemp/stepmodelparam or §10.
+
+**Status: IN PROGRESS - 2026-08-04 22:27 CDT**
+
+Unit: Close remaining differential gaps — move gap→pass/sibling with
+honest LTspice↔ngspice compares (`.step` temp/source/nested, Colpitts AC,
+Class-D OP). Prefer honest fix or explicit refusal+gap doc; never silent
+substitution. Script stdout is truth. DoD broad-differential box stays open.
+Shippable? NO unless proven.
+
 **Status: DONE - 2026-08-04 22:20 CDT**
 
 Unit: Widen differential matrix — move gap rows to pass/sibling with

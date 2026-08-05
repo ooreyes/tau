@@ -60,18 +60,28 @@ function prepareDeck(
   ltspice: boolean,
   skipSave = false,
 ): string {
-  const lines = source
-    .split(/\r?\n/)
-    .filter((line) => {
-      const trimmed = line.trim();
-      // Drop save/end/measure cards so the harness owns them. Tau's deck
-      // builder may already emit authored `.meas` (P1.6); re-appending the
-      // same names makes LTspice refuse with "Multiply defined .measure".
-      return !/^\.save\b/i.test(trimmed)
-        && !/^\.end\b/i.test(trimmed)
-        && !/^\.meas(?:ure)?\b/i.test(trimmed);
-    })
-    .map((line) => compatibleOptions(line, ltspice));
+  // Drop save/end/measure cards so the harness owns them. Tau's deck builder
+  // may already emit authored `.meas` (P1.6); re-appending the same names
+  // makes LTspice refuse with "Multiply defined .measure". Also drop `+`
+  // wrap lines that belong to a removed `.save` — otherwise orphan
+  // `+ @m1[id]` continuations splice onto the previous card and LTspice
+  // rejects Class-D / MOSFET decks with "Bad .save request".
+  const lines: string[] = [];
+  let skippingSaveWrap = false;
+  for (const line of source.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (/^\.save\b/i.test(trimmed)) {
+      skippingSaveWrap = true;
+      continue;
+    }
+    if (skippingSaveWrap) {
+      if (/^\+/.test(trimmed)) continue;
+      skippingSaveWrap = false;
+    }
+    if (/^\.end\b/i.test(trimmed) || /^\.meas(?:ure)?\b/i.test(trimmed)) continue;
+    if (/^\+\s+@/i.test(trimmed)) continue;
+    lines.push(compatibleOptions(line, ltspice));
+  }
   if (ltspice) lines.push(".options plotwinsize=0");
   if (!skipSave && saves.length > 0) lines.push(`.save ${saves.join(" ")}`);
   lines.push(...measurements);

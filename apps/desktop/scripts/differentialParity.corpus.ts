@@ -1,5 +1,5 @@
 /**
- * Broad differential parity — widened matrix (still not DoD-complete).
+ * Broad differential parity — gap-closure slice (still not DoD-complete).
  *
  * Runs the same Tau-derived decks through installed LTspice and ngspice and
  * compares numeric outputs for a representative analysis × topology matrix.
@@ -14,13 +14,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   formatDifferentialParityReport,
   type DifferentialCell,
 } from "../src/io/differentialParityReport";
-import { decodeSchematicText, importAsc } from "../src/io/ascImport";
+import { decodeSchematicText, importAsc, makeSubcircuitResolver } from "../src/io/ascImport";
 import { analysesFromDirectives } from "../src/io/directiveAnalysis";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
 import { buildParamScope } from "../src/simulation/paramScope";
@@ -37,9 +38,12 @@ import {
 const haveLtspice = existsSync(LTSPICE_BINARY);
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
 
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const CLASSD_DIR = join(REPO_ROOT, "examples", "class-d-amplifier");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
 const NOISEFIGURE_ASC = join(EDU, "NoiseFigure.asc");
+const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
 
 const RC_TRAN = [
   "Tau differential RC tran",
@@ -145,10 +149,35 @@ function compareAlignedSeries(
   };
 }
 
+function siblingResolver(dir: string) {
+  return makeSubcircuitResolver((symbolType) => {
+    const read = (extension: ".asy" | ".asc") => {
+      const candidate = join(dir, `${symbolType}${extension}`);
+      return existsSync(candidate) ? decodeSchematicText(readFileSync(candidate)) : undefined;
+    };
+    const asy = read(".asy");
+    const asc = read(".asc");
+    return asy || asc ? { asy, asc } : null;
+  });
+}
+
+/** Inject `AC 1` on the first V-source line when absent (LTspice requires an AC stimulus). */
+function withAcStimulus(netlist: string): string {
+  return netlist
+    .split(/\r?\n/)
+    .map((line) => {
+      if (/^V\w*\b/i.test(line.trim()) && !/\bAC\b/i.test(line)) {
+        return `${line.trimEnd()} AC 1`;
+      }
+      return line;
+    })
+    .join("\n");
+}
+
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step param, curvetrace, NoiseFigure", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, NoiseFigure, Colpitts AC, Class-D OP", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -328,6 +357,100 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- .step temp family: expand via .temp + tc1= (stock ngspice has no .step card) ---
+    {
+      const temps = [0, 27, 50] as const;
+      const memberNotes: string[] = [];
+      for (const temp of temps) {
+        const deck = [
+          "Tau differential RC step temp",
+          "V1 in 0 PULSE(0 1 0 1n 1n 10m 20m)",
+          "R1 in out 1k tc1=0.001",
+          "C1 out 0 1u",
+          `.temp ${temp}`,
+          ".tran 10u 1m",
+        ].join("\n");
+        const result = runPairedBatch(`diff-rc-temp-${temp}`, deck, ["v(out)"]);
+        const lt = result.ltspice.get("v(out)")!;
+        const ng = result.ngspice.get("v(out)")!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.01,
+          maxTolerance: 0.03,
+        });
+        expect(comparison.pass, `temp=${temp} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`T=${temp} nRms=${comparison.normalizedRms.toFixed(4)}`);
+      }
+      cells.push({
+        analysis: "step",
+        circuit: "rc",
+        topology: ".step temp 0 50 27 on RC .tran with tc1 (expanded via .temp)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
+    // --- .step source family: expand V1 DC values on OP ---
+    {
+      const volts = [1, 2, 3] as const;
+      const memberNotes: string[] = [];
+      for (const v of volts) {
+        const deck = [
+          "Tau differential step source",
+          `V1 in 0 ${v}`,
+          "R1 in out 1k",
+          "R2 out 0 1k",
+          ".op",
+        ].join("\n");
+        const result = runPairedBatch(`diff-src-${v}`, deck, ["v(out)"]);
+        const lt = firstSample(result.ltspice.get("v(out)")!);
+        const ng = firstSample(result.ngspice.get("v(out)")!);
+        expect(relativeError(ng, lt)).toBeLessThanOrEqual(1e-6);
+        expect(ng).toBeCloseTo(v / 2, 6);
+        memberNotes.push(`V1=${v}→V(out)=${ng}`);
+      }
+      cells.push({
+        analysis: "step",
+        circuit: "divider",
+        topology: ".step V1 list 1 2 3 on divider .op (expanded)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
+    // --- nested .step Cartesian: R × C expanded (outer×inner product) ---
+    {
+      const loads = [1e3, 2e3] as const;
+      const caps = [1e-6, 2e-6] as const;
+      const memberNotes: string[] = [];
+      for (const rload of loads) {
+        for (const cap of caps) {
+          const deck = [
+            "Tau differential nested step",
+            "V1 in 0 PULSE(0 1 0 1n 1n 10m 20m)",
+            `R1 in out ${rload}`,
+            `C1 out 0 ${cap}`,
+            ".tran 10u 1m",
+          ].join("\n");
+          const result = runPairedBatch(`diff-nest-${rload}-${cap}`, deck, ["v(out)"]);
+          const lt = result.ltspice.get("v(out)")!;
+          const ng = result.ngspice.get("v(out)")!;
+          const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+            rmsTolerance: 0.01,
+            maxTolerance: 0.03,
+          });
+          expect(comparison.pass, `R=${rload} C=${cap} ${JSON.stringify(comparison)}`).toBe(true);
+          memberNotes.push(`R=${rload}/C=${cap} nRms=${comparison.normalizedRms.toFixed(4)}`);
+        }
+      }
+      cells.push({
+        analysis: "step",
+        circuit: "rc",
+        topology: "nested .step param R×C Cartesian on RC .tran (expanded)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Educational curvetrace.asc nested DC (index-aligned; axis non-monotonic) ---
     {
       expect(existsSync(CURVETRACE_ASC), `missing ${CURVETRACE_ASC}`).toBe(true);
@@ -440,6 +563,84 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational Colpitts AC (fixture is .tran-authored; add AC stimulus for small-signal) ---
+    {
+      expect(existsSync(COLPITTS_ASC), `missing ${COLPITTS_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(COLPITTS_ASC)));
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "ac",
+        startHz: 1e5,
+        stopHz: 1e7,
+        pointsPerDecade: 10,
+      });
+      expect(deck.unresolvedSubckts).toEqual([]);
+      const q1 = deck.circuit.components.find(({ component }) => component.label.toLowerCase() === "q1");
+      const drain = q1?.pins.d;
+      expect(drain, "Colpitts Q1 drain net is missing").toBeTruthy();
+      const expression = `v(${drain})`;
+      // LTspice requires an AC stimulus; V1 is DC-only in the .tran fixture.
+      const netlist = withAcStimulus(deck.netlist);
+      expect(netlist).toMatch(/^V1\b.*\bAC\b/im);
+      const result = runPairedBatch("diff-colpitts-ac", netlist, [expression]);
+      const lt = result.ltspice.get(expression)!;
+      const ng = result.ngspice.get(expression)!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, JSON.stringify(comparison)).toBe(true);
+      cells.push({
+        analysis: "ac",
+        circuit: "colpitts",
+        topology: "Educational colpits.asc JFET oscillator (AC stim on V1)",
+        status: "pass",
+        note: `|V(drain)| nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`,
+      });
+    }
+
+    // --- Class-D OP (authored analyses are .tran/.meas; OP still converges differentially) ---
+    {
+      const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
+      expect(existsSync(ascPath), `missing ${ascPath}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(ascPath)), {
+        resolveSubcircuit: siblingResolver(CLASSD_DIR),
+      });
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, { kind: "op" });
+      expect(deck.unresolvedSubckts).toEqual([]);
+      // L1 is linear 225µH — prior gap note about "behavioral L @device[param]"
+      // was a misread of MOSFET/diode `@m1[id]` save vectors. Harness strips
+      // those; node-voltage OP compares cleanly.
+      expect(deck.netlist).toMatch(/^L1\b.+\b0\.000225\b/m);
+      const result = runPairedBatch("diff-classd-op", deck.netlist, ["v(vo)", "v(vpwm)"]);
+      const ltVo = firstSample(result.ltspice.get("v(vo)")!);
+      const ngVo = firstSample(result.ngspice.get("v(vo)")!);
+      const ltPwm = firstSample(result.ltspice.get("v(vpwm)")!);
+      const ngPwm = firstSample(result.ngspice.get("v(vpwm)")!);
+      expect(relativeError(ngVo, ltVo)).toBeLessThanOrEqual(1e-6);
+      expect(relativeError(ngPwm, ltPwm)).toBeLessThanOrEqual(1e-6);
+      cells.push({
+        analysis: "op",
+        circuit: "class-d",
+        topology: "class-d-starter + deadtime .op",
+        status: "pass",
+        note: `V(vo)/V(vpwm) relErr<=1e-6 (vo≈${ngVo.toFixed(4)}, vpwm=${ngPwm})`,
+      });
+    }
+
     // Sibling proofs already committed under dod-parity.sh (not re-swept here).
     cells.push(
       {
@@ -484,23 +685,16 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       {
         analysis: "step",
         circuit: "any",
-        topology: "nested / .step temp / .step source families",
+        topology: "Educational steptemp / stepmodelparam / native step_expand vs LTspice .step card",
         status: "gap",
-        note: "param list on RC proven; nested×temp×source differential families still open",
+        note: "simple RC temp/source/nested expanded proven; full Educational BJT steptemp, .step NPN(Vaf), and deck-card step_expand differential still open",
       },
       {
         analysis: "ac",
-        circuit: "colpitts",
-        topology: "oscillator AC",
-        status: "gap",
-        note: "Colpitts fixture is .tran-authored; no AC differential cell",
-      },
-      {
-        analysis: "op",
         circuit: "class-d",
-        topology: "Class-D non-tran (OP/AC/DC/noise/tf)",
+        topology: "Class-D AC/DC/noise/tf",
         status: "gap",
-        note: "authored analyses are .tran/.meas only; OP refused (behavioral L @device[param])",
+        note: "OP proven; authored analyses remain .tran/.meas — other non-tran Class-D cells not differentially proven",
       },
     );
 
@@ -515,7 +709,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(10);
+    expect(passCount).toBeGreaterThanOrEqual(15);
     expect(gapCount).toBeGreaterThanOrEqual(1);
-  }, 180_000);
+  }, 240_000);
 });
