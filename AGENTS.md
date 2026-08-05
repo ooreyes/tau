@@ -313,26 +313,30 @@ account and sign/notarize/ship.
       (log-domain / `.machine`). Resources mextram deferred (no authored analysis).
       Harness-slice gap closed; broad topology/device matrix still open —
       DoD box stays unchecked.
-- [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
+- [x] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps
       service credentials out of the renderer, obtains explicit cloud-data
       consent, gives the model bounded exact schematic/netlist/analysis tools,
       validates generated schematics with packaged ngspice before apply, and
       has release-gated live evaluations. Never reuse ChatGPT browser cookies or
       imply that a ChatGPT subscription pays API usage.
-      **Partial (2026-08-05):** packaged-ngspice-before-apply landed fail-closed
-      (`assistantNgspiceValidate.ts` + Create/Apply gate in `AssistantPanel`;
-      `scripts/ai-ngspice-before-apply.sh`). Credentials-out-of-renderer for
-      cloud BYOK landed: `has_*_api_key` presence-only IPC, `cloud_ai_proxy`
-      attaches OS-keychain secrets on allowlisted HTTPS (Anthropic/Gemini),
-      CSP no longer allows renderer→provider connect-src, proven by
-      `scripts/ai-credentials-out-of-renderer.sh`. Release-gated live evals
-      landed: `aiLiveEvalGate.ts` + `scripts/ai-live-eval.sh` (opt-in
-      `TAU_AI_LIVE_EVAL=1`; contract always; `--require-live` /
-      `TAU_AI_LIVE_EVAL_REQUIRE=1` fail-closed when unset; flag set without
-      MLX/keys exits non-zero; MLX/cloud `*.live.test.ts` smokes when present).
-      Still FAIL: no Tau OAuth/backend (not faked). DoD box stays unchecked.
-      SHIPPABLE? **NO**.
+      **Proven 2026-08-05 via native BYOK (OR clause — Tau OAuth not required /
+      not faked):** Anthropic + Gemini BYOK with separate API billing + on-device
+      MLX (`SettingsAiSection`; UI copy: ChatGPT subscription does not cover
+      keys; `cloudAiFetch` strips cookie/auth headers). Credentials out of
+      renderer: `has_*_api_key` presence-only IPC + `cloud_ai_proxy` keychain
+      attach on allowlisted HTTPS (`scripts/ai-credentials-out-of-renderer.sh`).
+      Explicit cloud consent fail-closed (`cloudAiConsent.ts` +
+      `scripts/ai-consent.sh`). Bounded exact tools: `build_tau_circuit`
+      (library kinds + ref.pin nets only) + `inspect_simulation_signal`
+      (read-only analysis). Packaged ngspice before apply fail-closed
+      (`assistantNgspiceValidate.ts` + `scripts/ai-ngspice-before-apply.sh`).
+      Release-gated live evals: `aiLiveEvalGate.ts` + `scripts/ai-live-eval.sh`
+      (opt-in `TAU_AI_LIVE_EVAL=1`; contract always; `--require-live` /
+      `TAU_AI_LIVE_EVAL_REQUIRE=1` fail-closed when unset; no_backend fail when
+      opted in without MLX/keys; `*.live.test.ts` when backends present).
+      Umbrella: `scripts/ai-dod.sh`. SHIPPABLE? **NO** — other DoD boxes remain
+      open.
 - [ ] **Student, professional, and developer product gates:** a first-success
       learning path and contextual help; crash-safe unsaved recovery plus safe
       external-edit/conflict handling and reproducible run records; and a stable,

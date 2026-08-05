@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prove cloud BYOK credentials stay out of the renderer for API use:
 # presence-only hydration + Tauri cloud_ai_proxy (secret headers stripped on IPC).
-# Does not claim the full AI DoD box — OAuth / live evals remain open.
+# Part of scripts/ai-dod.sh. Native BYOK path — does not invent Tau OAuth.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prove AI proposal Create/Apply is gated by packaged-ngspice validation
-# (fail-closed). Does not claim the full AI DoD box — only this bullet.
+# (fail-closed). Part of scripts/ai-dod.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

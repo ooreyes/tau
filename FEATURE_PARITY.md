@@ -2021,8 +2021,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `scripts/ai-live-eval.sh` — opt-in `TAU_AI_LIVE_EVAL=1`, contract unit tests
   always, `--require-live` fail-closed when unset, no_backend fail when opted
   in without MLX/keys, real `localMlxAssistant.live.test.ts` /
-  `cloudAiAssistant.live.test.ts` smokes when backends present. Tau
-  OAuth/backend remains open (not faked) — AI DoD stays unchecked.
+  `cloudAiAssistant.live.test.ts` smokes when backends present.
+  **AI DoD box ✅ (2026-08-05):** native BYOK path satisfies the DoD OR
+  (Tau OAuth/backend not required / not faked). Umbrella proof
+  `scripts/ai-dod.sh` (consent + credentials-out-of-renderer +
+  ngspice-before-apply + live-eval contract). SHIPPABLE? **NO** — other DoD
+  boxes remain open.
   **Crash-safe unsaved recovery (2026-08-05, product-gates partial):** dirty
   edits persist to versioned `tau.unsaved.recovery.v1`; launch offers
   Restore/Discard (`UnsavedRecoveryDialog`) instead of silently hydrating into

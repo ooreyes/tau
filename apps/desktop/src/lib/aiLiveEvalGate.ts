@@ -5,8 +5,8 @@
  * in default CI. Opt in with TAU_AI_LIVE_EVAL=1. When the flag is set but no
  * backend is available, callers must fail closed — never skip-green.
  *
- * This module does not claim the full AI DoD box (Tau OAuth/backend remains
- * open). It only encodes the release gate for live evaluations.
+ * Encodes the release gate for live evaluations (AI DoD bullet). Full box
+ * proof is scripts/ai-dod.sh via native BYOK — Tau OAuth is not required.
  */
 
 export const TAU_AI_LIVE_EVAL_ENV = "TAU_AI_LIVE_EVAL";

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Release-gated AI live evaluations (AI DoD partial — not the full box).
+# Release-gated AI live evaluations (AI DoD bullet; umbrella is scripts/ai-dod.sh).
 #
 # Opt-in:  TAU_AI_LIVE_EVAL=1
 # Legacy:  TAU_LIVE_MLX=1  (MLX-only; still accepted)
@@ -16,7 +16,8 @@
 #   • Flag set + MLX and/or keys:
 #       runs the matching *.live.test.ts smokes; success prints AI-LIVE-EVAL: ok
 #
-# Does NOT claim Tau OAuth/backend. Full AI DoD stays unchecked. SHIPPABLE=NO.
+# Native BYOK / MLX path — does not invent Tau OAuth. SHIPPABLE stays NO until
+# every other AGENTS.md DoD box is checked.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

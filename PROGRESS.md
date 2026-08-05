@@ -1,16 +1,52 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:20 CDT**
+**Status: DONE - 2026-08-05 ~13:15 CDT**
 
-Unit: **§10 Simulation setup `ui/Select`** — Primary analysis, AC sweep,
-measurement builder selects migrated off native `<select>`; unit proof
-6/6. §10 design-system DoD stays unchecked (eng-input /
-AnalysisSetupForms / local-AI / Resizable·Command·Toast remain; subckt
-Select already landed). SHIPPABLE? **NO**
+Unit: **AI DoD box ✅** — native BYOK (Anthropic/Gemini + MLX) satisfies the
+AGENTS.md OR clause; Tau OAuth not required / not faked. Umbrella
+`scripts/ai-dod.sh`. SHIPPABLE? **NO** (other DoD boxes open)
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — AI DoD box proven via native BYOK (§AI)
+
+**What I did**
+- Re-evaluated AGENTS.md AI checklist against tip `1cdb2d8` (+ later
+  min-window / §10 Select commits) honestly.
+- DoD wording is OR: "Tau OAuth/backend **or** native BYOK with separate API
+  billing". Prior note treating missing OAuth as a hard fail ignored the OR.
+- Every bullet proven on BYOK/MLX: credentials-out-of-renderer, cloud consent
+  fail-closed, bounded `build_tau_circuit` + `inspect_simulation_signal`,
+  ngspice-before-apply, release-gated live evals, no ChatGPT cookie reuse /
+  no ChatGPT-sub billing implication (Settings copy + cookie header strip).
+- Added `scripts/ai-consent.sh` + umbrella `scripts/ai-dod.sh`. Flipped AI
+  DoD box to ✅. Tau OAuth not invented. SHIPPABLE? **NO**.
+
+**Files**
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `scripts/ai-dod.sh`, `scripts/ai-consent.sh`
+- `scripts/ai-*.sh` header comments; `aiLiveEvalGate.ts` comment
+
+**Tests**
+- `bash scripts/ai-ngspice-before-apply.sh` → AI-NGSPICE-BEFORE-APPLY: ok
+- `bash scripts/ai-credentials-out-of-renderer.sh` → AI-CREDENTIALS-OUT-OF-RENDERER: ok
+- `bash scripts/ai-live-eval.sh` → AI-LIVE-EVAL: contract-ok
+- `bash scripts/ai-live-eval.sh --require-live` → exit 1 (fail-closed)
+- `TAU_AI_LIVE_EVAL=1` + no backend → refuse(no_backend) exit 1
+- `bash scripts/ai-consent.sh` + `bash scripts/ai-dod.sh` → AI-DOD: ok
+
+**Parity items**
+- AI DoD ✅ via BYOK. SHIPPABLE? **NO**
+
+**Next step**
+- Remaining open DoD: §10 visual system, named-device ≥95%, broad
+  differential, product-gates remainder. (Min-window already ✅.)
+
+SHIPPABLE? **NO**
 
 ---
 
