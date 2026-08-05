@@ -1,14 +1,48 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~14:15 CDT**
+**Status: DONE - 2026-08-05 ~14:25 CDT**
 
-Unit: **§10 design-system DoD proof** — both-theme screenshot gate on tip
-(Command/Toast/Resizable + Cupertino canvas/EmptyState already landed);
-`scripts/design-system-dod.sh` + AGENTS §10 CHECKED. SHIPPABLE? **NO**
-(named-device ≥95%, broad differential still open)
+Unit: **Educational PowerAmpLayout A=0.1 → pass=111** — layout TIP121/TIP127
++ sibling `.lib` `.tran 10m` (≠ PowerAmp.asc 5m). DoD broad-differential box
+stays open. SHIPPABLE? **NO** (named-device ≥95%, broad differential still open;
+§10 design-system checked on tip).
 
 **SHIPPABLE?** **NO**
 
+
+
+
+---
+
+### 2026-08-05 — PowerAmpLayout A=0.1 TRAN → pass=111 (§DoD)
+
+**What I did**
+- Educational `PAsystem/PowerAmpLayout.asc` authored `.tran 0 10m 0 1u` +
+  `.step param A`: layout `SYMBOL TIP121`/`TIP127` + sibling `.asy`/`.lib`
+  (≠ PowerAmp.asc Prefix-X ndarlington / `.tran 5m`). A=0.1 member (strip
+  `.step`/`.four`; bake `.param A=0.1`). Speaker nets nRms=0 @ 5%/15%. Tip
+  had gr_del midnodes as pass=110 → this cell is **pass=111**.
+- Left SoftDiode Vp>0 / Fc / ISO7637 / TLINE-inv / Draft10 / Chan/NIGBT/FRA.
+  DoD broad box stays open. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2985 passed / 8 skipped
+- `scripts/differential-parity.sh` → SUMMARY pass=111 sibling=5 gap=0
+
+**Parity items**
+- Differential 🟡 **pass=111 · sibling=5 · gap=0**; DoD broad box unchecked.
+  SHIPPABLE? **NO**
+
+**Next step**
+- PowerAmpLayout A=0.2..0.7 / Fc / ISO7637 / TLINE-inv / Draft10; never
+  SoftDiode Vp>0 fakes. SHIPPABLE? **NO**
+
+SHIPPABLE? **NO**
 
 
 ---
