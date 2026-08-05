@@ -229,7 +229,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=113 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=114 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -329,8 +329,7 @@ account and sign/notarize/ship.
       deferred).
       ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
       gr_del gd outs still deferred (all-pass |V|≈1 hollow magnitude). TwoTau deferred
-      (LTspice rejects Tau s_xfer same-deck). Draft8 Laplace brace-mangle
-      deferred. Draft6 AD823 / Draft10 UOA2 same-deck not landed. HalfSlope
+      (LTspice rejects Tau s_xfer same-deck). Draft8 Laplace dual-deck landed (same-deck s_xfer still N/A). Draft6 AD823 / Draft10 UOA2 same-deck not landed. HalfSlope
       Laplace not landed. SoftDiodeRecovery Vp>0 still deferred. wavein (wavefile=)
       deferred. ISO7637 spike still misses. Educational/IGBT.asc NIGBT refuse (≠ IGBTeq).
       dimmer gate/near-cutoff still deferred. Resources sinh authored ±1.01 poles still deferred
@@ -341,7 +340,10 @@ account and sign/notarize/ship.
       LTspice.app Resources/sinh.asc authored `.dc` (BV atanh≡½log;
       ±1.01→domain-safe ±0.99; v(n001)/v(n002) nRms≈0; authored poles deferred) +
       Educational/PAsystem/PowerAmpLayout.asc authored `.tran` (layout
-      TIP A=0.2..0.7; ≠ PowerAmp.asc 5m A-step; speaker nRms=0).
+      TIP A=0.2..0.7; ≠ PowerAmp.asc 5m A-step; speaker nRms=0) +
+      Documents/LTspice/Draft8.asc authored `.ac` (rational Laplace E
+      open/closed/inv; dual-deck native Laplace↔s_xfer; v(vo_ol)/v(vo_cl)/v(l)
+      nRms=0; ≠ TwoTau/HalfSlope non-rational hollow).
       Probed this session: Applications non-vendor leftovers=0; Documents
       Draft10 UOA2 same-deck B_U* triangle fails LTspice timestep; TLINE-inv
       nRms≈0.28; HalfSlope Laplace stripped to G=1; TwoTau s_xfer same-deck

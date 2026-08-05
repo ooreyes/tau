@@ -1,13 +1,88 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~14:40 CDT**
+**Status: DONE - 2026-08-05 ~15:05 CDT**
 
-Unit: **Named-device plaintext-refuse map + Omar install projection** —
-`PLAINTEXT-REFUSE PROBE` proves plaintext-twin-on-disk=0; wall docs
-1142 stems / install dirs / 1223→2538 (99.9%) math. DoD box stays ⬜.
-SHIPPABLE? **NO**
+Unit: **Documents/LTspice/Draft8.asc Laplace dual-deck .ac → pass=114** —
+native E Laplace↔s_xfer nRms≈0. Broad-differential **not** matrix-complete.
+SHIPPABLE? **NO** (ND≪95%).
 
 **SHIPPABLE?** **NO**
+
+
+
+---
+
+### 2026-08-05 — Documents Draft8 Laplace dual-deck AC → pass=114 (§DoD)
+
+**What I did**
+- Preferred Resources/help/Documents/contrib: help exhausted; Resources leftovers
+  are `.machine` hollow / mextram no-analysis / BobIGBT param template /
+  Draft10 UOA2 same-deck timestep fail. Landed **Documents/LTspice/Draft8.asc**
+  authored `.ac`: three rational E `Laplace=A0/(1+s/wp1)/(1+s/wp2)` (E3
+  negated). Same-deck Tau s_xfer rejected by LTspice — dual-deck via new
+  `emitNativeLaplace` (LTspice native E Laplace; ngspice exact s_xfer).
+  v(vo_ol)/v(vo_cl)/v(l) nRms≈0. Tip PowerAmpLayout-ahi pass=113 → **pass=114**.
+- Broad-differential matrix-complete? **NO** — SoftDiode Vp>0 / Fc / ISO7637 /
+  TLINE / Draft10 / `.machine` / Chan/NIGBT/FRA / HalfSlope non-rational still
+  open; ND exact-rate 48.1% ≪95%. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/engine/spiceNetlist.ts` (`emitNativeLaplace`)
+- `apps/desktop/src/engine/spiceDeck.test.ts`
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
+
+**Tests**
+- Probe Draft8 dual-deck: pass nRms≈0
+- `pnpm -C apps/desktop typecheck` / `test`
+- `scripts/differential-parity.sh` → SUMMARY pass=114 sibling=5 gap=0
+
+**Parity items**
+- Differential 🟡 **pass=114 · sibling=5 · gap=0**; DoD broad box unchecked.
+  SHIPPABLE? **NO**
+
+**Next step**
+- Fc / ISO7637 / TLINE / Draft10 UOA2; never SoftDiode Vp>0 / `.machine` hollow.
+  SHIPPABLE? **NO**
+
+SHIPPABLE? **NO**
+
+
+
+---
+
+### 2026-08-05 — Documents/Draft8 Laplace dual-deck AC → pass=114 (§DoD)
+
+**What I did**
+- Dig Applications/Documents/contrib: Applications leftovers are encrypted
+  ADI/LTC (ND wall — left alone); contrib fully covered; Draft10 UOA2
+  same-deck timestep fail; HalfSlope Laplace→unity hollow (not landed);
+  SoftDiode Vp>0 / Fc / ISO7637 / `.machine` walls remain.
+- Honest cell: Documents `Draft8.asc` authored `.ac dec 100 0.1–100Meg` with
+  three rational Laplace E sources. Dual-deck `emitNativeLaplace` (LT) ↔
+  XSPICE `s_xfer` (ng) — same class as ct-dflop. v(vo_ol)/v(vo_cl)/v(l)
+  nRms=0 / spans≈4e5 / 4.6 / 1e5. Tip PowerAmpLayout A-hi was pass=113 →
+  **pass=114**.
+- DoD broad box stays open. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
+
+**Tests**
+- Probe Draft8 dual-deck: pass nRms=0 on vo_ol/vo_cl/l
+- `pnpm -C apps/desktop typecheck` / `test`
+- `scripts/differential-parity.sh` → SUMMARY pass=114 sibling=5 gap=0
+
+**Parity items**
+- Differential 🟡 **pass=114 · sibling=5 · gap=0**; DoD broad box unchecked.
+  SHIPPABLE? **NO**
+
+**Next step**
+- Draft10 UOA2 / Fc / ISO7637 / SoftDiode Vp>0 / TLINE-inv; never
+  Chan/NIGBT/FRA / HalfSlope hollow fakes. SHIPPABLE? **NO**
+
+SHIPPABLE? **NO**
 
 
 
@@ -254,8 +329,6 @@ SUMMARY pass=110 sibling=5 gap=0 (DoD box stays open until broad authored-analys
   Draft10 / gr_del gd phase; never Chan/NIGBT/FRA.
 
 SHIPPABLE? **NO**
-
----
 
 ---
 

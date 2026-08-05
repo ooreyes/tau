@@ -227,6 +227,13 @@ export type BuildSpiceDeckOptions = {
    * `D(Ron=…)` cards byte-stable.
    */
   idealDiodeAsSidiode?: boolean;
+  /**
+   * Emit LTspice-native `E … Laplace=H(s)` (params expanded to numbers) instead
+   * of ngspice XSPICE `s_xfer`. Default **false** (Tau ngspice path). Pass
+   * **true** for dual-deck LTspice comparison of rational Laplace VCVS sources.
+   * Non-rational / G-source Laplace still follow the DC-gain fallback.
+   */
+  emitNativeLaplace?: boolean;
 };
 
 export function buildSpiceDeck(
@@ -795,6 +802,7 @@ export function buildSpiceDeck(
       currentSwitchSpecs.get(index),
       vendorOpampModels.get(index),
       circuit.warnings,
+      options.emitNativeLaplace === true,
     );
     lines.push(...emitted);
     // Read off the lines that were actually emitted rather than off the
@@ -1271,7 +1279,7 @@ export function clampedLoadSourceWarning(ref: string, flag: string): string {
   return `${ref} carries LTspice's "${flag}" flag, which clamps it so it only ever draws current. Tau's engine has no equivalent, so it ran as an ideal current source that can also deliver current. Results are unaffected while the source stays forward-biased.`;
 }
 
-function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec, vendorOpampModel?: string, warnings: string[] = []): string[] {
+function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec, vendorOpampModel?: string, warnings: string[] = [], emitNativeLaplace = false): string[] {
   const { component } = entry;
   const node = (pin: string) => requiredNode(entry, pin);
 
@@ -1740,8 +1748,14 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
     case "vcvs": {
       // A `Laplace=H(s)` value is a continuous transfer function, not a gain;
       // realize it as an XSPICE s_xfer (rational) or its DC gain (otherwise).
+      // Dual-deck LTspice comparison may request native `E … Laplace=…`.
       const transfer = laplaceTransfer(component.value);
       if (transfer !== null) {
+        if (emitNativeLaplace) {
+          // Expand schematic `.param` names to numbers; free variable `s` stays.
+          const native = substituteScopeIdentifiers(transfer, params);
+          return [`${name} ${node("op")} ${node("on")} ${node("cp")} ${node("cn")} Laplace=${native}`];
+        }
         const realized = laplaceSourceLines({
           base: safeName(component.label || `E${index + 1}`),
           op: node("op"), on: node("on"), cp: node("cp"), cn: node("cn"),

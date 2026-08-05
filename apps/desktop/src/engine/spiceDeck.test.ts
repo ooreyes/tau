@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import { buildSpiceDeck, type SpiceAnalysis } from "./spiceNetlist";
+import { buildParamScope } from "../simulation/paramScope";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 
 let counter = 0;
@@ -200,6 +201,26 @@ describe("deck structure - Laplace E source", () => {
     // H(0) = 2*exp(0) = 2 → plain VCVS, no code model.
     expect(deck.netlist).toMatch(/^E_E1 \S+ \S+ \S+ \S+ 2$/m);
     expect(deck.netlist).not.toContain("s_xfer");
+  });
+
+  it("emits LTspice-native E Laplace= when emitNativeLaplace is set", () => {
+    const params = buildParamScope([".param A0=10 wp1=1000"]);
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          Vcvs(0, 0, "Laplace=A0/(1+s/wp1)", "E1"),
+          GND(-32, 16),
+          GND(32, 16),
+        ],
+        wires: [],
+        params,
+      },
+      { kind: "op" },
+      { emitNativeLaplace: true },
+    );
+    expect(deck.netlist).toMatch(/^E1 \S+ \S+ \S+ \S+ Laplace=10\/\(1\+s\/1000\)$/m);
+    expect(deck.netlist).not.toContain("s_xfer");
+    expect(deck.netlist).not.toMatch(/^A_E1\b/m);
   });
 });
 
