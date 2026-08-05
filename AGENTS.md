@@ -142,8 +142,21 @@ account and sign/notarize/ship.
 - [x] **Waveform parity** demonstrated on at least RC, a Colpitts oscillator,
       and the Class‑D circuit (traces match LTspice within tolerance). Proven
       by `scripts/waveformParity.corpus.ts` via `scripts/dod-parity.sh`.
-- [ ] All directives used in the corpus are supported: `.tran .ac .op .dc .step
+- [x] All directives used in the corpus are supported: `.tran .ac .op .dc .step
       .meas .noise .tf .param .func .temp .options .model .inc .subckt`.
+      Proven 2026-08-05 by `scripts/directives-dod.sh` →
+      `apps/desktop/src/simulation/directivesDod.test.ts` (15/15): `.op`
+      (`pickAutoRunAnalysis` + `runOperatingPoint`); `.tran` (`parseTranDirective`
+      + RC charge); `.ac` (`parseAcDirective` + `runAcSweep`); `.dc`
+      (`parseDcDirective` + `runDcSweep`); `.step` (`parseStepDirective` +
+      `runParamStep`); `.meas` (`runMeasurements` + deck `measFourLinesFromDirectives`);
+      `.noise` (`runNoiseAnalysis` 4.07 nV/√Hz); `.tf` (`runTransferFunction`
+      gain/Zin/Zout); `.param` (brace OP mid=9 V); `.func` (scope +
+      `evaluateExpression`); `.temp` (deck `.temp 85`); `.options` (reltol
+      override on deck); `.model` (card in netlist); `.inc` (normalize +
+      unresolved warn / attached resolve, never file-backed card); `.subckt`
+      (block in deck + `definedSubcktNames`). SHIPPABLE? **NO** — other DoD
+      boxes remain open.
 - [x] Waveform viewer: arbitrary expressions, cursors, FFT/THD, stepped‑family
       overlays, CSV/image export. Proven 2026-08-05 by
       `scripts/waveform-viewer-dod.sh` → `apps/desktop/src/simulation/waveformViewerDod.test.ts`

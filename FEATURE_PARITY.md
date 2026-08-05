@@ -41,6 +41,11 @@ serves that goal.** Track progress with these circuits as the test suite.
 `.model` 29 · `.noise` 13 · `.func` 13 · `.op` 10 · `.options` 7 · `.temp` 4 ·
 `.subckt` 2 · `.tf` 1 · `.inc` 1
 
+✅ **AGENTS.md corpus-directives DoD (2026-08-05):** every listed keyword proven
+end-to-end by `scripts/directives-dod.sh` → `directivesDod.test.ts` (15/15).
+Remaining 🟡 notes below are polish/NEXT (native nonlinear DC, TS diode/BJT
+tempco, library search roots) — not “unsupported.” SHIPPABLE? **NO**.
+
 ---
 
 ## How to work on this (for the next LLM)
