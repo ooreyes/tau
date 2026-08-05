@@ -49,6 +49,8 @@ const NOISE_ASC = join(EDU, "noise.asc");
 const COHN_ASC = join(EDU, "Cohn.asc");
 const MEASUREBW_ASC = join(EDU, "MeasureBW.asc");
 const TRANSFORMER_ASC = join(EDU, "Transformer.asc");
+const TRANSFORMER2_ASC = join(EDU, "Transformer2.asc");
+const IDEAL_TRANSFORMER_ASC = join(EDU, "IdealTransformer.asc");
 const NOTCH_ASC = join(EDU, "notch.asc");
 const PASSIVE_ASC = join(EDU, "passive.asc");
 const BUTTER_ASC = join(EDU, "butter.asc");
@@ -199,7 +201,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Cohn AC, MeasureBW AC, Transformer TRAN, notch/passive/butter AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -929,6 +931,109 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational Transformer2.asc authored .tran (3-winding coupled L K=1) ---
+    {
+      expect(existsSync(TRANSFORMER2_ASC), `missing ${TRANSFORMER2_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(TRANSFORMER2_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.tran, "Transformer2.asc must author .tran").toBeTruthy();
+      expect(imported.directives.some((d) => /^K1\b/i.test(d.trim()))).toBe(true);
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^K1\s+L1\s+L2\s+L3\b/im);
+      expect(deck.netlist).toMatch(/^L1\b/im);
+      expect(deck.netlist).toMatch(/^L2\b/im);
+      expect(deck.netlist).toMatch(/^L3\b/im);
+      const result = runPairedBatch("diff-transformer2-tran", deck.netlist, ["v(in)", "v(a)", "v(b)"]);
+      const memberNotes: string[] = [];
+      for (const trace of ["v(in)", "v(a)", "v(b)"] as const) {
+        const lt = result.ltspice.get(trace)!;
+        const ng = result.ngspice.get(trace)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${trace} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`${trace} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`);
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "transformer2",
+        topology: "Educational Transformer2.asc coupled L1/L2/L3 K=1 (authored .tran 100µ)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
+    // --- Educational IdealTransformer.asc authored .tran (G-source ideal XFMR, .param N=10) ---
+    {
+      expect(existsSync(IDEAL_TRANSFORMER_ASC), `missing ${IDEAL_TRANSFORMER_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(IDEAL_TRANSFORMER_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.tran, "IdealTransformer.asc must author .tran").toBeTruthy();
+      expect(imported.directives.some((d) => /\.param\b/i.test(d) && /\bN\s*=/i.test(d))).toBe(true);
+      const params = buildParamScope(imported.directives);
+      expect(params.scope.N ?? params.scope.n).toBe(10);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^G1\b/im);
+      expect(deck.netlist).toMatch(/^G2\b/im);
+      // Tau evaluates `{1/N}` at deck build (N=10 → 0.1); no live `.param` card needed.
+      expect(deck.netlist).toMatch(/^G2\b.+\b0\.1\b/im);
+      expect(deck.netlist).toMatch(/^G4\b.+\b0\.1\b/im);
+      // Fixture has no named signal nets — probe primary (R1) and secondary (R3) tops.
+      const r1 = deck.circuit.components.find(({ component }) => component.label.toLowerCase() === "r1");
+      const r3 = deck.circuit.components.find(({ component }) => component.label.toLowerCase() === "r3");
+      const primary = [r1?.pins.a, r1?.pins.b].find((n) => n && n !== "0");
+      const secondary = [r3?.pins.a, r3?.pins.b].find((n) => n && n !== "0");
+      expect(primary, "IdealTransformer R1 hot net missing").toBeTruthy();
+      expect(secondary, "IdealTransformer R3 hot net missing").toBeTruthy();
+      const primaryExpr = `v(${primary})`;
+      const secondaryExpr = `v(${secondary})`;
+      const result = runPairedBatch("diff-idealtransformer-tran", deck.netlist, [primaryExpr, secondaryExpr]);
+      const memberNotes: string[] = [];
+      for (const trace of [primaryExpr, secondaryExpr] as const) {
+        const lt = result.ltspice.get(trace)!;
+        const ng = result.ngspice.get(trace)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${trace} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`${trace} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`);
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "idealtransformer",
+        topology: "Educational IdealTransformer.asc G-source XFMR N=10 (authored .tran 100µ)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Educational notch / passive / butter authored .ac (RLC filter breadth) ---
     for (const fixture of [
       {
@@ -1282,9 +1387,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(30);
+    expect(passCount).toBeGreaterThanOrEqual(32);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=30 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=32 sibling=5 gap=0/);
   }, 240_000);
 });

@@ -1576,9 +1576,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=30 · sibling=5 · gap=0**: prior cells
+  (truth). Gap-closure → **pass=32 · sibling=5 · gap=0**: prior cells
   plus Educational noise.asc, MeasureBW.asc AC, Transformer.asc TRAN
-  (coupled L1/L2 K=1), notch/passive/butter authored `.ac` (RLC filter
+  (coupled L1/L2 K=1), Transformer2 (3-winding K) + IdealTransformer
+  (G-source N=10) TRAN, notch/passive/butter authored `.ac` (RLC filter
   breadth; |V| nRms≈0), steptemp/stepmodelparam, native step_expand,
   Colpitts AC, Class-D AC/OP/DC/noise/tf (noise/tf promoted under the same
   added-analysis precedent as AC/OP/DC; V(onoise) nRms≈0.0003, .tf rel≈3e-8).

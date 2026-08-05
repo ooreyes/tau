@@ -9,12 +9,13 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 01:58 CDT**
+**Status: DONE - 2026-08-05 02:02 CDT**
 
-Unit: Educational notch/passive/butter authored `.ac` → differential **pass=30**.
+Unit: Educational `Transformer2.asc` + `IdealTransformer.asc` authored `.tran` → differential **pass=32**.
 ```
-SUMMARY pass=30 sibling=5 gap=0
-ac notch/passive/butter … nRms≈0
+SUMMARY pass=32 sibling=5 gap=0
+tran transformer2 … v(in)/v(a)/v(b) nRms=0
+tran idealtransformer … v(N002)/v(N004) nRms=0
 ```
 Named-device 47.9% encrypted wall unchanged. SHIPPABLE? **NO**
 
@@ -22,6 +23,40 @@ Named-device 47.9% encrypted wall unchanged. SHIPPABLE? **NO**
 
 
 ---
+
+### 2026-08-05 — Transformer2 + IdealTransformer TRAN → pass=32 (§DoD)
+
+**What I did**
+- Educational `Transformer2.asc`: 3-winding coupled L + `K1 L1 L2 L3 1`,
+  authored `.tran 100u` → V(in)/V(a)/V(b) LTspice↔ngspice nRms=0.
+- Educational `IdealTransformer.asc`: G-source ideal XFMR with `.param N=10`
+  (deck evaluates `{1/N}`→0.1) → primary/secondary node voltages match.
+- Concurrent leftover `_probeBreadth.corpus.ts` deleted (broke typecheck).
+- Broad DoD matrix still open. SHIPPABLE? **NO**.
+
+**Exact stdout**
+```
+SUMMARY pass=32 sibling=5 gap=0
+tran transformer2 … v(in) nRms=0.0000; v(a)/v(b) nRms=0.0000
+tran idealtransformer … v(N002)/v(N004) nRms=0.0000
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `scripts/differential-parity.sh`; typecheck; apps/desktop test (2679 passed)
+
+**Parity items**
+- Differential 🟡 harness **pass=32 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- Clapp/Hartly AC; Howland with LT1001 attach; more Educational authored analyses.
+  Never fake Vswitch continuous SW or encrypted SpiceModel decrypt.
+
 
 ### 2026-08-05 — notch/passive/butter AC differential → pass=30 (§DoD)
 
