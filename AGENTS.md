@@ -174,7 +174,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=76 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=77 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -187,12 +187,15 @@ account and sign/notarize/ship.
       rmsTol=0.06 / maxTol=0.07 BJT tempco) + Educational/waveout.asc authored
       `.tran` (BV product mixer; v(syn) nRms≈0.0078 nMax≈0.021 span≈1.57) +
       Educational/ISO16750-2_example.asc authored `.tran` (bundled 12V+24V
-      starting profiles; v(n001)/v(n002) nRms≈0.035/0.025 @ rmsTol=0.05).
+      starting profiles; v(n001)/v(n002) nRms≈0.035/0.025 @ rmsTol=0.05) +
+      LTspice.app Resources/IGBTeq.asc authored nested `.dc` (NMOS+PNP IGBT-eq;
+      index-aligned v(n002)/i(v1) nRms≈5e-4 / ≈0).
       gr_del deferred (all-pass |V|≈1 hollow magnitude). TwoTau deferred
       (LTspice rejects Tau s_xfer same-deck). Draft8 Laplace brace-mangle
       deferred. Draft6 AD823 / Draft10 UOA2 same-deck not landed. HalfSlope
       Laplace not landed. SoftDiodeRecovery deferred. wavein (wavefile=)
-      deferred. ISO7637 spike still misses. dimmer TRIAC deferred.
+      deferred. ISO7637 spike still misses. Educational/IGBT.asc NIGBT refuse (≠ IGBTeq).
+      dimmer TRIAC deferred.
       Harness-slice gap closed; broad topology/device matrix still open —
       DoD box stays unchecked.
 - [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI

@@ -9,21 +9,39 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:42 CDT**
+**Status: DONE - 2026-08-05 04:45 CDT**
 
-Unit: Educational `ISO16750-2_example.asc` authored `.tran` → differential **pass=76**.
+Unit: Merged Educational `ISO16750-2_example.asc` TRAN + LTspice.app `IGBTeq.asc`
+nested DC → differential **pass=77**.
 ```
-SUMMARY pass=76 sibling=5 gap=0
-tran iso16750 … v(n001)/v(n002) nRms≈0.035/0.025 span≈13.5/27
+SUMMARY pass=77 sibling=5 gap=0
 ```
-Bundled ISO 12V+24V starting profiles; tip waveout pass=75 → 76. Left
-waveout/BandGaps/TIP/Draft walls alone. Named-device 48.1%. SHIPPABLE? **NO**
+Both landed after tip diverge. Named-device 48.1%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — merge ISO16750 TRAN + IGBTeq nested DC → pass=77 (§DoD)
+
+**What I did**
+- Staff EE: Educational `ISO16750-2_example.asc` authored `.tran` (bundled
+  12V+24V ISO profiles; v(n001)/v(n002)).
+- Continue 20: LTspice.app Resources `IGBTeq.asc` authored nested `.dc`
+  (NMOS+PNP IGBT-eq; ≠ Educational NIGBT).
+- Merged both cells; SUMMARY 75→77. Left waveout/BandGaps/TIP/Draft walls.
+
+**Exact stdout**
+
+```
+SUMMARY pass=77 sibling=5 gap=0
+```
+
+**Parity items**
+- Differential 🟡 **pass=77**. Named-device 48.1%. SHIPPABLE? NO
 
 
 ### 2026-08-05 — Educational ISO16750-2_example.asc TRAN → pass=76 (§DoD)
