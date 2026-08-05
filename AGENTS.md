@@ -200,8 +200,7 @@ account and sign/notarize/ship.
       command); Settings sheet `max-h-[calc(100vh-60px)]` + `overflow-y-auto`
       (dialog fits, internal scroll); editor toolbar `overflow-x: auto` so
       Run/Stop stay reachable when the schematic column is ~260–360px; shots
-      under `screenshots/min-window-dod/`. **§10 design-system box stays
-      unchecked.** SHIPPABLE? **NO**.
+      under `screenshots/min-window-dod/`. SHIPPABLE? **NO**.
 - [ ] **Named-device fidelity is fail-closed everywhere:** zero silent generic
       semiconductor, switch, op-amp, subcircuit, or vendor-symbol substitution;
       the full recursive corpus has zero non-refusal hard failures and at least
