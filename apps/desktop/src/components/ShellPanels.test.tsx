@@ -70,6 +70,16 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     expect(screen.queryByRole("button", { name: "Refine transient resolution" })).toBeNull();
   });
 
+  it("exposes a horizontally scrollable tool strip so Run stays reachable at the 900px floor", () => {
+    // jsdom does not compute layout overflow, but the class contract is what
+    // App.css keys the overflow-x:auto rule on - prove the affordance is wired.
+    const { container } = render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
+    const toolbar = container.querySelector(".editor-toolbar");
+    expect(toolbar).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Run simulation" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop simulation" })).toBeTruthy();
+  });
+
   it("disables Wire, Net label, Undo, Redo, selection deletion, and Clear schematic in simulator mode", () => {
     const emptyDoc = { components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], textAnnotations: [], ascShapes: [], ascDataFlags: [], ascForeignSymbols: [], ascHierarchicalBlocks: [], ascSheet: null, userModelLibraries: [] };
     // Both past and future populated so canUndo/canRedo would be true if the

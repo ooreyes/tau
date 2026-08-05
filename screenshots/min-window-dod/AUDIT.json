@@ -1,0 +1,210 @@
+[
+  {
+    "label": "empty-light",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": {
+      "clientW": 622,
+      "scrollW": 622,
+      "overflowX": false
+    },
+    "editorToolbarScrollable": null,
+    "dialogGeom": null
+  },
+  {
+    "label": "schematic-light",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": {
+      "clientW": 358,
+      "scrollW": 358,
+      "overflowX": false
+    },
+    "editorToolbarScrollable": true,
+    "dialogGeom": null
+  },
+  {
+    "label": "schematic-panels-light",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": {
+      "clientW": 622,
+      "scrollW": 622,
+      "overflowX": false
+    },
+    "editorToolbarScrollable": true,
+    "dialogGeom": null
+  },
+  {
+    "label": "simulator-light",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": null,
+    "editorToolbarScrollable": null,
+    "dialogGeom": null
+  },
+  {
+    "label": "dialog-light",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": null,
+    "editorToolbarScrollable": null,
+    "dialogGeom": {
+      "t": 48,
+      "b": 588,
+      "h": 540,
+      "fits": true,
+      "canScroll": true,
+      "scrollH": 667,
+      "clientH": 538
+    }
+  },
+  {
+    "label": "command-light",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": null,
+    "editorToolbarScrollable": null,
+    "dialogGeom": null
+  },
+  {
+    "label": "empty-dark",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": {
+      "clientW": 622,
+      "scrollW": 622,
+      "overflowX": false
+    },
+    "editorToolbarScrollable": null,
+    "dialogGeom": null
+  },
+  {
+    "label": "schematic-dark",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": {
+      "clientW": 358,
+      "scrollW": 358,
+      "overflowX": false
+    },
+    "editorToolbarScrollable": true,
+    "dialogGeom": null
+  },
+  {
+    "label": "schematic-panels-dark",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": {
+      "clientW": 622,
+      "scrollW": 622,
+      "overflowX": false
+    },
+    "editorToolbarScrollable": true,
+    "dialogGeom": null
+  },
+  {
+    "label": "simulator-dark",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": null,
+    "editorToolbarScrollable": null,
+    "dialogGeom": null
+  },
+  {
+    "label": "dialog-dark",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": null,
+    "editorToolbarScrollable": null,
+    "dialogGeom": {
+      "t": 48,
+      "b": 588,
+      "h": 540,
+      "fits": true,
+      "canScroll": true,
+      "scrollH": 667,
+      "clientH": 538
+    }
+  },
+  {
+    "label": "command-dark",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": null,
+    "editorToolbarScrollable": null,
+    "dialogGeom": null
+  }
+]

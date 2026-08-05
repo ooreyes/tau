@@ -1,15 +1,50 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:05 CDT**
+**Status: DONE - 2026-08-05 ~13:40 CDT**
 
-Unit: **AI release-gated live evals** — `TAU_AI_LIVE_EVAL=1` harness +
-`scripts/ai-live-eval.sh` (fail-closed unset/`--require-live`; MLX live
-3/3 when opted in). Tau OAuth not faked. AI DoD box stays ⬜.
-SHIPPABLE? **NO**
+Unit: **min-window DoD** — Settings sheet viewport cap + editor toolbar
+horizontal scroll; `scripts/min-window-dod.sh` 12/12 at 900×600.
+§10 design-system DoD stays unchecked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — Min-window DoD proven (900×600)
+
+**What I did**
+- Audited stated minimum (tauri.conf.json 900×600): Settings sheet overflowed
+  (~669px, no scroll → Hugging Face / Import / Clear unreachable); editor
+  transport clipped past the schematic column with no scroll path.
+- Fixed `ui/sheet.tsx` (`max-h-[calc(100vh-60px)]` + `overflow-y-auto`) and
+  `.editor-toolbar` / `.editor-shell` overflow contract.
+- Committed re-runnable proof: `scripts/min-window-dod.{sh,mjs}` + shots under
+  `screenshots/min-window-dod/`. Flipped AGENTS **min-window** box only.
+  §10 design-system box left open. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/components/ui/sheet.tsx` (+ primitives test)
+- `apps/desktop/src/App.css` (editor-shell / editor-toolbar)
+- `apps/desktop/src/components/SettingsWorkspaceCopy.test.tsx`
+- `apps/desktop/src/components/ShellPanels.test.tsx`
+- `scripts/min-window-dod.sh`, `scripts/min-window-dod.mjs`
+- `screenshots/min-window-dod/*`, `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/min-window-dod.sh` → vitest slice green + 12/12 screenshot PASS
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2886 passed / 6 skipped
+
+**Parity items**
+- AGENTS.md min-window DoD → checked. §10 design-system still ⬜. SHIPPABLE? NO
+
+**Next step**
+- §10 remaining native `<select>`s / Resizable-Command-Toast; differential;
+  named-device wall; AI keys out of renderer; product gates.
+
+SHIPPABLE? **NO**
 
 ---
 

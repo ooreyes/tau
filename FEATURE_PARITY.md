@@ -2132,13 +2132,17 @@ settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model +
 IndependentSourceEditor Waveform type + semiconductor Simulation model native
 `<select>`s migrated onto shadcn `ui/Select` (Settings locked/untouched); unit
 proof in SimulationPanel/ShellPanels tests (combobox triggers, not native
-`<select>`). Remaining §10 debt that blocks an honest DoD check:
+`<select>`). **Min-window DoD (separate AGENTS box) proven 2026-08-05** via
+`scripts/min-window-dod.sh` at 900×600 (12/12; Settings sheet viewport cap +
+scroll; editor toolbar horizontal scroll) — shots in
+`screenshots/min-window-dod/`. Remaining §10 debt that blocks an honest **§10
+design-system** DoD check:
 Resizable/Command/Toast primitives still deferred; other native `<select>`s
 (Simulation setup, EngineeringInput units, subckt model chooser, local-AI
 settings) not yet on `ui/Select`; Assistant/local-AI
 settings surfaces still mid-migration; Cupertino icon chrome still settling;
-no proof of zero ad-hoc drift across every panel at both themes + min window.
-Do **not** flip the AGENTS box until that grep+screenshot proof exists.
+no proof of zero ad-hoc drift across every panel at both themes.
+Do **not** flip the AGENTS **§10** box until that grep+screenshot proof exists.
 
 **Earlier claim (2026-07-08 Phase 4c) that §10 "closes" AGENTS DoD was premature**
 once light theme, Anduril retune, and post-migration chrome re-entered the

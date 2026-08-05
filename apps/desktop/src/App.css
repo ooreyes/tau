@@ -5163,6 +5163,9 @@ body {
   display: flex;
   flex-direction: column;
   background: var(--panel-3);
+  /* Transport/tool strip scrolls inside `.editor-toolbar` at the 900px
+     floor - never let a sticky overflow widen the shell past its budget. */
+  overflow-x: hidden;
 }
 
 /* Component parts catalogue - a fixed right column inside the flex shell-body
@@ -5391,6 +5394,23 @@ body {
   padding: 0 10px;
   background: var(--panel-3);
   border-bottom: 0.5px solid var(--border);
+  /* At the 900×600 floor the schematic column can be ~260–360px while the
+     tool + transport cluster wants ~420px. Horizontal scroll keeps Run /
+     Stop / Probe reachable instead of clipping them past the rail edge. */
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-4) transparent;
+}
+
+.editor-toolbar::-webkit-scrollbar {
+  height: 3px;
+}
+
+.editor-toolbar::-webkit-scrollbar-thumb {
+  background: var(--panel-4);
+  border-radius: var(--r-2xs);
 }
 
 .editor-icon-btn {
@@ -5485,6 +5505,7 @@ body {
 
 .transport {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 1px;
   padding: 2px;

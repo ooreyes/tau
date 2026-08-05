@@ -126,7 +126,12 @@ describe("Sheet", () => {
       </Sheet>,
     );
     expect(screen.getByText("Settings")).toBeTruthy();
-    expect(document.querySelector('[data-slot="sheet-content"]')?.className).toContain("extra-class");
+    const content = document.querySelector('[data-slot="sheet-content"]');
+    expect(content?.className).toContain("extra-class");
+    // Min-window DoD: sheet must cap to the viewport and scroll internally so
+    // Appearance / Assistant / Workspace rows stay reachable at 900×600.
+    expect(content?.className).toMatch(/max-h-\[calc\(100vh-60px\)\]/);
+    expect(content?.className).toMatch(/overflow-y-auto/);
     expect(screen.getByRole("button", { name: "Close settings" })).toBeTruthy();
   });
 });

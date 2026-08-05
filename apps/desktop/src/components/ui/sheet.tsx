@@ -9,11 +9,12 @@ import { cn } from "@/lib/utils";
  * Dialog primitive as ui/dialog.tsx (focus trap, Escape-to-close, outside-
  * click all come free), positioned as an operator-console side panel instead
  * of a centered pop. This is the treatment Tau's Settings panel has always
- * used (top-right, fit-content height, not a full-height drawer) - now with
- * real slide-from-edge motion (`--animate-slide-in/out-right`, tokens.css)
- * instead of Dialog's scale-pop. Backdrop uses the lighter `--scrim` (a side
- * sheet dims the console less than a centered alert, which keeps
- * `--scrim-strong` in ui/dialog.tsx).
+ * used (top-right, not a full-height drawer) - now with real slide-from-edge
+ * motion (`--animate-slide-in/out-right`, tokens.css) instead of Dialog's
+ * scale-pop. Height is capped to the viewport (`max-h` + `overflow-y-auto`)
+ * so dense Settings content stays reachable at the app's 900×600 minimum
+ * window. Backdrop uses the lighter `--scrim` (a side sheet dims the console
+ * less than a centered alert, which keeps `--scrim-strong` in ui/dialog.tsx).
  */
 function Sheet({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="sheet" {...props} />;
@@ -61,7 +62,10 @@ function SheetContent({
       <DialogPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed top-12 right-3 z-50 flex w-[360px] max-w-[calc(100vw-24px)] flex-col gap-0 rounded-lg border border-border-strong bg-popover text-popover-foreground shadow-[var(--elev-pop)] outline-none",
+          // top-12 (48px) + 12px bottom inset → max-h keeps the sheet inside
+          // the stated 900×600 minimum; overflow-y-auto is the reachability
+          // path when Appearance + Circuit assistant + Workspace exceed it.
+          "fixed top-12 right-3 z-50 flex max-h-[calc(100vh-60px)] w-[360px] max-w-[calc(100vw-24px)] flex-col gap-0 overflow-y-auto rounded-lg border border-border-strong bg-popover text-popover-foreground shadow-[var(--elev-pop)] outline-none",
           "data-[state=open]:animate-slide-in-right data-[state=closed]:animate-slide-out-right",
           className,
         )}

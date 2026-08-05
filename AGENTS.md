@@ -182,10 +182,18 @@ account and sign/notarize/ship.
       IMPERATIVE per Omar): shadcn‑grade component system with a design‑token
       layer, every panel migrated, zero leftover ad‑hoc styling drift. The app
       must *look* like a product someone pays for, not a prototype.
-- [ ] **UI is usable down to the app's own stated minimum window size** — no
+- [x] **UI is usable down to the app's own stated minimum window size** — no
       column so narrow controls become unreachable, no header stuck above the
       scroll position. Verify with the screenshot pipeline (STEP 3.5 in the
       build prompt) at the minimum size, not just a comfortable one.
+      Proven 2026-08-05 by `scripts/min-window-dod.sh` →
+      `scripts/min-window-dod.mjs` at tauri.conf.json **900×600**: 12/12
+      PASS (both themes × empty/schematic/schematic-panels/simulator/dialog/
+      command); Settings sheet `max-h-[calc(100vh-60px)]` + `overflow-y-auto`
+      (dialog fits, internal scroll); editor toolbar `overflow-x: auto` so
+      Run/Stop stay reachable when the schematic column is ~260–360px; shots
+      under `screenshots/min-window-dod/`. **§10 design-system box stays
+      unchecked.** SHIPPABLE? **NO**.
 - [ ] **Named-device fidelity is fail-closed everywhere:** zero silent generic
       semiconductor, switch, op-amp, subcircuit, or vendor-symbol substitution;
       the full recursive corpus has zero non-refusal hard failures and at least
@@ -351,7 +359,7 @@ account and sign/notarize/ship.
       10/10 ignored cargo tests against mounted `libngspice.dylib`;
       `scripts/packaged-engine-smoke.py` passed (336 samples); Tau binary
       stay-alive ≥5s. **Shippable? NO** — other DoD boxes remain open
-      (broad differential, §10, named-device, UI/editor/waveform/AI/gates).
+      (broad differential, §10 design system, named-device, AI/product gates).
 
 When every box is checked, **stop and report** — do not invent new scope.
 

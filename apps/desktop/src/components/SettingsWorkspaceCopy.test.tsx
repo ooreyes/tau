@@ -85,4 +85,13 @@ describe("Settings workspace copy (student-calm)", () => {
     expect(workspace?.hasAttribute("open")).toBe(false);
     expect(screen.getByText("Autosave")).toBeTruthy();
   });
+
+  it("caps the Settings sheet to the viewport so dense rows scroll at 900×600", () => {
+    render(<SettingsPanel {...props} />);
+    const sheet = document.querySelector(".settings-panel");
+    expect(sheet).toBeTruthy();
+    expect(sheet?.className).toMatch(/max-h-\[calc\(100vh-60px\)\]/);
+    expect(sheet?.className).toMatch(/overflow-y-auto/);
+    expect(screen.getByRole("button", { name: "Close settings" })).toBeTruthy();
+  });
 });
