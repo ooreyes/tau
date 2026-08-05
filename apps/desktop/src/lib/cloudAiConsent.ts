@@ -6,6 +6,10 @@
 const STORAGE_KEY = "tau.cloud-ai.consent.v1";
 const CHANGE_EVENT = "tau:cloud-ai-consent-changed";
 
+/** Shown when a cloud provider is selected before the student opts in. */
+export const CLOUD_AI_CONSENT_REQUIRED =
+  "Allow cloud AI in Settings before Tau can send circuit context off this Mac.";
+
 export interface CloudAiConsent {
   /** Student acknowledged circuit data may be sent to the cloud provider. */
   consented: boolean;

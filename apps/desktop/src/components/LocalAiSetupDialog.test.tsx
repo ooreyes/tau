@@ -80,18 +80,21 @@ describe("LocalAiSetupDialog", () => {
     runtime.isNative.mockResolvedValue(false);
     render(<LocalAiSetupDialog />);
     await waitFor(() => expect(runtime.isNative).toHaveBeenCalled());
-    expect(screen.queryByText("Set up local AI")).toBeNull();
+    expect(screen.queryByText("Use on-device AI")).toBeNull();
   });
 
-  it("opens on first native launch and installs the runtime", async () => {
+  it("opens on first native launch and installs then starts via Turn on", async () => {
     runtime.isNative.mockResolvedValue(true);
     runtime.getStatus.mockResolvedValue(status({ installed: false }));
-    runtime.install.mockResolvedValue(status({ installed: true }));
+    runtime.install.mockResolvedValue(status({ installed: true, state: "stopped" }));
+    runtime.start.mockResolvedValue(status({ state: "starting", managed: true, installed: true }));
     render(<LocalAiSetupDialog />);
 
-    expect(await screen.findByRole("heading", { name: "Set up local AI" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Set up local AI" }));
+    expect(await screen.findByRole("heading", { name: "Use on-device AI" })).toBeTruthy();
+    expect(screen.queryByText(/8080|127\.0\.0\.1|localhost|loopback/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
     await waitFor(() => expect(runtime.install).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(runtime.start).toHaveBeenCalled());
   });
 
   it("downloads and starts the selected model after the runtime is present", async () => {
@@ -101,8 +104,8 @@ describe("LocalAiSetupDialog", () => {
     render(<LocalAiSetupDialog />);
 
     // First-run prefers the smaller 1.7B download for tryouts.
-    fireEvent.click(await screen.findByRole("button", { name: /Download Qwen3 1\.7B/ }));
-    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-1.7b-4bit", true));
+    fireEvent.click(await screen.findByRole("button", { name: "Turn on" }));
+    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-1.7b-4bit", true, undefined));
   });
 
   it("skips and does not reopen after dismiss", async () => {
@@ -110,10 +113,10 @@ describe("LocalAiSetupDialog", () => {
     runtime.getStatus.mockResolvedValue(status({ installed: false }));
     const { unmount } = render(<LocalAiSetupDialog />);
     fireEvent.click(await screen.findByRole("button", { name: "Skip for now" }));
-    expect(screen.queryByRole("heading", { name: "Set up local AI" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Use on-device AI" })).toBeNull();
     unmount();
     render(<LocalAiSetupDialog />);
     await waitFor(() => expect(runtime.getStatus).toHaveBeenCalled());
-    expect(screen.queryByRole("heading", { name: "Set up local AI" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Use on-device AI" })).toBeNull();
   });
 });
