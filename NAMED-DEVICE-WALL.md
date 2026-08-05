@@ -1,7 +1,7 @@
 # Tau named-device wall — exact-rate stuck at 48.1% (need ≥95%)
 
 **Date:** 2026-08-05  
-**Tip measured:** `c489e4a` + AD8561 climb (commit on push)  
+**Tip measured:** `5129e78` (AD8561 ambiguous-leaf climb)  
 **SHIPPABLE?** **NO** — DoD named-device box stays unchecked. Never claim ≥95% from this doc.
 
 This is the Omar-visible wall for the AGENTS.md named-device fidelity floor.
