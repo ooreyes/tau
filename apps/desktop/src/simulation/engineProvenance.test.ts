@@ -81,7 +81,11 @@ describe("engine copy", () => {
   });
 
   it("says out loud that the preview solver is a subset, so its badge is a caveat", () => {
-    expect(ENGINE_DESCRIPTIONS.preview).toMatch(/not vendor device models/i);
+    // Keep the badge honest: not ngspice, and vendor/nonlinear work is refused
+    // (exact phrasing may shift; the claims must stay).
+    expect(ENGINE_DESCRIPTIONS.preview).toMatch(/not ngspice/i);
+    expect(ENGINE_DESCRIPTIONS.preview).toMatch(/refuses vendor models/i);
+    expect(ENGINE_DESCRIPTIONS.preview).toMatch(/nonlinear/i);
     expect(ENGINE_LABELS.preview).not.toBe(ENGINE_LABELS.ngspice);
   });
 });
