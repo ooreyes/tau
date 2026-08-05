@@ -2,14 +2,53 @@
 
 **Status: DONE - 2026-08-05 ~13:55 CDT**
 
-Unit: **Educational HandsFreeLayout → pass=109** — PAsystem layout NJF/PNP
-`.tran 10m` (≠ HandsFreePreamp ElectretMic). DoD broad-differential box
-stays open. SHIPPABLE? **NO**
+Unit: **§10 Command + Toast + Resizable + drift gate** — ui/command (cmdk)
+CommandPalette; ui/sonner notices; ui/resizable re-export of panelResize;
+`scripts/design-system-drift.sh` green. AGENTS §10 stays UNCHECKED
+(Cupertino chrome + both-theme screenshot settlement remain). SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+---
+
+### 2026-08-05 — Command + Toast + Resizable + drift gate (§10)
+
+**What I did**
+- Added shadcn-shaped `ui/command.tsx` (cmdk) and migrated CommandPalette onto
+  CommandDialog; accent-hairline selection via `data-selected`.
+- Added `ui/sonner.tsx`; App `showNotice` → toast + sr-only live region.
+- Added `ui/resizable.tsx` re-exporting Tau panelResize (deliberate deviation
+  from react-resizable-panels — pixel localStorage widths); ShellPanels /
+  Assistant / TelemetryDock / App import through ui/.
+- Drift proof: `scripts/design-system-drift.sh` (native select / hex gate /
+  primitive consumption / focused unit tests).
+- Did **not** flip AGENTS §10 (Cupertino icon chrome + both-theme screenshot
+  still open). SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/components/ui/{command,sonner,resizable}.tsx`
+- `apps/desktop/src/components/CommandPalette.tsx` (+ test)
+- `apps/desktop/src/App.tsx`, `App.css`
+- ShellPanels / AssistantPanel / TelemetryDock / WorkspaceRightDock imports
+- `scripts/design-system-drift.sh`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+- package: cmdk, sonner
+
+**Tests**
+- `bash scripts/design-system-drift.sh` → DESIGN-SYSTEM-DRIFT: ok
+- `pnpm -C apps/desktop typecheck` / `test` green
+
+**Parity items**
+- §10 partial: Resizable/Command/Toast landed + drift script. Box stays ⬜.
+  SHIPPABLE? NO
+
+**Next step**
+- Cupertino icon chrome settlement + both-theme screenshot proof; only then
+  flip AGENTS §10. Never flip on a partial.
+
+SHIPPABLE? **NO**
 
 ---
 

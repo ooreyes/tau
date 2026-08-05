@@ -162,6 +162,7 @@ export function PanelResizeHandle({
   const vertical = edge === "top" || edge === "bottom";
   return (
     <div
+      data-slot="resizable-handle"
       className={`panel-resize-handle panel-resize-handle--${edge}${dragging ? " dragging" : ""}`}
       role="separator"
       aria-orientation={vertical ? "horizontal" : "vertical"}

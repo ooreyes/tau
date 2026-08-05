@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ComponentMeasurement } from "../simulation/measurementModel";
 import { ComponentMeasurementsPanel } from "./ComponentMeasurementsPanel";
-import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
+import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "@/components/ui/resizable";
 
 /**
  * Collapsible per-component V/I/P dock anchored to the bottom of the

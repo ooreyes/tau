@@ -2161,21 +2161,22 @@ chrome stays quiet ochre (soft ≈0.05 — not danger-red for optional empties);
 settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model +
 IndependentSourceEditor Waveform type + semiconductor Simulation model +
 Subcircuit model + Simulation setup dialog + EngineeringInput SI-prefix +
-AnalysisSetupForms + circuit-duration unit native `<select>`s migrated onto
-shadcn `ui/Select` (Settings locked/untouched); unit proof in
-SimulationPanel/ShellPanels/EngineeringInput/AnalysisSetupForms tests
-(combobox triggers, not native `<select>`). **Min-window DoD (separate AGENTS
-box) proven 2026-08-05** via `scripts/min-window-dod.sh` at 900×600 (12/12;
-Settings sheet viewport cap + scroll; editor toolbar horizontal scroll) —
-shots in `screenshots/min-window-dod/`. Remaining §10 debt that blocks an
-honest **§10 design-system** DoD check:
-Resizable/Command/Toast primitives still deferred; Cupertino icon chrome
-still settling; no proof of zero ad-hoc drift across every panel at both
-themes. **2026-08-05:** Settings AI + LocalAiSetupDialog model/provider
-choosers migrated onto `ui/Select` — zero native `<select>` remain under
+AnalysisSetupForms + circuit-duration unit + Settings AI / LocalAiSetup
+native `<select>`s migrated onto shadcn `ui/Select`; unit proof in
+SimulationPanel/ShellPanels/EngineeringInput/AnalysisSetupForms/
+SettingsPanel tests (combobox triggers, not native `<select>`).
+**Min-window DoD (separate AGENTS box) proven 2026-08-05** via
+`scripts/min-window-dod.sh` at 900×600 (12/12; Settings sheet viewport cap +
+scroll; editor toolbar horizontal scroll) — shots in
+`screenshots/min-window-dod/`. Remaining §10 debt that blocks an honest
+**§10 design-system** DoD check:
+Cupertino icon chrome still settling; both-theme screenshot settlement for
+zero ad-hoc drift still required (machine gate
+`scripts/design-system-drift.sh` is green for select/hex/Command-Toast-
+Resizable consumption, but does not flip the DoD alone). Resizable/Command/
+Toast primitives landed 2026-08-05; zero native `<select>` under
 `apps/desktop/src/**/*.tsx` (component sources).
-Do **not** flip the AGENTS **§10** box until that grep+screenshot proof exists.
-
+Do **not** flip the AGENTS **§10** box until that screenshot proof exists.
 **Earlier claim (2026-07-08 Phase 4c) that §10 "closes" AGENTS DoD was premature**
 once light theme, Anduril retune, and post-migration chrome re-entered the
 branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
@@ -2247,10 +2248,11 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   search-glyph mask + a second density override at the responsive
   "DESIGN HANDOFF MIGRATION" breakpoint (~L3626) that `Input` doesn't
   model, so adopting it there now would cascade into a layout change
-  outside this phase's scope. Remaining: Resizable (for the three-column
-  simulator layout), Command (replace/augment the command palette),
-  Toast/Sonner (errors + notifications) — deferred to a later phase per
-  the brief. New vitest suite `ui/primitives.test.tsx` (11 tests, jsdom via
+  outside this phase's scope. **Resizable / Command / Toast (2026-08-05):**
+  Command (`ui/command` + cmdk) and Toast (`ui/sonner`) adopted; Resizable is
+  Tau's pixel-persisted `panelResize` re-exported as `ui/resizable`
+  (deliberate deviation from stock `react-resizable-panels` percentage
+  groups). Drift gate: `scripts/design-system-drift.sh`. New vitest suite `ui/primitives.test.tsx` (11 tests, jsdom via
   a per-file `// @vitest-environment jsdom` pragma — every other suite
   stays on the fast default `node` environment) added `@testing-library/
   react` + `jsdom` as devDependencies; `vitest.config.ts` now also includes
@@ -2409,9 +2411,13 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   and first-run Setup local model use dense `settings-select` triggers
   (`--row-h`, `--panel-2`, ellipsis value); unit proof in
   `SettingsPanel.test.tsx` + `LocalAiSetupDialog.test.tsx` (combobox
-  triggers, zero `.settings-field select`). Left for a later pass:
-  deferred Resizable/Command/Toast + whole-app drift proof. AGENTS §10 stays
-  UNCHECKED. →
+  triggers, zero `.settings-field select`). **Command + Toast + Resizable +
+  drift gate (2026-08-05):** `ui/command` (cmdk) hosts CommandPalette;
+  `ui/sonner` hosts notices (sr-only live region retained); `ui/resizable`
+  re-exports Tau panelResize (honest deviation from react-resizable-panels);
+  `scripts/design-system-drift.sh` proves zero native selects, hex confined
+  to token zone, and primitive consumption. AGENTS §10 stays UNCHECKED
+  pending Cupertino chrome + both-theme screenshot settlement. →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
   same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`

@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { BottomPanel, ComponentInspector, ComponentsRail, EditorToolbar } from "./ShellPanels";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { useSchematic } from "../store/useSchematic";
-import { usePanelWidth } from "./panelResize";
+import { usePanelWidth } from "@/components/ui/resizable";
 
 /**
  * The simulator view is read-only outside the schematic tab (pan/zoom/probe

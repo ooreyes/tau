@@ -13,6 +13,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { ScrollArea } from "./scroll-area";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./context-menu";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "./command";
+import { ResizableHandle } from "./resizable";
+import { Toaster } from "./sonner";
 
 /**
  * shadcn primitive smoke tests: every Radix-backed primitive needs a
@@ -192,5 +201,50 @@ describe("ContextMenu", () => {
     );
     expect(screen.getByText("Rename")).toBeTruthy();
     expect(document.querySelector('[data-slot="context-menu-content"]')?.className).toContain("extra-class");
+  });
+});
+
+describe("Command", () => {
+  it("renders input/list slots", () => {
+    render(
+      <Command shouldFilter={false} className="extra-class">
+        <CommandInput placeholder="Search" />
+        <CommandList>
+          <CommandEmpty>None</CommandEmpty>
+          <CommandItem value="r">Resistor</CommandItem>
+        </CommandList>
+      </Command>,
+    );
+    expect(document.querySelector('[data-slot="command"]')?.className).toContain("extra-class");
+    expect(screen.getByPlaceholderText("Search")).toBeTruthy();
+    expect(screen.getByText("Resistor")).toBeTruthy();
+  });
+});
+
+describe("ResizableHandle", () => {
+  it("exposes the separator slot used by shell columns", () => {
+    render(
+      <ResizableHandle
+        edge="left"
+        label="Resize panel"
+        width={280}
+        minWidth={200}
+        maxWidth={400}
+        dragging={false}
+        onPointerDown={() => {}}
+        onKeyDown={() => {}}
+      />,
+    );
+    const handle = screen.getByRole("separator", { name: "Resize panel" });
+    expect(handle.getAttribute("data-slot")).toBe("resizable-handle");
+  });
+});
+
+describe("Toaster", () => {
+  it("mounts the sonner host", () => {
+    const { container } = render(<Toaster />);
+    // Sonner portals its list; the React host still mounts under the render root.
+    expect(container.innerHTML.length).toBeGreaterThan(0);
+    expect(document.querySelector("[data-sonner-toaster]") || container.firstChild).toBeTruthy();
   });
 });

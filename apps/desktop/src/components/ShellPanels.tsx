@@ -75,7 +75,7 @@ import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
-import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
+import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "@/components/ui/resizable";
 import { ThemeControl } from "./SettingsPanel";
 import { SettingsAiSection } from "./SettingsAiSection";
 

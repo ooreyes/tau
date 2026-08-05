@@ -1,4 +1,4 @@
-import type { PanelWidthConfig } from "./panelResize";
+import type { PanelWidthConfig } from "@/components/ui/resizable";
 
 export const SHELL_LAYOUT = {
   railWidth: 54,

@@ -3993,35 +3993,11 @@ body {
    for ".palette-key,"); `.status-hints .dot` lives beside the real block. */
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   COMMAND PALETTE (⌘K)
+   COMMAND PALETTE (⌘K) — ui/command (cmdk) + Dialog host
 ══════════════════════════════════════════════════════════════════════════════ */
-.cmdk-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: 13vh;
-  background: var(--scrim-strong);
-  animation: tau-fade-in var(--motion-fast) var(--spring) both;
-}
 
-/* True-black pop surface - same recipe as ui/dialog.tsx's DialogContent
-   (--panel-4 popover, hairline ring, --elev-pop), restyled in place rather
-   than migrated onto the primitive (the arrow-key + pointer selection model
-   here is bespoke, not a Dialog). No backdrop blur: flat surfaces only. */
-.cmdk {
-  width: min(540px, 90vw);
+.cmdk-dialog [data-slot="command"] {
   max-height: 58vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--panel-4);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-lg);
-  box-shadow: var(--elev-pop);
-  overflow: hidden;
-  animation: tau-pop-in var(--motion-fast) var(--spring) both;
 }
 
 .cmdk-input {
@@ -4032,7 +4008,6 @@ body {
   color: var(--text);
   font: 400 var(--fs-display) -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   padding: 16px 18px;
-  border-bottom: 1px solid var(--border);
   letter-spacing: -0.1px;
 }
 
@@ -4050,8 +4025,7 @@ body {
   scrollbar-color: var(--panel-4) transparent;
 }
 
-/* Accent-hairline selection (never a heavy fill) - the same "targeting"
-   language as .palette-item.active's left accent edge. */
+/* Accent-hairline selection (never a heavy fill) — cmdk uses data-selected. */
 .cmdk-item {
   display: flex;
   align-items: center;
@@ -4064,6 +4038,7 @@ body {
     box-shadow var(--motion-fast) var(--ease-out);
 }
 
+.cmdk-item[data-selected="true"],
 .cmdk-item.active {
   background: var(--overlay-hover-faint);
   box-shadow: inset 2px 0 0 var(--accent);
@@ -4087,6 +4062,7 @@ body {
   letter-spacing: -0.01em;
 }
 
+.cmdk-item[data-selected="true"] .cmdk-name,
 .cmdk-item.active .cmdk-name {
   color: var(--accent);
 }

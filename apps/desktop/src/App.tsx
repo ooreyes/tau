@@ -8,7 +8,8 @@ import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
 import { TelemetryDock } from "./components/TelemetryDock";
 import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/AssistantPanel";
-import { clampPanelWidth, usePanelWidth } from "./components/panelResize";
+import { clampPanelWidth, usePanelWidth } from "./components/ui/resizable";
+import { Toaster, toast } from "./components/ui/sonner";
 import {
   SHELL_LAYOUT,
   workspaceCanFitIndependentColumns,
@@ -556,6 +557,7 @@ function App() {
 
   const showNotice = useCallback((message: string) => {
     setNotice(message);
+    toast(message, { duration: 2600 });
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
   }, []);
 
@@ -2578,7 +2580,14 @@ function App() {
           onCancel={() => setConfirmLargeRun(null)}
         />
       )}
-      {notice && <div className="shell-toast" role="status">{notice}</div>}
+      {/* Visual toast via Sonner; sr-only live region keeps a11y + unit tests
+          on a stable role=status surface without a second painted chip. */}
+      {notice && (
+        <div className="sr-only" role="status" aria-live="polite">
+          {notice}
+        </div>
+      )}
+      <Toaster />
     </div>
   );
 }

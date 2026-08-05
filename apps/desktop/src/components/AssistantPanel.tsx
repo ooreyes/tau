@@ -64,7 +64,7 @@ import {
   ASSISTANT_PROMPT_CHAR_LIMIT,
   type AssistantConversation,
 } from "../lib/assistantMemory";
-import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
+import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "@/components/ui/resizable";
 import { BodeMascot } from "./BodeMascot";
 
 /** Docked at the far right of the simulator shell, same "edge=left widens"
