@@ -66,6 +66,7 @@ const DCOPNT_ASC = join(EDU, "DCopPnt.asc");
 const AUDIOAMP_ASC = join(EDU, "audioamp.asc");
 const UHFPREAMP_ASC = join(EDU, "UHFpreamp.asc");
 const ASC1563_ASC = join(EDU, "1563.asc");
+const SPARAM_ASC = join(EDU, "S-param.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -213,7 +214,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1619,6 +1620,60 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational S-param.asc authored .ac (RF ladder + .net port demo; pure RLC) ---
+    // Collision-avoided Staff EE LM78XX/100W/P2/160. NE555 Output/Dischrg phase miss;
+    // LoopGain/Wien/Electrometer = LT1001 OTA wall; Howland/SoftDiode/HalfSlope/Vswitch avoided.
+    // Probe OUT1–OUT5 node voltages (same-deck AC), not hollow V(in) alone.
+    {
+      expect(existsSync(SPARAM_ASC), `missing ${SPARAM_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(SPARAM_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "S-param.asc must author .ac").toBeTruthy();
+      expect(dirs.some((d) => /\.net\b/i.test(d))).toBe(true);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      const lCount = deck.netlist.split(/\r?\n/).filter((line) => /^L\w*\b/i.test(line.trim())).length;
+      const cCount = deck.netlist.split(/\r?\n/).filter((line) => /^C\w*\b/i.test(line.trim())).length;
+      expect(lCount).toBeGreaterThanOrEqual(20);
+      expect(cCount).toBeGreaterThanOrEqual(50);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      const probes = ["v(out1)", "v(out2)", "v(out3)", "v(out4)", "v(out5)"] as const;
+      const result = runPairedBatch("diff-sparam-ac", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`);
+      }
+      cells.push({
+        analysis: "ac",
+        circuit: "s-param",
+        topology: "Educational S-param.asc RF ladder + .net ports (authored .ac LIN 200–300 Meg)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -1912,9 +1967,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(44);
+    expect(passCount).toBeGreaterThanOrEqual(45);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=44 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=45 sibling=5 gap=0/);
   }, 240_000);
 });

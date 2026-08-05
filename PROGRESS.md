@@ -9,19 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:41 CDT**
+**Status: DONE - 2026-08-05 02:44 CDT**
 
-Unit: Educational `LM78XX.asc` authored `.tran` discrete BJT 78xx → differential **pass=44**.
+Unit: Educational `S-param.asc` authored `.ac` RF ladder + `.net` ports → differential **pass=45**.
 ```
-SUMMARY pass=44 sibling=5 gap=0
-tran lm78xx … v(out) nRms≈0.0002 span≈5.11 (Rx=905/5V)
+SUMMARY pass=45 sibling=5 gap=0
+ac s-param … v(out1..5) nRms=0
 ```
-NE555 blocked (v(3)/v(7) nRms≈0.4). LoopGain LT1001 wall. Named-device 47.9%. SHIPPABLE? **NO**
+Collision-avoided Staff EE LM78XX/100W/P2/160. NE555 phase miss. LoopGain LT1001 wall. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
 ---
+
+### 2026-08-05 — S-param.asc RF ladder AC → pass=45 (§DoD)
+
+**What I did**
+- Educational `S-param.asc` authored `.ac LIN 801 200Meg–300Meg`: pure RLC
+  multi-section RF ladder with `.net` port statements. Probes OUT1–OUT5 vs
+  LTspice all nRms=0 (zero modelSubstitutions; ≥20 L / ≥50 C; no X-subckts).
+- Collision-avoided Staff EE LM78XX/100W/P2/160 (tip already pass=44). NE555
+  Output/Dischrg phase miss (not landed). Never faked Vswitch/Howland/
+  SoftDiode/HalfSlope/encrypted/TLINE-inv/astable.
+
+**Exact stdout**
+```
+SUMMARY pass=45 sibling=5 gap=0
+ac s-param … v(out1..5) nRms=0.0000
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → pass=45; typecheck; apps/desktop test (2679)
+
+**Parity items**
+- Differential 🟡 harness **pass=45 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- stepAC AC (first-step C=50p honest) or Applications 2ndOrder*; never fake
+  Vswitch/Howland/SoftDiode/HalfSlope; leave Staff EE 100W/P2/160 alone.
+
 
 ### 2026-08-05 — LM78XX.asc discrete BJT regulator TRAN → pass=44 (§DoD)
 

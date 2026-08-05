@@ -173,13 +173,13 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=44 · sibling=5 · gap=0 on stdout: prior cells through DCopPnt OP +
-      Educational audioamp/UHFpreamp/1563/LM308 + LM78XX.asc authored `.tran`
-      discrete BJT 78xx regulator (LPNP→PNP; .step Rx→905/5V; v(out) nRms≈0.0002
-      span≈5.1). NE555.asc Output/Dischrg miss nRms≈0.4 (not landed). HalfSlope
-      Laplace not landed. SoftDiodeRecovery deferred. BandGaps `.dc temp` misses
-      tolerance. Harness-slice gap closed; broad topology/device matrix still
-      open — DoD box stays unchecked.
+      pass=45 · sibling=5 · gap=0 on stdout: prior cells through DCopPnt OP +
+      Educational audioamp/UHFpreamp/1563/LM308/LM78XX + S-param.asc authored
+      `.ac` RF ladder + `.net` ports (v(out1..5) nRms=0). NE555.asc
+      Output/Dischrg miss nRms≈0.4 (not landed). HalfSlope Laplace not landed.
+      SoftDiodeRecovery deferred. BandGaps `.dc temp` misses tolerance.
+      Harness-slice gap closed; broad topology/device matrix still open — DoD
+      box stays unchecked.
 - [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps
       service credentials out of the renderer, obtains explicit cloud-data
