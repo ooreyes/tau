@@ -50,15 +50,16 @@ export const LOCAL_MLX_PROFILE: ChatProviderProfile = {
   allowTextToolFallback: true,
   wording: {
     // Student-facing copy: never mention localhost, ports, or server plumbing.
-    subject: "on-device AI",
-    unreachable: () => "On-device AI is not ready. Start it and try again.",
+    subject: "on-device model",
+    unreachable: () =>
+      "On-device AI is not ready yet. Open Settings and choose Turn on — Tau will finish loading it.",
     httpStatus: (status) =>
-      `On-device AI returned an unexpected response (HTTP ${status}). Try again in a moment.`,
-    invalidJson: () => "On-device AI returned an invalid reply. Try again.",
+      `On-device AI returned an unexpected response (${status}). Try Turn off, then Turn on again.`,
+    invalidJson: () => "On-device AI returned an invalid reply.",
     timedOut: (seconds) =>
       `On-device AI made no complete reply within ${seconds} seconds. Tau stopped the request.`,
-    aborted: () => "The on-device AI request was stopped.",
-    failed: () => "The on-device AI request failed.",
+    aborted: () => "The on-device assistant request was stopped.",
+    failed: () => "The on-device assistant request failed.",
   },
 };
 
