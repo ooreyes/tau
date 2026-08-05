@@ -1577,7 +1577,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=75 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=76 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
@@ -1589,12 +1589,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   span≈0.37) plus Educational/**BandGaps.asc** authored `.dc temp` (four BJT
   bandgap refs A/B/C/D; nRms≈0.046–0.058 @ rmsTol=0.06 / maxTol=0.07 BJT
   tempco) plus Educational/**waveout.asc** authored `.tran` (BV product mixer;
-  v(syn) nRms≈0.0078 nMax≈0.021 span≈1.57). gr_del deferred (all-pass |V|≈1
+  v(syn) nRms≈0.0078 nMax≈0.021 span≈1.57) plus LTspice.app Resources/**IGBTeq.asc**
+  authored nested `.dc` (NMOS+PNP IGBT-eq; index-aligned v(n002)/i(v1)
+  nRms≈5e-4/≈0). gr_del deferred (all-pass |V|≈1
   hollow). TwoTau / Draft8 Laplace brace-mangle deferred. Draft6 AD823 /
   Draft10 UOA2 same-deck not landed. tip 65e05ce thrash
   corrected. phono/relax blocked. wavein (wavefile=) deferred. HalfSlope Laplace stripped;
   SoftDiodeRecovery deferred; LoopGain/Electrometer
-  LT1001 OTA wall; MC1648 deferred; dimmer TRIAC deferred. Harness-slice gaps
+  LT1001 OTA wall; MC1648 deferred; dimmer TRIAC deferred; Educational/IGBT.asc
+  NIGBT refuse (≠ IGBTeq). Harness-slice gaps
   closed; DoD broad-differential box remains open — see AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,

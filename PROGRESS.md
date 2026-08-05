@@ -9,14 +9,56 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:37 CDT**
+**Status: DONE - 2026-08-05 04:42 CDT**
 
-Unit: Staff EE blocked — Draft5 AD823 `.tf` (`ADI.lib`, no plaintext twin) +
-leftover plaintext refuse = Chan / NIGBT / FRA only. Named-device **48.1%** /
-exact=1222 unchanged. Differential pass=75. SHIPPABLE? **NO**
+Unit: LTspice.app Resources `IGBTeq.asc` authored nested `.dc` → differential **pass=76**.
+```
+SUMMARY pass=76 sibling=5 gap=0
+dc igbteq … v(n002) aligned nRms=0.0005; i(v1)≈0 samples=110011
+```
+NMOS+PNP IGBT-eq (≠ Educational NIGBT). Left named-device alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
+
+
+---
+
+
+### 2026-08-05 — LTspice.app Resources IGBTeq.asc nested DC → pass=76 (§DoD)
+
+**What I did**
+- LTspice.app Resources `IGBTeq.asc` authored nested `.dc V1 0 10 1m V2 0 10 1`:
+  NMOS `NM` (authored `.model`) + blank-Value PNP → same-deck `TAU_PNP`.
+  Index-aligned compare (like curvetrace). Default 2%/5%: v(n002) aligned
+  nRms≈0.0005; i(v1)≈0; samples=110011. Zero unresolved / substitutions.
+- Distinct from Educational/`IGBT.asc` (NIGBT refuse). Worktree
+  `Tau-wt-dod-draft`. Left named-device maps / Draft* / Wien-LT1001 / Fc /
+  avoid-list alone. Tip after Staff EE blocked docs → **pass=76**.
+
+**Exact stdout**
+
+```
+SUMMARY pass=76 sibling=5 gap=0
+dc igbteq … v(n002) aligned nRms=0.0005; i(v1) aligned nRms=0.0000 samples=110011
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/differential-parity.sh` → pass=76
+
+**Parity items**
+- Differential 🟡 **pass=76**. Named-device exact **1222** / **48.1%** unchanged.
+  SHIPPABLE? NO
+
+**Next step**
+- Continue honest differential outside Draft*/named-device/Chan/NIGBT/FRA/ADI/
+  LT1001 walls.
 
 
 ---
@@ -44,11 +86,15 @@ NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-fa
 - `pnpm -C apps/desktop typecheck` + `test` green (no code delta)
 
 **Parity items**
-- Named-device 🟡 **48.1%**. Differential pass=75. SHIPPABLE? NO
+- Named-device 🟡 **48.1%**. Differential pass=75 at that tip. SHIPPABLE? NO
 
 **Next step**
 - Continue 20 differential (not Chan/NIGBT/FRA/ADI). Staff EE needs a new
   plaintext class outside those walls.
+
+
+---
+
 
 ### 2026-08-05 — merge reconcile: waveout pass=75 + TIP121 48.1% (§DoD)
 
@@ -76,9 +122,7 @@ NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-fa
 - Differential 🟡 **pass=75**. Named-device exact **1222** / **48.1%**. SHIPPABLE? NO
 
 **Next step**
-- Land pass=76 on a non-colliding Educational fixture (Wien / similar). Avoid
-  Draft*/wavein/Fc/Chan/NIGBT/LT1001 walls and named-device map thrash.
-
+- Land pass=76 on a non-colliding fixture outside Draft*/named-device walls.
 
 
 ---

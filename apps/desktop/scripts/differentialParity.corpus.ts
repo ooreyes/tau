@@ -87,6 +87,8 @@ const DRAFT3_ASC = join(DOC_LTSPICE, "Draft3.asc");
 const DRAFT7_ASC = join(DOC_LTSPICE, "Draft7.asc");
 const BANDGAPS_ASC = join(EDU, "BandGaps.asc");
 const WAVEOUT_ASC = join(EDU, "waveout.asc");
+/** Bundled LTspice.app demo — NMOS+PNP IGBT equivalent (not Educational/IGBT.asc NIGBT). */
+const IGBT_EQ_ASC = join("/Applications/LTspice.app/Contents/Resources", "IGBTeq.asc");
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
@@ -246,7 +248,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, IGBTeq nested DC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2911,6 +2913,71 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- LTspice.app Resources IGBTeq.asc authored nested .dc (NMOS+PNP IGBT equivalent) ---
+    // Distinct from Educational/IGBT.asc (NIGBT refuse). Authored `.model NM NMOS(Vto=4.7
+    // kp={.38/50})` + blank Value PNP → Tau deck TAU_PNP (same-deck both engines).
+    // Authored `.dc V1 0 10 1m V2 0 10 1` — index-aligned like curvetrace (non-monotonic
+    // nested axis). Default 2%/5%: v(n002) nRms≈5e-4; i(v1)≈0. Zero unresolved /
+    // substitutions. Left Draft*/named-device/Wien-LT1001/Fc/avoid-list alone.
+    // Stacked on tip waveout pass=75 → 76.
+    {
+      expect(existsSync(IGBT_EQ_ASC), `missing ${IGBT_EQ_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(IGBT_EQ_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.dc, "IGBTeq.asc must author .dc").toBeTruthy();
+      expect(parsed.dc!.source2, "IGBTeq must be nested .dc").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "dc",
+        source: parsed.dc!.source,
+        start: parsed.dc!.start,
+        stop: parsed.dc!.stop,
+        step: parsed.dc!.step,
+        source2: parsed.dc!.source2,
+        start2: parsed.dc!.start2,
+        stop2: parsed.dc!.stop2,
+        step2: parsed.dc!.step2,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+NM\s+NMOS\b/i);
+      expect(deck.netlist).toMatch(/M1\b.*\bNM\b/i);
+      expect(deck.netlist).toMatch(/Q1\b.*\bTAU_PNP\b/i);
+      expect(deck.netlist).toMatch(/\.dc\s+V1\b/i);
+      expect(deck.netlist).not.toMatch(/\bNIGBT\b/i);
+      const probes = ["v(n002)", "i(v1)"] as const;
+      const result = runPairedBatch("diff-igbteq-dc", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareAlignedSeries(ng, lt, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `IGBTeq ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.samples, `IGBTeq ${probe} non-empty`).toBeGreaterThan(1000);
+        memberNotes.push(
+          `${probe} aligned nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} samples=${comparison.samples}`,
+        );
+      }
+      cells.push({
+        analysis: "dc",
+        circuit: "igbteq",
+        topology: "LTspice.app Resources IGBTeq.asc NMOS+PNP IGBT-eq (authored nested .dc V1×V2; index-aligned)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3207,6 +3274,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=75 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=76 sibling=5 gap=0/);
   }, 240_000);
 });
