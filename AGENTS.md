@@ -124,7 +124,7 @@ account and sign/notarize/ship.
       hand‑typed number — the script's stdout is the source of truth).
       Canonical re-check remains **82 imported / 81 warning-clean / 79
       deck-built / 79 op-converged** (three honest capability refusals:
-      NIGBT, Chan-core inductor, Royer `lt1184f` unresolved subckt leak-to-op).
+      NIGBT, Chan-core inductor, Royer `lt1184f` unresolved subckt).
 - [x] **`class-d_starter.asc`** opens unmodified (with sibling `deadtime`
       hierarchy), runs `.tran`, and its Efficiency `.meas` matches LTspice
       within 2%. Proven 2026-08-04 by `scripts/dod-parity.sh` /

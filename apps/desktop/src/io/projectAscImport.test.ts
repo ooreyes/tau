@@ -165,6 +165,96 @@ describe("importProjectAsc model library resolution", () => {
     expect(io.read).toEqual(["/project/examples/opamp.lib"]);
   });
 
+  it("follows a nested .lib inside an auto-resolved sibling library", async () => {
+    const peer = `.subckt PEER 1 2\nR1 1 2 1k\n.ends PEER\n`;
+    const parent = `* parent wraps peer\n.lib peer.lib\n.subckt WRAP 1 2\nX1 1 2 PEER\n.ends WRAP\n`;
+    const io = probe(new Map([
+      ["/project/examples/parent.lib", parent],
+      ["/project/examples/peer.lib", peer],
+    ]));
+    const result = await importProjectAsc(withInclude("parent.lib"), {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: io.pathExists,
+      readText: io.readText,
+    });
+
+    expect(result.modelLibraries).toEqual([
+      { name: "parent.lib", text: parent },
+      { name: "peer.lib", text: peer },
+    ]);
+    expect(io.read).toEqual([
+      "/project/examples/parent.lib",
+      "/project/examples/peer.lib",
+    ]);
+  });
+
+  it("follows a nested .include through the installed LTspice library root", async () => {
+    const peer = `.subckt UOA2 1 2 3 4 5\nR1 1 2 1meg\n.ends UOA2\n`;
+    const parent = `.lib UniversalOpAmp2.lib\n.subckt AD8310 1 2 3 4 5\nX1 1 2 3 4 5 UOA2\n.ends AD8310\n`;
+    const reads: string[] = [];
+    const result = await importProjectAsc(withInclude("AD8310.lib"), {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: async () => false,
+      readText: async () => "",
+      readInstalledLtspiceText: async (id) => {
+        reads.push(id);
+        if (id === "sub/AD8310.lib") return parent;
+        if (id === "sub/UniversalOpAmp2.lib") return peer;
+        throw new Error("missing");
+      },
+    });
+
+    expect(result.modelLibraries).toEqual([
+      { name: "ad8310.lib", text: parent },
+      { name: "universalopamp2.lib", text: peer },
+    ]);
+    expect(reads.filter((id) => id.startsWith("sub/"))).toEqual([
+      "sub/AD8310.lib",
+      "sub/UniversalOpAmp2.lib",
+    ]);
+  });
+
+  it("does not follow a nested path that escapes confinement", async () => {
+    const parent = `.include ../../secret.lib\n.subckt WRAP 1 2\nR1 1 2 1k\n.ends WRAP\n`;
+    const io = probe(new Map([["/project/examples/parent.lib", parent]]));
+    const result = await importProjectAsc(withInclude("parent.lib"), {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: io.pathExists,
+      readText: io.readText,
+    });
+
+    expect(result.modelLibraries).toEqual([{ name: "parent.lib", text: parent }]);
+    expect(io.read).toEqual(["/project/examples/parent.lib"]);
+    expect(io.asked.every((path) => !path.toLowerCase().includes("secret"))).toBe(true);
+  });
+
+  it("breaks a cyclic nested .include without duplicating libraries", async () => {
+    const a = `.include b.lib\n.subckt A 1 2\nR1 1 2 1k\n.ends A\n`;
+    const b = `.include a.lib\n.subckt B 1 2\nR1 1 2 2k\n.ends B\n`;
+    const io = probe(new Map([
+      ["/project/examples/a.lib", a],
+      ["/project/examples/b.lib", b],
+    ]));
+    const result = await importProjectAsc(withInclude("a.lib"), {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: io.pathExists,
+      readText: io.readText,
+    });
+
+    expect(result.modelLibraries).toEqual([
+      { name: "a.lib", text: a },
+      { name: "b.lib", text: b },
+    ]);
+    expect(io.read).toEqual([
+      "/project/examples/a.lib",
+      "/project/examples/b.lib",
+    ]);
+  });
+
   it("resolves a vendor op-amp's .asy model alias and implicit library without changing the ASC", async () => {
     const source = `Version 4
 SHEET 1 880 680

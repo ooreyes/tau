@@ -48,11 +48,14 @@ one engine for the whole session.
 - A `.include`/`.lib` is read from disk only when the reference is relative,
   stays inside the project folder, and ends in `.lib`, `.sub`, `.subckt`,
   `.mod` or `.inc`; Tau looks beside the schematic first, then in the project's
-  `lib` and `lib/sub` folders and its root. An absolute path, one that climbs
-  out of the project, a model kept in a `.txt`, or a file past the 5 MB read
-  limit is not opened on its own - attach that file through the Model libraries
-  dialog instead. Either way the rest of the schematic still simulates and the
-  run names any file it could not resolve.
+  `lib` and `lib/sub` folders and its root, then (when available) the user's
+  installed LTspice `lib/sub`. Nested `.include`/`.lib`/`.inc` cards inside an
+  auto-resolved library are followed through the same confinement and attached
+  as peer libraries. An absolute path, one that climbs out of the project, a
+  model kept in a `.txt`, or a file past the 5 MB read limit is not opened on
+  its own - attach that file through the Model libraries dialog instead. Either
+  way the rest of the schematic still simulates and the run names any file it
+  could not resolve.
 - DIAC/TRIAC instances invoke the document's own `.subckt` definitions;
   voltage-controlled varistors and PHASEDET have LTspice-backed behavioral
   models. NIGBT and encrypted LT1184F remain unsupported and refuse every

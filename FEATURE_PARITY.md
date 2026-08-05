@@ -871,8 +871,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   turns off immediately and the incoming device turns on after the requested
   interval. Embedded-library regressions prove 200 ns on -10/+10 V rails and an
   edited 400 ns on 0/5 V rails within 2 ns, with zero simultaneous-on command.
-  **NEXT:** resolve imported relative `.lib`/`.inc` references through an
-  explicit user-authorized project/library mapping; browser TS model physics.
+  **NEXT:** optional extra user-authorized library search roots beyond the
+  project folder + installed LTspice tree; browser TS model physics.
+  **Nested confined `.include`/`.lib` (2026-08-04):** `importProjectAsc` now
+  BFS-follows `.include`/`.inc`/`.lib` cards inside auto-resolved library text
+  through the same project-relative + installed-LTspice confinement (extension
+  allowlist, no `..`, aggregate caps, cycle-safe). Peer files attach as their
+  own model-library entries; the deck sanitizer still never sees a file-backed
+  card. Covers the AD8310.lib → UniversalOpAmp2.lib pattern.
 
 ## 4. Analyses (simulation commands)
 - ✅ `.op` Operating point — TS + native — `operatingPoint.ts`

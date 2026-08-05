@@ -14,8 +14,10 @@
  * literal text; it never returns a path or a `.include`/`.lib` reference.
  *
  * Recursion note: an `.include`/`.lib` line found INSIDE a supplied library
- * text is ignored rather than followed - resolving further nested vendor
- * files is a follow-up, not this unit.
+ * text is ignored here rather than followed - `importProjectAsc` resolves
+ * nested file refs at attach time (same confined roots) and registers each
+ * peer as its own library entry. This parser only ever inlines literal text;
+ * following a path would reintroduce file-backed cards the sanitizer rejects.
  *
  * Pure and dependency-light: no filesystem access, no schematic knowledge -
  * just text in, a registry out.

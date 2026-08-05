@@ -9,6 +9,29 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 20:50 CDT**
+
+Unit: NEW BAR P1.5 nested confined `.include`/`.lib` resolution.
+`importProjectAsc` BFS-follows nested `.include`/`.inc`/`.lib` inside
+auto-resolved library text through the same project + installed-LTspice
+confinement (caps, extension allowlist, no `..`, cycle-safe). Royer/
+`LT1184F` confirmed already a deck-time capability-refusal (AGENTS
+"leak-to-op" wording corrected). Canonical re-check: **82/81/79/79**,
+CAPABILITY 79/3/0/0. Honest deck+op ceiling on this 82-set remains 79
+(NIGBT / Chan / encrypted LT1184F). Shippable? NO.
+
+What landed this unit:
+
+- `resolveModelLibraries` queue-walks nested file refs; 4 new
+  `projectAscImport` tests (sibling nest, installed nest, escape, cycle)
+- KNOWN_ISSUES / FEATURE_PARITY / AGENTS honesty updates
+
+Next unit: optional extra user-authorized library search roots; or
+P1.6 native `.step`/`.meas`/`.four` delegation; authored-analysis
+differential parity.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 20:45 CDT**
 
 Unit: Class-D `.tran` / Efficiency `.meas` + waveform parity truth-pass.
@@ -17,17 +40,6 @@ UniversalOpAmp2). Re-measured: Efficiency rel err ≈0.24%; PS/PL also
 within 2% via app `deriveRcCurrents` path; `dod-parity.sh` green;
 missing `deadtime` siblings refuse Run. AGENTS DoD Class-D + waveform
 boxes checked. Canonical still 82/81/79/79. Shippable? NO.
-
-What landed this unit:
-
-- `classdEfficiency.corpus.ts` now asserts PS/PL/Efficiency and derives
-  I(R1) through `deriveRcCurrents` (UI path), not a hard-coded V/8
-- `src/io/classdHierarchy.test.ts` locks sibling resolve vs fail-closed
-  refusal + rail-clamped B_U1 emission
-- AGENTS.md / FEATURE_PARITY.md / STATE.md honesty updates
-
-Next unit: NEW BAR P1.5 confined `.include`/`.lib`, or Royer `lt1184f`
-unresolved-subckt pre-ngspice refusal / authored-analysis differential.
 
 Previous completed unit:
 

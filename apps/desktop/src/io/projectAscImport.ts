@@ -62,8 +62,26 @@ function safeLibraryPath(ref: string): string | null {
   return AUTO_MODEL_LIBRARY_EXTENSIONS.has(ext) ? safe : null;
 }
 
+/** File names a library text's own `.include`/`.lib`/`.inc` cards name. Nested
+ *  refs are followed by {@link resolveModelLibraries} through the same
+ *  confined roots; `parseUserModelLibraries` still drops the cards from the
+ *  inlined body (the sanitizer forbids file-backed primitives in the deck). */
+function nestedLibraryFileRefs(text: string): string[] {
+  const refs: string[] = [];
+  for (const raw of text.replace(/\r\n/g, "\n").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("*") || line.startsWith(";")) continue;
+    const fileRef = /^\.(?:include|inc|lib)\s+(.+)$/i.exec(line);
+    if (!fileRef) continue;
+    const file = includedFileName(fileRef[1]);
+    if (file) refs.push(file);
+  }
+  return refs;
+}
+
 /**
- * Read the vendor model files a document's `.include`/`.lib` directives name.
+ * Read the vendor model files a document's `.include`/`.lib` directives name,
+ * plus any nested `.include`/`.lib`/`.inc` those files themselves name.
  * LTspice resolves these relative to the schematic, which is the case that
  * makes a real design work at all; Tau otherwise drops the directive and can
  * only tell the user to attach the file by hand.
@@ -71,7 +89,9 @@ function safeLibraryPath(ref: string): string | null {
  * Reads are confined the same way hierarchical symbol reads are - relative
  * paths only, no `..` segment, under the schematic's folder or the project
  * root - because the directive comes from the document, not from the user. A
- * reference that resolves to nothing is simply left alone here.
+ * reference that resolves to nothing is simply left alone here. Nested
+ * discovery shares the same allowlist, aggregate caps, and installed-LTspice
+ * fallback; cycles are skipped via the seen set.
  */
 async function resolveModelLibraries(
   directives: readonly string[],
@@ -87,7 +107,13 @@ async function resolveModelLibraries(
     const fileRef = /^\.(include|lib)\s+(.+)$/i.exec(line.trim());
     return fileRef ? [includedFileName(fileRef[2])] : [];
   });
-  for (const file of [...explicitFiles, ...implicitFiles]) {
+  // BFS so a parent library's nested `.include`/`.lib` peers are attached too.
+  // `parseUserModelLibraries` drops nested file cards from the inlined body;
+  // without this walk those peers never reach the registry.
+  const pending = [...explicitFiles, ...implicitFiles];
+  for (let index = 0; index < pending.length; index += 1) {
+    if (libraries.length >= MAX_MODEL_LIBRARIES) break;
+    const file = pending[index];
     // A name the bundled LTspice libraries already satisfy is inlined by the
     // deck builder; reading a same-named file would duplicate every definition.
     if (!file || bundledLibraryText(file)) continue;
@@ -96,9 +122,8 @@ async function resolveModelLibraries(
     const key = libraryFileKey(safe);
     if (seen.has(key)) continue;
     seen.add(key);
-    if (libraries.length >= MAX_MODEL_LIBRARIES) break;
 
-    let resolved = false;
+    let contents: string | null = null;
     for (const root of roots) {
       const candidate = joinPath(root, safe);
       if (!(await options.pathExists(candidate))) continue;
@@ -110,31 +135,30 @@ async function resolveModelLibraries(
       // could not resolve. Stop looking after the first match rather than
       // falling through to a same-named file elsewhere, which would quietly
       // substitute different models than the reference asked for.
-      let contents: string;
       try {
         contents = await options.readText(candidate);
       } catch {
-        break;
+        contents = null;
       }
-      // Same aggregate budget an attachment picked by hand has to clear, so a
-      // document cannot use auto-resolution to exceed what the store accepts.
-      if (totalChars + contents.length > MAX_MODEL_LIBRARY_TOTAL_LENGTH) break;
-      totalChars += contents.length;
-      libraries.push({ name: key, text: contents });
-      resolved = true;
       break;
     }
-    if (resolved || !options.readInstalledLtspiceText) continue;
-    const installedId = safe.toLowerCase().startsWith("sub/") ? safe : `sub/${safe}`;
-    try {
-      const contents = await options.readInstalledLtspiceText(installedId);
-      if (totalChars + contents.length > MAX_MODEL_LIBRARY_TOTAL_LENGTH) continue;
-      totalChars += contents.length;
-      libraries.push({ name: key, text: contents });
-    } catch {
-      // Most installed ADI `.sub` files are intentionally encrypted. They are
-      // not SPICE text and must remain an explicit missing-model refusal.
+    if (contents === null && options.readInstalledLtspiceText) {
+      const installedId = safe.toLowerCase().startsWith("sub/") ? safe : `sub/${safe}`;
+      try {
+        contents = await options.readInstalledLtspiceText(installedId);
+      } catch {
+        // Most installed ADI `.sub` files are intentionally encrypted. They are
+        // not SPICE text and must remain an explicit missing-model refusal.
+        contents = null;
+      }
     }
+    if (contents === null) continue;
+    // Same aggregate budget an attachment picked by hand has to clear, so a
+    // document cannot use auto-resolution to exceed what the store accepts.
+    if (totalChars + contents.length > MAX_MODEL_LIBRARY_TOTAL_LENGTH) break;
+    totalChars += contents.length;
+    libraries.push({ name: key, text: contents });
+    pending.push(...nestedLibraryFileRefs(contents));
   }
   return libraries;
 }
