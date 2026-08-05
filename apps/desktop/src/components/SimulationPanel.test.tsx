@@ -696,7 +696,7 @@ describe("SimulationPanel - exportNetlist inlines attached model libraries", { t
 });
 
 describe("StepPlot measurements", () => {
-  function member(label: string, value: number, measured?: number) {
+  function member(label: string, value: number, measured?: number, times = [0, 1e-3, 2e-3], values = [0, 1, 2]) {
     return {
       label,
       value,
@@ -705,10 +705,10 @@ describe("StepPlot measurements", () => {
         ok: true as const,
         title: "Transient",
         circuit: { nets: [{ id: "n1", label: "out", isGround: false, points: [], pins: [], labelCount: 0 }], components: [], groundNetId: null, warnings: [] },
-        traces: [{ id: "n1", label: "V(out)", values: [0, 1, 2], unit: "V" as const, color: "var(--trace-cyan)" }],
-        times: [0, 1e-3, 2e-3],
+        traces: [{ id: "n1", label: "V(out)", values, unit: "V" as const, color: "var(--trace-cyan)" }],
+        times,
         currents: [],
-        stats: { netCount: 1, componentCount: 1, sampleCount: 3, stopTime: 2e-3, stepSize: 1e-3 },
+        stats: { netCount: 1, componentCount: 1, sampleCount: times.length, stopTime: times[times.length - 1] ?? 0, stepSize: 1e-3 },
         warnings: [],
       },
     };
@@ -733,6 +733,54 @@ describe("StepPlot measurements", () => {
     expect(screen.getAllByText("Efficiency")).toHaveLength(2);
     expect(screen.getByText("810 m")).toBeTruthy();
     expect(screen.getByText("930 m")).toBeTruthy();
+  });
+
+  it("exports a long-format CSV that preserves each member's own time grid", async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const capturedBlobs: Blob[] = [];
+    URL.createObjectURL = ((blob: Blob) => {
+      capturedBlobs.push(blob);
+      return "blob:mock-step-csv";
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    try {
+      render(
+        <StepPlot
+          result={{
+            ok: true,
+            spec: { kind: "param", name: "RL", values: [1, 2] },
+            members: [
+              member("RL=1", 1, undefined, [0, 1e-3], [0, 1]),
+              member("RL=2", 2, undefined, [0, 2e-3, 4e-3], [0, 0.5, 1]),
+            ],
+            warnings: [],
+          }}
+          probes={[]}
+          wires={[]}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+      expect(capturedBlobs).toHaveLength(1);
+      const csv = await capturedBlobs[0].text();
+      expect(csv).toBe(
+        [
+          "step,time,V(out)",
+          "RL=1,0,0",
+          "RL=1,0.001,1",
+          "RL=2,0,0",
+          "RL=2,0.002,0.5",
+          "RL=2,0.004,1",
+        ].join("\n"),
+      );
+      expect(clickSpy).toHaveBeenCalled();
+    } finally {
+      clickSpy.mockRestore();
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    }
   });
 });
 

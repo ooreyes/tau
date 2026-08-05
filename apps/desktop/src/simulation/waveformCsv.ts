@@ -39,3 +39,41 @@ function csvCell(s: string): string {
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
+
+/**
+ * One stepped-family member on its own time grid. `.step` members do not share
+ * a sample schedule after independent transient runs, so export keeps each
+ * member's authored times rather than resampling onto a common axis.
+ */
+export interface StepFamilyCsvMember {
+  label: string;
+  times: ReadonlyArray<number>;
+  values: ReadonlyArray<number>;
+}
+
+/**
+ * Serialize a stepped family as a long-format CSV: `step,time,<signal>` with
+ * one row per sample. Each member's time grid is preserved verbatim (empty /
+ * non-finite values become blank cells). Header-only when `members` is empty.
+ */
+export function stepFamilyToCsv(
+  signalLabel: string,
+  members: ReadonlyArray<StepFamilyCsvMember>,
+): string {
+  const header = ["step", "time", signalLabel].map(csvCell).join(",");
+  const rows: string[] = [header];
+  for (const member of members) {
+    const step = csvCell(member.label);
+    const n = Math.min(member.times.length, member.values.length);
+    // Prefer the shorter of times/values so a truncated series never invents
+    // paired cells from undefined indices.
+    for (let i = 0; i < n; i++) {
+      rows.push([step, num(member.times[i]), num(member.values[i])].join(","));
+    }
+    // Trailing unpaired times (values shorter) still emit as gaps.
+    for (let i = n; i < member.times.length; i++) {
+      rows.push([step, num(member.times[i]), ""].join(","));
+    }
+  }
+  return rows.join("\n");
+}

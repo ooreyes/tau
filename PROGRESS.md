@@ -9,20 +9,44 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:20 CDT**
+**Status: DONE - 2026-08-05 05:25 CDT**
 
-Unit: Resources `MicroCode.asc` TRAN (bsource Value+Value2 join) → differential **pass=83**.
-```
-SUMMARY pass=83 sibling=5 gap=0
-tran resources-microcode … v(out)/v(out2) nRms=0.0000 span≈12
-```
-mextram deferred (no authored analysis). SHIPPABLE? **NO**
+Unit: Waveform DoD — **step-family CSV export** (per-member time grids).
+`stepFamilyToCsv` long-format `step,time,<signal>` + StepPlot Export CSV.
+SHIPPABLE? **NO** (`.plt` / expressions-in-step / dual-axis still open)
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — step-family CSV export (§waveform DoD)
+
+**What I did**
+- Pure `stepFamilyToCsv` keeps each `.step` member's own time grid (long
+  format; no forced resample). StepPlot **Export CSV** downloads it.
+- Left MicroCode/help/Resources/sinh/.machine alone; no Settings/UI thrash.
+
+**Files**
+- `apps/desktop/src/simulation/waveformCsv.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ StepPlot CSV test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- waveformCsv 4 new + StepPlot CSV wiring
+
+**Parity items**
+- Waveform viewer 🟡 (CSV path now includes step family; `.plt` NEXT).
+  Differential pass=83 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue 22; next waveform slice = `.plt` or step-pane expressions / dual-axis.
+
+
+
 
 
 ### 2026-08-05 — Resources MicroCode.asc TRAN → pass=83 (§DoD)

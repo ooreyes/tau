@@ -1468,8 +1468,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   helper. **Export PNG** rasterizes every visible transient SVG pane into one
   two-column, 2× image; computed theme/trace styles are inlined so the file is
   faithful outside the app, and a multi-pane dashboard is never reduced to its
-  first plot. 6 hand-computed/DOM tests. **NEXT:** `.plt` settings and
-  step-family CSV (per-member time grids).
+  first plot. 6 hand-computed/DOM tests. **Step-family CSV landed**
+  (`stepFamilyToCsv`, 2026-08-05): long-format `step,time,<signal>` keeps each
+  `.step` member's own time grid (no forced resample); StepPlot **Export CSV**
+  downloads it. 4 pure + 1 StepPlot wiring tests. **NEXT:** `.plt` settings.
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy

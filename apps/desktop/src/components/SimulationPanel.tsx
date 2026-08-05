@@ -47,7 +47,7 @@ import { evaluateDcPlotExpression } from "../simulation/plotExpressionDc";
 import { commonTraceUnit } from "../simulation/exprUnit";
 import { groupDelay } from "../simulation/groupDelay";
 import { stabilityMargins } from "../simulation/stability";
-import { seriesToCsv } from "../simulation/waveformCsv";
+import { seriesToCsv, stepFamilyToCsv } from "../simulation/waveformCsv";
 import { downloadWaveformPng, waveformSvgsToPng } from "../simulation/plotPng";
 import { runWaveformFft, type WindowFn } from "../simulation/fft";
 import { spectrumInsights } from "../simulation/spectrumInsights";
@@ -3405,6 +3405,21 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
     return { series, min, max, tMax, signal };
   }, [result, probes, wires]);
 
+  const exportStepCsv = () => {
+    if (!family) return;
+    downloadCsv(
+      stepFamilyToCsv(
+        family.signal,
+        family.series.map((s) => ({
+          label: s.label,
+          times: s.times,
+          values: s.trace.values,
+        })),
+      ),
+      "step",
+    );
+  };
+
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message ?? "No step sweep to show."}</div>;
   if (!family) return <div className="analysis-empty">Step ran, but the selected signal has no data. Probe a node or check the sweep.</div>;
@@ -3448,6 +3463,9 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
         <Metric label="SIGNAL" value={family.signal} tone="green" />
         <Metric label="STEPS" value={String(family.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={result.spec?.name ?? "--"} tone="cream" />
+        <Button variant="outline" size="sm" onClick={exportStepCsv}>
+          Export CSV
+        </Button>
       </div>
       <StepMeasTable members={result.members} />
       {result.warnings.length > 0 && (
