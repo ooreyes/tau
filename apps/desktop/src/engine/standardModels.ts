@@ -28,6 +28,9 @@ const MODEL_LINES: readonly string[] = [
   ".model 1N5818 D(Is=31.7u Rs=.051 N=1.373 Cjo=160p M=.32 Eg=.69 Xti=2)",
   ".model 1N5819 D(Is=31.7u Rs=.051 N=1.373 Cjo=110p M=.35 Eg=.69 Xti=2)",
   ".model BAT54 D(Is=200u Rs=2 N=1.1 Cjo=10p M=.333 Eg=.69 Xti=2)",
+  // --- Varactor (standard.dio) — Educational varactor/varactor2.asc.
+  // LTspice annotation keys mfg/type/Vpk stripped for ngspice. ---
+  ".model MV2201 D(Is=1.365p Rs=1 Cjo=14.93p M=.4261 Vj=.75 Isr=16.02p Nr=2 Bv=25 Ibv=10u)",
   // --- Zeners (standard.dio) - reverse breakdown via Bv/Ibv ---
   ".model 1N750 D(Is=.88f Rs=.25 Cjo=175p M=.55 Bv=4.7 Ibv=20.245m)",
   ".model 1N751 D(Is=.88f Rs=.25 Cjo=170p M=.55 Bv=5.1 Ibv=20m)",

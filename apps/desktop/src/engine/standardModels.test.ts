@@ -44,6 +44,14 @@ describe("standardModelLine", () => {
     expect(catalog.find((entry) => entry.name === "2N3904")).toMatchObject({ type: "npn" });
   });
 
+  it("bundles MV2201 varactor diode from standard.dio", () => {
+    const line = standardModelLine("MV2201");
+    expect(line).toMatch(/^\.model MV2201 D\(/);
+    expect(line).toContain("Cjo=14.93p");
+    expect(line).not.toContain("mfg=");
+    expect(standardModelType("MV2201")).toBe("d");
+  });
+
   it("bundles zeners with a breakdown voltage", () => {
     expect(standardModelLine("1N750")).toContain("Bv=4.7");
   });

@@ -173,12 +173,12 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=54 · sibling=5 · gap=0 on stdout: prior cells through DCopPnt OP +
-      Educational logamp TRAN + Applications 2ndOrder{Lowpass,Bandpass,Highpass,
-      Notch,Allpass,Complexzero}.asc authored `.ac` (G-source RLC; v(2) nRms=0).
-      Pierce/phaseshift phase miss; TwoTau/colpits2 LTspice fail; 100W IRFP refuse.
-      HalfSlope Laplace not landed. SoftDiodeRecovery deferred. BandGaps `.dc temp`
-      misses tolerance. Harness-slice gap closed; broad topology/device matrix still
+      pass=55 · sibling=5 · gap=0 on stdout: prior cells through Applications
+      2ndOrder* AC + Educational `MonteCarlo.asc` authored `.ac` (RLC;
+      `mc`→nominal center same-deck; v(out) nRms=0). Pierce/phaseshift phase
+      miss; TwoTau/colpits2 LTspice fail; 100W IRFP refuse. HalfSlope Laplace
+      not landed. SoftDiodeRecovery deferred. BandGaps `.dc temp` misses
+      tolerance. Harness-slice gap closed; broad topology/device matrix still
       open — DoD box stays unchecked.
 - [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps

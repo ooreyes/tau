@@ -1576,11 +1576,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=54 · sibling=5 · gap=0**: prior cells through
-  logamp TRAN plus Applications 2ndOrder{Lowpass,Bandpass,Highpass,Notch,Allpass,
-  Complexzero}.asc authored `.ac` (G-source RLC; v(2) nRms=0). Note: tip `a0d6080`
-  message claimed Lowpass but corpus was logamp — this lands the real Applications
-  family. Pierce/phaseshift phase miss; 100W IRFP refuse. HalfSlope Laplace stripped;
+  (truth). Gap-closure → **pass=55 · sibling=5 · gap=0**: prior cells through
+  Applications 2ndOrder* AC plus Educational `MonteCarlo.asc` authored `.ac`
+  (RLC; `mc(val,tol)`→nominal center same-deck; v(out) nRms=0 span≈0.5).
+  Pierce/phaseshift phase miss; 100W IRFP refuse. HalfSlope Laplace stripped;
   SoftDiodeRecovery deferred; BandGaps dc-temp miss; LoopGain/Electrometer LT1001
   OTA wall; MC1648 deferred. Harness-slice gaps closed; DoD broad-differential box
   remains open — see AGENTS.md.

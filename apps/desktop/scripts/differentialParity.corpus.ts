@@ -71,6 +71,7 @@ const SPARAM_ASC = join(EDU, "S-param.asc");
 const P2_ASC = join(EDU, "P2.asc");
 const STEPAC_ASC = join(EDU, "stepAC.asc");
 const LOGAMP_ASC = join(EDU, "logamp.asc");
+const MONTECARLO_ASC = join(EDU, "MonteCarlo.asc");
 const ORDER2_LOWPASS_ASC = join(APP, "2ndOrderLowpass.asc");
 const ORDER2_BANDPASS_ASC = join(APP, "2ndOrderBandpass.asc");
 const ORDER2_HIGHPASS_ASC = join(APP, "2ndOrderHighpass.asc");
@@ -224,7 +225,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1938,6 +1939,56 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational MonteCarlo.asc authored .ac (RLC filter; mc(val,tol)→nominal center) ---
+    // Same-deck: Tau bakes mc() to val (expr.ts); both LTspice+ngspice see identical
+    // numeric RLC — proves filter AC, not RNG seed parity. Dummy `.step param X` unused
+    // by component values. Collision-avoided Staff EE 2ndOrder* + varactor/MV2201.
+    {
+      expect(existsSync(MONTECARLO_ASC), `missing ${MONTECARLO_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(MONTECARLO_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "MonteCarlo.asc must author .ac").toBeTruthy();
+      expect(dirs.some((d) => /\.param\s+tol\b/i.test(d))).toBe(true);
+      const params = buildParamScope(dirs);
+      expect(Number(params.scope.tol)).toBeCloseTo(0.05, 10);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).not.toMatch(/\bmc\s*\(/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).toMatch(/^C1\b.+\b1e-9\b/im);
+      expect(deck.netlist).toMatch(/^L3\b.+\b0\.00003/im);
+      const result = runPairedBatch("diff-montecarlo-ac", deck.netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!;
+      const ng = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `montecarlo ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "montecarlo non-hollow").toBeGreaterThan(0.1);
+      cells.push({
+        analysis: "ac",
+        circuit: "montecarlo",
+        topology: "Educational MonteCarlo.asc RLC filter (mc→nominal center; authored .ac oct 300k–10Meg)",
+        status: "pass",
+        note: `v(out) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2231,9 +2282,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(54);
+    expect(passCount).toBeGreaterThanOrEqual(55);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=54 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=55 sibling=5 gap=0/);
   }, 240_000);
 });
