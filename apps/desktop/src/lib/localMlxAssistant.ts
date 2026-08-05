@@ -1,8 +1,10 @@
 /**
- * The on-device provider: a loopback MLX server speaking OpenAI chat
- * completions. Everything except the profile below lives in
- * openAiCompatibleAssistant.ts and is shared with the hosted Gemini path, so
- * the system prompt, tool wiring, and plan-repair loop can never drift apart.
+ * The on-device provider: Tau-managed MLX inference speaking OpenAI chat
+ * completions on a fixed private endpoint. Everything except the profile below
+ * lives in openAiCompatibleAssistant.ts and is shared with the hosted Gemini
+ * path, so the system prompt, tool wiring, and plan-repair loop can never drift
+ * apart. Student-facing wording never mentions localhost, ports, or how to
+ * start a server — Settings / LocalAiSetupDialog own ensure→download→load.
  */
 import {
   OpenAiCompatibleAssistant,
@@ -47,15 +49,16 @@ export const LOCAL_MLX_PROFILE: ChatProviderProfile = {
   // message.tool_calls, so the bare-JSON fallback is genuinely needed here.
   allowTextToolFallback: true,
   wording: {
-    subject: "local model",
-    unreachable: () => "Tau could not reach the local MLX server at 127.0.0.1. Start it and try again.",
+    // Student-facing copy: never mention localhost, ports, or server plumbing.
+    subject: "on-device AI",
+    unreachable: () => "On-device AI is not ready. Start it and try again.",
     httpStatus: (status) =>
-      `The local MLX server returned HTTP ${status}. Check that its OpenAI-compatible endpoint is running.`,
-    invalidJson: () => "The local MLX server returned invalid JSON.",
+      `On-device AI returned an unexpected response (HTTP ${status}). Try again in a moment.`,
+    invalidJson: () => "On-device AI returned an invalid reply. Try again.",
     timedOut: (seconds) =>
-      `The local MLX server made no complete reply within ${seconds} seconds. Tau stopped the request.`,
-    aborted: () => "The local assistant request was stopped.",
-    failed: () => "The local assistant request failed.",
+      `On-device AI made no complete reply within ${seconds} seconds. Tau stopped the request.`,
+    aborted: () => "The on-device AI request was stopped.",
+    failed: () => "The on-device AI request failed.",
   },
 };
 

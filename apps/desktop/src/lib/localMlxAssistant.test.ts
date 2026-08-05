@@ -576,7 +576,7 @@ describe("LocalMlxAssistant", () => {
     });
     await expect(offline.complete(request())).rejects.toMatchObject({
       kind: "offline",
-      message: expect.stringContaining("127.0.0.1"),
+      message: expect.stringMatching(/On-device AI is not ready/i),
     });
 
     const server = new LocalMlxAssistant({
