@@ -1,22 +1,17 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:52 CDT**
+**Status: DONE - 2026-08-05 06:55 CDT**
 
-Unit: Circuit_testing_v1 `16_active_fourth_order_filter.asc` authored `.ac` → differential **pass=93**.
-```
-SUMMARY pass=93 sibling=5 gap=0
-ac ct-active-fourth-order … v(out) nRms=0.0000 nMax=0.0000 span=1.000
-```
-Named-device 48.1%. Worktree `Tau-wt-diff-92` rebased over FFT PNG tip (`54e844b`).
-ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
-Left Settings / IRFP / Draft* alone.
-SHIPPABLE? **NO**
+Unit: Waveform DoD — **Bode Phase / Group delay lower-pane toggle**.
+Differential pass=93 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
 
 ### 2026-08-05 — ct 16_active_fourth_order_filter .ac → pass=93 (§DoD)
 
@@ -43,6 +38,34 @@ SHIPPABLE? **NO**
 - Continue: ct 17/18 (passive power), Educational non-wall leftovers, or
   waveform phase/avg-rms. Leave IRFP/Draft*/Settings/ct19 OP alone unless OP
   convergence for multi-B_U* is fixed.
+
+### 2026-08-05 — Bode Phase / Group delay lower pane (§waveform DoD)
+
+**What I did**
+- AcPlot **Phase / Group delay** toggle: lower Bode pane swaps φ (°) ↔ τ =
+  −dφ/dω (s) via `groupDelay` + `groupDelayYDomain`.
+- ND wall at 48.1% — waveform pivot. Left 100W/step PNG, ct ASC, Educational
+  (continue 32), Chan/NIGBT/FRA, Settings alone. Rebased over pass=93 tip
+  `e5f8eb4`.
+
+**Files**
+- `apps/desktop/src/simulation/groupDelay.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2747 passed)
+- groupDelayYDomain + AcPlot Group delay 2
+
+**Parity items**
+- Waveform viewer 🟡 (Group delay lower pane landed). Differential pass=93 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Avg/rms Ctrl+click / standalone phase window / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
+
+
 
 ### 2026-08-05 — FFT spectrum Export PNG (§waveform DoD)
 

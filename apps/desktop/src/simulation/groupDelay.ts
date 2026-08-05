@@ -68,3 +68,36 @@ export function groupDelay(freqs: number[], phaseDeg: number[]): number[] {
   }
   return tau;
 }
+
+/**
+ * Autorange a group-delay series for the Bode lower pane (seconds).
+ * Returns null when no finite samples exist.
+ */
+export function groupDelayYDomain(
+  tauSeries: ReadonlyArray<ReadonlyArray<number>>,
+): { yMin: number; yMax: number } | null {
+  let found = false;
+  let rawMin = 0;
+  let rawMax = 0;
+  for (const series of tauSeries) {
+    for (const tau of series) {
+      if (!Number.isFinite(tau)) continue;
+      if (!found) {
+        rawMin = tau;
+        rawMax = tau;
+        found = true;
+      } else {
+        rawMin = Math.min(rawMin, tau);
+        rawMax = Math.max(rawMax, tau);
+      }
+    }
+  }
+  if (!found) return null;
+  if (rawMin === rawMax) {
+    const pad = Math.max(Math.abs(rawMin) * 0.1, 1e-12);
+    return { yMin: rawMin - pad, yMax: rawMax + pad };
+  }
+  const span = rawMax - rawMin;
+  const pad = span * 0.05;
+  return { yMin: rawMin - pad, yMax: rawMax + pad };
+}

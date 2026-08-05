@@ -61,7 +61,7 @@ import {
 } from "../simulation/traceMath";
 import { commonTraceUnit } from "../simulation/exprUnit";
 import { partitionTracesByAxis, planDualAxisY } from "../simulation/dualAxis";
-import { groupDelay } from "../simulation/groupDelay";
+import { groupDelay, groupDelayYDomain } from "../simulation/groupDelay";
 import { bodeMagYDomain, dbToLinearMag, freqToFraction } from "../simulation/freqAxis";
 import type { AxisScale } from "../simulation/axisTicks";
 import { stabilityMargins } from "../simulation/stability";
@@ -3402,8 +3402,10 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   const [phaseMeasureRef, phaseSize] = useMeasuredSize<SVGSVGElement>();
   // Bode X defaults to log decades (LTspice); Lin X is an explicit toggle.
   // Magnitude Y defaults to Lin dB; Log Y plots |V|/|Vref| on decades.
+  // Lower pane defaults to phase (°); Group delay swaps in τ = −dφ/dω (s).
   const [freqScale, setFreqScale] = useState<AxisScale>("log");
   const [magYScale, setMagYScale] = useState<AxisScale>("linear");
+  const [lowerMode, setLowerMode] = useState<"phase" | "groupDelay">("phase");
   const magTicks = tickCountsFromSize(magSize);
   const phaseTicks = tickCountsFromSize(phaseSize);
   const traces = success ? success.traces.slice(0, 4) : [];
@@ -3428,6 +3430,8 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
     }
     const maxPh = Math.ceil(Math.max(phMax, 0) / 45) * 45;
     const minPh = Math.floor(Math.min(phMin, maxPh - 45) / 45) * 45;
+    const tauSeries = traces.map((t) => groupDelay(success.freqs, t.phaseDeg));
+    const tauY = groupDelayYDomain(tauSeries) ?? { yMin: 0, yMax: 1e-6 };
     return {
       yMin: magY.yMin,
       yMax: magY.yMax,
@@ -3436,6 +3440,9 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
       f1,
       minPh,
       maxPh,
+      tauSeries,
+      tauYMin: tauY.yMin,
+      tauYMax: tauY.yMax,
     };
   }, [success, traces, overlays, magTraces, magYScale]);
 
@@ -3453,8 +3460,13 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
     [plot],
   );
   const phaseDomain = useMemo<Viewport>(
-    () => ({ xMin: plot ? 10 ** plot.f0 : 1, xMax: plot ? 10 ** plot.f1 : 10, yMin: plot ? plot.minPh : -180, yMax: plot ? plot.maxPh : 180 }),
-    [plot],
+    () => ({
+      xMin: plot ? 10 ** plot.f0 : 1,
+      xMax: plot ? 10 ** plot.f1 : 10,
+      yMin: plot ? (lowerMode === "groupDelay" ? plot.tauYMin : plot.minPh) : -180,
+      yMax: plot ? (lowerMode === "groupDelay" ? plot.tauYMax : plot.maxPh) : 180,
+    }),
+    [plot, lowerMode],
   );
   const magVp = usePlotViewport({
     domain: magDomain,
@@ -3470,7 +3482,9 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   const phaseVp = usePlotViewport({
     domain: phaseDomain,
     xScale: freqScale,
-    resetKey: plot && success ? `${freqScale}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}` : null,
+    resetKey: plot && success
+      ? `${freqScale}:${lowerMode}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
+      : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
@@ -3575,7 +3589,7 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
             className={phaseVp.isPanning ? "scope-svg panning" : "scope-svg"}
             viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
             role="img"
-            aria-label="Bode phase"
+            aria-label={lowerMode === "groupDelay" ? "Bode group delay" : "Bode phase"}
             {...phaseVp.dragHandlers}
           >
             <PlotAxes
@@ -3588,26 +3602,41 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
               yMax={phaseVp.viewport.yMax}
               xScale={freqScale}
               xUnit="Hz"
-              yUnit="°"
+              yUnit={lowerMode === "groupDelay" ? "s" : "°"}
               targetXTicks={phaseTicks.targetXTicks}
               targetYTicks={phaseTicks.targetYTicks}
             />
             {plot && (
               <ScopeClip id={phaseClipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
-                {traces.map((t, i) => (
-                  <path
-                    key={t.id}
-                    className="scope-trace ref"
-                    stroke={AC_COLORS[i % AC_COLORS.length]}
-                    d={bodeValuePath(t.phaseDeg, success!.freqs, {
-                      min: phaseVp.viewport.yMin,
-                      max: phaseVp.viewport.yMax,
-                      xMin: phaseVp.viewport.xMin,
-                      xMax: phaseVp.viewport.xMax,
-                      xScale: freqScale,
-                    })}
-                  />
-                ))}
+                {lowerMode === "groupDelay"
+                  ? plot.tauSeries.map((tau, i) => (
+                      <path
+                        key={traces[i]?.id ?? `tau-${i}`}
+                        className="scope-trace ref"
+                        stroke={AC_COLORS[i % AC_COLORS.length]}
+                        d={bodeValuePath(tau, success!.freqs, {
+                          min: phaseVp.viewport.yMin,
+                          max: phaseVp.viewport.yMax,
+                          xMin: phaseVp.viewport.xMin,
+                          xMax: phaseVp.viewport.xMax,
+                          xScale: freqScale,
+                        })}
+                      />
+                    ))
+                  : traces.map((t, i) => (
+                      <path
+                        key={t.id}
+                        className="scope-trace ref"
+                        stroke={AC_COLORS[i % AC_COLORS.length]}
+                        d={bodeValuePath(t.phaseDeg, success!.freqs, {
+                          min: phaseVp.viewport.yMin,
+                          max: phaseVp.viewport.yMax,
+                          xMin: phaseVp.viewport.xMin,
+                          xMax: phaseVp.viewport.xMax,
+                          xScale: freqScale,
+                        })}
+                      />
+                    ))}
               </ScopeClip>
             )}
           </svg>
@@ -3665,6 +3694,22 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
             onClick={() => setMagYScale("linear")}
           >
             Lin Y
+          </Button>
+          <Button
+            size="sm"
+            variant={lowerMode === "phase" ? "default" : "outline"}
+            aria-pressed={lowerMode === "phase"}
+            onClick={() => setLowerMode("phase")}
+          >
+            Phase
+          </Button>
+          <Button
+            size="sm"
+            variant={lowerMode === "groupDelay" ? "default" : "outline"}
+            aria-pressed={lowerMode === "groupDelay"}
+            onClick={() => setLowerMode("groupDelay")}
+          >
+            Group delay
           </Button>
         </div>
         <Metric label="START" value={formatEngineering(result.freqs[0] ?? 0, "Hz", 0)} tone="green" />

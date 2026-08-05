@@ -1429,8 +1429,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   buttons remaps Bode magnitude/phase axes and paths (default log). 2 pure +
   1 AcPlot wiring tests. **Log/linear Y toggle landed** (2026-08-05): AcPlot
   **Log Y / Lin Y** — Lin Y keeps dB (default); Log Y converts to |V|/|Vref|
-  decades via `bodeMagYDomain` / `dbToLinearMag`. Still ⬜: standalone phase
-  pane, group-delay trace overlay.
+  decades via `bodeMagYDomain` / `dbToLinearMag`. **Group-delay lower pane
+  landed** (2026-08-05): AcPlot **Phase / Group delay** toggle swaps the
+  Bode lower pane between φ (°) and τ = −dφ/dω (s) via `groupDelay` /
+  `groupDelayYDomain`. Still ⬜: standalone detached phase window.
 - 🟡 **Loop-stability margins** (LTspice Bode readouts) — **landed**
   (`simulation/stability.ts`, 10 tests): `stabilityMargins(freqs, magDb, phaseDeg)`
   returns **phase margin** (180°+φ at the 0 dB gain crossover) and **gain margin**
@@ -1529,9 +1531,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `tau-dc-step-….png`). 2 wiring tests. **Bode Log Y / Lin Y landed**
   (2026-08-05): AcPlot magnitude Lin Y = dB; Log Y = `|V|/|Vref|` decades
   via `bodeMagYDomain` / `dbToLinearMag`. **FFT Export PNG landed** (2026-08-05):
-  FftView **Export PNG** (`tau-fft-….png`). 1 wiring test. **NEXT:** (waveform
-  CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/cursor-CSV/step-PNG
-  covered — remaining: avg/rms readout polish, phase pane).
+  FftView **Export PNG** (`tau-fft-….png`). 1 wiring test. **Group-delay lower
+  pane landed** (2026-08-05): AcPlot Phase / Group delay toggle. **NEXT:**
+  (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/τ
+  covered — remaining: avg/rms readout polish, standalone phase window).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`,
   `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, or `ddt(…)`; whole-expr `ddt` peels

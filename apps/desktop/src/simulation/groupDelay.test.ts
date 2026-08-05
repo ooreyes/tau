@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { unwrapPhaseDeg, groupDelay } from "./groupDelay";
+import { unwrapPhaseDeg, groupDelay, groupDelayYDomain } from "./groupDelay";
 
 describe("unwrapPhaseDeg", () => {
   it("leaves a smooth curve unchanged", () => {
@@ -75,5 +75,16 @@ describe("groupDelay", () => {
   it("does not blow up on duplicate frequencies", () => {
     const tau = groupDelay([1, 1, 2], [0, -10, -20]);
     expect(tau.every((t) => Number.isFinite(t))).toBe(true);
+  });
+});
+
+describe("groupDelayYDomain", () => {
+  it("autoranges finite τ samples with padding; null when empty", () => {
+    expect(groupDelayYDomain([])).toBeNull();
+    expect(groupDelayYDomain([[Number.NaN]])).toBeNull();
+    const d = groupDelayYDomain([[1e-3, 2e-3, 3e-3]]);
+    expect(d).not.toBeNull();
+    expect(d!.yMin).toBeLessThan(1e-3);
+    expect(d!.yMax).toBeGreaterThan(3e-3);
   });
 });

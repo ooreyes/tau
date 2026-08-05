@@ -324,6 +324,31 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(ticks.some((t) => /V\/V/.test(t))).toBe(true);
     expect(container.querySelectorAll("path.scope-trace").length).toBeGreaterThan(0);
   });
+
+  it("Group delay toggle swaps the lower Bode pane to τ (s)", () => {
+    // Linear phase φ = −360·f·τ0 → constant group delay τ0.
+    const tau0 = 1e-3;
+    const freqs = [10, 100, 1000, 10000, 100000];
+    const phaseDeg = freqs.map((f) => -360 * f * tau0);
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20, -40, -60], phaseDeg }],
+      warnings: [],
+    };
+    const { container } = render(<AcPlot result={result} />);
+    expect(screen.getByRole("img", { name: "Bode phase" })).toBeTruthy();
+    const phaseBtn = screen.getByRole("button", { name: "Phase" });
+    const gdBtn = screen.getByRole("button", { name: "Group delay" });
+    expect(phaseBtn.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(gdBtn);
+    expect(gdBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(phaseBtn.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("img", { name: "Bode group delay" })).toBeTruthy();
+    const ticks = Array.from(container.querySelectorAll(".scope-tick")).map((t) => t.textContent ?? "");
+    expect(ticks.some((t) => /s/.test(t))).toBe(true);
+    expect(container.querySelectorAll("path.scope-trace").length).toBeGreaterThan(0);
+  });
 });
 
 describe("DcPlot - linear sweep/volts ticks", () => {
