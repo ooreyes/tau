@@ -24,7 +24,7 @@ import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec, ifToTernary, ltFuncsToNgspice, moduloToFloor, statFuncsToNgspice } from "../simulation/behavioral";
 import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
 import { parseCrystal, crystalDeckLines } from "./crystalSpec";
-import { parseDigitalGate, digitalGateDeckLines, dflopDeckLines } from "./digitalGateSpec";
+import { parseDigitalGate, digitalGateDeckLines, dflopDeckLines, srflopDeckLines, tflopDeckLines, jkflopDeckLines } from "./digitalGateSpec";
 import { sampleHoldDeckLines } from "./sampleHoldSpec";
 import { parseModulator, modulatorDeckLines } from "./modulatorSpec";
 import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
@@ -1640,6 +1640,60 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         qbar: connected("qbar"),
       }, spec);
     }
+    case "srflop": {
+      // Async SR latch (LTspice Digital\srflop): S/R → d_dff set/reset.
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseDigitalGate(component.value);
+      const connected = (pin: string): string | undefined => {
+        const netId = entry.pins[pin];
+        if (!netId) return undefined;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+        return netId.toLowerCase();
+      };
+      return srflopDeckLines(base, {
+        s: connected("s"),
+        r: connected("r"),
+        q: connected("q"),
+        qbar: connected("qbar"),
+      }, spec);
+    }
+    case "tflop": {
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseDigitalGate(component.value);
+      const connected = (pin: string): string | undefined => {
+        const netId = entry.pins[pin];
+        if (!netId) return undefined;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+        return netId.toLowerCase();
+      };
+      return tflopDeckLines(base, {
+        t: connected("t"),
+        clk: connected("clk"),
+        pre: connected("pre"),
+        clr: connected("clr"),
+        q: connected("q"),
+        qbar: connected("qbar"),
+      }, spec);
+    }
+    case "jkflop": {
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseDigitalGate(component.value);
+      const connected = (pin: string): string | undefined => {
+        const netId = entry.pins[pin];
+        if (!netId) return undefined;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+        return netId.toLowerCase();
+      };
+      return jkflopDeckLines(base, {
+        j: connected("j"),
+        k: connected("k"),
+        clk: connected("clk"),
+        pre: connected("pre"),
+        clr: connected("clr"),
+        q: connected("q"),
+        qbar: connected("qbar"),
+      }, spec);
+    }
     case "sampleHold": {
       // LTspice SpecialFunctions\sample (SAMPLEHOLD): behavioral track-and-
       // hold - S/H high tracks V(in+,in-) and holds when low; CLK latches the
@@ -2115,7 +2169,7 @@ function deckNode(value: string, role: string, analysis: string): string {
 const SPICE_PREFIX: Record<ComponentKind, string> = {
   resistor: "R", capacitor: "C", polarizedCapacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
   logicConstant: "V",
-  diode: "D", led: "D", zener: "D", photodiode: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
+  diode: "D", led: "D", zener: "D", photodiode: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", srflop: "A", tflop: "A", jkflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
   potentiometer: "R", bulb: "R", switch: "S", pushButton: "S", spdt: "S", relay: "S", motor: "L",
   transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
 };

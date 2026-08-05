@@ -45,7 +45,7 @@ export const ASSISTANT_DIRECT_GENERATABLE_KINDS = [
   "diode", "led", "zener", "photodiode", "opamp", "vcvs", "vccs",
   "bsource", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
   "tline", "sampleHold", "modulator",
-  "digitalGate", "dflop",
+  "digitalGate", "dflop", "srflop", "tflop", "jkflop",
 ] as const satisfies readonly ComponentKind[];
 
 /** Tau-native parts whose pin contract cannot be represented by one stock

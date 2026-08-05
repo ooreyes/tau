@@ -16,10 +16,12 @@ import { parseQuantity } from "../simulation/quantity";
  * Multi-input AND/OR must NOT use C-style `&&`/`||` — LTspice rejects those
  * with a grammatical error on the B-line. Use arithmetic on 0/1 comparisons
  * instead: AND = product of terms, OR = sum of terms `>0`. `==` and `abs()`
- * are likewise live-verified. The flip-flop (DFLOP) is stateful and cannot be
- * a B-source; it emits an XSPICE d_dff between explicit adc/dac bridges (also
- * live-verified — the AUTO bridge's default thresholds sit above LTspice's
- * 0..1 V logic levels, so explicit bridges at Vt/Vlow/Vhigh are required).
+ * are likewise live-verified. Flip-flops (DFLOP / SRFLOP / T / JK) are stateful
+ * and cannot be a B-source; they emit XSPICE d_dff / d_tff / d_jkff between
+ * explicit adc/dac bridges (also live-verified — the AUTO bridge's default
+ * thresholds sit above LTspice's 0..1 V logic levels, so explicit bridges at
+ * Vt/Vlow/Vhigh are required). SRFLOP is an async latch (S→set, R→reset on
+ * d_dff; no clock on the LTspice .asy).
  */
 export type DigitalGateFn = "buf" | "and" | "or" | "xor" | "schmitt";
 
@@ -209,34 +211,110 @@ export interface DflopNodes {
  * event queue always advances).
  */
 export function dflopDeckLines(base: string, nodes: DflopNodes, spec: DigitalGateSpec): string[] {
+  return xspiceFlopDeckLines(base, "dff", spec, {
+    adcIns: [nodes.d, nodes.clk, nodes.pre, nodes.clr],
+    digIns: ["dd", "dclk", "dpre", "dclr"],
+    instancePorts: (b) => `${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr ${b}_dq ${b}_dnq`,
+    q: nodes.q,
+    qbar: nodes.qbar,
+  });
+}
+
+/** Node assignments for an SR latch (LTspice `srflop.asy`: S/R/Q/_Q). */
+export interface SrflopNodes {
+  s?: string;
+  r?: string;
+  q?: string;
+  qbar?: string;
+}
+
+/**
+ * Async SR latch: S → d_dff async set, R → async reset. D/CLK held at digital 0
+ * via ADC from analog ground. Live-verified in ngspice — level-sensitive set/
+ * reset matches LTspice Digital\srflop (no clock pin on the .asy).
+ */
+export function srflopDeckLines(base: string, nodes: SrflopNodes, spec: DigitalGateSpec): string[] {
+  return xspiceFlopDeckLines(base, "dff", spec, {
+    adcIns: [undefined, undefined, nodes.s, nodes.r],
+    digIns: ["dd", "dclk", "ds", "dr"],
+    instancePorts: (b) => `${b}_dd ${b}_dclk ${b}_ds ${b}_dr ${b}_dq ${b}_dnq`,
+    q: nodes.q,
+    qbar: nodes.qbar,
+  });
+}
+
+/** Node assignments for a T flip-flop (XSPICE `d_tff`). */
+export interface TflopNodes {
+  t?: string;
+  clk?: string;
+  pre?: string;
+  clr?: string;
+  q?: string;
+  qbar?: string;
+}
+
+/** Edge-triggered T flip-flop via XSPICE d_tff between adc/dac bridges. */
+export function tflopDeckLines(base: string, nodes: TflopNodes, spec: DigitalGateSpec): string[] {
+  return xspiceFlopDeckLines(base, "tff", spec, {
+    adcIns: [nodes.t, nodes.clk, nodes.pre, nodes.clr],
+    digIns: ["dt", "dclk", "dpre", "dclr"],
+    instancePorts: (b) => `${b}_dt ${b}_dclk ${b}_dpre ${b}_dclr ${b}_dq ${b}_dnq`,
+    q: nodes.q,
+    qbar: nodes.qbar,
+  });
+}
+
+/** Node assignments for a JK flip-flop (XSPICE `d_jkff`). */
+export interface JkflopNodes {
+  j?: string;
+  k?: string;
+  clk?: string;
+  pre?: string;
+  clr?: string;
+  q?: string;
+  qbar?: string;
+}
+
+/** Edge-triggered JK flip-flop via XSPICE d_jkff between adc/dac bridges. */
+export function jkflopDeckLines(base: string, nodes: JkflopNodes, spec: DigitalGateSpec): string[] {
+  return xspiceFlopDeckLines(base, "jkff", spec, {
+    adcIns: [nodes.j, nodes.k, nodes.clk, nodes.pre, nodes.clr],
+    digIns: ["dj", "dk", "dclk", "dpre", "dclr"],
+    instancePorts: (b) => `${b}_dj ${b}_dk ${b}_dclk ${b}_dpre ${b}_dclr ${b}_dq ${b}_dnq`,
+    q: nodes.q,
+    qbar: nodes.qbar,
+  });
+}
+
+type XspiceFlopModel = "dff" | "tff" | "jkff";
+
+function xspiceFlopDeckLines(
+  base: string,
+  model: XspiceFlopModel,
+  spec: DigitalGateSpec,
+  opts: {
+    adcIns: Array<string | undefined>;
+    digIns: string[];
+    instancePorts: (b: string) => string;
+    q?: string;
+    qbar?: string;
+  },
+): string[] {
   const { vhigh, vlow, vt, td } = spec;
   const b = base.toLowerCase();
   const a = (n: string | undefined) => n ?? "0";
-  // A non-zero ADC transition band prevents event/analog feedback from
-  // chattering at exactly Vt when one DFF output drives the next D input.
-  // Keep it tiny (0.1% of the logic swing) so it is numerical hysteresis, not
-  // an observable change to the user's logic threshold.
   const bridgeBand = Math.max(Math.abs(vhigh - vlow) * 1e-3, 1e-9);
   const inLow = Number((vt - bridgeBand).toPrecision(12));
   const inHigh = Number((vt + bridgeBand).toPrecision(12));
-  // Round away float noise from SI-suffix parsing (100n → 1.0000…001e-7).
   const delay = Number(Math.max(td, 1e-9).toPrecision(12));
-  // libngspice's ngSpice_Circ parser resolves XSPICE models in one pass. A
-  // forward reference accepted by the CLI batch parser fails in the embedded
-  // API with "unable to find definition of model", so every model card must
-  // precede the A-device that consumes it.
+  const digNodes = opts.digIns.map((suffix) => `${b}_${suffix}`);
   return [
     `.model ${b}_adc adc_bridge(in_low=${inLow} in_high=${inHigh})`,
-    `A_${b}_adc [${a(nodes.d)} ${a(nodes.clk)} ${a(nodes.pre)} ${a(nodes.clr)}] [${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr] ${b}_adc`,
-    `.model ${b}_dff d_dff(ic=0 clk_delay=${delay} set_delay=${delay} reset_delay=${delay} rise_delay=1e-9 fall_delay=1e-9)`,
-    `A_${b} ${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr ${b}_dq ${b}_dnq ${b}_dff`,
-    // A zero-time DAC edge into even a small capacitive analog load can drive
-    // ngspice into a vanishing-timestep loop when several DFFs toggle together.
-    // A 10 ns analog edge remains negligible for the intended logic timescale,
-    // while giving the transient solver enough room to cross a capacitive load
-    // without collapsing below its minimum timestep.
+    `A_${b}_adc [${opts.adcIns.map(a).join(" ")}] [${digNodes.join(" ")}] ${b}_adc`,
+    `.model ${b}_${model} d_${model}(ic=0 clk_delay=${delay} set_delay=${delay} reset_delay=${delay} rise_delay=1e-9 fall_delay=1e-9)`,
+    `A_${b} ${opts.instancePorts(b)} ${b}_${model}`,
     `.model ${b}_dac dac_bridge(out_low=${vlow} out_high=${vhigh} t_rise=1e-8 t_fall=1e-8)`,
-    `A_${b}_dac [${b}_dq ${b}_dnq] [${nodes.q ?? `${b}_qnc`} ${nodes.qbar ?? `${b}_qbnc`}] ${b}_dac`,
+    `A_${b}_dac [${b}_dq ${b}_dnq] [${opts.q ?? `${b}_qnc`} ${opts.qbar ?? `${b}_qbnc`}] ${b}_dac`,
   ];
 }
 

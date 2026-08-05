@@ -379,3 +379,93 @@ describe("EveryCircuit library — bulb + relay + motor", () => {
     expect(hot).toBeDefined();
   });
 });
+
+describe("EveryCircuit library — SR / T / JK flip-flops", () => {
+  it("lists SR/T/JK in the palette with expected pin counts", () => {
+    expect(CATALOG.some((e) => e.kind === "srflop")).toBe(true);
+    expect(CATALOG.some((e) => e.kind === "tflop")).toBe(true);
+    expect(CATALOG.some((e) => e.kind === "jkflop")).toBe(true);
+    expect(getLocalPins("srflop").map((p) => p.id)).toEqual(["s", "r", "q", "qbar", "com"]);
+    expect(getLocalPins("tflop").map((p) => p.id)).toEqual(["t", "clk", "pre", "clr", "q", "qbar", "com"]);
+    expect(getLocalPins("jkflop").map((p) => p.id)).toEqual(["j", "k", "clk", "pre", "clr", "q", "qbar", "com"]);
+  });
+
+  it("emits SR latch as d_dff async set/reset (no fake 555/IC)", () => {
+    const components: SchematicComponent[] = [
+      {
+        ...c("srflop", "A1", "Vhigh=5", 0, 0),
+        pinOverride: [
+          { id: "s", label: "S", x: -32, y: -16 },
+          { id: "r", label: "R", x: -32, y: 16 },
+          { id: "q", label: "Q", x: 32, y: -16 },
+          { id: "qbar", label: "Q̅", x: 32, y: 16 },
+        ],
+      },
+      {
+        ...c("vsource", "VS", "5", -128, 16),
+        pinOverride: [
+          { id: "p", label: "+", x: -128, y: -16 },
+          { id: "n", label: "-", x: -128, y: 48 },
+        ],
+      },
+      {
+        ...c("resistor", "RL", "1k", 96, -16),
+        pinOverride: [
+          { id: "a", label: "A", x: 64, y: -16 },
+          { id: "b", label: "B", x: 128, y: -16 },
+        ],
+      },
+      {
+        ...c("ground", "GND", "", -128, 48),
+        pinOverride: [{ id: "g", label: "0", x: -128, y: 48 }],
+      },
+      {
+        ...c("ground", "GND2", "", 128, -16),
+        pinOverride: [{ id: "g", label: "0", x: 128, y: -16 }],
+      },
+    ];
+    const deck = buildSpiceDeck({
+      components,
+      wires: [
+        { id: "w1", points: [{ x: -32, y: -16 }, { x: -128, y: -16 }] },
+        { id: "w2", points: [{ x: 32, y: -16 }, { x: 64, y: -16 }] },
+      ],
+    }, { kind: "op" });
+    expect(deck.netlist).toMatch(/A_a1_adc \[0 0 \S+ 0\] \[a1_dd a1_dclk a1_ds a1_dr\] a1_adc/);
+    expect(deck.netlist).toContain(".model a1_dff d_dff(ic=0");
+    expect(deck.netlist).toContain("A_a1 a1_dd a1_dclk a1_ds a1_dr a1_dq a1_dnq a1_dff");
+    expect(deck.netlist).not.toMatch(/555|ne555|lm555/i);
+  });
+
+  it("emits T and JK as XSPICE d_tff / d_jkff", () => {
+    const t: SchematicComponent = {
+      ...c("tflop", "A2", "Vhigh=5", 0, 0),
+      pinOverride: [
+        { id: "t", label: "T", x: -32, y: -16 },
+        { id: "clk", label: "CLK", x: -32, y: 16 },
+        { id: "q", label: "Q", x: 32, y: -16 },
+      ],
+    };
+    const jk: SchematicComponent = {
+      ...c("jkflop", "A3", "Vhigh=5", 200, 0),
+      pinOverride: [
+        { id: "j", label: "J", x: 168, y: -24 },
+        { id: "k", label: "K", x: 168, y: 0 },
+        { id: "clk", label: "CLK", x: 168, y: 24 },
+        { id: "q", label: "Q", x: 232, y: -16 },
+      ],
+    };
+    const gnd: SchematicComponent = {
+      ...c("ground", "GND", "", 0, 64),
+      pinOverride: [{ id: "g", label: "0", x: 0, y: 64 }],
+    };
+    // Isolated devices still emit model cards (unconnected pins → ground).
+    const deckT = buildSpiceDeck({ components: [t, gnd], wires: [] }, { kind: "op" });
+    expect(deckT.netlist).toContain(".model a2_tff d_tff(ic=0");
+    expect(deckT.netlist).toContain("A_a2 a2_dt a2_dclk a2_dpre a2_dclr a2_dq a2_dnq a2_tff");
+
+    const deckJk = buildSpiceDeck({ components: [jk, gnd], wires: [] }, { kind: "op" });
+    expect(deckJk.netlist).toContain(".model a3_jkff d_jkff(ic=0");
+    expect(deckJk.netlist).toContain("A_a3 a3_dj a3_dk a3_dclk a3_dpre a3_dclr a3_dq a3_dnq a3_jkff");
+  });
+});

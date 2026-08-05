@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~10:00 CDT**
+**Status: DONE - 2026-08-05 ~10:05 CDT**
 
-Unit: EveryCircuit library — **bulb** + **relay** + **motor**
-(honest R / coil+SW / series RL). Worktree `Tau-wt-ec-lib`. Not full EC parity.
+Unit: EveryCircuit library — **SR latch** + **T FF** + **JK FF**
+(XSPICE d_dff set/reset · d_tff · d_jkff). Not full EC parity.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -12,6 +12,35 @@ SHIPPABLE? **NO**
 
 
 ---
+
+
+### 2026-08-05 — SR / T / JK flip-flops (§EveryCircuit)
+
+**What I did**
+- Palette **SR Latch** (`srflop`): async S/R → XSPICE `d_dff` set/reset (matches LTspice `Digital\srflop`; import path landed).
+- Palette **T Flip-Flop** / **JK Flip-Flop**: edge-triggered via XSPICE `d_tff` / `d_jkff` + adc/dac bridges (same path as DFLOP). ASC lossy carriers (no LTspice `.asy`).
+- Shared `xspiceFlopDeckLines` helper; catalog/placement/netlist/import/export tests.
+- Left CT xfmr / 7seg / 555 / ADC-DAC / counter refused or deep work.
+
+**Files**
+- `schematic/{types,catalog,pins,symbols,everyCircuitLibrary.test}.ts(x)`
+- `engine/{digitalGateSpec,spiceNetlist}.ts` (+ tests)
+- `io/{ascImport,ascExport}.ts` (+ tests), `lib/assistantCircuitPlan.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck`
+- `pnpm -C apps/desktop test` (2836 passed)
+
+**Parity items**
+- §EveryCircuit: SR + T + JK landed. Remaining: CT xfmr / 7seg / 555 / ADC-DAC / counter. SHIPPABLE? NO
+
+**Next step**
+- CT transformer (honest multi-L + K) if wanted; refuse 555/ADC/counter without real subckts.
+
+---
+
+
 
 
 ### 2026-08-05 — bulb + relay + motor (§EveryCircuit)

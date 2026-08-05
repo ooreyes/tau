@@ -3,6 +3,9 @@ import {
   parseDigitalGate,
   digitalGateDeckLines,
   dflopDeckLines,
+  srflopDeckLines,
+  tflopDeckLines,
+  jkflopDeckLines,
 } from "./digitalGateSpec";
 
 describe("parseDigitalGate", () => {
@@ -137,5 +140,33 @@ describe("dflopDeckLines", () => {
   it("maps Td onto the event delays with a 1 ns floor", () => {
     const lines = dflopDeckLines("A1", { d: "d", clk: "c", q: "q" }, parseDigitalGate("Td=100n"));
     expect(lines[2]).toContain("clk_delay=1e-7 set_delay=1e-7 reset_delay=1e-7");
+  });
+});
+
+describe("srflopDeckLines", () => {
+  it("emits async SR via d_dff set/reset (D/CLK held at digital 0)", () => {
+    const lines = srflopDeckLines("A1", { s: "s", r: "r", q: "q", qbar: "qb" }, parseDigitalGate("Vhigh=5"));
+    expect(lines[0]).toBe(".model a1_adc adc_bridge(in_low=2.495 in_high=2.505)");
+    expect(lines[1]).toBe("A_a1_adc [0 0 s r] [a1_dd a1_dclk a1_ds a1_dr] a1_adc");
+    expect(lines[2]).toContain(".model a1_dff d_dff(ic=0");
+    expect(lines[3]).toBe("A_a1 a1_dd a1_dclk a1_ds a1_dr a1_dq a1_dnq a1_dff");
+    expect(lines[5]).toBe("A_a1_dac [a1_dq a1_dnq] [q qb] a1_dac");
+  });
+});
+
+describe("tflopDeckLines / jkflopDeckLines", () => {
+  it("emits XSPICE d_tff between adc/dac bridges", () => {
+    const lines = tflopDeckLines("A2", { t: "t", clk: "c", q: "q" }, parseDigitalGate("Vhigh=5"));
+    expect(lines[1]).toBe("A_a2_adc [t c 0 0] [a2_dt a2_dclk a2_dpre a2_dclr] a2_adc");
+    expect(lines[2]).toContain(".model a2_tff d_tff(ic=0");
+    expect(lines[3]).toBe("A_a2 a2_dt a2_dclk a2_dpre a2_dclr a2_dq a2_dnq a2_tff");
+  });
+
+  it("emits XSPICE d_jkff between adc/dac bridges", () => {
+    const lines = jkflopDeckLines("A3", { j: "j", k: "k", clk: "c", q: "q", qbar: "qb" }, parseDigitalGate(""));
+    expect(lines[1]).toBe("A_a3_adc [j k c 0 0] [a3_dj a3_dk a3_dclk a3_dpre a3_dclr] a3_adc");
+    expect(lines[2]).toContain(".model a3_jkff d_jkff(ic=0");
+    expect(lines[3]).toBe("A_a3 a3_dj a3_dk a3_dclk a3_dpre a3_dclr a3_dq a3_dnq a3_jkff");
+    expect(lines[5]).toBe("A_a3_dac [a3_dq a3_dnq] [q qb] a3_dac");
   });
 });

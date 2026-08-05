@@ -1265,13 +1265,13 @@ describe("digital A-device symbols (Digital\\*)", () => {
     expect(ltspiceTypeToKind("Digital\\inv")).toBe("digitalGate");
     expect(ltspiceTypeToKind("digital\\schmtbuf")).toBe("digitalGate");
     expect(ltspiceTypeToKind("Digital\\dflop")).toBe("dflop");
+    expect(ltspiceTypeToKind("Digital\\srflop")).toBe("srflop");
     expect(ltspiceTypeToKind("Digital\\phidet")).toBe("digitalGate");
     // Bare leafs are too generic to claim globally.
     expect(ltspiceTypeToKind("and")).toBeNull();
     expect(ltspiceTypeToKind("inv")).toBeNull();
     // Unmodelled Digital parts still fall through to the skip path.
     expect(ltspiceTypeToKind("Digital\\counter")).toBeNull();
-    expect(ltspiceTypeToKind("Digital\\srflop")).toBeNull();
   });
 
   it("imports DIGITAL\\AND with the full 8-slot pin bank and the fn in the value", () => {

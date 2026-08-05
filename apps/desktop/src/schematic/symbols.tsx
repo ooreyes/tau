@@ -63,6 +63,9 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   comparator: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
   digitalGate: { minX: -24, minY: -38, maxX: 28, maxY: 40 },
   dflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
+  srflop: { minX: -24, minY: -24, maxX: 24, maxY: 40 },
+  tflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
+  jkflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
   sampleHold: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
   modulator: { minX: -24, minY: -32, maxX: 24, maxY: 32 },
   vcvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
@@ -110,6 +113,9 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   comparator: { halfW: 28, halfH: 28 },
   digitalGate: { halfW: 28, halfH: 40 },
   dflop: { halfW: 26, halfH: 42 },
+  srflop: { halfW: 26, halfH: 34 },
+  tflop: { halfW: 26, halfH: 42 },
+  jkflop: { halfW: 26, halfH: 42 },
   sampleHold: { halfW: 26, halfH: 42 },
   modulator: { halfW: 26, halfH: 34 },
   vcvs: { halfW: 20, halfH: 24 },
@@ -390,6 +396,58 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           <line x1={-32} y1={48} x2={-24} y2={40} />
           {/* D-flop glyph */}
           <path d="M -8 -6 H 0 A 6 6 0 0 1 0 6 H -8 Z" fill="none" />
+        </>
+      );
+
+    case "srflop":
+      return (
+        <>
+          <rect x={-24} y={-24} width={48} height={56} rx={2} />
+          <line x1={-32} y1={-16} x2={-24} y2={-16} />
+          <line x1={-32} y1={16} x2={-24} y2={16} />
+          <line x1={24} y1={-16} x2={32} y2={-16} />
+          <circle cx={27} cy={16} r={3} />
+          <line x1={30} y1={16} x2={32} y2={16} />
+          <line x1={-32} y1={48} x2={-24} y2={32} />
+          {/* SR glyph: crossed set/reset hint */}
+          <path d="M -6 -4 L 6 4 M -6 4 L 6 -4" fill="none" />
+        </>
+      );
+
+    case "tflop":
+      return (
+        <>
+          <rect x={-24} y={-40} width={48} height={80} rx={2} />
+          <line x1={-32} y1={-16} x2={-24} y2={-16} />
+          <line x1={-32} y1={16} x2={-24} y2={16} />
+          <path d="M -24 10 L -16 16 L -24 22" fill="none" />
+          <line x1={0} y1={-48} x2={0} y2={-40} />
+          <line x1={0} y1={40} x2={0} y2={48} />
+          <line x1={24} y1={-16} x2={32} y2={-16} />
+          <circle cx={27} cy={16} r={3} />
+          <line x1={30} y1={16} x2={32} y2={16} />
+          <line x1={-32} y1={48} x2={-24} y2={40} />
+          {/* T glyph */}
+          <path d="M -6 -6 H 6 M 0 -6 V 6" fill="none" />
+        </>
+      );
+
+    case "jkflop":
+      return (
+        <>
+          <rect x={-24} y={-40} width={48} height={80} rx={2} />
+          <line x1={-32} y1={-24} x2={-24} y2={-24} />
+          <line x1={-32} y1={0} x2={-24} y2={0} />
+          <line x1={-32} y1={24} x2={-24} y2={24} />
+          <path d="M -24 18 L -16 24 L -24 30" fill="none" />
+          <line x1={0} y1={-48} x2={0} y2={-40} />
+          <line x1={0} y1={40} x2={0} y2={48} />
+          <line x1={24} y1={-16} x2={32} y2={-16} />
+          <circle cx={27} cy={16} r={3} />
+          <line x1={30} y1={16} x2={32} y2={16} />
+          <line x1={-32} y1={48} x2={-24} y2={40} />
+          {/* JK glyph */}
+          <path d="M -8 -8 V 8 M -8 0 L 0 8 M 4 -8 V 8 M 4 0 L 10 -8 M 4 0 L 10 8" fill="none" />
         </>
       );
 

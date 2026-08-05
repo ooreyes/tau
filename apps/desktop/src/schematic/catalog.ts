@@ -64,6 +64,11 @@ export const CATALOG: CatalogEntry[] = [
   // The gate's value names its function: and/or/xor/buf/inv/schmtbuf/schmtinv.
   { kind: "digitalGate",   section: "Digital",           name: "Logic Gate",      hotkey: "",  prefix: "A",   defaultValue: "and",   unit: "" },
   { kind: "dflop",         section: "Digital",           name: "D Flip-Flop",     hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
+  // Async SR latch (LTspice Digital\srflop): S/R → XSPICE d_dff set/reset.
+  { kind: "srflop",        section: "Digital",           name: "SR Latch",        hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
+  // Edge-triggered T / JK via XSPICE d_tff / d_jkff (EveryCircuit-style; no LTspice .asy).
+  { kind: "tflop",         section: "Digital",           name: "T Flip-Flop",     hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
+  { kind: "jkflop",        section: "Digital",           name: "JK Flip-Flop",    hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
   { kind: "sampleHold",    section: "Digital",           name: "Sample & Hold",   hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
   // Behavioral VCO (LTspice SpecialFunctions\modulate). mark=space keeps a
   // bare placement oscillating at 1kHz even with the FM input unwired (FM=0V

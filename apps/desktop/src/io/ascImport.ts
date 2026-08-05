@@ -560,6 +560,7 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
   // is required - bare leafs like "and"/"or" are too generic to claim globally.
   if (base.includes("digital/")) {
     if (leaf === "dflop") return "dflop";
+    if (leaf === "srflop") return "srflop";
     if (leaf === "phidet") return "digitalGate";
     if (DIGITAL_GATE_LEAFS.has(leaf)) return "digitalGate";
   }
@@ -574,9 +575,9 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
 }
 
 /** `Digital\*.asy` leafs that map onto the behavioral `digitalGate` kind.
- *  (counter/srflop and the diff* family are not yet modelled and fall
- *  through to the skip-warning path; SpecialFunctions\sample maps to the
- *  `sampleHold` kind above.) */
+ *  (counter and the diff* family are not yet modelled and fall through to the
+ *  skip-warning path; SpecialFunctions\sample maps to the `sampleHold` kind
+ *  above. srflop maps to its own kind.) */
 const DIGITAL_GATE_LEAFS = new Set([
   "inv", "buf", "buf1", "and", "or", "xor", "schmitt", "schmtbuf", "schmtinv",
 ]);
@@ -823,6 +824,14 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
     { name: "q", dx: 80, dy: 48 },
     { name: "com", dx: -80, dy: 144 },
   ],
+  // srflop.asy (SpiceOrder S=1, R=2, _Q=6, Q=7, com=8).
+  srflop: [
+    { name: "s", dx: -48, dy: 48 },
+    { name: "r", dx: -48, dy: 96 },
+    { name: "qbar", dx: 64, dy: 96 },
+    { name: "q", dx: 48, dy: 48 },
+    { name: "com", dx: -48, dy: 128 },
+  ],
   // Digital/phidet.asy: two clock inputs, current output, and common.
   phidet: [
     { name: "in1", dx: -32, dy: -16 },
@@ -935,7 +944,7 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
       inv: "digInv", schmtinv: "digInv",
       buf: "digBuf", schmitt: "digBuf",
       buf1: "digBuf1", schmtbuf: "digBuf1",
-      dflop: "dflop", phidet: "phidet",
+      dflop: "dflop", srflop: "srflop", phidet: "phidet",
     };
     return digital[leaf] ?? null;
   }
@@ -1062,7 +1071,7 @@ function buildPinOverride(
   // ONLY the pins the .asy actually has (the deck builder ignores absent pins,
   // matching LTspice's floating-input semantics). sampleHold and modulator
   // share the scheme.
-  if (kind === "digitalGate" || kind === "dflop" || kind === "sampleHold" || kind === "modulator") {
+  if (kind === "digitalGate" || kind === "dflop" || kind === "srflop" || kind === "tflop" || kind === "jkflop" || kind === "sampleHold" || kind === "modulator") {
     const byId = new Map(tauPins.map((p) => [p.id, p]));
     const override: PinOverride[] = [];
     for (const lt of ltPins) {
@@ -1393,7 +1402,7 @@ export function componentValueFromAttrs(
   // `Value2 Trise=10n`); join them all for parseDigitalGate, which skips
   // unknown tokens. The caller prepends the gate function (from the symbol
   // path) since LTspice encodes it in the symbol name, not the value.
-  if (kind === "digitalGate" || kind === "dflop" || kind === "sampleHold" || kind === "modulator") {
+  if (kind === "digitalGate" || kind === "dflop" || kind === "srflop" || kind === "tflop" || kind === "jkflop" || kind === "sampleHold" || kind === "modulator") {
     const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
       .map(normalizeLtspiceAttr)
       .filter(Boolean);

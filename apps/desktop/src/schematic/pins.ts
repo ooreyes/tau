@@ -97,6 +97,35 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
     { id: "com", label: "COM", x: -32, y: 48 },
   ],
+  // Async SR latch (LTspice Digital\srflop.asy): S/R left, complementary outs.
+  srflop: [
+    { id: "s", label: "S", x: -32, y: -16 },
+    { id: "r", label: "R", x: -32, y: 16 },
+    { id: "q", label: "Q", x: 32, y: -16 },
+    { id: "qbar", label: "Q̅", x: 32, y: 16 },
+    { id: "com", label: "COM", x: -32, y: 48 },
+  ],
+  // Edge-triggered T flip-flop (XSPICE d_tff): T/CLK left, PRE/CLR, Q/Q̅.
+  tflop: [
+    { id: "t", label: "T", x: -32, y: -16 },
+    { id: "clk", label: "CLK", x: -32, y: 16 },
+    { id: "pre", label: "PRE", x: 0, y: -48 },
+    { id: "clr", label: "CLR", x: 0, y: 48 },
+    { id: "q", label: "Q", x: 32, y: -16 },
+    { id: "qbar", label: "Q̅", x: 32, y: 16 },
+    { id: "com", label: "COM", x: -32, y: 48 },
+  ],
+  // Edge-triggered JK flip-flop (XSPICE d_jkff): J/K/CLK left, PRE/CLR, Q/Q̅.
+  jkflop: [
+    { id: "j", label: "J", x: -32, y: -24 },
+    { id: "k", label: "K", x: -32, y: 0 },
+    { id: "clk", label: "CLK", x: -32, y: 24 },
+    { id: "pre", label: "PRE", x: 0, y: -48 },
+    { id: "clr", label: "CLR", x: 0, y: 48 },
+    { id: "q", label: "Q", x: 32, y: -16 },
+    { id: "qbar", label: "Q̅", x: 32, y: 16 },
+    { id: "com", label: "COM", x: -32, y: 48 },
+  ],
   // Behavioral sample-and-hold (LTspice SpecialFunctions\sample): differential
   // analog input plus CLK (rising-edge sample) and S/H (track-while-high)
   // controls on the left, analog output right, com reference below. Imported

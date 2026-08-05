@@ -223,6 +223,7 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     sampleHold: "SpecialFunctions\\\\sample",
     modulator: "SpecialFunctions\\\\modulate",
     dflop: "Digital\\\\dflop",
+    srflop: "Digital\\\\srflop",
     bsource: "bv",
     vcvs: "e",
     vccs: "g",
@@ -272,7 +273,7 @@ const VERBATIM_UNSAFE_LEAFS = new Set(["npn4", "pnp4", "varistor", "diac"]);
 export function canEmitLtSymbolVerbatim(type: string, kind: ComponentKind): boolean {
   const leaf = type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
   if (VERBATIM_UNSAFE_LEAFS.has(leaf)) return false;
-  if (["digitalGate", "subckt", "dflop", "sampleHold", "modulator"].includes(kind)) return false;
+  if (["digitalGate", "subckt", "dflop", "srflop", "tflop", "jkflop", "sampleHold", "modulator"].includes(kind)) return false;
   return ltspiceTypeToKind(type) === kind && hasBankedLtPins(type);
 }
 
@@ -306,7 +307,10 @@ export function isLossyCarrierWarning(warning: string): boolean {
 }
 
 export const LOSSY_CARRIER_KINDS: ReadonlySet<string> = new Set([
-  "comparator", "cccs", "ccvs", "switch", "pushButton", "spdt", "relay", "motor", "subckt", "testpoint",
+  "comparator", "cccs", "ccvs", "switch", "pushButton", "spdt", "relay", "motor",
+  // T/JK are Tau-native XSPICE flops — no LTspice Digital\*.asy counterparts.
+  "tflop", "jkflop",
+  "subckt", "testpoint",
 ]);
 
 /**

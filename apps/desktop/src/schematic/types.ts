@@ -25,6 +25,9 @@ export type ComponentKind =
   | "comparator"
   | "digitalGate"
   | "dflop"
+  | "srflop"
+  | "tflop"
+  | "jkflop"
   | "sampleHold"
   | "modulator"
   | "vcvs"
@@ -55,7 +58,8 @@ export type ComponentKind =
 export const COMPONENT_KINDS = [
   "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource", "vac", "iac", "vpulse",
   "logicConstant",
-  "diode", "led", "zener", "photodiode", "opamp", "comparator", "digitalGate", "dflop", "sampleHold",
+  "diode", "led", "zener", "photodiode", "opamp", "comparator", "digitalGate", "dflop", "srflop",
+  "tflop", "jkflop", "sampleHold",
   "modulator", "vcvs", "vccs", "cccs", "ccvs", "bsource", "nmos", "pmos", "njf", "pjf",
   "npn", "pnp", "potentiometer", "bulb", "switch", "pushButton", "spdt", "relay", "motor",
   "transformer", "tline", "subckt", "testpoint",
