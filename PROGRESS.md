@@ -2,16 +2,51 @@
 
 **Status: DONE - 2026-08-05 ~13:40 CDT**
 
-Unit: **Named-device AD8561 ambiguous-leaf exact map** — prefer OpAmps
-plaintext `AD8561.lib` over Comparators encrypted `.sub` when bare SYMBOL
-collides; never silent generic / never decrypt. Measured exact=1223 /
-refuse=1318 / 48.1%. DoD box stays ⬜. SHIPPABLE? **NO**
+Unit: **Educational NE555 period-meas → pass=108** — discrete BJT 555
+Output `.meas` period (continuous phase deferred). DoD broad box stays
+open. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+### 2026-08-05 — Educational NE555 period-meas → pass=108 (§DoD)
+
+**What I did**
+- Educational `NE555.asc` authored `.tran 30m`: on-schematic NP/PN (LPNP→PNP)
+  discrete 555. Continuous Output/Dischrg waveforms still phase-miss; land
+  **period** via `.meas` TRIG/TARG on Output net `3` (TD=5m RISE=2→3).
+  LTspice log vs Tau `runMeasurements`: tper relErr≈0.016%. Same honesty
+  class as astable period-meas. Never Chan/NIGBT/FRA.
+- Left SoftDiode Vp>0 / Fc / ISO7637 spike / TLINE-inv alone. DoD broad box
+  stays open. SHIPPABLE? **NO**.
+
+**Exact stdout**
+```
+SUMMARY pass=108 sibling=5 gap=0 (DoD box stays open until broad authored-analysis matrix is green)
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=108 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test`
+
+**Parity items**
+- Differential 🟡 **pass=108 · sibling=5 · gap=0**; DoD broad box unchecked.
+- SHIPPABLE? **NO**
+
+**Next**
+- Fc / ISO7637 spike / TLINE-inv / LT1001 walls / Chan; never SoftDiode Vp>0
+  waveform fakes. SHIPPABLE? **NO**
+
+SHIPPABLE? **NO**
+
 
 ### 2026-08-05 — Named-device AD8561 ambiguous-leaf → exact=1223 (§DoD)
 

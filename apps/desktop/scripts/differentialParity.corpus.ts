@@ -89,6 +89,8 @@ const SOFTDIODE_ASC = join(EDU, "SoftDiodeRecovery.asc");
 const POWERAMP_ASC = join(EDU, "PAsystem", "PowerAmp.asc");
 /** Educational astable — 2N3904 BJT multivibrator (period-meas; continuous phase deferred). */
 const ASTABLE_ASC = join(EDU, "astable.asc");
+/** Educational NE555 — discrete BJT 555 (period-meas on Output; continuous phase deferred). */
+const NE555_ASC = join(EDU, "NE555.asc");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
@@ -408,7 +410,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -5322,6 +5324,83 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational/NE555.asc authored .tran (discrete BJT 555; period-meas) ---
+    // On-schematic `.model NP NPN` / `.model PN LPNP` (LPNP→PNP rewrite) discrete
+    // 555. Continuous Output/Dischrg waveforms still phase-miss vs LTspice —
+    // land **period** via `.meas` TRIG/TARG on Output net `3` after settle
+    // (TD=5m RISE=2→3): LTspice log vs Tau `runMeasurements`, relErr≈0.016%.
+    // Same honesty class as Educational/astable period-meas. Never Chan/NIGBT/
+    // FRA. Tip pass=107 → **pass=108**. Left SoftDiode Vp>0 / Fc / ISO7637 /
+    // TLINE-inv alone.
+    {
+      expect(existsSync(NE555_ASC), `missing ${NE555_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(NE555_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      expect(dirs.some((d) => /\.model\s+NP\s+NPN\b/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.model\s+PN\s+LPNP\b/i.test(d))).toBe(true);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "NE555.asc must author .tran").toBeTruthy();
+      expect(parsed.tran!.stopTime, "NE555 .tran 30m").toBeCloseTo(0.03, 12);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 10000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+        startup: parsed.tran!.startup,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      // LPNP → PNP rewrite for stock ngspice (same path as LM78XX).
+      expect(deck.netlist).toMatch(/\.model\s+NP\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+PN\s+PNP\b/i);
+      expect(deck.netlist).not.toMatch(/\.model\s+PN\s+LPNP\b/i);
+      expect(deck.netlist).toMatch(/^Q\d+\b.+\bNP\b/im);
+      expect(deck.netlist).toMatch(/^Q\d+\b.+\bPN\b/im);
+      expect(deck.netlist).not.toMatch(/^Q\w+\b.+\bTAU_NPN\b/im);
+      expect(deck.netlist).toMatch(/\b3\b/);
+      const probeNet = "3";
+      const probe = `v(${probeNet})`;
+      const measLines = [
+        `.meas tran tper TRIG V(${probeNet}) VAL=2.5 RISE=2 TD=5m TARG V(${probeNet}) VAL=2.5 RISE=3 TD=5m`,
+      ];
+      const result = runPairedBatch("diff-ne555-period", deck.netlist, [probe], {
+        measurements: measLines,
+      });
+      const ltTrace = result.ltspice.get(probe)!;
+      const ngTrace = result.ngspice.get(probe)!;
+      const span = Math.max(
+        Math.max(...ltTrace.values) - Math.min(...ltTrace.values),
+        Math.max(...ngTrace.values) - Math.min(...ngTrace.values),
+      );
+      expect(span, "NE555 Output non-hollow").toBeGreaterThan(10);
+      const ltTper = measurementValue(result.ltspiceLog, "tper");
+      const tauMeas = runMeasurements(measLines, {
+        times: ngTrace.axis,
+        traces: [{ id: probeNet, label: `V(${probeNet})`, values: ngTrace.values }],
+      });
+      const ngTper = tauMeas.find((row) => row.name.toLowerCase() === "tper")?.value;
+      expect(ngTper, JSON.stringify(tauMeas)).toEqual(expect.any(Number));
+      const periodRel = relativeError(ngTper!, ltTper);
+      expect(periodRel, `NE555 tper lt=${ltTper} ng=${ngTper}`).toBeLessThanOrEqual(0.02);
+      cells.push({
+        analysis: "tran",
+        circuit: "ne555",
+        topology: "Educational/NE555.asc discrete BJT 555 NP/PN (authored .tran 30m; period-meas on Output; continuous phase deferred)",
+        status: "pass",
+        note: `tper lt=${ltTper.toExponential(3)} ng=${ngTper!.toExponential(3)} relErr=${periodRel.toExponential(2)} (Output ${probe}; waveform phase deferred)`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -5618,6 +5697,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=107 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=108 sibling=5 gap=0/);
   }, 600_000);
 });
