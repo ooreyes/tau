@@ -322,7 +322,6 @@ function App() {
   pendingExternalEditRef.current = pendingExternalEdit;
   const [schematicReadoutTime, setSchematicReadoutTime] = useState<number | null>(null);
   /** Animate schematic V/I through real `.tran` samples (EveryCircuit-style live). */
-  const [liveSchematicPlayback, setLiveSchematicPlayback] = useState(true);
   // Current mode: the animated flow-dot overlay. On by default because it is
   // the point of running a simulation, but genuinely dismissable - an overlay
   // you cannot turn off is one you end up fighting while reading the drawing.
@@ -2295,7 +2294,6 @@ function App() {
               readoutTime={schematicReadoutTime}
               interactive
               fitSignal={fitSignal}
-              currentVisualizer={currentVisualizer}
             />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState
@@ -2357,36 +2355,18 @@ function App() {
                     type="button"
                     className={`sim-current-mode-badge${currentVisualizer ? " active" : ""}`}
                     aria-pressed={currentVisualizer}
-                    aria-label={currentVisualizer ? "Current mode on" : "Current mode off"}
+                    aria-label={currentVisualizer ? "Current Mode on" : "Current Mode off"}
                     title={
                       currentVisualizer
-                        ? "Current mode on: animated flow dots show real branch current on the wires. Click to hide."
-                        : "Current mode off. Click to show animated branch current on the wires."
+                        ? "Current Mode on: animated flow dots show real branch current on the wires. Click to hide."
+                        : "Current Mode off. Click to show animated branch current on the wires."
                     }
                     onClick={() => setCurrentVisualizer((on) => !on)}
                   >
                     {currentVisualizer
                       ? <Eye size={13} strokeWidth={1.7} aria-hidden="true" />
                       : <EyeOff size={13} strokeWidth={1.7} aria-hidden="true" />}
-                    <span>Current mode</span>
-                  </button>
-                )}
-                {/* Live only means anything while the overlay is visible - a
-                    playback control for a hidden layer is a dead button. */}
-                {analysis?.ok && currentVisualizer && (
-                  <button
-                    type="button"
-                    className={`sim-live-playback-badge${liveSchematicPlayback ? " active" : ""}`}
-                    aria-pressed={liveSchematicPlayback}
-                    aria-label={liveSchematicPlayback ? "Live current playback on" : "Live current playback off"}
-                    title={
-                      liveSchematicPlayback
-                        ? "Live: flow dots scrub through real .tran samples (scope cursors override). Click to pause at the final sample."
-                        : "Paused at the final .tran sample. Click to animate flow through the waveform."
-                    }
-                    onClick={() => setLiveSchematicPlayback((on) => !on)}
-                  >
-                    Live
+                    <span>Current Mode</span>
                   </button>
                 )}
                 <span
@@ -2457,7 +2437,7 @@ function App() {
                 stepSetupUi={stepSetupUi}
                 onStepSetupUiChange={setStepSetupUi}
                 onSchematicReadoutTime={setSchematicReadoutTime}
-                liveSchematicPlayback={liveSchematicPlayback}
+                liveSchematicPlayback={currentVisualizer}
               />
             </AnalysisErrorBoundary>
           </>

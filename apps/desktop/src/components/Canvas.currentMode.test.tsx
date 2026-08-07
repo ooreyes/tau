@@ -76,20 +76,30 @@ describe("Canvas - current mode", () => {
     expect(document.querySelectorAll(".op-annotation")).toHaveLength(0);
   });
 
-  it("shows the flow layer on the editor canvas after a real OP", async () => {
+  it("stays off on the editor canvas even with a converged result", async () => {
+    // Current Mode is a reading of a completed run, so it belongs to the
+    // simulator. Moving current on the canvas you are still drawing into is
+    // noise, and the overlay defaults off for exactly that reason.
     const op = okOp();
     expect(op.ok).toBe(true);
     render(<Canvas op={op} interactive />);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(document.querySelector(".flow-layer")).toBeNull();
+    // The toggle lives in App's simulator header, not on Canvas itself.
+    expect(screen.queryByLabelText("Current Mode on")).toBeNull();
+  });
+
+  it("shows the flow layer when the simulator opts in", async () => {
+    const op = okOp();
+    render(<Canvas op={op} interactive={false} currentVisualizer />);
     // Dots are placed on the first animation frame, so the layer mounts a tick
     // after render rather than synchronously.
     await waitFor(() => expect(document.querySelector(".flow-layer")).not.toBeNull());
     expect(document.querySelectorAll(".flow-layer .flow-dot").length).toBeGreaterThan(0);
-    // The badge lives in App's simulator header, not on Canvas itself.
-    expect(screen.queryByLabelText("Current mode on")).toBeNull();
   });
 
   it("hides the flow layer entirely when current mode is off", async () => {
-    render(<Canvas op={okOp()} interactive currentVisualizer={false} />);
+    render(<Canvas op={okOp()} interactive={false} currentVisualizer={false} />);
     // Give the animation the same chance to start that the "on" case gets, so
     // this proves the layer stays absent rather than merely not-yet-mounted.
     await new Promise((r) => setTimeout(r, 60));
@@ -105,7 +115,7 @@ describe("Canvas - current mode", () => {
     const { runTransientAnalysis } = await import("../simulation/linearTransient");
     const tran = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 64 });
     expect(tran.ok).toBe(true);
-    render(<Canvas tran={tran} interactive />);
+    render(<Canvas tran={tran} interactive={false} currentVisualizer />);
     await waitFor(() => expect(document.querySelector(".flow-layer")).not.toBeNull());
   });
 });

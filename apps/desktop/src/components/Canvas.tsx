@@ -107,7 +107,7 @@ export function Canvas({
   readoutTime = null,
   interactive = true,
   fitSignal = 0,
-  currentVisualizer = true,
+  currentVisualizer = false,
 }: {
   /** Last DC operating point; drives the current-flow visualizer. */
   op?: OperatingPointResult | null;
@@ -122,9 +122,11 @@ export function Canvas({
   interactive?: boolean;
   /** Bumped by App on open/new/tab switch so the schematic auto-fits once. */
   fitSignal?: number;
-  /** Current mode: draws animated flow dots along wires from real branch
-   *  currents. Off hides the layer entirely rather than freezing it, so an
-   *  unwanted overlay costs nothing. */
+  /** Current Mode: animated flow dots along the wires, from real branch
+   *  currents. Defaults OFF and is opted into by the simulator only - it is a
+   *  reading of a completed run, and an editor canvas showing moving current
+   *  while you are still drawing the circuit is noise, not information. Off
+   *  hides the layer entirely rather than freezing it. */
   currentVisualizer?: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);

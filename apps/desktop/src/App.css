@@ -6424,7 +6424,10 @@ button.bottom-panel-head:focus-visible {
   gap: var(--sp-1);
   height: 22px;
   padding: 0 var(--sp-2);
-  margin-left: auto;
+  /* The header is already `justify-content: space-between`; a second
+     `margin-left: auto` fought it and pulled the chip over its neighbour. */
+  margin-left: var(--sp-2);
+  white-space: nowrap;
   font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -6483,7 +6486,9 @@ button.bottom-panel-head:focus-visible {
 }
 
 .sim-circuit-tools {
-  min-width: 0;
+  /* Never the item that gives way: this group shrinking is what clipped the
+     "Name" button when the Current Mode chip sat beside it. */
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 1px;
