@@ -2625,24 +2625,6 @@ body {
 /* In-place DC operating point labels on the schematic (simulator mode). A
    background stroke keeps them readable over wires and symbol bodies. Kept
    outside the App.css type scale (schematic canvas SVG text). */
-.op-annotation {
-  font-size: 12px;
-  font-weight: 600;
-  font-family: var(--font-mono);
-  paint-order: stroke;
-  stroke: var(--bg);
-  stroke-width: 3.5px;
-  pointer-events: none;
-}
-
-.op-annotation.voltage {
-  fill: var(--trace-cyan);
-}
-
-.op-annotation.current {
-  fill: var(--trace-green);
-}
-
 /* EveryCircuit-like current-mode flow dots (real OP branch currents only). */
 .flow-layer .flow-dot {
   fill: var(--trace-green);
@@ -6431,20 +6413,45 @@ button.bottom-panel-head:focus-visible {
   background: var(--panel-3);
 }
 
+/* Current mode is a real toggle, so it has to read as pressable rather than as
+   a status chip: neutral at rest, semantic only when the overlay is actually
+   on. The eye icon carries the on/off state alongside the colour, since colour
+   alone cannot say "hidden". */
 .sim-current-mode-badge {
   flex: none;
   display: inline-flex;
   align-items: center;
+  gap: var(--sp-1);
   height: 22px;
   padding: 0 var(--sp-2);
   margin-left: auto;
   font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--trace-green);
-  border: 1px solid color-mix(in srgb, var(--trace-green) 35%, var(--border));
+  color: var(--muted);
+  border: 1px solid var(--border);
   border-radius: var(--r-md);
+  background: var(--panel-3);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
+}
+
+.sim-current-mode-badge.active {
+  color: var(--trace-green);
+  border-color: color-mix(in srgb, var(--trace-green) 35%, var(--border));
   background: color-mix(in srgb, var(--trace-green) 12%, var(--panel-3));
+}
+
+.sim-current-mode-badge:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 25%, var(--border));
+}
+
+.sim-current-mode-badge:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-line);
 }
 
 .sim-live-playback-badge {

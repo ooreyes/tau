@@ -10,7 +10,6 @@ import {
   nativeSubcircuitBody,
 } from "../schematic/subcircuitGeometry";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
-import { opAnnotations, tranAnnotations } from "../simulation/opAnnotations";
 import { OpCurrentFlowLayer } from "./OpCurrentFlowLayer";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -27,9 +26,6 @@ import {
   ascArcPath,
   ascShapeRender,
   buildLabelPlacements,
-  buildOpAnnotationPlacements,
-  netLabelTextRect,
-  type OpAnnotationPlacement,
   circuitBounds,
   circuitBoundsWithLabels,
   collides,
@@ -111,12 +107,12 @@ export function Canvas({
   readoutTime = null,
   interactive = true,
   fitSignal = 0,
+  currentVisualizer = true,
 }: {
-  /** Last DC operating point; in simulator mode its node voltages / branch
-   *  currents are annotated in place on the schematic. */
+  /** Last DC operating point; drives the current-flow visualizer. */
   op?: OperatingPointResult | null;
-  /** Last successful `.tran`; when present, schematic current mode prefers a
-   *  real waveform sample (default = final) over the DC OP. */
+  /** Last successful `.tran`; when present, the flow visualizer prefers a real
+   *  waveform sample (default = final) over the DC OP. */
   tran?: AnalysisResult | null;
   /** Optional seconds into the transient for the schematic readout (cursor).
    *  Null → last sample. Ignored when there is no ok transient. */
@@ -126,6 +122,10 @@ export function Canvas({
   interactive?: boolean;
   /** Bumped by App on open/new/tab switch so the schematic auto-fits once. */
   fitSignal?: number;
+  /** Current mode: draws animated flow dots along wires from real branch
+   *  currents. Off hides the layer entirely rather than freezing it, so an
+   *  unwanted overlay costs nothing. */
+  currentVisualizer?: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, zoom: 1 });
@@ -186,21 +186,16 @@ export function Canvas({
   const setNetLabelOffsetDirect = useSchematic((s) => s.setNetLabelOffsetDirect);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // EveryCircuit-style current mode: show real OP / `.tran` V/I on the
-  // schematic whenever results exist — editor and simulator. Prefer a real
-  // `.tran` sample when available; otherwise DC OP. Never invent currents.
+  // Current mode: animate real OP / `.tran` branch currents along the wires.
+  // Prefer a real `.tran` sample when available; otherwise DC OP. Never invent
+  // currents. The schematic carries no numeric readouts - values belong in the
+  // measurement panels, where they can be read without covering the drawing.
   const useTranReadout = Boolean(tran?.ok && tran.times.length > 0);
   const biasCircuit = useMemo(() => {
+    if (!currentVisualizer) return null;
     if (useTranReadout || op?.ok) return extractCircuit(components, wires, netLabels);
     return null;
-  }, [useTranReadout, op, components, wires, netLabels]);
-
-  const opLabels = useMemo(() => {
-    if (!biasCircuit) return [];
-    if (useTranReadout && tran?.ok) return tranAnnotations(tran, biasCircuit);
-    return opAnnotations(op, biasCircuit);
-  }, [biasCircuit, useTranReadout, tran, op]);
-
+  }, [currentVisualizer, useTranReadout, op, components, wires, netLabels]);
 
   const flowCurrents = useMemo(() => {
     if (!biasCircuit) return null;
@@ -321,23 +316,6 @@ export function Canvas({
     () => autoNetLabelOffsets(netLabels, components, wires, probes),
     [netLabels, components, wires, probes],
   );
-
-  // Readouts are placed against the drawing rather than at a fixed offset, and
-  // they are placed LAST: refdes/value text and net labels are already on the
-  // canvas, so they are obstacles here rather than competitors. Keeping the
-  // circuit legible is the point - a number nobody can read beside a symbol
-  // nobody can see is worse than the number moving a few grid units away.
-  const opLabelPlacements = useMemo(() => {
-    if (opLabels.length === 0) return new Map<string, OpAnnotationPlacement>();
-    const occupied: Rect[] = [
-      ...[...buildLabelPlacements(components, wires).values()].map((placement) => placement.box),
-      ...netLabels.map((label) => {
-        const offset = netLabelOffsets.get(label.id) ?? { dx: 0, dy: 0 };
-        return netLabelTextRect(label, offset.dx, offset.dy, label.text);
-      }),
-    ];
-    return buildOpAnnotationPlacements(opLabels, components, wires, occupied);
-  }, [opLabels, components, wires, netLabels, netLabelOffsets]);
 
   // Interaction kept in a ref so dragging/panning doesn't trigger re-renders.
   const drag = useRef<DragState>({
@@ -1374,22 +1352,6 @@ export function Canvas({
               );
             })}
           </g>
-
-          {opLabels.map((a) => {
-            const placement = opLabelPlacements.get(a.key);
-            if (!placement) return null;
-            return (
-              <text
-                key={a.key}
-                className={`op-annotation ${a.kind}`}
-                x={placement.x}
-                y={placement.y}
-                textAnchor={placement.anchor}
-              >
-                {a.text}
-              </text>
-            );
-          })}
 
           <OpCurrentFlowLayer
             currents={flowCurrents}

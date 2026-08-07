@@ -6,8 +6,6 @@ import {
   autoNetLabelOffset,
   autoNetLabelOffsets,
   buildLabelPlacements,
-  buildOpAnnotationPlacements,
-  opAnnotationTextRect,
   circuitBounds,
   circuitBoundsWithLabels,
   componentVisualPlacement,
@@ -23,7 +21,7 @@ import {
   translateAttachedWireEndpoints,
   wireIntersectsRect,
 } from "./Canvas.geometry";
-import type { SchematicAscShape, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { SchematicAscShape, SchematicComponent } from "../schematic/types";
 import { GRID } from "../schematic/symbols";
 import { getLocalPins, transformPoint } from "../schematic/pins";
 
@@ -536,111 +534,6 @@ describe("autoNetLabelOffset (Fix 2 - net label auto-placement)", () => {
         `net label overlaps component label text ${JSON.stringify(labelBox)}`,
       ).toBe(false);
     }
-  });
-});
-
-describe("buildOpAnnotationPlacements (V/I readout placement)", () => {
-  // Reproduced from the reported screenshot: a 1 kHz source driving R1 (1k)
-  // into L1 (1m). The current readout rendered at a fixed (x, y+30) offset,
-  // which put "-494 µA" straight through R1's own "R1 / 1k Ω" text. Static
-  // settlement ranges made it worse - the string roughly doubled in width.
-  const r1 = {
-    id: "r1", kind: "resistor", label: "R1", value: "1k", x: 320, y: 200, rotation: 0,
-  } as SchematicComponent;
-  const l1 = {
-    id: "l1", kind: "inductor", label: "L1", value: "1m", x: 520, y: 200, rotation: 0,
-  } as SchematicComponent;
-  const components = [r1, l1];
-  const wires = [
-    { id: "w1", points: [{ x: 200, y: 200 }, { x: 640, y: 200 }] },
-    { id: "w2", points: [{ x: 640, y: 200 }, { x: 640, y: 360 }] },
-  ] as SchematicWire[];
-
-  const annotations = [
-    { key: "i:r1", x: r1.x, y: r1.y, kind: "current" as const, text: "±494 µA" },
-    { key: "i:l1", x: l1.x, y: l1.y, kind: "current" as const, text: "±494 µA" },
-    { key: "v:n1", x: 260, y: 200, kind: "voltage" as const, text: "±488 mV" },
-  ];
-
-  const labelBoxes = [...buildLabelPlacements(components, wires).values()].map((p) => p.box);
-
-  it("guards a collision the old fixed offset actually produced", () => {
-    // Proves the tests below are load-bearing rather than passing on a fixture
-    // that was clear anyway: the previous hard-coded current offset - (x, y+30),
-    // anchor "middle" - lands on R1's own refdes/value text on this exact
-    // circuit. If this ever stops overlapping, the fixture has drifted and the
-    // no-overlap assertions no longer prove anything.
-    const legacy = opAnnotationTextRect(r1.x, r1.y + 30, "middle", "±494 µA");
-    expect(
-      labelBoxes.some((box) => rectsOverlap(legacy, box)),
-      "fixture no longer reproduces the reported overlap",
-    ).toBe(true);
-  });
-
-  it("keeps every readout off the refdes and value text", () => {
-    const placements = buildOpAnnotationPlacements(annotations, components, wires, labelBoxes);
-    for (const annotation of annotations) {
-      const placement = placements.get(annotation.key);
-      expect(placement, `no placement for ${annotation.key}`).toBeDefined();
-      const box = opAnnotationTextRect(placement!.x, placement!.y, placement!.anchor, annotation.text);
-      for (const labelBox of labelBoxes) {
-        expect(
-          rectsOverlap(box, labelBox),
-          `${annotation.key} overlaps component label text ${JSON.stringify(labelBox)}`,
-        ).toBe(false);
-      }
-    }
-  });
-
-  it("keeps every readout off the component symbols", () => {
-    const placements = buildOpAnnotationPlacements(annotations, components, wires, labelBoxes);
-    const bodies = components.map(componentWorldRect);
-    for (const annotation of annotations) {
-      const placement = placements.get(annotation.key)!;
-      const box = opAnnotationTextRect(placement.x, placement.y, placement.anchor, annotation.text);
-      for (const body of bodies) {
-        expect(
-          rectsOverlap(box, body),
-          `${annotation.key} covers a component symbol ${JSON.stringify(body)}`,
-        ).toBe(false);
-      }
-    }
-  });
-
-  it("does not stack two readouts on the same spot", () => {
-    const placements = buildOpAnnotationPlacements(annotations, components, wires, labelBoxes);
-    const boxes = annotations.map((a) => {
-      const p = placements.get(a.key)!;
-      return { key: a.key, box: opAnnotationTextRect(p.x, p.y, p.anchor, a.text) };
-    });
-    for (let i = 0; i < boxes.length; i += 1) {
-      for (let j = i + 1; j < boxes.length; j += 1) {
-        expect(
-          rectsOverlap(boxes[i].box, boxes[j].box),
-          `${boxes[i].key} overlaps ${boxes[j].key}`,
-        ).toBe(false);
-      }
-    }
-  });
-
-  it("is deterministic - the same circuit places identically twice", () => {
-    const a = buildOpAnnotationPlacements(annotations, components, wires, labelBoxes);
-    const b = buildOpAnnotationPlacements(annotations, components, wires, labelBoxes);
-    for (const annotation of annotations) {
-      expect(a.get(annotation.key)).toEqual(b.get(annotation.key));
-    }
-  });
-
-  it("still places every readout when the circuit leaves nowhere clear", () => {
-    // Degenerate: everything piled on one point. There is no zero-score slot,
-    // so the lowest-score fallback must still return a placement for each
-    // readout rather than dropping labels the user is waiting to read.
-    const crowded = Array.from({ length: 6 }, (_, i) => ({
-      key: `i:${i}`, x: 0, y: 0, kind: "current" as const, text: "±494 µA",
-    }));
-    const placements = buildOpAnnotationPlacements(crowded, components, wires, labelBoxes);
-    expect(placements.size).toBe(6);
-    for (const c of crowded) expect(placements.get(c.key)).toBeDefined();
   });
 });
 

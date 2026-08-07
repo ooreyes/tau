@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
-import { Crosshair, Eye, LockKeyhole, MousePointer2, Tag } from "lucide-react";
+import { Crosshair, Eye, EyeOff, LockKeyhole, MousePointer2, Tag } from "lucide-react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
@@ -323,6 +323,10 @@ function App() {
   const [schematicReadoutTime, setSchematicReadoutTime] = useState<number | null>(null);
   /** Animate schematic V/I through real `.tran` samples (EveryCircuit-style live). */
   const [liveSchematicPlayback, setLiveSchematicPlayback] = useState(true);
+  // Current mode: the animated flow-dot overlay. On by default because it is
+  // the point of running a simulation, but genuinely dismissable - an overlay
+  // you cannot turn off is one you end up fighting while reading the drawing.
+  const [currentVisualizer, setCurrentVisualizer] = useState(true);
   const [opAnalysis, setOpAnalysis] = useState<(OperatingPointResult & EngineProvenance) | null>(null);
   const [acAnalysis, setAcAnalysis] = useState<(AcResult & EngineProvenance) | null>(null);
   const [dcAnalysis, setDcAnalysis] = useState<(DcSweepResult & EngineProvenance) | null>(null);
@@ -2291,6 +2295,7 @@ function App() {
               readoutTime={schematicReadoutTime}
               interactive
               fitSignal={fitSignal}
+              currentVisualizer={currentVisualizer}
             />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState
@@ -2348,15 +2353,27 @@ function App() {
                   </button>
                 </div>
                 {(opAnalysis?.ok || analysis?.ok) && (
-                  <span
-                    className="sim-current-mode-badge"
-                    aria-label="Current mode on"
-                    title="Schematic shows measured voltages and currents from the last run"
+                  <button
+                    type="button"
+                    className={`sim-current-mode-badge${currentVisualizer ? " active" : ""}`}
+                    aria-pressed={currentVisualizer}
+                    aria-label={currentVisualizer ? "Current mode on" : "Current mode off"}
+                    title={
+                      currentVisualizer
+                        ? "Current mode on: animated flow dots show real branch current on the wires. Click to hide."
+                        : "Current mode off. Click to show animated branch current on the wires."
+                    }
+                    onClick={() => setCurrentVisualizer((on) => !on)}
                   >
-                    Current mode
-                  </span>
+                    {currentVisualizer
+                      ? <Eye size={13} strokeWidth={1.7} aria-hidden="true" />
+                      : <EyeOff size={13} strokeWidth={1.7} aria-hidden="true" />}
+                    <span>Current mode</span>
+                  </button>
                 )}
-                {analysis?.ok && (
+                {/* Live only means anything while the overlay is visible - a
+                    playback control for a hidden layer is a dead button. */}
+                {analysis?.ok && currentVisualizer && (
                   <button
                     type="button"
                     className={`sim-live-playback-badge${liveSchematicPlayback ? " active" : ""}`}
@@ -2364,8 +2381,8 @@ function App() {
                     aria-label={liveSchematicPlayback ? "Live current playback on" : "Live current playback off"}
                     title={
                       liveSchematicPlayback
-                        ? "Live: schematic V/I/flow scrub through real .tran samples (scope cursors override). Click to pause at the final sample."
-                        : "Paused at the final .tran sample. Click to animate schematic current mode through the waveform."
+                        ? "Live: flow dots scrub through real .tran samples (scope cursors override). Click to pause at the final sample."
+                        : "Paused at the final .tran sample. Click to animate flow through the waveform."
                     }
                     onClick={() => setLiveSchematicPlayback((on) => !on)}
                   >
@@ -2387,6 +2404,7 @@ function App() {
                   readoutTime={schematicReadoutTime}
                   interactive={false}
                   fitSignal={fitSignal}
+                  currentVisualizer={currentVisualizer}
                 />
               </div>
               <TelemetryDock rows={componentRows} selectedId={selectedId} onSelect={select} />

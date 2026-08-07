@@ -7,7 +7,6 @@ import type { Point, SchematicWire } from "../schematic/types";
 import type { ExtractedCircuit } from "../schematic/netlist";
 import { deriveDcRcBranches, findCurrentTrace } from "./currents";
 import type { AnalysisResult } from "./linearTransient";
-import { settledReading, type SettledReading } from "./settlement";
 import { primaryBranches, type OperatingPointResult } from "./operatingPoint";
 
 export type PinIndex = Map<string, { componentId: string; pinId: string }[]>;
@@ -85,37 +84,6 @@ export function tranNetVoltages(
   }
   return out;
 }
-
-/** Settled node voltages. Deliberately NOT whole-run min/max: that mixed the
- *  turn-on excursion into a number the schematic presents as the operating
- *  value. See `settlement.ts`. */
-export function tranNetVoltagesSettled(
-  result: Extract<AnalysisResult, { ok: true }>,
-): Map<string, SettledReading> {
-  const out = new Map<string, SettledReading>();
-  for (const trace of result.traces) {
-    if (trace.unit !== "V" || trace.values.length === 0) continue;
-    const reading = settledReading(trace.values);
-    if (reading) out.set(trace.id, reading);
-  }
-  return out;
-}
-
-/** Settled branch currents, on the same basis as `tranNetVoltagesSettled`. */
-export function tranComponentCurrentsSettled(
-  result: Extract<AnalysisResult, { ok: true }>,
-): Map<string, SettledReading> {
-  const out = new Map<string, SettledReading>();
-  for (const { component } of result.circuit.components) {
-    if (!component.label) continue;
-    const trace = findCurrentTrace(result.currents, component.label);
-    if (!trace || trace.values.length === 0) continue;
-    const reading = settledReading(trace.values);
-    if (reading) out.set(component.id, reading);
-  }
-  return out;
-}
-
 
 /**
  * Current entering a wire at its first point (+ = travels points[0] → last),
