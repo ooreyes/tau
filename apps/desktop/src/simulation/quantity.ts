@@ -100,6 +100,15 @@ export function formatEngineeringRange(
   if (strMin === strMax) {
     return strMin;
   }
+  // A symmetric swing is the common AC case, and "±488 mV" says the same thing
+  // as "-488 mV … 488 mV" in less than half the width - which matters on a
+  // schematic, where every extra character is more of the circuit covered up.
+  // Compare the FORMATTED strings, not the raw numbers: a real `.tran` sine is
+  // never exactly symmetric, but at display precision it reads as though it is,
+  // and that is the precision the reader is being shown.
+  if (strMin === `-${strMax}`) {
+    return `±${strMax}`;
+  }
   return `${strMin} … ${strMax}`;
 }
 

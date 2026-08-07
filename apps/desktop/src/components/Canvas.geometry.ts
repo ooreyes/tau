@@ -749,6 +749,143 @@ export function autoNetLabelOffsets(
   return offsets;
 }
 
+// ── Operating-point / transient V-I readout placement ────────────────────────
+
+/** 12px 600-weight mono, measured against the rendered `.op-annotation` rule.
+ *  Mono is the easy case: every glyph is one advance. */
+const OP_ANNOTATION_CHAR_W = 7.2;
+const OP_ANNOTATION_H = 12;
+
+export interface OpAnnotationAnchor {
+  key: string;
+  x: number;
+  y: number;
+  kind: "voltage" | "current";
+  text: string;
+}
+
+export interface OpAnnotationPlacement {
+  x: number;
+  y: number;
+  anchor: "start" | "middle" | "end";
+}
+
+/** Exported so a test can assert a placed readout clears the drawing, the same
+ *  reason `netLabelTextRect` is exported. */
+export const opAnnotationTextRect = (
+  x: number,
+  y: number,
+  anchor: OpAnnotationPlacement["anchor"],
+  text: string,
+): Rect => {
+  const w = Math.max(8, text.length * OP_ANNOTATION_CHAR_W);
+  const minX = anchor === "middle" ? x - w / 2 : anchor === "end" ? x - w : x;
+  // SVG `y` is the text baseline, so the box sits mostly above it.
+  return padRect({ minX, minY: y - OP_ANNOTATION_H, maxX: minX + w, maxY: y + 3 }, 2);
+};
+
+/** Offsets tried around a readout's anchor, nearest-and-clearest first.
+ *
+ * A voltage belongs to a NET, whose anchor is the topmost-leftmost point of a
+ * wire run, so "above the wire" is both conventional and usually empty. A
+ * current belongs to a PART, whose anchor is the body centre, so it has to get
+ * clear of the body before anything else - the ring starts below (where a
+ * horizontal part has no pins) and works outward. */
+const opAnnotationCandidates = (
+  kind: "voltage" | "current",
+): ReadonlyArray<{ dx: number; dy: number; anchor: OpAnnotationPlacement["anchor"] }> =>
+  kind === "voltage"
+    ? [
+      { dx: 5, dy: -8, anchor: "start" },
+      { dx: -5, dy: -8, anchor: "end" },
+      { dx: 5, dy: 16, anchor: "start" },
+      { dx: -5, dy: 16, anchor: "end" },
+      { dx: 0, dy: -22, anchor: "middle" },
+      { dx: 0, dy: 28, anchor: "middle" },
+      { dx: 5, dy: -30, anchor: "start" },
+      { dx: -5, dy: -30, anchor: "end" },
+      { dx: 5, dy: 38, anchor: "start" },
+      { dx: -5, dy: 38, anchor: "end" },
+    ]
+    : [
+      { dx: 0, dy: 30, anchor: "middle" },
+      { dx: 0, dy: -26, anchor: "middle" },
+      { dx: 0, dy: 44, anchor: "middle" },
+      { dx: 0, dy: -40, anchor: "middle" },
+      { dx: 30, dy: 34, anchor: "start" },
+      { dx: -30, dy: 34, anchor: "end" },
+      { dx: 30, dy: -30, anchor: "start" },
+      { dx: -30, dy: -30, anchor: "end" },
+      { dx: 44, dy: 4, anchor: "start" },
+      { dx: -44, dy: 4, anchor: "end" },
+    ];
+
+/**
+ * Place every V/I readout so it clears the circuit.
+ *
+ * These labels used to render at a fixed offset - voltage at `(x+5, y-8)`,
+ * current at `(x, y+30)` - which put them on top of whatever happened to be
+ * there. A resistor's current landed squarely on its own refdes and value,
+ * because those are placed by `buildLabelPlacements` and the readout knew
+ * nothing about them. Static settlement ranges made it worse: "-488 mV … 488 mV"
+ * is more than twice the width of the single sample it replaced.
+ *
+ * Scoring follows `chooseNetLabelOffset`, with the weights the circuit deserves:
+ * the drawing is the thing being read, so covering a symbol or a wire is worse
+ * than covering empty grid, and covering other TEXT is worst of all - that is
+ * the one case where two things become unreadable instead of one.
+ */
+export function buildOpAnnotationPlacements(
+  annotations: readonly OpAnnotationAnchor[],
+  components: readonly SchematicComponent[],
+  wires: readonly SchematicWire[] = [],
+  /** Text already on the canvas: refdes/value boxes and net labels. */
+  occupiedLabelRects: readonly Rect[] = [],
+): Map<string, OpAnnotationPlacement> {
+  const placements = new Map<string, OpAnnotationPlacement>();
+  if (annotations.length === 0) return placements;
+
+  const componentRects = components.map(componentWorldRect);
+  const segments = wireSegments(wires as SchematicWire[]);
+  const occupied: Rect[] = [...occupiedLabelRects];
+
+  for (const annotation of annotations) {
+    const candidates = opAnnotationCandidates(annotation.kind);
+    const scored = candidates.map((candidate) => {
+      const box = opAnnotationTextRect(
+        annotation.x + candidate.dx,
+        annotation.y + candidate.dy,
+        candidate.anchor,
+        annotation.text,
+      );
+      // Symbols: the reader is looking at the circuit, not the numbers.
+      let score = componentRects.reduce((total, rect) => total + overlapArea(box, rect) * 2, 0);
+      // Text on text - both strings lost.
+      score += occupied.reduce((total, rect) => total + overlapArea(box, rect) * 3, 0);
+      // Wire crossings are linear rather than areal, so weight per unit length.
+      score += segments.reduce((total, segment) => total + segmentLengthInRect(segment, box) * 4, 0);
+      // Distance is a tie-breaker, never a reason to accept a collision: a
+      // readout drifting far from its part gets silently re-attributed to a
+      // neighbour, which is the failure that put C1's current under R1's value
+      // in an RLC ringing circuit. Overlap is measured in px^2 and runs to the
+      // hundreds, so at this weight a few tens of px of travel only decides
+      // between slots that are already clear.
+      score += Math.hypot(candidate.dx, candidate.dy) * 0.5;
+      return { candidate, box, score };
+    });
+    // Closest clear slot, not the first clear slot in list order.
+    const chosen = scored.reduce((best, entry) => (entry.score < best.score ? entry : best));
+    placements.set(annotation.key, {
+      x: annotation.x + chosen.candidate.dx,
+      y: annotation.y + chosen.candidate.dy,
+      anchor: chosen.candidate.anchor,
+    });
+    occupied.push(chosen.box);
+  }
+
+  return placements;
+}
+
 export interface FitViewOptions {
   /** Fraction of each viewport dimension kept clear around the circuit. */
   paddingFraction?: number;

@@ -151,8 +151,32 @@ describe("tranAnnotations (transient current mode)", () => {
     const anns = tranAnnotations(result, circuit);
     const vAnn = anns.find((a) => a.kind === "voltage");
     const iAnn = anns.find((a) => a.kind === "current");
-    expect(vAnn?.text).toBe("-488 mV … 488 mV");
-    expect(iAnn?.text).toBe("-494 µA … 494 µA");
+    // A symmetric swing collapses to "±X" - same information as
+    // "-488 mV … 488 mV", less than half the schematic covered up.
+    expect(vAnn?.text).toBe("±488 mV");
+    expect(iAnn?.text).toBe("±494 µA");
+  });
+
+  it("keeps the full range when the swing is not symmetric", () => {
+    const circuit = extractCircuit(components, wires, []);
+    const nonGndNet = circuit.nets.find((n) => !n.isGround);
+
+    const result: Extract<AnalysisResult, { ok: true }> = {
+      ok: true,
+      title: "Offset ramp",
+      times: [0, 0.5, 1],
+      traces: [
+        { id: nonGndNet!.id, label: `V(${nonGndNet!.id})`, unit: "V", color: "#000", values: [0, 2.5, 5] },
+      ],
+      currents: [{ ref: "R1", label: "I(R1)", values: [0, 0.0025, 0.005] }],
+      circuit,
+      stats: { sampleCount: 3, netCount: 2, componentCount: 2, stopTime: 1e-3, stepSize: 1e-5 },
+      warnings: [],
+    };
+
+    const anns = tranAnnotations(result, circuit);
+    expect(anns.find((a) => a.kind === "voltage")?.text).toBe("0 V … 5 V");
+    expect(anns.find((a) => a.kind === "current")?.text).toBe("0 A … 5 mA");
   });
 
   it("returns [] for failed/null transient input", () => {

@@ -27,6 +27,9 @@ import {
   ascArcPath,
   ascShapeRender,
   buildLabelPlacements,
+  buildOpAnnotationPlacements,
+  netLabelTextRect,
+  type OpAnnotationPlacement,
   circuitBounds,
   circuitBoundsWithLabels,
   collides,
@@ -198,6 +201,7 @@ export function Canvas({
     return opAnnotations(op, biasCircuit);
   }, [biasCircuit, useTranReadout, tran, op]);
 
+
   const flowCurrents = useMemo(() => {
     if (!biasCircuit) return null;
     if (useTranReadout && tran?.ok) {
@@ -317,6 +321,23 @@ export function Canvas({
     () => autoNetLabelOffsets(netLabels, components, wires, probes),
     [netLabels, components, wires, probes],
   );
+
+  // Readouts are placed against the drawing rather than at a fixed offset, and
+  // they are placed LAST: refdes/value text and net labels are already on the
+  // canvas, so they are obstacles here rather than competitors. Keeping the
+  // circuit legible is the point - a number nobody can read beside a symbol
+  // nobody can see is worse than the number moving a few grid units away.
+  const opLabelPlacements = useMemo(() => {
+    if (opLabels.length === 0) return new Map<string, OpAnnotationPlacement>();
+    const occupied: Rect[] = [
+      ...[...buildLabelPlacements(components, wires).values()].map((placement) => placement.box),
+      ...netLabels.map((label) => {
+        const offset = netLabelOffsets.get(label.id) ?? { dx: 0, dy: 0 };
+        return netLabelTextRect(label, offset.dx, offset.dy, label.text);
+      }),
+    ];
+    return buildOpAnnotationPlacements(opLabels, components, wires, occupied);
+  }, [opLabels, components, wires, netLabels, netLabelOffsets]);
 
   // Interaction kept in a ref so dragging/panning doesn't trigger re-renders.
   const drag = useRef<DragState>({
@@ -1354,19 +1375,21 @@ export function Canvas({
             })}
           </g>
 
-          {opLabels.map((a) =>
-            a.kind === "voltage" ? (
-              <text key={a.key} className="op-annotation voltage" x={a.x + 5} y={a.y - 8}>
+          {opLabels.map((a) => {
+            const placement = opLabelPlacements.get(a.key);
+            if (!placement) return null;
+            return (
+              <text
+                key={a.key}
+                className={`op-annotation ${a.kind}`}
+                x={placement.x}
+                y={placement.y}
+                textAnchor={placement.anchor}
+              >
                 {a.text}
               </text>
-            ) : (
-              // Centered under the component body - clear of the ref/value
-              // labels, which sit beside the body.
-              <text key={a.key} className="op-annotation current" x={a.x} y={a.y + 30} textAnchor="middle">
-                {a.text}
-              </text>
-            ),
-          )}
+            );
+          })}
 
           <OpCurrentFlowLayer
             currents={flowCurrents}
