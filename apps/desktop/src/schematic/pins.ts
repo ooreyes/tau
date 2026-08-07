@@ -126,6 +126,59 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
     { id: "com", label: "COM", x: -32, y: 48 },
   ],
+  // 4-bit ripple counter: CLK/RST left, Q0..Q3 right, com below.
+  counter: [
+    { id: "clk", label: "CLK", x: -40, y: -16 },
+    { id: "rst", label: "RST", x: -40, y: 16 },
+    { id: "q0", label: "Q0", x: 40, y: -24 },
+    { id: "q1", label: "Q1", x: 40, y: -8 },
+    { id: "q2", label: "Q2", x: 40, y: 8 },
+    { id: "q3", label: "Q3", x: 40, y: 24 },
+    { id: "com", label: "COM", x: 0, y: 48 },
+  ],
+  // Classic 555 / NE555 pinout (SpiceOrder 1..8).
+  timer555: [
+    { id: "gnd", label: "GND", x: -40, y: 32 },
+    { id: "trig", label: "TRIG", x: -40, y: 16 },
+    { id: "out", label: "OUT", x: 40, y: 0 },
+    { id: "reset", label: "RESET", x: -40, y: -32 },
+    { id: "cont", label: "CONT", x: 40, y: -32 },
+    { id: "thres", label: "THRES", x: 40, y: 16 },
+    { id: "disch", label: "DISCH", x: 40, y: 32 },
+    { id: "vcc", label: "VCC", x: -40, y: -16 },
+  ],
+  // 4-bit flash/quantizer ADC.
+  adc: [
+    { id: "vin", label: "VIN", x: -40, y: -16 },
+    { id: "vref", label: "VREF", x: -40, y: 16 },
+    { id: "d0", label: "D0", x: 40, y: -24 },
+    { id: "d1", label: "D1", x: 40, y: -8 },
+    { id: "d2", label: "D2", x: 40, y: 8 },
+    { id: "d3", label: "D3", x: 40, y: 24 },
+    { id: "com", label: "COM", x: 0, y: 48 },
+  ],
+  // 4-bit weighted DAC.
+  dac: [
+    { id: "d0", label: "D0", x: -40, y: -24 },
+    { id: "d1", label: "D1", x: -40, y: -8 },
+    { id: "d2", label: "D2", x: -40, y: 8 },
+    { id: "d3", label: "D3", x: -40, y: 24 },
+    { id: "vref", label: "VREF", x: -40, y: 40 },
+    { id: "out", label: "OUT", x: 40, y: 0 },
+    { id: "com", label: "COM", x: 0, y: 48 },
+  ],
+  // Raw 7-segment + optional DP (no BCD decoder).
+  sevenSeg: [
+    { id: "a", label: "A", x: -8, y: -48 },
+    { id: "b", label: "B", x: 32, y: -24 },
+    { id: "c", label: "C", x: 32, y: 24 },
+    { id: "d", label: "D", x: -8, y: 48 },
+    { id: "e", label: "E", x: -32, y: 24 },
+    { id: "f", label: "F", x: -32, y: -24 },
+    { id: "g", label: "G", x: -40, y: 0 },
+    { id: "dp", label: "DP", x: 40, y: 40 },
+    { id: "com", label: "COM", x: 0, y: 56 },
+  ],
   // Behavioral sample-and-hold (LTspice SpecialFunctions\sample): differential
   // analog input plus CLK (rising-edge sample) and S/H (track-while-high)
   // controls on the left, analog output right, com reference below. Imported

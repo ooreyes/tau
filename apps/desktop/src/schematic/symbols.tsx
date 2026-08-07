@@ -66,6 +66,11 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   srflop: { minX: -24, minY: -24, maxX: 24, maxY: 40 },
   tflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
   jkflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
+  counter: { minX: -32, minY: -32, maxX: 32, maxY: 40 },
+  timer555: { minX: -32, minY: -40, maxX: 32, maxY: 40 },
+  adc: { minX: -32, minY: -32, maxX: 32, maxY: 40 },
+  dac: { minX: -32, minY: -40, maxX: 32, maxY: 40 },
+  sevenSeg: { minX: -28, minY: -40, maxX: 28, maxY: 48 },
   sampleHold: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
   modulator: { minX: -24, minY: -32, maxX: 24, maxY: 32 },
   vcvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
@@ -117,6 +122,11 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   srflop: { halfW: 26, halfH: 34 },
   tflop: { halfW: 26, halfH: 42 },
   jkflop: { halfW: 26, halfH: 42 },
+  counter: { halfW: 34, halfH: 42 },
+  timer555: { halfW: 34, halfH: 42 },
+  adc: { halfW: 34, halfH: 42 },
+  dac: { halfW: 34, halfH: 46 },
+  sevenSeg: { halfW: 32, halfH: 52 },
   sampleHold: { halfW: 26, halfH: 42 },
   modulator: { halfW: 26, halfH: 34 },
   vcvs: { halfW: 20, halfH: 24 },
@@ -450,6 +460,100 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           <line x1={-32} y1={48} x2={-24} y2={40} />
           {/* JK glyph */}
           <path d="M -8 -8 V 8 M -8 0 L 0 8 M 4 -8 V 8 M 4 0 L 10 -8 M 4 0 L 10 8" fill="none" />
+        </>
+      );
+
+    case "counter":
+      return (
+        <>
+          <rect x={-32} y={-32} width={64} height={72} rx={2} />
+          <line x1={-40} y1={-16} x2={-32} y2={-16} />
+          <line x1={-40} y1={16} x2={-32} y2={16} />
+          <path d="M -32 -22 L -24 -16 L -32 -10" fill="none" />
+          <line x1={32} y1={-24} x2={40} y2={-24} />
+          <line x1={32} y1={-8} x2={40} y2={-8} />
+          <line x1={32} y1={8} x2={40} y2={8} />
+          <line x1={32} y1={24} x2={40} y2={24} />
+          <line x1={0} y1={40} x2={0} y2={48} />
+          {/* binary stair glyph */}
+          <path d="M -14 20 H -6 V 12 H 2 V 4 H 10 V -4" fill="none" />
+        </>
+      );
+
+    case "timer555":
+      return (
+        <>
+          <rect x={-32} y={-40} width={64} height={80} rx={2} />
+          <line x1={-40} y1={-32} x2={-32} y2={-32} />
+          <line x1={-40} y1={-16} x2={-32} y2={-16} />
+          <line x1={-40} y1={16} x2={-32} y2={16} />
+          <line x1={-40} y1={32} x2={-32} y2={32} />
+          <line x1={32} y1={-32} x2={40} y2={-32} />
+          <line x1={32} y1={0} x2={40} y2={0} />
+          <line x1={32} y1={16} x2={40} y2={16} />
+          <line x1={32} y1={32} x2={40} y2={32} />
+          <text x={0} y={4} textAnchor="middle" fontSize={11} fill="currentColor" stroke="none">
+            555
+          </text>
+        </>
+      );
+
+    case "adc":
+      return (
+        <>
+          <rect x={-32} y={-32} width={64} height={72} rx={2} />
+          <line x1={-40} y1={-16} x2={-32} y2={-16} />
+          <line x1={-40} y1={16} x2={-32} y2={16} />
+          <line x1={32} y1={-24} x2={40} y2={-24} />
+          <line x1={32} y1={-8} x2={40} y2={-8} />
+          <line x1={32} y1={8} x2={40} y2={8} />
+          <line x1={32} y1={24} x2={40} y2={24} />
+          <line x1={0} y1={40} x2={0} y2={48} />
+          <path d="M -16 0 L -4 -10 L -4 10 Z" fill="none" />
+          <path d="M 4 -8 H 16 M 4 0 H 12 M 4 8 H 16" fill="none" />
+        </>
+      );
+
+    case "dac":
+      return (
+        <>
+          <rect x={-32} y={-40} width={64} height={80} rx={2} />
+          <line x1={-40} y1={-24} x2={-32} y2={-24} />
+          <line x1={-40} y1={-8} x2={-32} y2={-8} />
+          <line x1={-40} y1={8} x2={-32} y2={8} />
+          <line x1={-40} y1={24} x2={-32} y2={24} />
+          <line x1={-40} y1={40} x2={-32} y2={40} />
+          <line x1={32} y1={0} x2={40} y2={0} />
+          <line x1={0} y1={40} x2={0} y2={48} />
+          <path d="M -14 -8 H -4 M -14 0 H -8 M -14 8 H -2" fill="none" />
+          <path d="M 4 -10 L 16 0 L 4 10 Z" fill="none" />
+        </>
+      );
+
+    case "sevenSeg":
+      return (
+        <>
+          {/* Clear "8." glyph — raw segment pins, no digit decode. */}
+          <rect x={-28} y={-40} width={56} height={88} rx={2} />
+          <line x1={-8} y1={-48} x2={-8} y2={-40} />
+          <line x1={32} y1={-24} x2={32} y2={-24} />
+          <line x1={28} y1={-24} x2={32} y2={-24} />
+          <line x1={28} y1={24} x2={32} y2={24} />
+          <line x1={-8} y1={40} x2={-8} y2={48} />
+          <line x1={-32} y1={24} x2={-28} y2={24} />
+          <line x1={-32} y1={-24} x2={-28} y2={-24} />
+          <line x1={-40} y1={0} x2={-28} y2={0} />
+          <line x1={28} y1={40} x2={40} y2={40} />
+          <line x1={0} y1={48} x2={0} y2={56} />
+          {/* segment "8" */}
+          <path d="M -12 -28 H 12" fill="none" strokeWidth={2.5} />
+          <path d="M 14 -26 V -4" fill="none" strokeWidth={2.5} />
+          <path d="M 14 4 V 26" fill="none" strokeWidth={2.5} />
+          <path d="M -12 28 H 12" fill="none" strokeWidth={2.5} />
+          <path d="M -14 4 V 26" fill="none" strokeWidth={2.5} />
+          <path d="M -14 -26 V -4" fill="none" strokeWidth={2.5} />
+          <path d="M -12 0 H 12" fill="none" strokeWidth={2.5} />
+          <circle cx={18} cy={30} r={2.5} fill="currentColor" stroke="none" />
         </>
       );
 

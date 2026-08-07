@@ -14,7 +14,7 @@ import { runOperatingPoint } from "./operatingPoint";
 import { extractCircuit } from "../schematic/netlist";
 import { opAnnotations, tranAnnotations } from "./opAnnotations";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
-import { runTransientAnalysis } from "./linearTransient";
+import { runTransientAnalysis, type AnalysisResult } from "./linearTransient";
 
 const VS: SchematicComponent = { id: "vs-1", kind: "vsource", x: 0, y: 32, rotation: 0, value: "10V", label: "V1" };
 const R1: SchematicComponent = { id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" };
@@ -128,9 +128,37 @@ describe("tranAnnotations (transient current mode)", () => {
     expect(anns.find((a) => a.key === "i:r-2")?.text).toBe("5 mA");
   });
 
+  it("labels static settlement voltage and current ranges for dynamic waveforms", () => {
+    const circuit = extractCircuit(components, wires, []);
+    const nonGndNet = circuit.nets.find((n) => !n.isGround);
+    expect(nonGndNet).toBeDefined();
+
+    const result: Extract<AnalysisResult, { ok: true }> = {
+      ok: true,
+      title: "Dynamic AC test",
+      times: [0, 0.5, 1],
+      traces: [
+        { id: nonGndNet!.id, label: `V(${nonGndNet!.id})`, unit: "V", color: "#000", values: [-0.488, 0.00546, 0.488] },
+      ],
+      currents: [
+        { ref: "R1", label: "I(R1)", values: [-0.000494, 0, 0.000494] },
+      ],
+      circuit,
+      stats: { sampleCount: 3, netCount: 2, componentCount: 2, stopTime: 1e-3, stepSize: 1e-5 },
+      warnings: [],
+    };
+
+    const anns = tranAnnotations(result, circuit);
+    const vAnn = anns.find((a) => a.kind === "voltage");
+    const iAnn = anns.find((a) => a.kind === "current");
+    expect(vAnn?.text).toBe("-488 mV … 488 mV");
+    expect(iAnn?.text).toBe("-494 µA … 494 µA");
+  });
+
   it("returns [] for failed/null transient input", () => {
     const circuit = extractCircuit(components, wires, []);
     expect(tranAnnotations(null, circuit)).toEqual([]);
     expect(tranAnnotations({ ok: false, title: "t", message: "x", warnings: [] }, circuit)).toEqual([]);
   });
 });
+

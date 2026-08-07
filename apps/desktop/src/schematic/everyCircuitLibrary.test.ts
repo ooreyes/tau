@@ -470,6 +470,125 @@ describe("EveryCircuit library — SR / T / JK flip-flops", () => {
   });
 });
 
+describe("EveryCircuit library — IC pack (counter / 555 / ADC / DAC / 7-seg)", () => {
+  it("lists the five ICs in the Digital palette with expected pins", () => {
+    expect(CATALOG.some((e) => e.kind === "counter")).toBe(true);
+    expect(CATALOG.some((e) => e.kind === "timer555")).toBe(true);
+    expect(CATALOG.some((e) => e.kind === "adc")).toBe(true);
+    expect(CATALOG.some((e) => e.kind === "dac")).toBe(true);
+    expect(CATALOG.some((e) => e.kind === "sevenSeg")).toBe(true);
+    expect(getLocalPins("counter").map((p) => p.id)).toEqual([
+      "clk", "rst", "q0", "q1", "q2", "q3", "com",
+    ]);
+    expect(getLocalPins("timer555").map((p) => p.id)).toEqual([
+      "gnd", "trig", "out", "reset", "cont", "thres", "disch", "vcc",
+    ]);
+    expect(getLocalPins("adc").map((p) => p.id)).toEqual([
+      "vin", "vref", "d0", "d1", "d2", "d3", "com",
+    ]);
+    expect(getLocalPins("dac").map((p) => p.id)).toEqual([
+      "d0", "d1", "d2", "d3", "vref", "out", "com",
+    ]);
+    expect(getLocalPins("sevenSeg").map((p) => p.id)).toEqual([
+      "a", "b", "c", "d", "e", "f", "g", "dp", "com",
+    ]);
+    // Honest SR label — not a gated SR without enable.
+    expect(CATALOG.find((e) => e.kind === "srflop")?.name).toBe("SR Latch");
+  });
+
+  it("emits a 4-bit ripple counter as four d_tff stages", () => {
+    const ctr: SchematicComponent = {
+      ...c("counter", "A1", "Vhigh=5", 0, 0),
+      pinOverride: [
+        { id: "clk", label: "CLK", x: -40, y: -16 },
+        { id: "rst", label: "RST", x: -40, y: 16 },
+        { id: "q0", label: "Q0", x: 40, y: -24 },
+        { id: "q1", label: "Q1", x: 40, y: -8 },
+        { id: "q2", label: "Q2", x: 40, y: 8 },
+        { id: "q3", label: "Q3", x: 40, y: 24 },
+      ],
+    };
+    const gnd: SchematicComponent = {
+      ...c("ground", "GND", "", 0, 64),
+      pinOverride: [{ id: "g", label: "0", x: 0, y: 64 }],
+    };
+    const deck = buildSpiceDeck({ components: [ctr, gnd], wires: [] }, { kind: "op" });
+    expect(deck.netlist).toContain(".model a1_tff d_tff(ic=0");
+    expect(deck.netlist).toContain("A_a1_0 a1_dt a1_dclk a1_dpre a1_drst a1_dq0 a1_dnq0 a1_tff");
+    expect(deck.netlist).toContain("A_a1_3 a1_dt a1_dnq2 a1_dpre a1_drst a1_dq3 a1_dnq3 a1_tff");
+    expect(deck.netlist).toMatch(/A_a1_dac \[a1_dq0 a1_dq1 a1_dq2 a1_dq3\]/);
+  });
+
+  it("emits timer555 as X… tau_555 with the bundled .subckt", () => {
+    const u1: SchematicComponent = {
+      ...c("timer555", "U1", "", 0, 0),
+      pinOverride: [
+        { id: "gnd", label: "GND", x: -40, y: 32 },
+        { id: "trig", label: "TRIG", x: -40, y: 16 },
+        { id: "out", label: "OUT", x: 40, y: 0 },
+        { id: "reset", label: "RESET", x: -40, y: -32 },
+        { id: "cont", label: "CONT", x: 40, y: -32 },
+        { id: "thres", label: "THRES", x: 40, y: 16 },
+        { id: "disch", label: "DISCH", x: 40, y: 32 },
+        { id: "vcc", label: "VCC", x: -40, y: -16 },
+      ],
+    };
+    const gnd: SchematicComponent = {
+      ...c("ground", "GND", "", 0, 64),
+      pinOverride: [{ id: "g", label: "0", x: 0, y: 64 }],
+    };
+    const deck = buildSpiceDeck({ components: [u1, gnd], wires: [] }, { kind: "op" });
+    expect(deck.netlist).toContain(".subckt tau_555");
+    expect(deck.netlist).toMatch(/^XU1\b.+\btau_555$/m);
+    expect(deck.netlist).not.toMatch(/analog\.com|encrypted|\$CMII|AD712/i);
+  });
+
+  it("emits ADC / DAC behavioral B lines and 7-seg 1G loads", () => {
+    const adc: SchematicComponent = {
+      ...c("adc", "A2", "Vhigh=5", 0, 0),
+      pinOverride: [
+        { id: "vin", label: "VIN", x: -40, y: -16 },
+        { id: "vref", label: "VREF", x: -40, y: 16 },
+        { id: "d0", label: "D0", x: 40, y: -24 },
+        { id: "d3", label: "D3", x: 40, y: 24 },
+      ],
+    };
+    const dac: SchematicComponent = {
+      ...c("dac", "A3", "", 200, 0),
+      pinOverride: [
+        { id: "d0", label: "D0", x: 160, y: -24 },
+        { id: "d1", label: "D1", x: 160, y: -8 },
+        { id: "d2", label: "D2", x: 160, y: 8 },
+        { id: "d3", label: "D3", x: 160, y: 24 },
+        { id: "vref", label: "VREF", x: 160, y: 40 },
+        { id: "out", label: "OUT", x: 240, y: 0 },
+      ],
+    };
+    const disp: SchematicComponent = {
+      ...c("sevenSeg", "U2", "", 400, 0),
+      pinOverride: [
+        { id: "a", label: "A", x: 392, y: -48 },
+        { id: "b", label: "B", x: 432, y: -24 },
+        { id: "g", label: "G", x: 360, y: 0 },
+        { id: "com", label: "COM", x: 400, y: 56 },
+      ],
+    };
+    const gnd: SchematicComponent = {
+      ...c("ground", "GND", "", 0, 64),
+      pinOverride: [{ id: "g", label: "0", x: 0, y: 64 }],
+    };
+    const deck = buildSpiceDeck(
+      { components: [adc, dac, disp, gnd], wires: [] },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toMatch(/^B_a2_d3\b/m);
+    expect(deck.netlist).toMatch(/^B_a2_d0\b/m);
+    expect(deck.netlist).toMatch(/^B_a3_out\b/m);
+    expect(deck.netlist).toMatch(/^R_u2_a\b.+1G/m);
+    expect(deck.netlist).toMatch(/^R_u2_g\b.+1G/m);
+  });
+});
+
 describe("EveryCircuit library — center-tapped transformer", () => {
   it("lists CT transformer with five pins", () => {
     expect(CATALOG.some((e) => e.kind === "ctTransformer")).toBe(true);

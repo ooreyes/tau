@@ -29,6 +29,7 @@
  */
 
 import tauDeadtimeDriver from "./bundled/tau_deadtime_driver.sub?raw";
+import tau555 from "./bundled/tau_555.sub?raw";
 
 /**
  * Map an LTspice subcircuit name onto the ngspice-safe name the bundled text
@@ -490,6 +491,7 @@ const LIBRARY_FILES = new Map<string, string>([
 Rpass 1 2 1m
 .ends tau_passthrough`],
   ["tau-deadtime-driver.sub", tauDeadtimeDriver],
+  ["tau-555.sub", tau555],
   ["opamp.sub", OPAMP_SUB],
   ["towtom2.sub", TOWTOM2_SUB],
   ["capometer.sub", CAPOMETER_SUB],

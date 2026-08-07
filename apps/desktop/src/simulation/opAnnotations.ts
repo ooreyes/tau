@@ -6,10 +6,16 @@
  */
 import { primaryBranches, type OperatingPointResult } from "./operatingPoint";
 import type { ExtractedCircuit } from "../schematic/netlist";
-import { formatEngineering } from "./quantity";
+import { formatEngineeringRange, type ValueRange } from "./quantity";
 import { deriveDcRcBranches } from "./currents";
 import type { AnalysisResult } from "./linearTransient";
-import { nearestSampleIndex, tranComponentCurrents, tranNetVoltages } from "./wireCurrentFlow";
+import {
+  nearestSampleIndex,
+  tranComponentCurrents,
+  tranComponentCurrentRanges,
+  tranNetVoltages,
+  tranNetVoltageRanges,
+} from "./wireCurrentFlow";
 
 export interface OpAnnotation {
   /** Stable render key (net id / component id). */
@@ -31,7 +37,7 @@ function netAnchor(points: readonly { x: number; y: number }[]): { x: number; y:
 
 function voltageAnnotations(
   circuit: ExtractedCircuit,
-  voltageByNet: ReadonlyMap<string, number>,
+  voltageByNet: ReadonlyMap<string, number | ValueRange>,
 ): OpAnnotation[] {
   const annotations: OpAnnotation[] = [];
   for (const [netId, voltage] of voltageByNet) {
@@ -43,7 +49,7 @@ function voltageAnnotations(
       key: `v:${netId}`,
       x: anchor.x,
       y: anchor.y,
-      text: formatEngineering(voltage, "V", 3),
+      text: formatEngineeringRange(voltage, "V", 3),
       kind: "voltage",
     });
   }
@@ -52,15 +58,19 @@ function voltageAnnotations(
 
 function currentAnnotations(
   circuit: ExtractedCircuit,
-  currents: ReadonlyMap<string, number>,
+  currents: ReadonlyMap<string, number | ValueRange>,
 ): OpAnnotation[] {
   const annotations: OpAnnotation[] = [];
   for (const [id, current] of currents) {
     const extracted = circuit.components.find((c) => c.component.id === id);
     if (!extracted) continue;
+    const isNearZero = (c: number | ValueRange) => {
+      if (typeof c === "number") return Math.abs(c) < 1e-15;
+      return Math.abs(c.min) < 1e-15 && Math.abs(c.max) < 1e-15;
+    };
     // Skip empty R/C spam; still label sources/inductors that report 0 A.
     if (
-      Math.abs(current) < 1e-15
+      isNearZero(current)
       && (extracted.component.kind === "resistor"
         || extracted.component.kind === "bulb"
         || extracted.component.kind === "capacitor"
@@ -72,7 +82,7 @@ function currentAnnotations(
       key: `i:${id}`,
       x: extracted.component.x,
       y: extracted.component.y,
-      text: formatEngineering(current, "A", 3),
+      text: formatEngineeringRange(current, "A", 3),
       kind: "current",
     });
   }
@@ -113,9 +123,9 @@ export function opAnnotations(
 }
 
 /**
- * EveryCircuit-style readout from a successful `.tran`: voltages and branch
- * currents at one sample (default = last). Same cyan/green labels as OP mode;
- * capacitors keep non-zero transient currents when the engine reported them.
+ * EveryCircuit-style static settlement readout from a successful `.tran`:
+ * voltage and branch current ranges across settlement/steady state. Same
+ * cyan/green labels as OP mode.
  */
 export function tranAnnotations(
   result: AnalysisResult | null,
@@ -123,14 +133,20 @@ export function tranAnnotations(
   timeSeconds?: number | null,
 ): OpAnnotation[] {
   if (!result || !result.ok || !circuit || result.times.length === 0) return [];
-  const sampleIndex =
-    timeSeconds == null
-      ? result.times.length - 1
-      : nearestSampleIndex(result.times, timeSeconds);
-  const voltageByNet = tranNetVoltages(result, sampleIndex);
-  const currents = tranComponentCurrents(result, sampleIndex);
+  if (timeSeconds != null) {
+    const sampleIndex = nearestSampleIndex(result.times, timeSeconds);
+    const voltageByNet = tranNetVoltages(result, sampleIndex);
+    const currents = tranComponentCurrents(result, sampleIndex);
+    return [
+      ...voltageAnnotations(circuit, voltageByNet),
+      ...currentAnnotations(circuit, currents),
+    ];
+  }
+  const voltageByNet = tranNetVoltageRanges(result);
+  const currents = tranComponentCurrentRanges(result);
   return [
     ...voltageAnnotations(circuit, voltageByNet),
     ...currentAnnotations(circuit, currents),
   ];
 }
+

@@ -78,3 +78,28 @@ export function formatEngineering(value: number, unit = "", digits = 3): string 
   const scaled = value / prefix.scale;
   return `${Number(scaled.toPrecision(safeDigits))} ${prefix.suffix}${unit}`.trim();
 }
+
+export interface ValueRange {
+  min: number;
+  max: number;
+}
+
+export function formatEngineeringRange(
+  range: number | ValueRange,
+  unit = "",
+  digits = 3,
+): string {
+  if (typeof range === "number") {
+    return formatEngineering(range, unit, digits);
+  }
+  if (!Number.isFinite(range.min) || !Number.isFinite(range.max)) {
+    return "--";
+  }
+  const strMin = formatEngineering(range.min, unit, digits);
+  const strMax = formatEngineering(range.max, unit, digits);
+  if (strMin === strMax) {
+    return strMin;
+  }
+  return `${strMin} … ${strMax}`;
+}
+

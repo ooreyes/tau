@@ -96,11 +96,18 @@ export const CATALOG: CatalogEntry[] = [
   // The gate's value names its function: and/or/xor/buf/inv/schmtbuf/schmtinv.
   { kind: "digitalGate",   section: "Digital",           name: "Logic Gate",      hotkey: "",  prefix: "A",   defaultValue: "and",   unit: "" },
   // Async SR latch (LTspice Digital\srflop): S/R → XSPICE d_dff set/reset.
+  // Catalog name stays "SR Latch" (Q/Q̅) — no fake gated-SR without an enable pin.
   { kind: "srflop",        section: "Digital",           name: "SR Latch",        hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
   { kind: "dflop",         section: "Digital",           name: "D Flip-Flop",     hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
   // Edge-triggered T / JK via XSPICE d_tff / d_jkff (EveryCircuit-style; no LTspice .asy).
   { kind: "tflop",         section: "Digital",           name: "T Flip-Flop",     hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
   { kind: "jkflop",        section: "Digital",           name: "JK Flip-Flop",    hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
+  // EveryCircuit-style ICs (Tau-owned behavioral — not vendor macromodels).
+  { kind: "counter",       section: "Digital",           name: "Counter (4-bit)", hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
+  { kind: "timer555",      section: "Digital",           name: "555 Timer",       hotkey: "",  prefix: "X",   defaultValue: "",      unit: "" },
+  { kind: "adc",           section: "Digital",           name: "ADC (4-bit)",     hotkey: "",  prefix: "A",   defaultValue: "Vhigh=5", unit: "" },
+  { kind: "dac",           section: "Digital",           name: "DAC (4-bit)",     hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
+  { kind: "sevenSeg",      section: "Digital",           name: "7-Segment",       hotkey: "",  prefix: "U",   defaultValue: "",      unit: "" },
   { kind: "sampleHold",    section: "Digital",           name: "Sample & Hold",   hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
 
   // ── Electromechanical (switches → actuators → magnetics) ─────────────────

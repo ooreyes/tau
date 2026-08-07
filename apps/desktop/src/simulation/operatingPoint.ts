@@ -127,6 +127,7 @@ const OP_SUPPORTED = new Set<ComponentKind>([
   "led",
   "zener",
   "photodiode",
+  "sevenSeg",
 ]);
 
 /** Tiny conductance added from every non-ground node to ground (SPICE gmin trick).
@@ -493,6 +494,17 @@ export function runOperatingPoint(
             ? nodeIdx(entry.pins["no"], nodeIndex)
             : nodeIdx(entry.pins["nc"], nodeIndex);
           stampConductance(matrix, com, thrown, 1e9);
+          break;
+        }
+
+        case "sevenSeg": {
+          // High-Z segment loads (1 GΩ) match the deck's R_… 1G emission.
+          const com = nodeIdx(entry.pins["com"], nodeIndex);
+          for (const id of ["a", "b", "c", "d", "e", "f", "g", "dp"] as const) {
+            const seg = nodeIdx(entry.pins[id], nodeIndex);
+            if (seg < 0 && com < 0) continue;
+            stampConductance(matrix, seg, com, 1e-9);
+          }
           break;
         }
 

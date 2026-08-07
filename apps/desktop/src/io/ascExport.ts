@@ -273,7 +273,7 @@ const VERBATIM_UNSAFE_LEAFS = new Set(["npn4", "pnp4", "varistor", "diac"]);
 export function canEmitLtSymbolVerbatim(type: string, kind: ComponentKind): boolean {
   const leaf = type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
   if (VERBATIM_UNSAFE_LEAFS.has(leaf)) return false;
-  if (["digitalGate", "subckt", "dflop", "srflop", "tflop", "jkflop", "sampleHold", "modulator"].includes(kind)) return false;
+  if (["digitalGate", "subckt", "dflop", "srflop", "tflop", "jkflop", "counter", "timer555", "adc", "dac", "sevenSeg", "sampleHold", "modulator"].includes(kind)) return false;
   return ltspiceTypeToKind(type) === kind && hasBankedLtPins(type);
 }
 
@@ -308,8 +308,8 @@ export function isLossyCarrierWarning(warning: string): boolean {
 
 export const LOSSY_CARRIER_KINDS: ReadonlySet<string> = new Set([
   "comparator", "cccs", "ccvs", "switch", "pushButton", "spdt", "relay", "motor",
-  // T/JK are Tau-native XSPICE flops — no LTspice Digital\*.asy counterparts.
-  "tflop", "jkflop",
+  // T/JK / EveryCircuit ICs are Tau-native — no faithful single LTspice .asy.
+  "tflop", "jkflop", "counter", "timer555", "adc", "dac", "sevenSeg",
   // CT transformer expands to 3×L + K; no single LTspice 5-pin CT symbol.
   "ctTransformer",
   "subckt", "testpoint",

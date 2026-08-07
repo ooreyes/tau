@@ -1071,7 +1071,7 @@ function buildPinOverride(
   // ONLY the pins the .asy actually has (the deck builder ignores absent pins,
   // matching LTspice's floating-input semantics). sampleHold and modulator
   // share the scheme.
-  if (kind === "digitalGate" || kind === "dflop" || kind === "srflop" || kind === "tflop" || kind === "jkflop" || kind === "sampleHold" || kind === "modulator") {
+  if (kind === "digitalGate" || kind === "dflop" || kind === "srflop" || kind === "tflop" || kind === "jkflop" || kind === "counter" || kind === "timer555" || kind === "adc" || kind === "dac" || kind === "sevenSeg" || kind === "sampleHold" || kind === "modulator") {
     const byId = new Map(tauPins.map((p) => [p.id, p]));
     const override: PinOverride[] = [];
     for (const lt of ltPins) {
@@ -1402,7 +1402,7 @@ export function componentValueFromAttrs(
   // `Value2 Trise=10n`); join them all for parseDigitalGate, which skips
   // unknown tokens. The caller prepends the gate function (from the symbol
   // path) since LTspice encodes it in the symbol name, not the value.
-  if (kind === "digitalGate" || kind === "dflop" || kind === "srflop" || kind === "tflop" || kind === "jkflop" || kind === "sampleHold" || kind === "modulator") {
+  if (kind === "digitalGate" || kind === "dflop" || kind === "srflop" || kind === "tflop" || kind === "jkflop" || kind === "counter" || kind === "timer555" || kind === "adc" || kind === "dac" || kind === "sevenSeg" || kind === "sampleHold" || kind === "modulator") {
     const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
       .map(normalizeLtspiceAttr)
       .filter(Boolean);

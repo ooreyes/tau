@@ -51,6 +51,11 @@ describe("Library catalog contract", () => {
     expectSection("srflop", "Digital");
     expectSection("tflop", "Digital");
     expectSection("jkflop", "Digital");
+    expectSection("counter", "Digital");
+    expectSection("timer555", "Digital");
+    expectSection("adc", "Digital");
+    expectSection("dac", "Digital");
+    expectSection("sevenSeg", "Digital");
     expectSection("pushButton", "Electromechanical");
     expectSection("spdt", "Electromechanical");
     expectSection("relay", "Electromechanical");
@@ -78,6 +83,11 @@ describe("Library catalog contract", () => {
       "dflop",
       "tflop",
       "jkflop",
+      "counter",
+      "timer555",
+      "adc",
+      "dac",
+      "sevenSeg",
       "sampleHold",
     ]);
   });

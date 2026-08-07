@@ -194,9 +194,9 @@ export function Canvas({
 
   const opLabels = useMemo(() => {
     if (!biasCircuit) return [];
-    if (useTranReadout && tran?.ok) return tranAnnotations(tran, biasCircuit, readoutTime);
+    if (useTranReadout && tran?.ok) return tranAnnotations(tran, biasCircuit);
     return opAnnotations(op, biasCircuit);
-  }, [biasCircuit, useTranReadout, tran, readoutTime, op]);
+  }, [biasCircuit, useTranReadout, tran, op]);
 
   const flowCurrents = useMemo(() => {
     if (!biasCircuit) return null;

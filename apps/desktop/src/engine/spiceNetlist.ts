@@ -26,6 +26,14 @@ import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
 import { parseCrystal, crystalDeckLines } from "./crystalSpec";
 import { parseDigitalGate, digitalGateDeckLines, dflopDeckLines, srflopDeckLines, tflopDeckLines, jkflopDeckLines } from "./digitalGateSpec";
 import { sampleHoldDeckLines } from "./sampleHoldSpec";
+import {
+  adcDeckLines,
+  counterDeckLines,
+  dacDeckLines,
+  parseConverterLevels,
+  sevenSegDeckLines,
+  timer555InstanceLine,
+} from "./everyCircuitIcSpec";
 import { parseModulator, modulatorDeckLines } from "./modulatorSpec";
 import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
@@ -646,11 +654,18 @@ export function buildSpiceDeck(
   // bundledSubcircuits.ts) so the deck is self-contained - this is how the
   // ISO16750-2/ISO7637-2 symbols work in LTspice, whose `.asy` ModelFile
   // attribute pulls the library in without any on-canvas directive.
+  // timer555 places also pull the Tau-owned `tau_555` block the same way.
   const emittedSubckts = new Set<string>(emittedOpampSubckts);
   for (const { component } of circuit.components) {
-    if (component.kind !== "subckt") continue;
-    if (importedSymbolLeaf(component) === "varistor") continue;
-    const ref = sanitizeSubcktName(component.value.trim().split(/\s+/)[0] ?? "").toLowerCase();
+    let ref = "";
+    if (component.kind === "subckt") {
+      if (importedSymbolLeaf(component) === "varistor") continue;
+      ref = sanitizeSubcktName(component.value.trim().split(/\s+/)[0] ?? "").toLowerCase();
+    } else if (component.kind === "timer555") {
+      ref = "tau_555";
+    } else {
+      continue;
+    }
     if (!ref || userModels.has(ref) || inlinedSubckts.has(ref) || emittedSubckts.has(ref)) continue;
     // Same local-definition-wins rule as the model loop above: an attached
     // vendor library's `.subckt` wins over a bundled subcircuit of the same
@@ -1702,6 +1717,110 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         qbar: connected("qbar"),
       }, spec);
     }
+    case "counter": {
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseDigitalGate(component.value);
+      const connected = (pin: string): string | undefined => {
+        const netId = entry.pins[pin];
+        if (!netId) return undefined;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+        return netId.toLowerCase();
+      };
+      return counterDeckLines(base, {
+        clk: connected("clk"),
+        rst: connected("rst"),
+        q0: connected("q0"),
+        q1: connected("q1"),
+        q2: connected("q2"),
+        q3: connected("q3"),
+        com: connected("com"),
+      }, spec);
+    }
+    case "timer555": {
+      // Always emit every NE555 pin (float → private node) so the X line and
+      // bundled `.subckt tau_555` stay complete for smoke / OP-skip cases.
+      const pin = (id: string): string | undefined => {
+        const netId = entry.pins[id];
+        return netId ? netId.toLowerCase() : undefined;
+      };
+      return [timer555InstanceLine(name, {
+        gnd: pin("gnd"),
+        trig: pin("trig"),
+        out: pin("out"),
+        reset: pin("reset"),
+        cont: pin("cont"),
+        thres: pin("thres"),
+        disch: pin("disch"),
+        vcc: pin("vcc"),
+      })];
+    }
+    case "adc": {
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseConverterLevels(component.value);
+      // VIN/VREF must be present as nets; digital outs may float privately.
+      const pin = (id: string): string | undefined => {
+        const netId = entry.pins[id];
+        return netId ? netId.toLowerCase() : undefined;
+      };
+      const connected = (id: string): string | undefined => {
+        const netId = entry.pins[id];
+        if (!netId) return undefined;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+        return netId.toLowerCase();
+      };
+      return adcDeckLines(base, {
+        vin: pin("vin"),
+        vref: pin("vref"),
+        d0: connected("d0"),
+        d1: connected("d1"),
+        d2: connected("d2"),
+        d3: connected("d3"),
+        com: connected("com"),
+      }, spec);
+    }
+    case "dac": {
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseConverterLevels(component.value);
+      const pin = (id: string): string | undefined => {
+        const netId = entry.pins[id];
+        return netId ? netId.toLowerCase() : undefined;
+      };
+      const connected = (id: string): string | undefined => {
+        const netId = entry.pins[id];
+        if (!netId) return undefined;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+        return netId.toLowerCase();
+      };
+      return dacDeckLines(base, {
+        d0: pin("d0"),
+        d1: pin("d1"),
+        d2: pin("d2"),
+        d3: pin("d3"),
+        vref: pin("vref"),
+        out: connected("out") ?? pin("out"),
+        com: connected("com"),
+      }, spec);
+    }
+    case "sevenSeg": {
+      const base = safeName(component.label || `U${index + 1}`);
+      // Segment loads are passive — emit for every assigned pin net (including
+      // otherwise-floating pins) so a lone display still netlists cleanly.
+      const pin = (id: string): string | undefined => {
+        const netId = entry.pins[id];
+        return netId ? netId.toLowerCase() : undefined;
+      };
+      return sevenSegDeckLines(base, {
+        a: pin("a"),
+        b: pin("b"),
+        c: pin("c"),
+        d: pin("d"),
+        e: pin("e"),
+        f: pin("f"),
+        g: pin("g"),
+        dp: pin("dp"),
+        com: pin("com"),
+      });
+    }
     case "sampleHold": {
       // LTspice SpecialFunctions\sample (SAMPLEHOLD): behavioral track-and-
       // hold - S/H high tracks V(in+,in-) and holds when low; CLK latches the
@@ -2198,7 +2317,7 @@ function deckNode(value: string, role: string, analysis: string): string {
 const SPICE_PREFIX: Record<ComponentKind, string> = {
   resistor: "R", capacitor: "C", polarizedCapacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
   logicConstant: "V",
-  diode: "D", led: "D", zener: "D", photodiode: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", srflop: "A", tflop: "A", jkflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
+  diode: "D", led: "D", zener: "D", photodiode: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", srflop: "A", tflop: "A", jkflop: "A", counter: "A", timer555: "X", adc: "B", dac: "B", sevenSeg: "R", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
   potentiometer: "R", bulb: "R", switch: "S", pushButton: "S", spdt: "S", relay: "S", motor: "L",
   transformer: "L", ctTransformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
 };

@@ -58,11 +58,12 @@ describe("sanitizeSubcktName", () => {
 });
 
 describe("bundled block registry", () => {
-  it("ships all 33 blocks, including Tau's native passthrough and dead-time driver", () => {
+  it("ships all 34 blocks, including Tau's native passthrough, dead-time driver, and 555", () => {
     const names = bundledSubcircuitNames();
-    expect(names.size).toBe(33);
+    expect(names.size).toBe(34);
     expect(names.has("tau_passthrough")).toBe(true);
     expect(names.has("taudeadtimedriver")).toBe(true);
+    expect(names.has("tau_555")).toBe(true);
     expect(names.has("opamp")).toBe(true);
     expect(names.has("towtom2")).toBe(true);
     expect(names.has("capometer")).toBe(true);

@@ -28,6 +28,11 @@ export type ComponentKind =
   | "srflop"
   | "tflop"
   | "jkflop"
+  | "counter"
+  | "timer555"
+  | "adc"
+  | "dac"
+  | "sevenSeg"
   | "sampleHold"
   | "modulator"
   | "vcvs"
@@ -60,7 +65,7 @@ export const COMPONENT_KINDS = [
   "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource", "vac", "iac", "vpulse",
   "logicConstant",
   "diode", "led", "zener", "photodiode", "opamp", "comparator", "digitalGate", "dflop", "srflop",
-  "tflop", "jkflop", "sampleHold",
+  "tflop", "jkflop", "counter", "timer555", "adc", "dac", "sevenSeg", "sampleHold",
   "modulator", "vcvs", "vccs", "cccs", "ccvs", "bsource", "nmos", "pmos", "njf", "pjf",
   "npn", "pnp", "potentiometer", "bulb", "switch", "pushButton", "spdt", "relay", "motor",
   "transformer", "ctTransformer", "tline", "subckt", "testpoint",
