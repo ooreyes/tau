@@ -166,12 +166,16 @@ on measured values it actively misleads. Honour `prefers-reduced-motion`.
 ### The canvas comes first
 
 The schematic or waveform is the subject; everything else is apparatus. When
-space is short, collapse the apparatus before compressing the canvas. Readouts
-placed on the canvas must not cover it — Tau has a real placement engine
-(`buildOpAnnotationPlacements` in `components/Canvas.geometry.ts`) that scores
-candidate positions against symbols, wires and existing text. Use it rather
-than hardcoding an offset; a fixed offset is how a current readout ended up on
-top of its own resistor's value.
+space is short, collapse the apparatus before compressing the canvas.
+
+Readouts placed on the canvas must not cover it. Tau has a placement engine for
+exactly this — `buildLabelPlacements` in `components/Canvas.geometry.ts`, which
+scores candidate positions by overlap area against component bodies, wire
+segments, and text already placed. Use it rather than hardcoding an offset. The
+schematic deliberately carries **no numeric V/I readouts** today: they were
+tried, they covered the drawing, and they were removed in favour of the flow
+overlay plus the measurement panels. If you are adding anything textual to the
+canvas, that history is the bar to clear.
 
 ## How to work
 

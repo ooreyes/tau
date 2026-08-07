@@ -212,17 +212,36 @@ export function segmentFlowCurrents(
     keyOf(s.points[s.points.length - 1]!.x, s.points[s.points.length - 1]!.y),
   ] as const;
 
+  // Path-compressed, union-by-rank. Without both, unioning a wire chain in
+  // draw order degenerates into a linked list and `find` walks it — which made
+  // this whole solve quadratic in the wire count, on a function that used to run
+  // every animation frame.
   const parent = new Map<string, string>();
+  const rank = new Map<string, number>();
   const find = (k: string): string => {
     let root = k;
     while (parent.get(root) !== root) root = parent.get(root) ?? root;
+    // Second pass points every node on the path straight at the root.
+    let cur = k;
+    while (cur !== root) {
+      const next = parent.get(cur) ?? root;
+      parent.set(cur, root);
+      cur = next;
+    }
     return root;
   };
-  const add = (k: string) => { if (!parent.has(k)) parent.set(k, k); };
+  const add = (k: string) => {
+    if (!parent.has(k)) { parent.set(k, k); rank.set(k, 0); }
+  };
   const union = (a: string, b: string) => {
     const ra = find(a);
     const rb = find(b);
-    if (ra !== rb) parent.set(ra, rb);
+    if (ra === rb) return;
+    const da = rank.get(ra) ?? 0;
+    const db = rank.get(rb) ?? 0;
+    if (da < db) parent.set(ra, rb);
+    else if (da > db) parent.set(rb, ra);
+    else { parent.set(rb, ra); rank.set(ra, da + 1); }
   };
 
   for (const s of segments) {
@@ -256,13 +275,23 @@ export function segmentFlowCurrents(
     if (b !== a) push(b, edge);
   }
 
+  // Group nodes by net ONCE. Filtering every node in the schematic per net was
+  // the second quadratic: 1000 nets x 2000 nodes is two million `find` calls
+  // for a grouping that does not change while the animation runs.
+  const nodesByRoot = new Map<string, string[]>();
+  for (const k of parent.keys()) {
+    const r = find(k);
+    const list = nodesByRoot.get(r);
+    if (list) list.push(k); else nodesByRoot.set(r, [k]);
+  }
+
   const doneNets = new Set<string>();
   for (const s of segments) {
     const root = find(endsOf(s)[0]);
     if (doneNets.has(root)) continue;
     doneNets.add(root);
 
-    const netNodes = [...parent.keys()].filter((k) => find(k) === root);
+    const netNodes = nodesByRoot.get(root) ?? [];
     const edgeCount = netNodes.reduce((n, k) => n + (adjacency.get(k)?.length ?? 0), 0) / 2;
 
     const start = endsOf(s)[0];
