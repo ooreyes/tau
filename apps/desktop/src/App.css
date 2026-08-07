@@ -2625,8 +2625,53 @@ body {
 /* In-place DC operating point labels on the schematic (simulator mode). A
    background stroke keeps them readable over wires and symbol bodies. Kept
    outside the App.css type scale (schematic canvas SVG text). */
-/* EveryCircuit-like current-mode flow dots (real OP branch currents only). */
+/* Current-mode key. Floats on the canvas with no container - grouping comes
+   from proximity, per the instrument language. Tiny caps label, subordinate
+   scale, one semantic hue. */
+.flow-legend {
+  position: absolute;
+  left: var(--sp-3);
+  bottom: var(--sp-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.flow-legend-mark {
+  width: 44px;
+  height: 8px;
+  fill: var(--trace-green);
+  opacity: 0.85;
+}
+
+.flow-legend-label {
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  color: var(--trace-green);
+}
+
+.flow-legend-scale {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--muted);
+}
+
+/* Current-mode flow overlay: real branch currents only, never invented. */
 .flow-layer .flow-dot {
+  fill: var(--trace-green);
+  stroke: none;
+  pointer-events: none;
+}
+
+/* Static direction marker. Deliberately quieter than the dots - it is there so
+   direction survives a paused frame, a screenshot, or reduced motion, not to
+   compete with the animation. */
+.flow-layer .flow-arrow {
   fill: var(--trace-green);
   stroke: none;
   pointer-events: none;

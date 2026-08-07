@@ -204,14 +204,16 @@ function pinEffect(
     case "terminal": {
       const amps = terminals.get(pin.componentId)?.get(role.terminal);
       // The engine did not report this terminal (a preview run, or a device
-      // whose vectors were not saved). Unknown, not zero.
-      if (amps === undefined) return BOUNDARY;
+      // whose vectors were not saved), or reported something non-finite after a
+      // failed solve. Unknown, not zero - a NaN here would reach the renderer
+      // as NaN dot coordinates and silently blank the layer.
+      if (amps === undefined || !Number.isFinite(amps)) return BOUNDARY;
       // Reported current flows INTO the terminal, so the wire loses it.
       return { kind: "amps", amps: -amps };
     }
     case "series": {
       const i = currents.get(pin.componentId);
-      if (i === undefined) return BOUNDARY;
+      if (i === undefined || !Number.isFinite(i)) return BOUNDARY;
       return { kind: "amps", amps: role.sign * i };
     }
     default:
@@ -467,7 +469,10 @@ export function segmentFlowCurrents(
       const below = subtree.get(to) ?? 0;
       subtree.set(from, (subtree.get(from) ?? 0) + below);
       // `below` flows child → parent; positive output means points[0] → last.
-      out.set(seg.id, endsOf(seg)[0] === to ? below : -below);
+      const signed = endsOf(seg)[0] === to ? below : -below;
+      // `-below` yields -0 for a dead branch; normalise so callers comparing
+      // against 0 behave, and so a readout never renders "-0 A".
+      out.set(seg.id, signed === 0 ? 0 : signed);
     }
   }
 
@@ -494,6 +499,25 @@ export interface FlowDot {
   x: number;
   y: number;
   opacity: number;
+}
+
+/** A static direction marker at a segment's midpoint.
+ *
+ *  Dots alone encode direction only through motion, which fails three readers
+ *  at once: anyone with `prefers-reduced-motion`, anyone looking at a paused
+ *  frame or a screenshot, and anyone who simply cannot track a 2.8px dot. An
+ *  arrowhead is readable standing still. */
+export interface FlowArrow {
+  x: number;
+  y: number;
+  /** Degrees, pointing the way conventional current flows. */
+  angle: number;
+  opacity: number;
+}
+
+export interface FlowField {
+  dots: FlowDot[];
+  arrows: FlowArrow[];
 }
 
 function measure(points: Point[]): { lengths: number[]; total: number } {
@@ -561,7 +585,7 @@ export function flowMagnitude(amps: number): number {
  * off it carries a different current before and after the tap, and animating
  * the whole polyline at one speed misrepresents the busiest wire in most
  * circuits.
- */export function flowDotsForWires(
+ */export function flowFieldForWires(
   wires: readonly SchematicWire[],
   pins: PinIndex,
   currents: ReadonlyMap<string, number>,
@@ -572,10 +596,11 @@ export function flowMagnitude(amps: number): number {
   _peak = peakAbsCurrent(currents),
   terminals: TerminalCurrents = new Map(),
   labelPoints: readonly { x: number; y: number }[] = [],
-): FlowDot[] {
+): FlowField {
   const segments = flowSegments(wires, pins);
   const solved = segmentFlowCurrents(segments, pins, currents, terminals, labelPoints);
   const dots: FlowDot[] = [];
+  const arrows: FlowArrow[] = [];
   for (const segment of segments) {
     const { lengths, total } = measure(segment.points);
     if (total <= 1) continue;
@@ -592,6 +617,25 @@ export function flowMagnitude(amps: number): number {
       const d = (((advanced + (k * total) / count) % total) + total) % total;
       dots.push({ ...posAt(segment.points, lengths, total, d), opacity });
     }
+
+    // One arrowhead per segment, at the midpoint, tangent to the path there.
+    const mid = total / 2;
+    const ahead = posAt(segment.points, lengths, total, Math.min(total, mid + 1));
+    const behind = posAt(segment.points, lengths, total, Math.max(0, mid - 1));
+    const angle = Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * (180 / Math.PI);
+    arrows.push({
+      ...posAt(segment.points, lengths, total, mid),
+      angle: dir >= 0 ? angle : angle + 180,
+      opacity,
+    });
   }
-  return dots;
+  return { dots, arrows };
+}
+
+/** Dots only — the original shape, kept so existing callers and tests that do
+ *  not care about direction markers stay unchanged. */
+export function flowDotsForWires(
+  ...args: Parameters<typeof flowFieldForWires>
+): FlowDot[] {
+  return flowFieldForWires(...args).dots;
 }

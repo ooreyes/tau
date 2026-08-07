@@ -1403,6 +1403,22 @@ export function Canvas({
         })()}
       </svg>
 
+      {/* A moving dot means nothing without a scale. This states the direction
+          convention and the full-scale current, so a reader can name a number
+          rather than only compare two wires. */}
+      {currentVisualizer && flowCurrents && flowCurrents.size > 0 && (
+        <div className="flow-legend" aria-label="Current flow key">
+          <svg className="flow-legend-mark" viewBox="0 0 44 8" aria-hidden="true">
+            <circle cx="4" cy="4" r="2" />
+            <circle cx="14" cy="4" r="2" />
+            <circle cx="24" cy="4" r="2" />
+            <path d="M 34 1 L 40 4 L 34 7 Z" />
+          </svg>
+          <span className="flow-legend-label">CURRENT</span>
+          <span className="flow-legend-scale">1 µA — 1 A</span>
+        </div>
+      )}
+
       <div className="view-controls" role="toolbar" aria-label="Schematic view">
         <InstrumentIconButton
           icon={ZoomIn}

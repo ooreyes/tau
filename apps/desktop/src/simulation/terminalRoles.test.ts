@@ -31,8 +31,10 @@ describe("terminal roles cover every kind and pin", () => {
     // The three specific misreadings that shipped.
     expect(terminalRole("npn", "b")).toEqual({ role: "terminal", terminal: "b" });
     expect(terminalRole("nmos", "b")).toEqual({ role: "none" });
-    expect(terminalRole("sevenSeg", "a")).toEqual({ role: "none" });
-    expect(terminalRole("sevenSeg", "b")).toEqual({ role: "none" });
+    // Segments drive LEDs, so they carry real but unquantified current — a
+    // boundary, never a two-terminal leg.
+    expect(terminalRole("sevenSeg", "a")).toEqual({ role: "unknown" });
+    expect(terminalRole("sevenSeg", "b")).toEqual({ role: "unknown" });
   });
 
   it("gives a diode's cathode the current its anode already had", () => {
@@ -57,5 +59,17 @@ describe("terminal roles cover every kind and pin", () => {
 
   it("defaults an unmapped pin to unknown rather than to two-terminal", () => {
     expect(terminalRole("resistor", "not-a-pin")).toEqual({ role: "unknown" });
+  });
+
+  it("separates high-impedance inputs from current-sourcing outputs", () => {
+    // A logic input draws nothing; a logic output really does drive a load.
+    // Calling an output "none" would make a gate-to-resistor net unbalanced
+    // and animate nothing.
+    expect(terminalRole("digitalGate", "in1")).toEqual({ role: "none" });
+    expect(terminalRole("digitalGate", "q")).toEqual({ role: "unknown" });
+    expect(terminalRole("dflop", "clk")).toEqual({ role: "none" });
+    expect(terminalRole("dflop", "q")).toEqual({ role: "unknown" });
+    expect(terminalRole("opamp", "in+")).toEqual({ role: "none" });
+    expect(terminalRole("opamp", "out")).toEqual({ role: "unknown" });
   });
 });

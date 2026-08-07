@@ -21,9 +21,9 @@ function usePrefersReducedMotion(): boolean {
 }
 import type { SchematicWire } from "../schematic/types";
 import {
-  flowDotsForWires,
+  flowFieldForWires,
   peakAbsCurrent,
-  type FlowDot,
+  type FlowField,
   type PinIndex,
   type TerminalCurrents,
 } from "../simulation/wireCurrentFlow";
@@ -47,7 +47,7 @@ export function OpCurrentFlowLayer({
   /** When false, clear dots (no bias readout / empty current map). */
   active: boolean;
 }) {
-  const [dots, setDots] = useState<FlowDot[]>([]);
+  const [field, setField] = useState<FlowField>({ dots: [], arrows: [] });
   const phase = useRef(new Map<string, number>());
   const raf = useRef<number | undefined>(undefined);
   const last = useRef(0);
@@ -57,7 +57,7 @@ export function OpCurrentFlowLayer({
 
   useEffect(() => {
     if (!live) {
-      setDots([]);
+      setField({ dots: [], arrows: [] });
       phase.current = new Map();
       return;
     }
@@ -67,7 +67,7 @@ export function OpCurrentFlowLayer({
     // arrowheads the dots are laid along; a still frame beats a moving one the
     // reader has asked not to see.
     if (reducedMotion) {
-      setDots(flowDotsForWires(
+      setField(flowFieldForWires(
         wires, pinIndex, live, phase.current, 0, peakAbsCurrent(live),
         terminals, labelPoints,
       ));
@@ -76,7 +76,7 @@ export function OpCurrentFlowLayer({
     const tick = (now: number) => {
       const dtMs = Math.min(64, now - (last.current || now));
       last.current = now;
-      setDots(flowDotsForWires(
+      setField(flowFieldForWires(
         wires, pinIndex, live, phase.current, dtMs / 1000, peakAbsCurrent(live),
         terminals, labelPoints,
       ));
@@ -88,10 +88,20 @@ export function OpCurrentFlowLayer({
     };
   }, [live, wires, pinIndex, terminals, labelPoints, reducedMotion]);
 
-  if (dots.length === 0) return null;
+  if (field.dots.length === 0 && field.arrows.length === 0) return null;
   return (
     <g className="flow-layer" aria-hidden="true">
-      {dots.map((d, i) => (
+      {/* Direction markers first, so the moving dots read on top of them. */}
+      {field.arrows.map((a, i) => (
+        <path
+          key={`arrow-${i}`}
+          className="flow-arrow"
+          d="M -3.4 -3 L 3.4 0 L -3.4 3 Z"
+          transform={`translate(${a.x} ${a.y}) rotate(${a.angle})`}
+          opacity={a.opacity * 0.55}
+        />
+      ))}
+      {field.dots.map((d, i) => (
         <circle
           key={i}
           className="flow-dot"

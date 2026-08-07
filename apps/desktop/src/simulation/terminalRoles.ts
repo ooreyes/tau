@@ -55,9 +55,6 @@ const I_SOURCE = { p: SERIES_OUT, n: SERIES_IN } as const;
 const unknownPins = <K extends string>(...ids: K[]): Record<K, TerminalRole> =>
   Object.fromEntries(ids.map((id) => [id, UNKNOWN])) as Record<K, TerminalRole>;
 
-const nonePins = <K extends string>(...ids: K[]): Record<K, TerminalRole> =>
-  Object.fromEntries(ids.map((id) => [id, NONE])) as Record<K, TerminalRole>;
-
 export const TERMINAL_ROLES: Readonly<
   Record<ComponentKind, Readonly<Record<string, TerminalRole>>>
 > = {
@@ -131,20 +128,36 @@ export const TERMINAL_ROLES: Readonly<
   comparator: { "in+": NONE, "in-": NONE, out: UNKNOWN },
   sampleHold: { "in+": NONE, "in-": NONE, clk: NONE, sh: NONE, out: UNKNOWN, com: UNKNOWN },
   modulator: { fm: NONE, am: NONE, out: UNKNOWN, com: UNKNOWN },
-  timer555: unknownPins("gnd", "trig", "out", "reset", "cont", "thres", "disch", "vcc"),
+  timer555: {
+    trig: NONE, thres: NONE, cont: NONE, reset: NONE,
+    out: UNKNOWN, disch: UNKNOWN, vcc: UNKNOWN, gnd: UNKNOWN,
+  },
   adc: { vin: NONE, vref: NONE, d0: UNKNOWN, d1: UNKNOWN, d2: UNKNOWN, d3: UNKNOWN, com: UNKNOWN },
   dac: { d0: NONE, d1: NONE, d2: NONE, d3: NONE, vref: NONE, out: UNKNOWN, com: UNKNOWN },
 
-  // ── Digital: logic pins carry no meaningful continuous current, and no
-  //    engine reports one. Treated as `none` so a digital part never puts a
-  //    boundary on an otherwise solvable analog net beside it. ──────────────
-  digitalGate: nonePins("in1", "in2", "in3", "in4", "in5", "q", "qbar", "com"),
-  dflop: nonePins("d", "clk", "pre", "clr", "q", "qbar", "com"),
-  srflop: nonePins("s", "r", "q", "qbar", "com"),
-  tflop: nonePins("t", "clk", "pre", "clr", "q", "qbar", "com"),
-  jkflop: nonePins("j", "k", "clk", "pre", "clr", "q", "qbar", "com"),
-  counter: nonePins("clk", "rst", "q0", "q1", "q2", "q3", "com"),
-  sevenSeg: nonePins("a", "b", "c", "d", "e", "f", "g", "dp", "com"),
+  // ── Digital. The split that matters is input vs output, not analog vs
+  //    digital: a logic INPUT is high-impedance and draws nothing, but a logic
+  //    OUTPUT really does source current into whatever it drives. Calling an
+  //    output `none` would leave a gate-to-resistor net looking unbalanced and
+  //    animate nothing; calling it `unknown` makes it the net's single boundary,
+  //    so the load's own current resolves the wire exactly. ──────────────────
+  digitalGate: {
+    in1: NONE, in2: NONE, in3: NONE, in4: NONE, in5: NONE,
+    q: UNKNOWN, qbar: UNKNOWN, com: UNKNOWN,
+  },
+  dflop: { d: NONE, clk: NONE, pre: NONE, clr: NONE, q: UNKNOWN, qbar: UNKNOWN, com: UNKNOWN },
+  srflop: { s: NONE, r: NONE, q: UNKNOWN, qbar: UNKNOWN, com: UNKNOWN },
+  tflop: { t: NONE, clk: NONE, pre: NONE, clr: NONE, q: UNKNOWN, qbar: UNKNOWN, com: UNKNOWN },
+  jkflop: {
+    j: NONE, k: NONE, clk: NONE, pre: NONE, clr: NONE,
+    q: UNKNOWN, qbar: UNKNOWN, com: UNKNOWN,
+  },
+  counter: {
+    clk: NONE, rst: NONE,
+    q0: UNKNOWN, q1: UNKNOWN, q2: UNKNOWN, q3: UNKNOWN, com: UNKNOWN,
+  },
+  // Every segment drives an LED, so each carries real current.
+  sevenSeg: unknownPins("a", "b", "c", "d", "e", "f", "g", "dp", "com"),
 
   // ── Structural ───────────────────────────────────────────────────────────
   testpoint: { tp: NONE },
