@@ -6424,9 +6424,12 @@ button.bottom-panel-head:focus-visible {
   gap: var(--sp-1);
   height: 22px;
   padding: 0 var(--sp-2);
-  /* The header is already `justify-content: space-between`; a second
-     `margin-left: auto` fought it and pulled the chip over its neighbour. */
-  margin-left: var(--sp-2);
+  /* Collapse the row's free space HERE, so Current Mode and the view-only lock
+     read as one right-hand cluster instead of drifting apart across the header.
+     Safe now that `.sim-circuit-tools` no longer shrinks - that, not this
+     margin, was what clipped the "Name" button. */
+  margin-left: auto;
+  margin-right: calc(var(--sp-2) - var(--sp-3));
   white-space: nowrap;
   font-size: var(--fs-label);
   font-weight: 600;

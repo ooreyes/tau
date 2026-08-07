@@ -6,12 +6,15 @@ import { runOperatingPoint } from "./operatingPoint";
 import { runTransientAnalysis } from "./linearTransient";
 import {
   flowDotsForWires,
+  flowMagnitude,
   nearestSampleIndex,
   opComponentCurrents,
   peakAbsCurrent,
   tranComponentCurrents,
   tranNetVoltages,
   wireFlowCurrent,
+  opTerminalCurrents,
+  type PinIndex,
   flowSegments,
   segmentFlowCurrents,
 } from "./wireCurrentFlow";
@@ -28,12 +31,12 @@ const wires: SchematicWire[] = [
 ];
 
 function buildPinIndex() {
-  const pinIndex = new Map<string, { componentId: string; pinId: string }[]>();
+  const pinIndex: PinIndex = new Map();
   for (const c of components) {
     for (const p of getComponentPins(c)) {
       const k = `${p.x},${p.y}`;
       const list = pinIndex.get(k) ?? [];
-      list.push({ componentId: c.id, pinId: p.id });
+      list.push({ componentId: c.id, pinId: p.id, kind: c.kind });
       pinIndex.set(k, list);
     }
   }
@@ -127,11 +130,11 @@ describe("flow segments (reported dot gaps)", () => {
   ];
 
   const rig = () => {
-    const pinIndex = new Map<string, { componentId: string; pinId: string }[]>();
+    const pinIndex: PinIndex = new Map();
     for (const c of parts) {
       for (const p of getComponentPins(c)) {
         const k = `${p.x},${p.y}`;
-        pinIndex.set(k, [...(pinIndex.get(k) ?? []), { componentId: c.id, pinId: p.id }]);
+        pinIndex.set(k, [...(pinIndex.get(k) ?? []), { componentId: c.id, pinId: p.id, kind: c.kind }]);
       }
     }
     const op = runOperatingPoint({ components: parts, wires: rails }, { returnBranches: true });
@@ -172,11 +175,11 @@ describe("flow segments (reported dot gaps)", () => {
       { id: "bot", points: [{ x: 0, y: 128 }, { x: 0, y: 192 }, { x: 384, y: 192 }, { x: 384, y: 128 }] },
     ];
     const only = [V, RB, G];
-    const pinIndex = new Map<string, { componentId: string; pinId: string }[]>();
+    const pinIndex: PinIndex = new Map();
     for (const c of only) {
       for (const p of getComponentPins(c)) {
         const k = `${p.x},${p.y}`;
-        pinIndex.set(k, [...(pinIndex.get(k) ?? []), { componentId: c.id, pinId: p.id }]);
+        pinIndex.set(k, [...(pinIndex.get(k) ?? []), { componentId: c.id, pinId: p.id, kind: c.kind }]);
       }
     }
     const op = runOperatingPoint({ components: only, wires: midRails }, { returnBranches: true });
@@ -201,8 +204,282 @@ describe("flow segments (reported dot gaps)", () => {
     ]);
     const dots = flowDotsForWires(rails, pinIndex, lopsided, new Map(), 0.05);
     const onR2Rail = dots.filter((d) => d.x > 200);
+    const onMainRail = dots.filter((d) => d.x <= 200);
     expect(onR2Rail.length).toBeGreaterThan(0);
-    // Visibly quieter than the main branch, but present.
-    expect(Math.min(...onR2Rail.map((d) => d.opacity))).toBeLessThan(0.7);
+    expect(onMainRail.length).toBeGreaterThan(0);
+    // Present, and visibly quieter than the dominant branch. Comparing the two
+    // is the real property; an absolute threshold just encodes today's scale.
+    expect(Math.min(...onR2Rail.map((d) => d.opacity)))
+      .toBeLessThan(Math.max(...onMainRail.map((d) => d.opacity)));
+  });
+});
+
+/**
+ * The reported failure: an NMOS common-source stage animated only its ground
+ * rail. Drain, source and gate wires were dead, because `nmos` pins are
+ * `d,g,s,b` and none of them matched the old two-terminal id rule.
+ */
+describe("multi-terminal devices and ground", () => {
+  const pinsOf = (cs: SchematicComponent[]) => {
+    const idx = new Map<string, { componentId: string; pinId: string; kind: typeof cs[number]["kind"] }[]>();
+    for (const c of cs) {
+      for (const p of getComponentPins(c)) {
+        const k = `${p.x},${p.y}`;
+        idx.set(k, [...(idx.get(k) ?? []), { componentId: c.id, pinId: p.id, kind: c.kind }]);
+      }
+    }
+    return idx;
+  };
+
+  it("animates a wire that runs to a ground symbol", () => {
+    // The most basic circuit there is. Both ground legs used to read 0 A
+    // because a ground pin injected nothing, so the solve concluded no current
+    // entered ground.
+    const V: SchematicComponent = { id: "v", kind: "vsource", x: 0, y: 96, rotation: 0, value: "10V", label: "V1" };
+    const R: SchematicComponent = { id: "r", kind: "resistor", x: 384, y: 96, rotation: 90, value: "1k", label: "R1" };
+    const G: SchematicComponent = { id: "g", kind: "ground", x: 0, y: 192, rotation: 0, value: "", label: "" };
+    const parts = [V, R, G];
+    const rails: SchematicWire[] = [
+      { id: "top", points: [{ x: 0, y: 64 }, { x: 0, y: 32 }, { x: 384, y: 32 }, { x: 384, y: 64 }] },
+      { id: "ret", points: [{ x: 384, y: 128 }, { x: 384, y: 192 }, { x: 0, y: 192 }] },
+      { id: "gl", points: [{ x: 0, y: 128 }, { x: 0, y: 192 }] },
+    ];
+    const pins = pinsOf(parts);
+    const op = runOperatingPoint({ components: parts, wires: rails }, { returnBranches: true });
+    expect(op.ok).toBe(true);
+    const currents = opComponentCurrents(op, extractCircuit(parts, rails, []));
+    const segs = flowSegments(rails, pins);
+    const solved = segmentFlowCurrents(segs, pins, currents, opTerminalCurrents(op));
+
+    for (const s of segs) {
+      expect(Math.abs(solved.get(s.id) ?? 0), `${s.id} is dead`).toBeCloseTo(0.01, 9);
+    }
+  });
+
+  it("does not depend on which direction the wire was drawn", () => {
+    const V: SchematicComponent = { id: "v", kind: "vsource", x: 0, y: 96, rotation: 0, value: "10V", label: "V1" };
+    const R: SchematicComponent = { id: "r", kind: "resistor", x: 384, y: 96, rotation: 90, value: "1k", label: "R1" };
+    const G: SchematicComponent = { id: "g", kind: "ground", x: 0, y: 192, rotation: 0, value: "", label: "" };
+    const parts = [V, R, G];
+    const forward: SchematicWire[] = [
+      { id: "top", points: [{ x: 0, y: 64 }, { x: 0, y: 32 }, { x: 384, y: 32 }, { x: 384, y: 64 }] },
+      { id: "ret", points: [{ x: 384, y: 128 }, { x: 384, y: 192 }, { x: 0, y: 192 }] },
+      { id: "gl", points: [{ x: 0, y: 128 }, { x: 0, y: 192 }] },
+    ];
+    // Same circuit, ground leg drawn the other way round.
+    const reversed = forward.map((w) =>
+      w.id === "gl" ? { ...w, points: [...w.points].reverse() } : w);
+
+    const pins = pinsOf(parts);
+    const op = runOperatingPoint({ components: parts, wires: forward }, { returnBranches: true });
+    const currents = opComponentCurrents(op, extractCircuit(parts, forward, []));
+    const term = opTerminalCurrents(op);
+
+    const a = segmentFlowCurrents(flowSegments(forward, pins), pins, currents, term);
+    const b = segmentFlowCurrents(flowSegments(reversed, pins), pins, currents, term);
+    const glA = [...a.entries()].find(([k]) => k.startsWith("gl"))![1];
+    const glB = [...b.entries()].find(([k]) => k.startsWith("gl"))![1];
+    // Same magnitude; the sign follows points[0]→last, so reversing flips it.
+    expect(Math.abs(glA)).toBeCloseTo(Math.abs(glB), 12);
+    expect(Math.abs(glA)).toBeCloseTo(0.01, 9);
+  });
+
+  it("puts a transistor's base current on the base wire, not its collector current", () => {
+    // Truth: base wire carries ib. The old model injected the part's PRIMARY
+    // current there, which for a BJT is ic — 110x too large and reversed.
+    // A complete base net: the bias resistor feeds the wire, the base drains
+    // it. Balanced, so the solve runs rather than being refused by the KCL gate.
+    const pins: PinIndex = new Map([
+      ["0,0", [{ componentId: "rb", pinId: "b", kind: "resistor" as const }]],
+      ["64,0", [{ componentId: "q1", pinId: "b", kind: "npn" as const }]],
+    ]);
+    const wires: SchematicWire[] = [{ id: "base", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }];
+    const ic = 1.469e-3;
+    const ib = 13.37e-6;
+    const currents = new Map([["rb", ib], ["q1", ic]]);
+    const terminals = new Map([["q1", new Map([["b", ib], ["e", -(ic + ib)]])]]);
+
+    const segs = flowSegments(wires, pins);
+    const solved = segmentFlowCurrents(segs, pins, currents, terminals);
+    const flow = solved.get(segs[0]!.id) ?? 0;
+
+    expect(Math.abs(flow)).toBeCloseTo(ib, 9);
+    expect(Math.abs(flow)).toBeLessThan(ic / 10);
+  });
+
+  it("refuses a net whose known currents do not balance", () => {
+    // A mapping mistake or an engine-convention mismatch shows up as a KCL
+    // residual. Drawing nothing is right; drawing a fabricated split is not.
+    const pins: PinIndex = new Map([
+      ["0,0", [{ componentId: "r1", pinId: "a", kind: "resistor" as const }]],
+      ["64,0", [{ componentId: "r2", pinId: "a", kind: "resistor" as const }]],
+    ]);
+    const wires: SchematicWire[] = [{ id: "w", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }];
+    // Both ends drain the wire: 5 mA in, 3 mA in, nothing out. Impossible.
+    const currents = new Map([["r1", 5e-3], ["r2", 3e-3]]);
+    const segs = flowSegments(wires, pins);
+    expect(segmentFlowCurrents(segs, pins, currents).get(segs[0]!.id)).toBe(0);
+  });
+
+  it("survives a zero-length wire without killing its net", () => {
+    // A self-loop segment used to break the edge-count guard and reject the
+    // whole net, leaving a dead gap mid-rail.
+    const V: SchematicComponent = { id: "v", kind: "vsource", x: 0, y: 96, rotation: 0, value: "10V", label: "V1" };
+    const R: SchematicComponent = { id: "r", kind: "resistor", x: 384, y: 96, rotation: 90, value: "1k", label: "R1" };
+    const G: SchematicComponent = { id: "g", kind: "ground", x: 0, y: 192, rotation: 0, value: "", label: "" };
+    const parts = [V, R, G];
+    const rails: SchematicWire[] = [
+      { id: "top", points: [{ x: 0, y: 64 }, { x: 0, y: 32 }, { x: 384, y: 32 }, { x: 384, y: 64 }] },
+      { id: "ret", points: [{ x: 384, y: 128 }, { x: 384, y: 192 }, { x: 0, y: 192 }] },
+      { id: "gl", points: [{ x: 0, y: 128 }, { x: 0, y: 192 }] },
+      { id: "degenerate", points: [{ x: 0, y: 32 }, { x: 0, y: 32 }] },
+    ];
+    const pins = pinsOf(parts);
+    const op = runOperatingPoint({ components: parts, wires: rails }, { returnBranches: true });
+    const currents = opComponentCurrents(op, extractCircuit(parts, rails, []));
+    const segs = flowSegments(rails, pins);
+    const solved = segmentFlowCurrents(segs, pins, currents, opTerminalCurrents(op));
+    const top = segs.find((s) => s.wireId === "top")!;
+    expect(Math.abs(solved.get(top.id) ?? 0)).toBeCloseTo(0.01, 9);
+  });
+});
+
+/**
+ * The exact reported circuit: NMOS common source. V4 → drain, source → R2 →
+ * ground, V3 → gate. Before the terminal-role work only the ground rail
+ * animated; the drain, source and gate wires were all dead.
+ *
+ * Currents are shaped the way native ngspice reports them: a primary drain
+ * current plus `ig`/`is` terminal vectors, each the current INTO the terminal.
+ */
+describe("NMOS common source (reported failure)", () => {
+  const id = 4.0e-3;      // drain current
+  const ig = 0;           // gate draws nothing at DC
+  const is = -id;         // source returns it
+
+  const pins: PinIndex = new Map([
+    // V4's + faces the drain (its − goes to the top ground).
+    ["400,128", [{ componentId: "v4", pinId: "p", kind: "vsource" as const }]],
+    ["400,160", [{ componentId: "m1", pinId: "d", kind: "nmos" as const }]],
+    // Source down to R2.
+    ["400,208", [{ componentId: "m1", pinId: "s", kind: "nmos" as const }]],
+    ["400,240", [{ componentId: "r2", pinId: "a", kind: "resistor" as const }]],
+    // R2 to ground.
+    ["400,320", [{ componentId: "r2", pinId: "b", kind: "resistor" as const }]],
+    ["400,352", [{ componentId: "g2", pinId: "g", kind: "ground" as const }]],
+    // Gate drive.
+    ["176,160", [{ componentId: "v3", pinId: "p", kind: "vsource" as const }]],
+    ["176,128", [{ componentId: "m1", pinId: "g", kind: "nmos" as const }]],
+  ]);
+
+  const wires: SchematicWire[] = [
+    { id: "drain", points: [{ x: 400, y: 128 }, { x: 400, y: 160 }] },
+    { id: "source", points: [{ x: 400, y: 208 }, { x: 400, y: 240 }] },
+    { id: "toGnd", points: [{ x: 400, y: 320 }, { x: 400, y: 352 }] },
+    { id: "gate", points: [{ x: 176, y: 160 }, { x: 176, y: 128 }] },
+  ];
+
+  // ngspice: a delivering voltage source reports a negative branch current.
+  const currents = new Map([["v4", -id], ["m1", id], ["r2", id], ["v3", 0]]);
+  const terminals = new Map([["m1", new Map([["g", ig], ["s", is]])]]);
+
+  const solve = () => {
+    const segs = flowSegments(wires, pins);
+    const solved = segmentFlowCurrents(segs, pins, currents, terminals);
+    const by = (wireId: string) =>
+      Math.abs(solved.get(segs.find((s) => s.wireId === wireId)!.id) ?? 0);
+    return by;
+  };
+
+  it("animates the drain wire at the drain current", () => {
+    expect(solve()("drain")).toBeCloseTo(id, 9);
+  });
+
+  it("animates the source wire at the drain current", () => {
+    // Series with the drain through the channel: same current.
+    expect(solve()("source")).toBeCloseTo(id, 9);
+  });
+
+  it("animates the return wire into ground", () => {
+    expect(solve()("toGnd")).toBeCloseTo(id, 9);
+  });
+
+  it("leaves the gate wire still, because a MOS gate draws no DC current", () => {
+    // Not "dead because unsupported" — dead because zero is the right answer.
+    expect(solve()("gate")).toBeCloseTo(0, 12);
+  });
+
+  it("never animates the gate at the drain current", () => {
+    // The specific old failure: the primary current injected at the wrong pin.
+    expect(solve()("gate")).toBeLessThan(id / 100);
+  });
+});
+
+/**
+ * Magnitude must mean amps. It used to be normalised to the circuit's own peak
+ * every frame, so a single-branch loop always animated at exactly one speed —
+ * a 100 ohm and a 1 Mohm circuit were pixel-identical across four decades.
+ */
+describe("magnitude is absolute", () => {
+  it("separates four decades of current", () => {
+    const mags = [1e-1, 1e-2, 1e-3, 1e-4].map(flowMagnitude);
+    for (let i = 1; i < mags.length; i += 1) {
+      expect(mags[i], `${mags[i]} should be below ${mags[i - 1]}`).toBeLessThan(mags[i - 1]!);
+    }
+    // And the spread is usable, not a rounding difference.
+    expect(mags[0]! - mags[3]!).toBeGreaterThan(0.4);
+  });
+
+  it("does not depend on what else is in the circuit", () => {
+    // The same 1 mA reads the same whether or not a 100 A branch sits beside it.
+    expect(flowMagnitude(1e-3)).toBeCloseTo(flowMagnitude(1e-3), 12);
+    expect(flowMagnitude(1e-3)).toBeLessThan(flowMagnitude(1));
+  });
+
+  it("treats solver noise as no current", () => {
+    expect(flowMagnitude(0)).toBe(0);
+    expect(flowMagnitude(1e-15)).toBe(0);
+  });
+
+  it("keeps a very small current moving rather than freezing it", () => {
+    expect(flowMagnitude(1e-9)).toBeGreaterThan(0);
+  });
+
+  it("saturates instead of running away on a large current", () => {
+    expect(flowMagnitude(1)).toBe(1);
+    expect(flowMagnitude(1000)).toBe(1);
+  });
+});
+
+describe("net labels as boundaries", () => {
+  it("animates a wire that ends at a net label", () => {
+    // A label ties this net to another elsewhere on the sheet, so current
+    // leaves here. Without treating it as a boundary the net looks unbalanced
+    // and the solver refuses it, leaving the wire dead.
+    const pins: PinIndex = new Map([
+      ["0,0", [{ componentId: "r1", pinId: "a", kind: "resistor" as const }]],
+    ]);
+    const wires: SchematicWire[] = [{ id: "w", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }];
+    const currents = new Map([["r1", 5e-3]]);
+
+    const segs = flowSegments(wires, pins);
+    // No label: unbalanced net, correctly refused.
+    expect(segmentFlowCurrents(segs, pins, currents).get(segs[0]!.id)).toBe(0);
+    // With the label declared, the net resolves to the resistor's current.
+    const withLabel = segmentFlowCurrents(segs, pins, currents, new Map(), [{ x: 64, y: 0 }]);
+    expect(Math.abs(withLabel.get(segs[0]!.id) ?? 0)).toBeCloseTo(5e-3, 9);
+  });
+
+  it("refuses when a net has both a label and a ground", () => {
+    // Two unquantified exits: the split between them is genuinely ambiguous.
+    const pins: PinIndex = new Map([
+      ["0,0", [{ componentId: "r1", pinId: "a", kind: "resistor" as const }]],
+      ["64,0", [{ componentId: "g", pinId: "g", kind: "ground" as const }]],
+    ]);
+    const wires: SchematicWire[] = [{ id: "w", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }];
+    const currents = new Map([["r1", 5e-3]]);
+    const segs = flowSegments(wires, pins);
+    const solved = segmentFlowCurrents(segs, pins, currents, new Map(), [{ x: 0, y: 0 }]);
+    expect(solved.get(segs[0]!.id)).toBe(0);
   });
 });

@@ -119,3 +119,45 @@ describe("Canvas - current mode", () => {
     await waitFor(() => expect(document.querySelector(".flow-layer")).not.toBeNull());
   });
 });
+
+describe("Canvas - reduced motion", () => {
+  const mockReducedMotion = (reduce: boolean) => {
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      matches: reduce && q.includes("prefers-reduced-motion"),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    }));
+  };
+
+  it("still shows the flow layer, but does not animate it", async () => {
+    // The movement is a JS rAF loop, so a CSS media query cannot stop it —
+    // honouring the preference has to mean not scheduling frames. The dots
+    // must still be drawn: hiding the data would punish the preference.
+    mockReducedMotion(true);
+    render(<Canvas op={okOp()} interactive={false} currentVisualizer />);
+    await waitFor(() => expect(document.querySelector(".flow-layer")).not.toBeNull());
+
+    const at = () => [...document.querySelectorAll(".flow-layer .flow-dot")]
+      .map((d) => `${d.getAttribute("cx")},${d.getAttribute("cy")}`).join("|");
+    const first = at();
+    expect(first.length).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 250));
+    expect(at(), "dots moved despite prefers-reduced-motion").toBe(first);
+  });
+
+  it("animates normally when the preference is not set", async () => {
+    mockReducedMotion(false);
+    render(<Canvas op={okOp()} interactive={false} currentVisualizer />);
+    await waitFor(() => expect(document.querySelector(".flow-layer")).not.toBeNull());
+    const at = () => [...document.querySelectorAll(".flow-layer .flow-dot")]
+      .map((d) => `${d.getAttribute("cx")},${d.getAttribute("cy")}`).join("|");
+    const first = at();
+    await new Promise((r) => setTimeout(r, 250));
+    expect(at()).not.toBe(first);
+  });
+});

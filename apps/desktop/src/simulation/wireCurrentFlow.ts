@@ -3,13 +3,22 @@
  * currents onto wires for animated flow dots. Numbers come only from the
  * engine / derived RC path — never invented.
  */
-import type { Point, SchematicWire } from "../schematic/types";
+import type { ComponentKind, Point, SchematicWire } from "../schematic/types";
 import type { ExtractedCircuit } from "../schematic/netlist";
 import { deriveDcRcBranches, findCurrentTrace } from "./currents";
 import type { AnalysisResult } from "./linearTransient";
 import { primaryBranches, type OperatingPointResult } from "./operatingPoint";
+import { terminalRole } from "./terminalRoles";
 
-export type PinIndex = Map<string, { componentId: string; pinId: string }[]>;
+export type PinIndex = Map<
+  string,
+  { componentId: string; pinId: string; kind?: ComponentKind }[]
+>;
+
+/** Per-terminal currents: componentId -> terminal -> amps INTO that terminal.
+ *  Both engines already report these for BJTs and MOSFETs; the flow model used
+ *  to discard them one call before use. */
+export type TerminalCurrents = ReadonlyMap<string, ReadonlyMap<string, number>>;
 
 const keyOf = (x: number, y: number) => `${x},${y}`;
 
@@ -115,21 +124,99 @@ export function wireFlowCurrent(
   return end ?? 0;
 }
 
-/** Current a component pushes INTO the wire at its pin, or null when the pin's
- *  share of the part's current is not knowable from the branch list alone.
+/** Terminal currents from a native `.op`, keyed component -> terminal -> amps
+ *  into that terminal. Engines report these for BJTs and MOSFETs; without them
+ *  a transistor's base and emitter wires cannot be animated at all. */
+export function opTerminalCurrents(op: OperatingPointResult): TerminalCurrents {
+  const out = new Map<string, Map<string, number>>();
+  if (!op.ok) return out;
+  for (const branch of op.branches ?? []) {
+    if (!branch.terminal) continue;
+    const per = out.get(branch.id) ?? new Map<string, number>();
+    per.set(branch.terminal, branch.current);
+    out.set(branch.id, per);
+  }
+  return out;
+}
+
+/** Terminal currents at one `.tran` sample, same shape as `opTerminalCurrents`. */
+export function tranTerminalCurrents(
+  result: Extract<AnalysisResult, { ok: true }>,
+  sampleIndex: number,
+): TerminalCurrents {
+  const out = new Map<string, Map<string, number>>();
+  const i = Math.max(0, Math.min(sampleIndex, result.times.length - 1));
+  const byRef = new Map<string, string>();
+  for (const { component } of result.circuit.components) {
+    if (component.label) byRef.set(component.label.toLowerCase(), component.id);
+  }
+  for (const trace of result.currents) {
+    if (!trace.terminal) continue;
+    const id = byRef.get(trace.ref.toLowerCase());
+    if (!id) continue;
+    const amps = trace.values[i];
+    if (!Number.isFinite(amps)) continue;
+    const per = out.get(id) ?? new Map<string, number>();
+    per.set(trace.terminal, amps as number);
+    out.set(id, per);
+  }
+  return out;
+}
+
+/**
+ * What a pin does to the wire it sits on.
  *
- *  Two-terminal parts are exact: `currents` holds the a→b (or p→n) branch
- *  current, so pin `a`/`p` drains the wire and `b`/`n` feeds it. A three-plus
- *  terminal part reports one primary current for the whole device, which says
- *  nothing about how it divides between collector, base and emitter — guessing
- *  there would draw confident arrows in the wrong direction. */
-function pinInjection(
-  pinId: string,
-  componentCurrent: number,
-): number | null {
-  if (pinId === "a" || pinId === "p") return -componentCurrent;
-  if (pinId === "b" || pinId === "n") return componentCurrent;
-  return null;
+ * `amps` is the current flowing INTO the wire. `boundary` means the pin carries
+ * current we cannot quantify — a ground symbol (where the net's current leaves),
+ * an op-amp output, a multi-element expansion. A boundary is emphatically not
+ * zero: treating ground as zero-injection is what made every wire running to a
+ * ground symbol read 0 A, and made the answer depend on which direction the
+ * user happened to draw the wire.
+ */
+type PinEffect =
+  | { kind: "amps"; amps: number }
+  | { kind: "boundary" }
+  | { kind: "none" };
+
+const NO_EFFECT: PinEffect = { kind: "none" };
+const BOUNDARY: PinEffect = { kind: "boundary" };
+
+function pinEffect(
+  pin: { componentId: string; pinId: string; kind?: ComponentKind },
+  currents: ReadonlyMap<string, number>,
+  terminals: TerminalCurrents,
+): PinEffect {
+  // Without a kind we cannot resolve a role safely, and guessing from the pin
+  // id alone is the original bug. Fall back to the two-terminal reading only
+  // for ids that are unambiguous across every kind.
+  if (!pin.kind) {
+    const i = currents.get(pin.componentId);
+    if (i === undefined) return BOUNDARY;
+    if (pin.pinId === "p") return { kind: "amps", amps: -i };
+    if (pin.pinId === "n") return { kind: "amps", amps: i };
+    return BOUNDARY;
+  }
+
+  const role = terminalRole(pin.kind, pin.pinId);
+  switch (role.role) {
+    case "none":
+      return NO_EFFECT;
+    case "terminal": {
+      const amps = terminals.get(pin.componentId)?.get(role.terminal);
+      // The engine did not report this terminal (a preview run, or a device
+      // whose vectors were not saved). Unknown, not zero.
+      if (amps === undefined) return BOUNDARY;
+      // Reported current flows INTO the terminal, so the wire loses it.
+      return { kind: "amps", amps: -amps };
+    }
+    case "series": {
+      const i = currents.get(pin.componentId);
+      if (i === undefined) return BOUNDARY;
+      return { kind: "amps", amps: role.sign * i };
+    }
+    default:
+      return BOUNDARY;
+  }
 }
 
 export interface FlowSegment {
@@ -201,10 +288,18 @@ export function flowSegments(
  * unknowable, falls back to the endpoint heuristic rather than inventing a
  * number.
  */
+export const KCL_TOLERANCE = 1e-6;
+
 export function segmentFlowCurrents(
   segments: readonly FlowSegment[],
   pins: PinIndex,
   currents: ReadonlyMap<string, number>,
+  terminals: TerminalCurrents = new Map(),
+  /** Points where current leaves the drawn geometry without passing through a
+   *  pin — net labels. A label ties this net to another somewhere else on the
+   *  sheet, so it is a boundary in exactly the same sense as a ground symbol.
+   *  Without this the solver sees an unbalanced net and refuses it. */
+  labelPoints: readonly { x: number; y: number }[] = [],
 ): Map<string, number> {
   const out = new Map<string, number>();
   const endsOf = (s: FlowSegment) => [
@@ -249,17 +344,31 @@ export function segmentFlowCurrents(
     add(a); add(b); union(a, b);
   }
 
+  // Injections, plus the nodes where current leaves through something we
+  // cannot quantify. A boundary is a real terminal, not a zero.
   const injection = new Map<string, number>();
-  const netUnknown = new Set<string>();
+  const boundariesByNet = new Map<string, Set<string>>();
+  for (const label of labelPoints) {
+    const point = keyOf(label.x, label.y);
+    if (!parent.has(point)) continue;
+    const root = find(point);
+    const set = boundariesByNet.get(root) ?? new Set<string>();
+    set.add(point);
+    boundariesByNet.set(root, set);
+  }
   for (const [point, list] of pins) {
     if (!parent.has(point)) continue; // pin sits on no segment end
     const root = find(point);
     for (const pin of list) {
-      const i = currents.get(pin.componentId);
-      if (i === undefined) continue;
-      const inj = pinInjection(pin.pinId, i);
-      if (inj === null) { netUnknown.add(root); continue; }
-      injection.set(point, (injection.get(point) ?? 0) + inj);
+      const effect = pinEffect(pin, currents, terminals);
+      if (effect.kind === "none") continue;
+      if (effect.kind === "boundary") {
+        const set = boundariesByNet.get(root) ?? new Set<string>();
+        set.add(point);
+        boundariesByNet.set(root, set);
+        continue;
+      }
+      injection.set(point, (injection.get(point) ?? 0) + effect.amps);
     }
   }
 
@@ -268,16 +377,25 @@ export function segmentFlowCurrents(
     const list = adjacency.get(k);
     if (list) list.push(e); else adjacency.set(k, [e]);
   };
+  // Self-loop segments carry no meaningful current and used to break the
+  // edge-count guard: they contributed 1 to the degree sum but 0 to the DFS
+  // order, so `order.length !== edgeCount` rejected the whole net and left a
+  // dead gap mid-rail. Drop them up front and count real edges directly.
+  const realEdges: { seg: FlowSegment; a: string; b: string }[] = [];
   for (const s of segments) {
     const [a, b] = endsOf(s);
+    if (a === b) continue;
     const edge = { seg: s, a, b };
+    realEdges.push(edge);
     push(a, edge);
-    if (b !== a) push(b, edge);
+    push(b, edge);
+  }
+  const edgeCountByNet = new Map<string, number>();
+  for (const e of realEdges) {
+    const r = find(e.a);
+    edgeCountByNet.set(r, (edgeCountByNet.get(r) ?? 0) + 1);
   }
 
-  // Group nodes by net ONCE. Filtering every node in the schematic per net was
-  // the second quadratic: 1000 nets x 2000 nodes is two million `find` calls
-  // for a grouping that does not change while the animation runs.
   const nodesByRoot = new Map<string, string[]>();
   for (const k of parent.keys()) {
     const r = find(k);
@@ -292,9 +410,35 @@ export function segmentFlowCurrents(
     doneNets.add(root);
 
     const netNodes = nodesByRoot.get(root) ?? [];
-    const edgeCount = netNodes.reduce((n, k) => n + (adjacency.get(k)?.length ?? 0), 0) / 2;
+    const boundaries = boundariesByNet.get(root) ?? new Set<string>();
 
-    const start = endsOf(s)[0];
+    // Two or more unquantified terminals and the split is genuinely ambiguous.
+    if (boundaries.size > 1) continue;
+
+    // Root the walk AT the boundary when there is one. Everything below a tree
+    // edge is then a subtree whose injections are all known, and the boundary's
+    // own unknown current never enters any sum - which is exactly what makes a
+    // wire to a ground symbol carry its true current instead of zero, and makes
+    // the answer independent of which way the wire was drawn.
+    const start = boundaries.size === 1
+      ? [...boundaries][0]!
+      : endsOf(s)[0];
+
+    // With no boundary at all the net must balance on its own. A residual here
+    // means a pin was mapped wrongly or an engine convention disagrees, and it
+    // is far better to draw nothing than to animate a fabricated split. This
+    // one gate catches every future (kind, pin) mistake as well as today's.
+    if (boundaries.size === 0) {
+      let sum = 0;
+      let scale = 0;
+      for (const node of netNodes) {
+        const v = injection.get(node) ?? 0;
+        sum += v;
+        scale = Math.max(scale, Math.abs(v));
+      }
+      if (scale > 0 && Math.abs(sum) > KCL_TOLERANCE * scale) continue;
+    }
+
     const seen = new Set<string>([start]);
     const order: { seg: FlowSegment; from: string; to: string }[] = [];
     const usedEdge = new Set<string>();
@@ -305,7 +449,6 @@ export function segmentFlowCurrents(
       for (const edge of adjacency.get(node) ?? []) {
         if (usedEdge.has(edge.seg.id)) continue;
         const other = edge.a === node ? edge.b : edge.a;
-        if (other === node) { usedEdge.add(edge.seg.id); continue; }
         if (seen.has(other)) { cyclic = true; continue; }
         usedEdge.add(edge.seg.id);
         seen.add(other);
@@ -314,9 +457,8 @@ export function segmentFlowCurrents(
       }
     }
 
-    // A cycle, an unknowable pin, or an unreachable piece all mean the split is
-    // not unique. Leave those to the fallback rather than guess.
-    if (cyclic || netUnknown.has(root) || order.length !== edgeCount) continue;
+    // A cycle or an unreachable piece means the split is not unique.
+    if (cyclic || order.length !== (edgeCountByNet.get(root) ?? 0)) continue;
 
     const subtree = new Map<string, number>();
     for (const node of seen) subtree.set(node, injection.get(node) ?? 0);
@@ -329,10 +471,12 @@ export function segmentFlowCurrents(
     }
   }
 
+  // Anything the solve declined draws nothing rather than a guess. The old
+  // endpoint heuristic filled these in, but it produced contradictions -
+  // adjacent segments of one series path disagreeing - and "unknown" rendered
+  // identically to "zero amps".
   for (const s of segments) {
-    if (!out.has(s.id)) {
-      out.set(s.id, wireFlowCurrent({ id: s.id, points: s.points } as SchematicWire, pins, currents));
-    }
+    if (!out.has(s.id)) out.set(s.id, 0);
   }
   return out;
 }
@@ -376,14 +520,38 @@ function posAt(points: Point[], lengths: number[], total: number, distance: numb
   return points[points.length - 1];
 }
 
-/** |I|/peak below which a wire is treated as carrying no current at all. Set
- *  low enough to be a numerical-noise gate rather than a visibility policy —
- *  how *faint* a small current looks is decided by the log scale below. */
+/** |I|/peak below which a wire is treated as carrying no current at all. */
 export const FLOW_MIN_MAG = 1e-9;
-/** Decades of current compressed into the visible speed/opacity range. */
-const FLOW_DECADES = 4;
+
+/**
+ * The magnitude scale is ABSOLUTE, not relative to the circuit's own peak.
+ *
+ * It used to divide by `peakAbsCurrent(currents)`, recomputed every frame. In a
+ * single-branch circuit that is the branch's own current, so the ratio was
+ * always exactly 1 and the animation ran at one fixed speed no matter what:
+ * a 100 ohm loop and a 1 Mohm loop were pixel-identical across four decades of
+ * current. For anyone using this to learn Ohm's law that is the worst possible
+ * failure, so speed now means amps.
+ *
+ * 1 A saturates the scale; each decade below costs 1/FLOW_DECADES of the range,
+ * so 1 µA lands at the floor and still creeps rather than freezing.
+ */
+const FLOW_REF_AMPS = 1;
+const FLOW_DECADES = 6;
+/** Absolute floor. Below a picoamp is solver noise, not a current. */
+const FLOW_FLOOR_AMPS = 1e-12;
 /** Floor for the scaled magnitude, so the smallest shown current still moves. */
 const FLOW_MIN_VISIBLE_MAG = 0.09;
+
+/** Speed/opacity weight for a current, on the absolute log scale. */
+export function flowMagnitude(amps: number): number {
+  const a = Math.abs(amps);
+  if (!(a > FLOW_FLOOR_AMPS)) return 0;
+  return Math.max(
+    FLOW_MIN_VISIBLE_MAG,
+    Math.min(1, 1 + Math.log10(a / FLOW_REF_AMPS) / FLOW_DECADES),
+  );
+}
 
 /**
  * Place flow dots from real signed currents. `phaseByWire` holds per-segment
@@ -399,28 +567,21 @@ const FLOW_MIN_VISIBLE_MAG = 0.09;
   currents: ReadonlyMap<string, number>,
   phaseByWire: Map<string, number>,
   dtSeconds: number,
-  peak = peakAbsCurrent(currents),
+  /** Retained for API compatibility; magnitude is now absolute, so the
+   *  circuit's own peak no longer scales the animation. */
+  _peak = peakAbsCurrent(currents),
+  terminals: TerminalCurrents = new Map(),
+  labelPoints: readonly { x: number; y: number }[] = [],
 ): FlowDot[] {
-  const norm = peak > 0 ? peak : 1;
   const segments = flowSegments(wires, pins);
-  const solved = segmentFlowCurrents(segments, pins, currents);
+  const solved = segmentFlowCurrents(segments, pins, currents, terminals, labelPoints);
   const dots: FlowDot[] = [];
   for (const segment of segments) {
     const { lengths, total } = measure(segment.points);
     if (total <= 1) continue;
     const signed = solved.get(segment.id) ?? 0;
-    const ratio = Math.abs(signed) / norm;
-    if (ratio < FLOW_MIN_MAG) continue;
-    // Log scale, because branch currents span decades. A 100 F cap beside a 1k
-    // resistor puts nine orders of magnitude between the two branches; on a
-    // linear scale the resistor's wires sit at 1e-9 of peak and simply stop
-    // animating, which reads as "this branch is broken" rather than "this
-    // branch carries very little". Compressing four decades into the speed and
-    // opacity range keeps a small current visibly slow instead of absent.
-    const mag = Math.max(
-      FLOW_MIN_VISIBLE_MAG,
-      Math.min(1, 1 + Math.log10(ratio) / FLOW_DECADES),
-    );
+    const mag = flowMagnitude(signed);
+    if (mag <= 0) continue;
     const dir = signed >= 0 ? 1 : -1;
     const speed = 9 + mag * 60;
     const advanced = (phaseByWire.get(segment.id) ?? 0) + dir * speed * dtSeconds;

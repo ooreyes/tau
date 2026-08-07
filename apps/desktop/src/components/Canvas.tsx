@@ -16,7 +16,10 @@ import type { AnalysisResult } from "../simulation/linearTransient";
 import {
   nearestSampleIndex,
   opComponentCurrents,
+  opTerminalCurrents,
   tranComponentCurrents,
+  tranTerminalCurrents,
+  type PinIndex,
 } from "../simulation/wireCurrentFlow";
 import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
@@ -199,29 +202,40 @@ export function Canvas({
     return null;
   }, [currentVisualizer, useTranReadout, op, components, wires, netLabels]);
 
-  const flowCurrents = useMemo(() => {
+  // Primary AND per-terminal currents. A transistor's base/emitter wires can
+  // only be animated from the terminal vectors, which both engines report and
+  // the flow model used to discard.
+  const flow = useMemo(() => {
     if (!biasCircuit) return null;
     if (useTranReadout && tran?.ok) {
       const sample =
         readoutTime == null
           ? tran.times.length - 1
           : nearestSampleIndex(tran.times, readoutTime);
-      return tranComponentCurrents(tran, sample);
+      return {
+        currents: tranComponentCurrents(tran, sample),
+        terminals: tranTerminalCurrents(tran, sample),
+      };
     }
-    if (op?.ok) return opComponentCurrents(op, biasCircuit);
+    if (op?.ok) {
+      return { currents: opComponentCurrents(op, biasCircuit), terminals: opTerminalCurrents(op) };
+    }
     return null;
   }, [biasCircuit, useTranReadout, tran, readoutTime, op]);
+  const flowCurrents = flow?.currents ?? null;
 
   const editDirty = useRef(false);
 
   // Map of world "x,y" -> component pins there, for attributing wire current flow.
   const pinIndex = useMemo(() => {
-    const m = new Map<string, { componentId: string; pinId: string }[]>();
+    const m: PinIndex = new Map();
     for (const c of components) {
       for (const p of getComponentPins(c)) {
         const k = `${p.x},${p.y}`;
         const list = m.get(k) ?? [];
-        list.push({ componentId: c.id, pinId: p.id });
+        // The kind travels with the pin: a role cannot be resolved from the id
+        // alone, since "b" is a resistor's leg, a BJT's base and a MOSFET's bulk.
+        list.push({ componentId: c.id, pinId: p.id, kind: c.kind });
         m.set(k, list);
       }
     }
@@ -1357,6 +1371,8 @@ export function Canvas({
 
           <OpCurrentFlowLayer
             currents={flowCurrents}
+            terminals={flow?.terminals}
+            labelPoints={netLabels}
             wires={wires}
             pinIndex={pinIndex}
             active={Boolean(flowCurrents && flowCurrents.size > 0)}
