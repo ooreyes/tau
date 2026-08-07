@@ -12,6 +12,7 @@ import {
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { OpCurrentFlowLayer } from "./OpCurrentFlowLayer";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
+import { resolveAmmeterTarget } from "../schematic/ammeterAttach";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import {
   nearestSampleIndex,
@@ -190,6 +191,8 @@ export function Canvas({
   const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
   const setNetLabelOffsetDirect = useSchematic((s) => s.setNetLabelOffsetDirect);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** Why the last ammeter drop found nothing to measure. Cleared on success. */
+  const [ammeterNote, setAmmeterNote] = useState<string | null>(null);
 
   // Current mode: animate real OP / `.tran` branch currents along the wires.
   // Prefer a real `.tran` sample when available; otherwise DC OP. Never invent
@@ -589,26 +592,35 @@ export function Canvas({
 
   // All selection/drag goes through one hit-test on the SVG, so z-order never
   // decides which component a click lands on (components don't intercept).
+  // A node has a voltage; a branch has a current. The probe reads the first and
+  // the ammeter the second. One tool used to do both - dropping a probe on a
+  // component body silently turned it into a clamp meter - which made the tool
+  // mean two different things depending on where the pointer happened to land.
   const handleProbeAction = (clientX: number, clientY: number): boolean => {
     const point = snappedCursor(clientX, clientY);
     const physicalNets = extractCircuit(components, wires, []).nets;
-    if (netAtPoint(physicalNets, wires, point)) {
-      addProbe(point.x, point.y);
-      return true;
-    }
-    // A node has voltage; a component body has branch current. This mirrors
-    // an oscilloscope probe vs clamp meter and avoids inventing a meaningless
-    // "node current" for a junction shared by several branches.
+    if (!netAtPoint(physicalNets, wires, point)) return false;
+    addProbe(point.x, point.y);
+    return true;
+  };
+
+  const handleAmmeterAction = (clientX: number, clientY: number): boolean => {
     const world = screenToWorld(clientX, clientY);
     const host = componentAt(components, world.x, world.y);
-    if (!host) return false;
-    toggleCurrentProbe(host.id);
+    const target = resolveAmmeterTarget(world, host ?? null, wires, components);
+    if (!target.ok) {
+      setAmmeterNote(target.reason);
+      return true; // consumed: the click got an answer, just not a placement
+    }
+    setAmmeterNote(null);
+    toggleCurrentProbe(target.componentId);
     return true;
   };
 
   const handleSimulatorNodeAction = (clientX: number, clientY: number): boolean => {
-    if (interactive || (tool.mode !== "probe" && tool.mode !== "label")) return false;
+    if (interactive || (tool.mode !== "probe" && tool.mode !== "ammeter" && tool.mode !== "label")) return false;
     if (tool.mode === "probe") return handleProbeAction(clientX, clientY);
+    if (tool.mode === "ammeter") return handleAmmeterAction(clientX, clientY);
     const point = snappedCursor(clientX, clientY);
     const physicalNets = extractCircuit(components, wires, []).nets;
     if (!netAtPoint(physicalNets, wires, point)) return false;
@@ -1319,8 +1331,21 @@ export function Canvas({
                 } : undefined}
               >
                 {probeSelected && <circle className="probe-select-ring" cx={px} cy={py} r={11} />}
-                <circle className="probe-ring" cx={px} cy={py} r={7} />
-                <circle className="probe-dot" cx={px} cy={py} r={3.5} />
+                {p.componentId ? (
+                  // A clamp meter reads a branch, so it draws as a ring AROUND
+                  // the conductor rather than a dot ON a node. The two must not
+                  // look alike: one is a voltage at a point, the other a
+                  // current through a path.
+                  <>
+                    <circle className="ammeter-clamp" cx={px} cy={py} r={8} />
+                    <circle className="ammeter-clamp-inner" cx={px} cy={py} r={4.5} />
+                  </>
+                ) : (
+                  <>
+                    <circle className="probe-ring" cx={px} cy={py} r={7} />
+                    <circle className="probe-dot" cx={px} cy={py} r={3.5} />
+                  </>
+                )}
               </g>
             );
           })}
@@ -1417,6 +1442,10 @@ export function Canvas({
           <span className="flow-legend-label">CURRENT</span>
           <span className="flow-legend-scale">1 µA — 1 A</span>
         </div>
+      )}
+
+      {ammeterNote && (
+        <p className="ammeter-note" role="status">{ammeterNote}</p>
       )}
 
       <div className="view-controls" role="toolbar" aria-label="Schematic view">

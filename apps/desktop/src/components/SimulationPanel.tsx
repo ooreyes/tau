@@ -166,7 +166,7 @@ import { useMeasuredSize, tickCountsFromSize } from "./useMeasuredSize";
 import { usePlotViewport } from "./usePlotViewport";
 import { ScopeZoomCluster } from "./ScopeZoomCluster";
 import type { Viewport } from "../simulation/plotViewport";
-import { visibleTransientTraces } from "../simulation/visibleTraces";
+import { probeTraceOwners, visibleTransientTraces } from "../simulation/visibleTraces";
 import { EngineeringTraceReadout } from "./EngineeringTraceReadout";
 import { traceStatistics, windowedTraceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
@@ -355,6 +355,10 @@ export function SimulationPanel({
   const [activeTransientCursor, setActiveTransientCursor] = useState<TransientCursorId | null>(null);
   const [cursorF1, setCursorF1] = useState(0.25);
   const [cursorF2, setCursorF2] = useState(0.75);
+  // One cursor is what a reader wants most of the time - "what is the value
+  // here". The second exists to measure an interval, so it is added on demand
+  // rather than always cluttering the plot with a line nobody asked for.
+  const [secondCursorOn, setSecondCursorOn] = useState(false);
 
   useEffect(() => {
     if (!onSchematicReadoutTime) return;
@@ -895,11 +899,14 @@ export function SimulationPanel({
   }, [components, options]);
   const transientCursorPositions = useMemo(() => {
     if (!cursorsOpen || !result?.ok || result.times.length === 0) return null;
+    if (!secondCursorOn) {
+      return { x1: fractionToX(result.times, cursorF1), x2: null };
+    }
     return {
       x1: fractionToX(result.times, cursorF1),
       x2: fractionToX(result.times, cursorF2),
     };
-  }, [cursorsOpen, result, cursorF1, cursorF2]);
+  }, [cursorsOpen, result, cursorF1, cursorF2, secondCursorOn]);
   const minimumTransientSteps =
     resolution && resolution.requiredSteps > 0 && resolution.requiredSteps <= maxTransientSteps
       ? Math.max(32, resolution.requiredSteps)
@@ -1282,9 +1289,23 @@ export function SimulationPanel({
               cursors={transientCursorPositions}
               cursorTool={{
                 activeCursor: cursorsOpen ? activeTransientCursor : null,
+                secondCursorOn,
                 onActiveCursorChange: (cursor) => {
                   if (cursor !== null) setCursorsOpen(true);
+                  // Selecting C2 implies wanting it on the plot.
+                  if (cursor === "c2") setSecondCursorOn(true);
                   setActiveTransientCursor(cursor);
+                },
+                onSecondCursorChange: (on) => {
+                  setSecondCursorOn(on);
+                  if (on) {
+                    setCursorsOpen(true);
+                    setActiveTransientCursor("c2");
+                  } else if (activeTransientCursor === "c2") {
+                    // Never leave the selection pointing at a cursor that is
+                    // no longer on the plot.
+                    setActiveTransientCursor("c1");
+                  }
                 },
                 onCursorFractionChange: (cursor, fraction) => {
                   if (cursor === "c1") setCursorF1(fraction);
@@ -1887,12 +1908,16 @@ export function WaveformPlot({
   layoutKey?: string;
   /** Optional X window from an applied LTspice `.plt` (overrides auto 0…tMax). */
   forcedX?: { xMin: number; xMax: number } | null;
-  /** Active transient measurement positions, drawn through every plot pane. */
-  cursors?: { x1: number; x2: number } | null;
+  /** Active transient measurement positions, drawn through every plot pane.
+   *  `x2` is null while the second cursor has not been added. */
+  cursors?: { x1: number; x2: number | null } | null;
   /** Direct plot interaction shared with the exact C1/C2 controls. */
   cursorTool?: {
     activeCursor: TransientCursorId | null;
+    /** Whether the second cursor has been added to the plot. */
+    secondCursorOn?: boolean;
     onActiveCursorChange: (cursor: TransientCursorId | null) => void;
+    onSecondCursorChange?: (on: boolean) => void;
     onCursorFractionChange: (cursor: TransientCursorId, fraction: number) => void;
   };
   /** Right-click math → add a derived expression overlay (parent owns exprList). */
@@ -1901,6 +1926,34 @@ export function WaveformPlot({
   const success = result?.ok ? result : null;
   const [activeTraceId, setActiveTraceId] = useState<string | null>(null);
   const [traceColorOverrides, setTraceColorOverrides] = useState<Record<string, string>>({});
+
+  // A probe's colour is the one authority for how its signal is drawn - the
+  // schematic dot and the curve both read it. Writing the picker's choice into
+  // a separate local override is what let the two disagree, so when a trace
+  // belongs to a probe the picker updates the PROBE. Traces with no probe
+  // behind them (expressions, extra overlays) keep the local override.
+  const probesForColor = useSchematic((s) => s.probes);
+  const wiresForColor = useSchematic((s) => s.wires);
+  const setProbeColor = useSchematic((s) => s.setProbeColor);
+  const traceOwners = useMemo(
+    () => (success ? probeTraceOwners(success, probesForColor, wiresForColor) : new Map<string, string>()),
+    [success, probesForColor, wiresForColor],
+  );
+  const applyTraceColor = useCallback((traceId: string, color: string) => {
+    const probeId = traceOwners.get(traceId);
+    if (probeId) {
+      // Drop any stale override first, or it would keep winning over the probe.
+      setTraceColorOverrides((current) => {
+        if (!(traceId in current)) return current;
+        const next = { ...current };
+        delete next[traceId];
+        return next;
+      });
+      setProbeColor(probeId, color);
+      return;
+    }
+    setTraceColorOverrides((current) => ({ ...current, [traceId]: color }));
+  }, [traceOwners, setProbeColor]);
   const [windowStats, setWindowStats] = useState<{
     label: string;
     unit: string;
@@ -2240,20 +2293,47 @@ export function WaveformPlot({
                                 >
                                   Pan
                                 </button>
-                                {(["c1", "c2"] as const).map((cursor) => (
-                                  <button
-                                    key={cursor}
-                                    type="button"
-                                    aria-label={`Glide cursor ${cursor === "c1" ? "1" : "2"} on ${displayLabel}`}
-                                    aria-pressed={selected && cursorTool.activeCursor === cursor}
-                                    onClick={() => {
-                                      setActiveTraceId(trace.id);
-                                      cursorTool.onActiveCursorChange(cursor);
-                                    }}
-                                  >
-                                    {cursor.toUpperCase()}
-                                  </button>
-                                ))}
+                                <button
+                                  type="button"
+                                  aria-label={`Glide cursor 1 on ${displayLabel}`}
+                                  aria-pressed={selected && cursorTool.activeCursor === "c1"}
+                                  onClick={() => {
+                                    setActiveTraceId(trace.id);
+                                    cursorTool.onActiveCursorChange("c1");
+                                  }}
+                                >
+                                  C1
+                                </button>
+                                {/* One cursor answers "what is the value here";
+                                    the second exists to measure an interval, so
+                                    it is added deliberately rather than always
+                                    sitting on the plot. */}
+                                {(() => {
+                                  const on = cursorTool.secondCursorOn !== false;
+                                  const active = selected && cursorTool.activeCursor === "c2";
+                                  return (
+                                    <button
+                                      type="button"
+                                      aria-label={on
+                                        ? (active
+                                          ? `Remove cursor 2 from ${displayLabel}`
+                                          : `Glide cursor 2 on ${displayLabel}`)
+                                        : `Add a second cursor to ${displayLabel}`}
+                                      aria-pressed={active}
+                                      title={on
+                                        ? (active ? "Click again to remove C2" : "Move C2")
+                                        : "Add a second cursor to measure an interval"}
+                                      onClick={() => {
+                                        setActiveTraceId(trace.id);
+                                        if (!on) { cursorTool.onSecondCursorChange?.(true); return; }
+                                        if (active) { cursorTool.onSecondCursorChange?.(false); return; }
+                                        cursorTool.onActiveCursorChange("c2");
+                                      }}
+                                    >
+                                      {on ? "C2" : "+C2"}
+                                    </button>
+                                  );
+                                })()}
                               </div>
                             )}
                           </div>
@@ -2278,7 +2358,7 @@ export function WaveformPlot({
                                       : `Set ${displayLabel} trace color to ${swatch.name}`}
                                     aria-pressed={isCurrent}
                                     title={takenBy ? `${swatch.name} - already used by ${labelFor(takenBy)}` : swatch.name}
-                                    onClick={() => setTraceColorOverrides((current) => ({ ...current, [trace.id]: swatch.color }))}
+                                    onClick={() => applyTraceColor(trace.id, swatch.color)}
                                   />
                                 );
                               })}
@@ -2294,8 +2374,7 @@ export function WaveformPlot({
                                   value={resolveCssColorHex(trace.color)}
                                   aria-label={`Pick a custom color for ${displayLabel}`}
                                   onChange={(event) => {
-                                    const color = event.currentTarget.value;
-                                    setTraceColorOverrides((current) => ({ ...current, [trace.id]: color }));
+                                    applyTraceColor(trace.id, event.currentTarget.value);
                                   }}
                                 />
                               </label>
@@ -2328,12 +2407,14 @@ export function WaveformPlot({
                           <EngineeringTraceReadout
                             trace={{ ...trace, label: displayLabel }}
                             times={success ? success.times : []}
-                            cursor={selected && cursors && cursorTool?.activeCursor
-                              ? {
-                                  label: cursorTool.activeCursor.toUpperCase(),
-                                  time: cursorTool.activeCursor === "c1" ? cursors.x1 : cursors.x2,
-                                }
-                              : undefined}
+                            cursor={(() => {
+                              if (!selected || !cursors || !cursorTool?.activeCursor) return undefined;
+                              const time = cursorTool.activeCursor === "c1" ? cursors.x1 : cursors.x2;
+                              // C2 can be absent; a readout for a cursor that
+                              // is not on the plot would be a phantom number.
+                              if (time == null) return undefined;
+                              return { label: cursorTool.activeCursor.toUpperCase(), time };
+                            })()}
                           />
                         </div>
                       );
@@ -2589,11 +2670,14 @@ function TranScopePane({
   /** Dashboard card height (S/M/L → 160/190/260, see cardLayout.ts). Defaults
    *  to the old fixed 190 for any caller that doesn't specify one. */
   plotHeight?: number;
-  cursors?: { x1: number; x2: number } | null;
+  cursors?: { x1: number; x2: number | null } | null;
   activeTrace?: Trace | null;
   cursorTool?: {
     activeCursor: TransientCursorId | null;
+    /** Whether the second cursor has been added to the plot. */
+    secondCursorOn?: boolean;
     onActiveCursorChange: (cursor: TransientCursorId | null) => void;
+    onSecondCursorChange?: (on: boolean) => void;
     onCursorFractionChange: (cursor: TransientCursorId, fraction: number) => void;
   };
 }) {
@@ -2742,6 +2826,7 @@ function TranScopePane({
     event.preventDefault();
     event.stopPropagation();
     const value = cursorTool.activeCursor === "c1" ? cursors.x1 : cursors.x2;
+    if (value == null) return; // arrow-keying a cursor that is not on the plot
     const span = times[times.length - 1] - times[0];
     if (!(span > 0)) return;
     const current = (value - times[0]) / span;
@@ -2804,12 +2889,29 @@ function TranScopePane({
                 height={plotHeight}
               />
             )}
-            {cursors && (
+            {cursors && (() => {
+              // Readout boxes are laid out together, not independently: two
+              // cursors at similar values put their boxes on the same line and
+              // neither is legible. Placing the first, then pushing the second
+              // clear of it, is the only way to guarantee both can be read.
+              const LABEL_H = 17;
+              const placed: { top: number; bottom: number }[] = [];
+              const claimY = (preferred: number): number => {
+                let y = preferred;
+                for (const box of placed) {
+                  if (y < box.bottom + 3 && y + LABEL_H > box.top - 3) y = box.bottom + 4;
+                }
+                y = Math.max(PLOT_PAD + 3, Math.min(y, plotHeight - PLOT_PAD - LABEL_H - 1));
+                placed.push({ top: y, bottom: y + LABEL_H });
+                return y;
+              };
+              return (
               <g className="transient-cursors" aria-hidden="true">
                 {[
                   { label: "C1", value: cursors.x1, className: "cursor-1" },
                   { label: "C2", value: cursors.x2, className: "cursor-2" },
-                ].map((cursor) => {
+                ].map((cursor, cursorIndex) => {
+                  if (cursor.value == null) return null;
                   if (cursor.value < viewport.xMin || cursor.value > viewport.xMax) return null;
                   const x = PLOT_PAD + ((cursor.value - viewport.xMin) / (viewport.xMax - viewport.xMin)) * (PLOT_WIDTH - 2 * PLOT_PAD);
                   const selectedValue = selectedPaneTrace
@@ -2826,13 +2928,15 @@ function TranScopePane({
                     : NaN;
                   const labelWidth = 118;
                   const labelX = x > PLOT_WIDTH / 2 ? x - labelWidth - 4 : x + 4;
-                  const labelY = pointVisible
-                    ? Math.max(PLOT_PAD + 3, Math.min(y - 20, plotHeight - PLOT_PAD - 18))
-                    : 0;
+                  // C1 reads above its point, C2 below. Both sat 20px above,
+                  // so whenever the two cursors landed at a similar value their
+                  // readouts stacked and neither was legible. Splitting them
+                  // vertically keeps both readable no matter where they meet.
+                  const labelY = pointVisible ? claimY(y - 20) : 0;
                   return (
                     <g key={cursor.label} className={`plot-cursor transient-cursor ${cursor.className}`}>
                       <line x1={x} y1={PLOT_PAD} x2={x} y2={plotHeight - PLOT_PAD} />
-                      <text x={x + 4} y={PLOT_PAD + 11}>{cursor.label}</text>
+                      <text x={x + 4} y={PLOT_PAD + 11 + cursorIndex * 13}>{cursor.label}</text>
                       {selectedPaneTrace && pointVisible && (
                         <g className={`cursor-trace-readout${cursorTool?.activeCursor === cursor.label.toLowerCase() ? " active" : ""}`}>
                           <circle
@@ -2852,7 +2956,8 @@ function TranScopePane({
                   );
                 })}
               </g>
-            )}
+              );
+            })()}
             {hoverEnabled && (
               <rect
                 className="scope-hover-surface"
@@ -7578,6 +7683,14 @@ function TraceSeekFields({
   const cursorLabel = (activeCursor ?? "c1").toUpperCase();
   const valueUnit = trace.unit || "V";
 
+  // Both boxes read the cursor, so dragging updates the pair together. "At
+  // value" used to be permanently blank, which made it look like an input with
+  // no output - you could type into it but it never told you where the cursor
+  // actually was.
+  const valueAtCursor = cursorX == null
+    ? null
+    : interpolateAt(times, trace.values, cursorX);
+
   const seekTime = (raw: string) => {
     try {
       const seconds = parseQuantity(raw, "s");
@@ -7626,7 +7739,9 @@ function TraceSeekFields({
         <span>At value</span>
         <EngineeringInput
           label={`Move cursor ${cursorLabel} to where ${label} equals a value`}
-          value=""
+          value={valueAtCursor != null && Number.isFinite(valueAtCursor)
+            ? engineeringInputDisplay(valueAtCursor, valueUnit)
+            : ""}
           unit={valueUnit}
           allowEmpty
           onValueChange={seekValue}

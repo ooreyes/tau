@@ -102,8 +102,19 @@ describe("Canvas - simulator mutation boundary", () => {
     expect(useSchematic.getState().wires).toHaveLength(1);
   });
 
-  it("adds a real branch-current probe when Probe clicks a component body", () => {
+  it("leaves a component body alone when the Probe tool clicks it", () => {
+    // A node has a voltage; a branch has a current. The probe used to become a
+    // clamp meter whenever it happened to land on a part, so the same tool
+    // meant two different measurements depending on where the pointer fell.
     useSchematic.setState({ tool: { mode: "probe" } });
+    render(<Canvas interactive={false} />);
+
+    fireEvent.pointerDown(document.querySelector("svg.canvas")!, { button: 0, clientX: 0, clientY: 0 });
+    expect(useSchematic.getState().probes).toEqual([]);
+  });
+
+  it("clamps an ammeter on a component body and takes it off again", () => {
+    useSchematic.setState({ tool: { mode: "ammeter" } });
     render(<Canvas interactive={false} />);
 
     fireEvent.pointerDown(document.querySelector("svg.canvas")!, { button: 0, clientX: 0, clientY: 0 });
@@ -114,6 +125,32 @@ describe("Canvas - simulator mutation boundary", () => {
 
     fireEvent.pointerDown(document.querySelector("svg.canvas")!, { button: 0, clientX: 0, clientY: 0 });
     expect(useSchematic.getState().probes).toEqual([]);
+  });
+
+  it("clamps an ammeter on a wire by resolving it to the part in series", () => {
+    // Dropping a clamp on a wire is the bench gesture, but a wire is not a
+    // branch: it has to resolve to the one part whose current it carries. R1's
+    // `a` pin sits at (-32,0); this wire runs to it.
+    useSchematic.setState({
+      tool: { mode: "ammeter" },
+      wires: [{ id: "lead", points: [{ x: -96, y: 0 }, { x: -32, y: 0 }] }],
+    });
+    render(<Canvas interactive={false} />);
+
+    fireEvent.pointerDown(document.querySelector(".wire-group")!, { button: 0, clientX: -64, clientY: 0 });
+    expect(useSchematic.getState().probes).toEqual([
+      expect.objectContaining({ componentId: "r1" }),
+    ]);
+  });
+
+  it("refuses an ammeter on empty canvas and says why", () => {
+    // A click that silently does nothing reads as a broken tool.
+    useSchematic.setState({ tool: { mode: "ammeter" }, components: [], wires: [] });
+    render(<Canvas interactive={false} />);
+
+    fireEvent.pointerDown(document.querySelector("svg.canvas")!, { button: 0, clientX: 900, clientY: 900 });
+    expect(useSchematic.getState().probes).toEqual([]);
+    expect(screen.getByRole("status").textContent).toMatch(/component or a wire/i);
   });
 
   it("adds, edits, and removes a node name inline", () => {

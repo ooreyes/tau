@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
-import { Crosshair, Eye, EyeOff, LockKeyhole, MousePointer2, Tag } from "lucide-react";
+import { Crosshair, Eye, EyeOff, Gauge, LockKeyhole, MousePointer2, Tag } from "lucide-react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
@@ -251,6 +251,7 @@ function App() {
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
   const startProbing = useSchematic((s) => s.startProbing);
+  const startAmmeter = useSchematic((s) => s.startAmmeter);
   const startLabeling = useSchematic((s) => s.startLabeling);
   const loadCircuit = useSchematic((s) => s.loadCircuit);
   const replaceCircuit = useSchematic((s) => s.replaceCircuit);
@@ -2008,11 +2009,12 @@ function App() {
     if (modeRef.current === "schematic") invalidateAnalysis();
   }, [netLabels, invalidateAnalysis]);
 
-  // The simulator's circuit surface has exactly three safe modes: inspect,
-  // voltage probe, and node name. Never carry a topology-editing tool across
-  // from the schematic editor.
+  // The simulator's circuit surface allows only measurement tools: inspect,
+  // voltage probe, ammeter, and node name. All four read the circuit; none can
+  // change its topology. Anything else is an editing tool carried across from
+  // the schematic editor and gets cancelled.
   useEffect(() => {
-    if (mode === "simulator" && !["select", "probe", "label"].includes(toolMode)) cancel();
+    if (mode === "simulator" && !["select", "probe", "ammeter", "label"].includes(toolMode)) cancel();
   }, [mode, toolMode, cancel]);
 
   useEffect(() => {
@@ -2335,10 +2337,19 @@ function App() {
                     className={toolMode === "probe" ? "active" : undefined}
                     onClick={startProbing}
                     aria-pressed={toolMode === "probe"}
-                    title="Plot wire voltage or component current"
+                    title="Plot a node\u2019s voltage over time"
                   >
                     <Crosshair size={13} strokeWidth={1.7} aria-hidden="true" />
                     <span>Probe</span>
+                  </button>
+                  <button
+                    className={toolMode === "ammeter" ? "active" : undefined}
+                    onClick={startAmmeter}
+                    aria-pressed={toolMode === "ammeter"}
+                    title="Clamp an ammeter on a part or wire to plot its current over time"
+                  >
+                    <Gauge size={13} strokeWidth={1.7} aria-hidden="true" />
+                    <span>Ammeter</span>
                   </button>
                   <button
                     className={toolMode === "label" ? "active" : undefined}

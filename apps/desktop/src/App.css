@@ -2625,6 +2625,40 @@ body {
 /* In-place DC operating point labels on the schematic (simulator mode). A
    background stroke keeps them readable over wires and symbol bodies. Kept
    outside the App.css type scale (schematic canvas SVG text). */
+/* Clamp meter: a ring around the conductor, deliberately unlike the probe's
+   filled dot. A voltage at a point and a current through a path are different
+   measurements and must not share a glyph. */
+.ammeter-clamp {
+  fill: none;
+  stroke: var(--trace-green);
+  stroke-width: 2;
+}
+
+.ammeter-clamp-inner {
+  fill: none;
+  stroke: color-mix(in srgb, var(--trace-green) 45%, transparent);
+  stroke-width: 1;
+}
+
+/* Why an ammeter drop found nothing to measure. Refusals have to be visible:
+   a click that silently does nothing reads as a broken tool. */
+.ammeter-note {
+  position: absolute;
+  left: 50%;
+  bottom: var(--sp-6);
+  transform: translateX(-50%);
+  max-width: 60ch;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-body);
+  color: var(--text);
+  background: var(--panel-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-pop);
+  pointer-events: none;
+}
+
 /* Current-mode key. Floats on the canvas with no container - grouping comes
    from proximity, per the instrument language. Tiny caps label, subordinate
    scale, one semantic hue. */

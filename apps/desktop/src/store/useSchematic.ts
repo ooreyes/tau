@@ -193,6 +193,8 @@ interface SchematicState extends Doc {
   /** Meter probes (ephemeral): each pins to a world point and plots whatever net is there. */
   probes: Probe[];
   startProbing: () => void;
+  /** Clamp meter: measures the current through a part or a wire. */
+  startAmmeter: () => void;
   addProbe: (x: number, y: number) => void;
   /** Toggle a clamp-meter current probe on a component (plots `I(ref)`). */
   toggleCurrentProbe: (componentId: string) => void;
@@ -1009,6 +1011,7 @@ export const useSchematic = create<SchematicState>()((set) => {
       }),
 
     startProbing: () => set({ tool: { mode: "probe" }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [], selectedIds: [] }),
+    startAmmeter: () => set({ tool: { mode: "ammeter" }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [], selectedIds: [] }),
     // A net carries AT MOST ONE voltage probe (current/clamp probes dedup
     // separately, per component, in toggleCurrentProbe below). Resolve the
     // click through the same net-identity authority the netlist extractor

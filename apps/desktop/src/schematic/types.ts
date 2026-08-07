@@ -323,9 +323,16 @@ export interface SchematicWire {
   ltHierarchy?: SchematicHierarchyMemberProvenance;
 }
 
-/** A meter probe pinned to a world point; resolves to whatever net sits there.
- *  With `componentId` set it is a current probe (LTspice clamp-meter) instead:
- *  it follows the component and plots its branch current `I(ref)`. */
+/** A meter pinned to a world point.
+ *
+ *  Without `componentId` it is a VOLTAGE probe: it resolves to whatever net
+ *  sits at its point and plots that node's voltage. Probes attach to nodes
+ *  only — a junction shared by several branches has no single current, so
+ *  letting a voltage probe land on a component body invented a reading.
+ *
+ *  With `componentId` it is an AMMETER (clamp meter): it follows that part and
+ *  plots its branch current `I(ref)`. It can be dropped on the part itself or
+ *  on a wire carrying that part's current, which is why it keeps its own x/y. */
 export interface Probe {
   id: string;
   x: number;
@@ -374,4 +381,8 @@ export type Tool =
     }
   | { mode: "wire" }
   | { mode: "probe" }
+  /** Clamp meter: attaches to a part or a wire and plots the current through
+   *  it. Distinct from `probe`, which reads a NODE's voltage — a node has a
+   *  voltage, a branch has a current, and one tool cannot honestly do both. */
+  | { mode: "ammeter" }
   | { mode: "label" };

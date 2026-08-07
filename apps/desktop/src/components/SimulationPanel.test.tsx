@@ -630,7 +630,20 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     // Direct line interaction is available beside the trace - engineers do
     // not have to discover a slider hidden under Advanced first.
     fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
+    // One cursor by default: "what is the value here" is the common question,
+    // and a second line nobody asked for is clutter over the waveform.
+    expect(document.querySelectorAll(".transient-cursor")).toHaveLength(1);
+
+    // The second cursor exists to measure an interval, and is added on demand.
+    fireEvent.click(screen.getByRole("button", { name: "Add a second cursor to V(out)" }));
     expect(document.querySelectorAll(".transient-cursor")).toHaveLength(2);
+
+    // Clicking the active C2 again takes it back off the plot.
+    fireEvent.click(screen.getByRole("button", { name: "Remove cursor 2 from V(out)" }));
+    expect(document.querySelectorAll(".transient-cursor")).toHaveLength(1);
+
+    // Back to C1 for the exact-endpoint check below.
+    fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
     await chooseSelectOption("Cursor 1 time SI prefix", "s");
