@@ -24,25 +24,35 @@ User's requests (his words, paraphrased), all for the SCHEMATIC tab:
 - [x] 5a. Canvas label font fix — `.label-layer .ref/.val` in App.css: small glyphs with a heavy
       halo stroke produced crushed counters. Component references are now 11px, values 10px,
       net names 11px, all with a crisp 1.5px canvas-background halo.
-- [x] 5b. Transistor arrows — `apps/desktop/src/schematic/symbols.tsx`: npn (~line 455) / pnp
-      (~line 466) used open unfilled chevron paths that render as stray lines; nmos (~436) /
-      pmos (~452) / njf / pjf arrows unfilled. Replaced with filled triangles (class
-      `symbol-arrow`, CSS `fill: currentColor; stroke: none`) with correct conventions:
+- [x] 5b. Transistor arrows — `apps/desktop/src/schematic/symbols.tsx`: npn / pnp
+      used open unfilled chevron paths that render as stray lines; nmos /
+      pmos / njf / pjf arrows unfilled. Replaced with filled triangles (class
+      `symbol-arrow`, CSS `fill: var(--comp); stroke: none` at `App.css:698`, with
+      `fill: var(--text)` when selected) with correct conventions:
       NPN arrow on emitter pointing OUT, PNP pointing IN toward base, NMOS into channel,
-      PMOS out of channel.
+      PMOS out of channel. (Still in place 2026-08-06; the six `symbol-arrow` paths are now
+      at `symbols.tsx:701, 718, 731, 744, 759, 773` — the original `~line 4xx` pointers
+      have drifted as the symbol library grew.)
 - [x] 6. Run button + Errors strip status color — Toolbar.tsx already has `result`/`runState`
       and a `.run-lamp-dot`. Added subtle gradient states on the Run button: `--success`-tinted
       gradient when last run ok / circuit clean, `--danger`-tinted when `result.ok === false`,
       neutral when idle. Same treatment on the schematic BottomPanel "Errors" header strip
-      (ShellPanels.tsx ~line 568; it derives `hasIssues`/`hasError` from `result`). Tokens only,
+      (ShellPanels.tsx — `hasIssues`/`hasError` now at ~line 1383, derived from `result`). Tokens only,
       keep it restrained (Palantir, not candy).
 - [x] 4. Click-to-delete affordance — Canvas.tsx: when a selection exists in the schematic
       editor (selectedIds / selectedWireIds / label / probe selections), render a 30×30 floating
       "✕" pill button near the selection's screen-space bbox top-right corner. Clicking calls the
       existing delete action (`deleteSelected` — the same one the Delete key uses, App.tsx
       keyboard handler). Pointer-events on, does not steal canvas drags. Hidden in simulator mode.
+
+      > **Superseded 2026-08-06.** The floating `✕` pill was later removed. `deleteSelected`
+      > is now a stable toolbar control — `<IconButton title="Delete selection (Delete)">` at
+      > `apps/desktop/src/components/ShellPanels.tsx:1189` — and the Delete/Backspace key
+      > still works via `apps/desktop/src/schematic/shortcuts.ts`. There is no
+      > `.selection-delete-pill` in `Canvas.tsx` or `App.css`; `Canvas.simulator.test.tsx:574`
+      > now asserts its absence. (TAU_DESIGN_VISION.md §11 records the same move.)
 - [x] 1. Net-label placement avoiding wires/probes — `autoNetLabelOffset` in
-      Canvas.geometry.ts currently only scores candidate offsets against component bboxes.
+      Canvas.geometry.ts (`autoNetLabelOffsets`, now ~line 718) currently only scores candidate offsets against component bboxes.
       Extended scoring to penalize: overlap of the label text box with wire segments, probe
       dots (r≈8 at probe.x/y), and other net labels' boxes. `autoNetLabelOffsets` places labels as
       a deterministic set: manually dragged labels reserve their chosen boxes first, then auto
@@ -56,7 +66,7 @@ User's requests (his words, paraphrased), all for the SCHEMATIC tab:
       `A 4 4 0 0 sweep` with sweep flipped for right-to-left segments so the bump always points up.
       Pure helper `pathWithHops(points, hopXsBySegment)` in Canvas.geometry.ts + unit tests;
       Canvas computes per-wire hop positions with a memo over (wires, junctions).
-- [x] 3. Cleanest-path auto-routing — `routeWireSmart` (Canvas.geometry.ts ~line 669) already
+- [x] 3. Cleanest-path auto-routing — `routeWireSmart` (Canvas.geometry.ts, now ~line 1118) already
       generates channel candidates and scores by `hits/length/corners`. Added two scoring terms
       between hits and length: `crossings` (count of intersections with existing wires — requires
       passing `wires` into the router; callsites: Canvas.tsx addWire (~line 383) and

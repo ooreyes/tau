@@ -8,13 +8,14 @@
 Quick orientation for an interactive session:
 
 - **Canonical branch:** `auto/ltspice-parity` (a superset of all prior work).
-- **Current priority mission (§11 in the autobuilder's prompt, 2026-07-10):**
-  simulator UX + measurements — resizable panels, fit-to-view padding, errors
-  tab, dashboard-style simulator layout, auto simulation settings, per-component
-  voltage/current/power measurements, oscillation detection, plot statistics.
-  Full spec lives in the autobuilder's actual driver
-  (`~/.tau-autobuilder/prompt.md` §11) — that file is what the autonomous bot
-  reads; this doc is for interactive sessions.
+- **Current priority mission:** the ordered completion criteria under
+  **"THE NEW BAR"** in the autobuilder's driver
+  (`~/.tau-autobuilder/prompt.md`, section `AUDIT 2026-08-04`) — correctness and
+  legality first (license/attribution, no silent model substitution), then
+  capability. That file is what the autonomous bot reads; this doc is for
+  interactive sessions. (The older "§11 simulator UX + measurements, 2026-07-10"
+  mission was superseded by the 2026-08-04 audit rewrite; the prompt no longer
+  has a §11.)
 - **To‑do list:** [FEATURE_PARITY.md](FEATURE_PARITY.md) — pick the next item.
 - **Live status + heartbeat:** top of [PROGRESS.md](PROGRESS.md) — shows the
   active unit and whether the last run finished or died mid‑change.

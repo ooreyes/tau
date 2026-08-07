@@ -205,10 +205,14 @@ until labels or controls become unreachable.
 
 The shipped local protocol is not free-form ASC. Qwen calls
 `build_tau_circuit` with catalog kinds, values, and exact `ref.pin` net members.
-Tau now accepts 29 fixed-pin/library kinds. Twenty-three round-trip as exact
-stock symbols; comparator, potentiometer, transformer, static switch, CCCS, and
-CCVS lower into electrically equivalent LTspice primitives (including explicit
-sense branches and K coupling). Tau validates references, kinds, values, pins,
+Tau now accepts 45 fixed-pin/library kinds
+(`ASSISTANT_GENERATABLE_KINDS`, `apps/desktop/src/lib/assistantCircuitPlan.ts:60`).
+Thirty-five round-trip as exact stock symbols
+(`ASSISTANT_DIRECT_GENERATABLE_KINDS`, same file line 42); the ten composite
+kinds — CCCS, CCVS, comparator, potentiometer, static switch, push button,
+relay, motor, transformer, and CT transformer (`ASSISTANT_COMPOSITE_KINDS`,
+line 55) — lower into electrically equivalent LTspice primitives (including
+explicit sense branches and K coupling). Tau validates references, kinds, values, pins,
 single-net membership, ground, and directives; assigns a deterministic graph
 layout; obstacle-routes the wires; serializes and re-imports ASC; then proves the
 requested physical net partition is still connected and isolated. An invalid

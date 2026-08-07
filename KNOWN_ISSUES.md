@@ -37,7 +37,7 @@ one engine for the whole session.
   voltage source, translates LTspice threshold/hysteresis cards, and refuses a
   missing, malformed, or wrong-kind control/model before execution. A browser-
   only preview still cannot stand in for that native proof.
-- Tau ships 28 standard device models against LTspice's ~2,500. In the macOS
+- Tau ships 31 standard device models against LTspice's ~2,500. In the macOS
   desktop app it also reads the exact diode/BJT/MOS/JFET `standard.*` databases
   from the user's installed LTspice copy, ephemerally and read-only. A named
   part unresolved by the document, an attached library, Tau's exact bundle, or
@@ -147,15 +147,60 @@ one engine for the whole session.
 
 ## Corpus files that do not simulate
 
-- In the extended acceptance corpus (189 schematics when the full third-party
-  power-electronics tree is present), eight files do not produce an operating
-  point, and all eight are hierarchical symbol definition sheets
-  (gate-driver, AC-source, and monitor building blocks from a third-party
-  power-electronics library), not runnable circuits. Seven have no ground
-  node by design and Tau refuses their deck with "Add a ground symbol so node
-  voltages have a reference"; one (a current-monitor block) yields a singular
-  matrix that its own file comment predicts for small shunt values. Every
-  runnable circuit in the corpus converges.
+**Measured 2026-08-06 on `auto/ltspice-parity` @ `f77b831`. The canonical gate
+is currently RED and 13 runnable circuits do not converge.** Reproduce in ~26
+seconds with `CORPUS_CANONICAL_ONLY=1 scripts/acceptance-corpus.sh`.
+
+Canonical 82-file corpus: **82 imported / 81 warning-clean / 79 deck-built /
+65 op-converged.** Import, warning-clean and deck-built all sit exactly at the
+documented honest ceiling; op-converged is 14 below its floor of 79.
+
+Three files are refused at deck build. These are the expected, documented
+refusals and are *not* regressions — Tau declines rather than substituting
+something it cannot model:
+
+- `Educational/IGBT.asc` — the `misc\nigbt` symbol has no electrical model.
+- `Educational/NonLinearTransformer.asc` — an LTspice Chan magnetic core, which
+  Tau refuses rather than silently sizing as an unsaturated linear inductor.
+- `Educational/Royer.asc` — the encrypted `LT1184F` subcircuit is undefined, so
+  the `unresolvedSubckts` guard stops the run before ngspice sees it.
+
+Thirteen files build a valid deck and are then rejected by ngspice at `.op`.
+These *are* real failures, in two groups:
+
+- **XSPICE Laplace lowering — `Educational/TwoTau.asc`, `Draft8.asc`.**
+  ngspice reports `singular matrix: check node a_e2#branch_1_0` (and
+  `a_e1#branch_1_0`). The `s_xfer` lowering emits both the original VCVS and an
+  XSPICE `A` block without linking their node names: in `TwoTau` the `A`
+  device's input is node `b`, the VCVS's control is node `c`, neither node is
+  referenced anywhere else in the deck, and both paths drive `n002`.
+  `Educational/PLL.asc` and `PLL2.asc` also use `s_xfer` and do converge, so
+  this is specific to the dual-deck Laplace path rather than to `s_xfer`.
+- **Operating-point non-convergence — 11 files.** `class-d_starter.asc`,
+  `deadtime.asc`, `Draft9.asc`, `Draft10.asc`, `Educational/Electrometer.asc`,
+  `Howland.asc`, `LoopGain.asc`, `LoopGain2.asc`, `phono.asc`, `relax.asc`,
+  `Wien.asc`. No singular matrix is reported; dynamic gmin stepping, true gmin
+  stepping, source stepping and the transient operating point all fail in turn.
+  Several of these decks also draw ngspice "Model issue" warnings for
+  LTspice-only model parameters (`Iave`/`Vpk` on a `D`, `Vk`/`Alpha` on an
+  `NJF`) and LTspice-only model types (`sidiode`, `VDMOS`). Those parameters are
+  ignored by ngspice rather than fatal, and have **not** been confirmed as the
+  cause — the root cause of this group is still open.
+
+Note when debugging: the corpus reporter truncates the engine error at 320
+characters, which hides the actual `singular matrix` / `Error:` lines. To see
+the full output, dump the generated deck with `CORPUS_DECK_DIR=<dir>` and pipe
+it to `apps/desktop/src-tauri/target/debug/tau --tau-spice-worker` as
+`{"request":{"netlist":"..."},"libraryCandidates":["<path to libngspice.dylib>"]}`.
+
+In the extended acceptance corpus (189 schematics when the full third-party
+power-electronics tree is present), a further eight files produce no operating
+point, and all eight are hierarchical symbol definition sheets (gate-driver,
+AC-source, and monitor building blocks from a third-party power-electronics
+library), not runnable circuits. Seven have no ground node by design and Tau
+refuses their deck with "Add a ground symbol so node voltages have a
+reference"; one (a current-monitor block) yields a singular matrix that its own
+file comment predicts for small shunt values.
 
 ## Native engine limits
 

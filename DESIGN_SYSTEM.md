@@ -164,6 +164,19 @@ node scripts/validate-palette.mjs "#008B62,#C04A00,#0E7EB0,#857700,#A55583,#A763
 
 Both currently report ALL CHECKS PASS: lightness band, chroma floor, adjacent
 CVD separation, normal-vision floor, and contrast against the surface.
+(Re-verified 2026-08-06 by running both commands above.)
+
+> **Audit note — 2026-08-06: the shipped rotation does not match this table.**
+> The rule is stated correctly here; the code has diverged.
+> `apps/desktop/src/simulation/linearTransient.ts:116` uses the documented order
+> (green, vermillion/red, sky/cyan, olive/cream, purple, orange/amber), but the
+> **native ngspice path** — the engine that actually runs on the desktop build —
+> uses a different order at `apps/desktop/src/engine/nativeSpice.ts:62`:
+> cyan, green, cream, red, purple, amber. That puts olive adjacent to green,
+> which is the exact pair §1.5 says fails the normal-vision floor.
+> `apps/desktop/src/styles/palette.test.ts:26` only parses `TRACE_COLORS` out of
+> `linearTransient.ts`, so the native list is unguarded. Fix the code (and widen
+> the test to both lists); do not edit this table to match.
 
 Traces are drawn at 1.5px. No glow, gradient fill, or drop shadow: decoration
 misrepresents the precision of the data. `--signal` (amber) is the running
@@ -321,9 +334,20 @@ mentions three ways in, there are three buttons or the copy is wrong.
    `color-mix(in srgb, var(--success) 32%, white)`, which is how the Run button's label
    went near-invisible in light mode: mixing toward `white` is only correct on a dark
    fill. That case now routes through `--status-ink-mix`, which flips to `black` on light.
+
+   **Audit — 2026-08-06.** `App.css` itself is clean: every hex/rgba literal below the
+   three `:root` blocks (dark, `@media (prefers-color-scheme: light)`,
+   `:root[data-theme]`) is gone. The rule is *not* currently met outside `App.css` —
+   seven raw values remain and are known violations, not sanctioned exceptions:
+   `lib/assistantCircuitPlan.ts:1259-1269` (five hexes in the SVG plan-preview
+   strokes/fills), `components/SimulationPanel.tsx:697` (`"#000"` probe sentinel), and
+   `lib/cssColor.ts:43` (parser fallback). One `color-mix(in srgb, white 10%, …)`
+   keyword also survives at `App.css:4593`.
 2. **Both themes, every change.** A component styled only for dark is unfinished.
-3. **Screenshot every visual change.** `node scripts/design-shot.mjs <label>` captures six
-   app states at three viewports **in both themes** into `screenshots/<label>/`, named
+3. **Screenshot every visual change.** `node scripts/design-shot.mjs <label>` captures eight
+   app states (empty, schematic, inspector, model, subcircuit, simulator, dialog, command)
+   at three viewports (1440×900, 1280×720, and the declared minimum)
+   **in both themes** into `screenshots/<label>/`, named
    `<state>-<theme>-<width>x<height>.png`. A design commit that does not visibly differ
    from the previous shot did not do anything. Look at the light shots too: Playwright's
    default colour scheme is light, so before this was explicit the pipeline had silently

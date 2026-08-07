@@ -44,9 +44,25 @@ and [README.md](README.md) (the pitch).
 | D7 | **Monorepo: pnpm workspaces (JS) now; Cargo workspace added with `crates/` in Phase 3** | Avoid breaking the Rust build before there are multiple crates |
 | D8 | **Two simulation modes**: Live (animated, interactive) and Analysis (full SPICE) | Live mode is the EveryCircuit-like "feel"; Analysis is the rigor. Distinct execution models. |
 
+> **Correction / drift audit — 2026-08-06.** Two entries above no longer match
+> the tree; the decisions are left intact as the record of what was agreed.
+>
+> - **D3:** the frontend is React 19 + TypeScript, but the bundler is now
+>   **Vite 8**, not Vite 7 (`apps/desktop/package.json` `"vite": "^8.2.0"`).
+> - **D7:** the Cargo workspace was never introduced. `crates/` still contains
+>   only `crates/README.md`; there is no repo-root `Cargo.toml`, and
+>   `apps/desktop/src-tauri/Cargo.toml` declares no workspace members. The
+>   native engine lives entirely in `apps/desktop/src-tauri/src/spice.rs`.
+> - **D8:** Live mode (a continuous, interactive, animated integration loop)
+>   **does not exist.** The nearest shipped thing is
+>   `apps/desktop/src/simulation/liveSchematicPlayback.ts`, which scrubs
+>   wall-clock time across an already-completed `.tran` result — playback of
+>   Analysis output, not a second execution model. OQ4 below is therefore still
+>   genuinely open.
+
 ## Roadmap (condensed)
 
-- **Phase 1 — Schematic editor (current):** canvas, component placement, wiring,
+- **Phase 1 — Schematic editor:** canvas, component placement, wiring,
   editing, net extraction, save/load, netlist export.
 - **Phase 2 — First simulation:** build/bundle `libngspice`, FFI crate, run
   `.op`/`.tran`/`.ac`/`.dc`, click-to-probe, waveform viewer.
@@ -54,6 +70,18 @@ and [README.md](README.md) (the pitch).
   subcircuit import, parameter sweeps, noise, Live mode.
 - **Phase 4+ — Scale & intelligence:** Verilog-A via OpenVAF/OSDI, optional Xyce
   for large/parallel circuits, part-number import, Monte Carlo, AI assistant.
+
+> **Where this actually stands (2026-08-06).** Phases 1 and 2 are shipped.
+> Phase 3 is largely shipped except Live mode — nonlinear devices, bundled
+> subcircuits (`apps/desktop/src/engine/bundledSubcircuits.ts`), `.step`
+> parameter sweeps (`simulation/paramStep.ts`) and noise
+> (`simulation/noise.ts`) all work on the native path. Some Phase 4 work has
+> jumped ahead of Phase 3: the AI assistant
+> (`apps/desktop/src/lib/assistantCircuitPlan.ts`,
+> `components/AssistantPanel.tsx`) and OSDI/Verilog-A directive support in the
+> native bridge (`src-tauri/src/spice.rs`, `.pre_osdi`) are both in the tree.
+> This list is kept as the original plan, not as a status board — see
+> `FEATURE_PARITY.md` and `PROGRESS.md` for current status.
 
 ## Open questions
 
@@ -72,9 +100,16 @@ and [README.md](README.md) (the pitch).
 - Schematic types currently live in `apps/desktop/src/schematic/` rather than in
   `@tau/schematic-core` (see OQ3). The package holds the canonical *intended*
   API; the app will migrate to import from it.
-- The current simulation path is an interim frontend TypeScript MNA solver for
-  linear R/C/L/V/GND circuits only. It is real analysis, not mocked output, but
-  it does not replace the locked ngspice/Rust engine decision.
+- ~~The current simulation path is an interim frontend TypeScript MNA solver for
+  linear R/C/L/V/GND circuits only.~~ **Superseded 2026-08-06.** The locked
+  ngspice/Rust engine (D2) shipped: `apps/desktop/src-tauri/src/spice.rs` loads
+  the bundled `libngspice` and is the engine on the desktop build
+  (`apps/desktop/src/engine/nativeSpice.ts`, gated by `isNativeSpiceRuntime()`).
+  The TypeScript MNA solvers in `apps/desktop/src/simulation/` remain as the
+  explicit `pnpm dev:web` browser fallback, and they now cover far more than
+  linear R/C/L/V/GND (diode companion models, behavioral sources, controlled
+  sources, DC sweep, noise, FFT, …). The debt that remains is having two solver
+  implementations at all, not the absence of the native one.
 
 ---
 

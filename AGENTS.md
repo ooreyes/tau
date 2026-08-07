@@ -86,8 +86,12 @@ reproducing LTspice results. UI breadth without that path is not progress.
   bundled third-party software is separate and mandatory - `THIRD_PARTY_NOTICES`
   must exist and stay accurate, and no GPL-licensed file may be shipped.
 - Don't hardcode colors — every color goes through the design-token CSS
-  variables (`src/App.css` today; the §10 shadcn token layer once it lands).
-  No SPICE specifics in React components.
+  variables in `apps/desktop/src/App.css`, consumed by the §10 shadcn primitive
+  layer in `apps/desktop/src/components/ui/` (landed). The machine-checkable
+  rule is `scripts/design-system-drift.sh`: hex literals only inside the App.css
+  token zone (lines ≤ 567) and only in its documented ts/tsx allowlist
+  (`SimulationPanel.tsx`, `cssColor.ts`, `assistantCircuitPlan.ts`,
+  `plotPng.ts`). No SPICE specifics in React components.
 
 ## Required gates before every push
 
@@ -141,7 +145,7 @@ account and sign/notarize/ship.
       uses the rail-clamped tanh model (`engine/opampSpec.ts`).
 - [x] **Waveform parity** demonstrated on at least RC, a Colpitts oscillator,
       and the Class‑D circuit (traces match LTspice within tolerance). Proven
-      by `scripts/waveformParity.corpus.ts` via `scripts/dod-parity.sh`.
+      by `apps/desktop/scripts/waveformParity.corpus.ts` via `scripts/dod-parity.sh`.
 - [x] All directives used in the corpus are supported: `.tran .ac .op .dc .step
       .meas .noise .tf .param .func .temp .options .model .inc .subckt`.
       Proven 2026-08-05 by `scripts/directives-dod.sh` →
@@ -192,8 +196,9 @@ account and sign/notarize/ship.
       named-device ≥95% and broad differential still open.
 - [x] **UI is usable down to the app's own stated minimum window size** — no
       column so narrow controls become unreachable, no header stuck above the
-      scroll position. Verify with the screenshot pipeline (STEP 3.5 in the
-      build prompt) at the minimum size, not just a comfortable one.
+      scroll position. Verify with the screenshot pipeline
+      (`scripts/min-window-dod.sh` → `scripts/min-window-dod.mjs`) at the
+      minimum size, not just a comfortable one.
       Proven 2026-08-05 by `scripts/min-window-dod.sh` →
       `scripts/min-window-dod.mjs` at tauri.conf.json **900×600**: 12/12
       PASS (both themes × empty/schematic/schematic-panels/simulator/dialog/
@@ -423,8 +428,9 @@ When every box is checked, **stop and report** — do not invent new scope.
    `codesign --verify --deep --strict` and `spctl -a -vv`.
 3. Install on a clean Mac and run one simulation.
 4. Distribute.
-The completion notification (run.sh) reminds Omar of this list and drops
-`~/Desktop/TAU-READY-ACTION-REQUIRED.md` with the exact steps.
+The completion notification (`~/.tau-autobuilder/run.sh`, not in this repo)
+reminds Omar of this list and drops `~/Desktop/TAU-READY-ACTION-REQUIRED.md`
+with the exact steps.
 
 ## Branch discipline (one lineage, no forks)
 
@@ -439,7 +445,9 @@ same session, or don't branch at all. A second branch that anything is
 "constantly improving" in parallel is exactly the fragmentation this rule
 exists to prevent — it produces divergent metrics and unreviewable duplicate
 work. The only sanctioned exception is the ephemeral `auto/ltspice-parity-wip`
-rescue ref created by `scripts/checkpoint.sh` / `run.sh`'s durability net —
+rescue ref created by the `~/.tau-autobuilder/run.sh` durability net (the
+in‑repo `scripts/checkpoint.sh` hook commits and pushes to the branch itself,
+it does not create the `-wip` ref) —
 it is force‑pushed scratch space for crash recovery, always reconciled or
 discarded within the next session (see STEP 0 in the build prompt), and is
 deleted once consumed. It is not a parallel lineage of real work.
