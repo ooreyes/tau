@@ -166,17 +166,24 @@ Both currently report ALL CHECKS PASS: lightness band, chroma floor, adjacent
 CVD separation, normal-vision floor, and contrast against the surface.
 (Re-verified 2026-08-06 by running both commands above.)
 
-> **Audit note — 2026-08-06: the shipped rotation does not match this table.**
-> The rule is stated correctly here; the code has diverged.
-> `apps/desktop/src/simulation/linearTransient.ts:116` uses the documented order
-> (green, vermillion/red, sky/cyan, olive/cream, purple, orange/amber), but the
-> **native ngspice path** — the engine that actually runs on the desktop build —
-> uses a different order at `apps/desktop/src/engine/nativeSpice.ts:62`:
-> cyan, green, cream, red, purple, amber. That puts olive adjacent to green,
-> which is the exact pair §1.5 says fails the normal-vision floor.
-> `apps/desktop/src/styles/palette.test.ts:26` only parses `TRACE_COLORS` out of
-> `linearTransient.ts`, so the native list is unguarded. Fix the code (and widen
-> the test to both lists); do not edit this table to match.
+> **Audit note — 2026-08-06: a rotation drift was found here and is now fixed.**
+> The **native ngspice path** — the engine that actually runs on the desktop
+> build — had shipped a different order in `apps/desktop/src/engine/nativeSpice.ts`:
+> cyan, green, cream, red, purple, amber. That put olive directly after green.
+> Measured, not assumed: that order fails the validator twice — normal-vision
+> `#9A8C00↔#0CA176` ΔE **13.7** against a floor of 15, and CVD
+> `#D86108↔#9A8C00` ΔE **0.8** under deuteranopia. The preview solver's list in
+> `simulation/linearTransient.ts` was correct throughout, and
+> `styles/palette.test.ts` only parsed that one file, so the native list was
+> unguarded and drifted silently.
+>
+> Both lists now use the documented order, and `styles/palette.test.ts`
+> enumerates every renderer's `TRACE_COLORS`, validates each in its own order,
+> and asserts the lists are identical to one another — verified to fail on the
+> old order before the fix landed. **Adding a new renderer means adding it to
+> `ROTATION_SOURCES` in that test**; a rotation that exists but is not listed is
+> precisely the gap that allowed this. As before: fix the code, never edit this
+> table to match.
 
 Traces are drawn at 1.5px. No glow, gradient fill, or drop shadow: decoration
 misrepresents the precision of the data. `--signal` (amber) is the running

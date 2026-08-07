@@ -120,7 +120,9 @@
      The rotation order in TRACE_COLORS is part of the result, not cosmetic:
      these hues only clear the adjacent-pair checks in the order
      green, vermillion, sky, olive, purple, orange. Re-run
-     dataviz/scripts/validate_palette.js before changing a value OR the order. */
+     `node scripts/validate-palette.mjs` (from the repo root) before changing a
+     value OR the order; src/styles/palette.test.ts runs it over every
+     renderer's TRACE_COLORS and fails if the lists drift apart. */
   --trace-cyan: #3193C6;   /* sky */
   --trace-green: #0CA176;   /* green */
   --trace-cream: #9A8C00;   /* olive */

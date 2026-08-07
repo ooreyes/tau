@@ -59,11 +59,17 @@ type NativeExecution = { result: NativeSpiceResult; deck: ReturnType<typeof buil
 /** Keeps a single high-resolution result below Rust's transfer guard. */
 export const MAX_NATIVE_OUTPUT_POINTS = 2_000_000;
 
+/** Rotation order is load-bearing, not cosmetic - see DESIGN_SYSTEM.md §1.5.
+ * These hues only clear the adjacent-pair checks in this exact sequence: olive
+ * (cream) beside green fails the normal-vision floor, and vermillion (red)
+ * beside olive collapses under deuteranopia. This list must stay identical to
+ * the one in `simulation/linearTransient.ts`; `styles/palette.test.ts` reads
+ * both and fails if they drift apart or out of order. */
 const TRACE_COLORS = [
-  "var(--trace-cyan)",
   "var(--trace-green)",
-  "var(--trace-cream)",
   "var(--trace-red)",
+  "var(--trace-cyan)",
+  "var(--trace-cream)",
   "var(--trace-purple)",
   "var(--trace-amber)",
 ];
