@@ -20,33 +20,40 @@
 > of Done). The old "≥80/82" deck/op DoD wording is retired — honest ceiling
 > on this 82-set is **79** deck/op; do not weaken the three refusals.
 
-> **🔴 GATE IS RED — measured 2026‑08‑06 on `auto/ltspice-parity` @ `f77b831`.**
+> **🔴 GATE IS RED BY ONE FILE — measured 2026‑08‑06 on `auto/ltspice-parity`.**
 > `CORPUS_CANONICAL_ONLY=1 scripts/acceptance-corpus.sh` (26 s) reports
-> **82 imported / 81 warning‑clean / 79 deck‑built / 65 op‑converged**.
-> Import, warning‑clean and deck‑built all sit exactly at the documented
-> ceiling; **op‑converged is 14 below the floor of 79**, so three soft
-> assertions fail: `opConverged ≥ 79`, `capability.failure === 0` (13), and
-> `capability.deck_guard_leak === 0` (1). The three capability refusals are
-> still the expected ones (NIGBT, Chan‑core NonLinearTransformer, Royer's
-> LT1184F). The 13 hard failures all build a deck and are then rejected by
-> ngspice at `.op`, in two groups:
+> **82 imported / 81 warning‑clean / 79 deck‑built / 78 op‑converged**;
+> capability **success 78 · refusal 3 · deck‑guard‑leak 1 · failure 0**.
+> Import, warning‑clean and deck‑built sit exactly at the documented ceiling.
+> Two soft assertions still fail: `opConverged ≥ 79` (78) and
+> `capability.deck_guard_leak === 0` (1). Both are the same single file.
 >
-> - **XSPICE Laplace lowering (TwoTau, Draft8)** — `singular matrix: check node
->   a_e2#branch_1_0` / `a_e1#branch_1_0`. The `s_xfer` lowering emits *both* the
->   original VCVS and an XSPICE `A` block with unlinked node names (in TwoTau the
->   `A` device's input is `b`, the VCVS's control is `c`, neither is connected to
->   anything else, and both paths drive `n002`). `PLL`/`PLL2` also use `s_xfer`
->   and pass, so this is specific to the dual‑deck path, not to `s_xfer` itself.
-> - **Genuine OP non‑convergence (11 files)** — class‑d_starter, deadtime,
->   Draft9, Draft10, Electrometer, Howland, LoopGain, LoopGain2, phono, relax,
->   Wien. No singular matrix; gmin/source stepping and the transient OP all fail.
->   Several carry ngspice "Model issue" warnings for LTspice‑only parameters
->   (`Iave`/`Vpk` on `D`, `Vk`/`Alpha` on `NJF`, plus `sidiode`/`VDMOS` types),
->   which are *not* yet confirmed as the cause.
+> **Fixed today: the VCVS pin‑role inversion (13 files, 65 → 78 op‑converged).**
+> `buildPinOverride` preferred the installed LTspice `.asy` pin list over Tau's
+> curated `LTSPICE_PINS` entry, then mapped it *positionally* onto
+> `getLocalPins(kind)`. `e.asy` SpiceOrder is `out+,out-,ctrl+,ctrl-` but Tau's
+> local order is `cp,cn,op,on`, so **every imported VCVS had its output and
+> control terminals swapped**. It only reproduced with an installed LTspice
+> symbol library present. Fixed in `apps/desktop/src/io/ascImport.ts` by
+> preferring the curated entry for primitives while leaving `subckt` on the
+> `.asy` (whose pin count is genuinely variable — AD8029's 6th DISABLE port).
+> Full suite green afterwards: 2995 passed / 8 skipped, typecheck clean.
+> Note for anyone reading older results: a swapped VCVS that still converged
+> produced a **wrong answer**, not an error.
 >
-> Reproduce the untruncated engine output with `CORPUS_DECK_DIR=<dir>` to dump
-> the generated `.cir`, then pipe it to `target/debug/tau --tau-spice-worker`;
-> the corpus reporter itself truncates the error at 320 characters.
+> **Still open — `Educational/ISO16750-2_example.asc` (deck‑guard‑leak).**
+> Subcircuit‑name sanitisation mismatch: ngspice rejects `-` in a subckt name,
+> so Tau maps it to `_` on instance references, and its bundled `ISO16750-2.lib`
+> is stored pre‑sanitised — but the user's *installed* `lib/sub/ISO16750-2.lib`
+> is auto‑resolved ahead of it and is not. The deck defines
+> `.subckt 4-6-3_12V_StartingProfile` and references `4_6_3_12V_StartingProfile`.
+> The fix must sanitise `.subckt`/`.ends` in attached and auto‑resolved library
+> text *including nested references inside those libraries*, so it is not a
+> one‑liner. The guard should also refuse this before the native round trip.
+>
+> Debugging note: the corpus reporter truncates engine errors at 320 characters,
+> which hides the real `singular matrix` / `Error:` lines. Dump the deck with
+> `CORPUS_DECK_DIR=<dir>` and pipe it to `target/debug/tau --tau-spice-worker`.
 
 ---
 

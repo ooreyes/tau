@@ -1069,7 +1069,13 @@ function buildPinOverride(
   // terminals and silently inverted every imported VCVS. The curated entries are
   // written in Tau's own pin order for exactly this reason, so prefer them and
   // fall back to `.asy` geometry only for symbols nobody has curated.
-  const ltPins = curatedPins ?? metadataPins;
+  // A `subckt` is the exception: its pin COUNT is whatever its `.asy` declares
+  // (AD8029's sixth DISABLE port, instrumentation amps, FDAs), and the branch
+  // below assigns p1..pN straight from SpiceOrder, so there is no positional
+  // mismatch to correct and the installed symbol must stay authoritative.
+  const ltPins = kind === "subckt"
+    ? (metadataPins ?? curatedPins)
+    : (curatedPins ?? metadataPins);
   if (!ltPins) return null;
   const tauPins = getLocalPins(kind);
   if (ltPins.length === 0 || tauPins.length === 0) return null;

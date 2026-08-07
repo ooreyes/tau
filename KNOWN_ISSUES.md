@@ -21,14 +21,18 @@ that as a successful run, not an error, so Tau checks for the stimulus first and
 says what is missing instead of drawing a flat trace at the bottom of the plot.
 
 Outside the desktop app there is no native engine, so noise there falls back to
-Tau's own smaller solver, which models R/C/L, sources, diodes, op-amps and
-controlled sources but **not transistors** - on those it refuses to run and
-says so.
+Tau's own smaller solver. Its supported set is narrower than the other preview
+analyses: R/C/L, sources, ideal op amps, switches, grounds and test points, and
+**only resistors actually generate noise**. Diodes, controlled sources and
+transistors are all refused by name rather than quietly contributing zero (see
+`NOISE_SUPPORTED` in `apps/desktop/src/simulation/noise.ts`).
 
-Every result is labelled with the engine that produced it, on the status strip
-above the plots - `ngspice` or `Preview solver`. The label follows the analysis
+Every result that records an engine is labelled with it, on the status strip
+above the plots - `ngspice` or `Linear preview`. The label follows the analysis
 tab you are looking at, so switching tabs re-attributes rather than reporting
-one engine for the whole session.
+one engine for the whole session. A result produced by a path that never chose
+an engine carries no badge at all; an absent badge means unknown, never
+"native".
 
 ## Devices that are not modelled yet
 
@@ -78,9 +82,12 @@ one engine for the whole session.
   sheet that is nothing but a drawing - opens in view. Hierarchy ports (`IOPIN`
   records, which mark the nets a sheet exposes when it is used as a subcircuit
   symbol) survive a save with their direction, attached to the net label they
-  name. Tau does not draw a port marker for them and does not yet resolve a
-  hierarchy, so such a sheet still opens as a flat circuit - the ports are
-  preserved, not acted on. The readouts LTspice paints on a schematic after a
+  name. Tau does not draw a port marker for them, so opening such a sheet on its
+  own shows a flat circuit with the ports preserved but not annotated. Being
+  *used* as a subcircuit is a different matter and does work: a parent schematic
+  that instances an `.asc` resolves and flattens it for simulation (see "a
+  resolved `.asc` hierarchical block" below). The readouts LTspice paints on a
+  schematic after a
   run (`DATAFLAG` records) survive a save with their expression intact; Tau
   does not evaluate or draw them, so they too are preserved rather than acted
   on. The extra symbol attributes that carry a part's
@@ -92,10 +99,12 @@ one engine for the whole session.
   would have to rewrite into a different real symbol (so the slots have nowhere
   to land), a joined-value edit that spans more than one original attribute slot
   (a change wholly inside one slot is written back there), and symbols whose pins
-  and Tau's do not line up (a 4-pin BJT's substrate, which Tau does not model;
-  a 2-pin current-controlled switch, which has nowhere to put the control pair
-  Tau draws on every switch). A voltage-controlled switch (`sw`) is not one of
-  them any more - it is written back as a `sw` with its four pins. A part saved
+  and Tau's do not line up (a 4-pin BJT's substrate, which Tau does not model).
+  Neither switch is one of them any more: a voltage-controlled switch (`sw`) is
+  written back as a `sw` with its four pins, and a current-controlled switch
+  (`csw`) as a `csw` with its two, its named current control preserved in
+  `SpiceModel` (`VERBATIM_UNSAFE_LEAFS` in `apps/desktop/src/io/ascExport.ts` is
+  now just `npn4`, `pnp4`, `varistor`, `diac`). A part saved
   under a placeholder symbol is the exception - it keeps its slots in a Tau-only
   attribute, so they are no longer a reason to refuse the save. Neither is a
   vendor symbol Tau has no equivalent for: its raw `SYMBOL` record, WINDOW
@@ -121,10 +130,17 @@ one engine for the whole session.
 - Tau ships no manufacturer model files and bundles no example that depends on
   one. You attach your own `.lib`/`.subckt`; nothing vendor-specific is
   redistributed with the app.
-- LTspice's built-in behavioral code models (for example the `OTA` A-device)
-  and its soft-limit helper functions (`uplim`/`dnlim`, common in Analog
-  Devices output stages) are not translated yet; a macromodel built from them
-  will not simulate and says so at run time.
+- LTspice's `OTA` A-device and its soft-limit helper functions
+  (`uplim`/`dnlim`, common in Analog Devices output stages) **are** translated.
+  The documented OTA subset maps onto a pinned native OTA code model, including
+  four-quadrant multiplier ports, asymmetric `Isource`/`Isink`, the `Ref` input
+  offset and the `linear` flag; an expression-valued `Iout` or a non-literal
+  epsilon still refuses by name rather than approximating
+  (`apps/desktop/src/engine/userModelLibrary.ts`). Three-argument `uplim`/
+  `dnlim` become the documented exponential-shoulder expression
+  (`apps/desktop/src/simulation/behavioral.ts`); an unexpected arity is left
+  verbatim rather than guessed at, so a two-argument form still reaches ngspice
+  unchanged.
 - If two attached files define the same subcircuit name, the first attached
   file wins; re-attaching a file with the same name replaces it. An attached
   definition that collides with a Tau built-in model name takes precedence -
@@ -134,8 +150,16 @@ one engine for the whole session.
 
 - The preview solver covers R/C/L, sources, diodes/LEDs/zeners, op-amps and
   controlled sources. Transistors and digital parts need the native engine and
-  say so when you press Run. Switches are accepted but not modelled - see
-  "Devices that are not modelled yet" above.
+  say so when you press Run.
+- Switches in the preview solver are modelled, but only as *static* contacts: a
+  switch, push button or SPDT whose value reads as closed is stamped as an
+  ideal short and otherwise as an open, in all four preview analyses. The hazard
+  is the case the solver cannot see - a **model-backed `sw`** has no threshold
+  behaviour here and simply reads as permanently open, so a preview result for a
+  circuit that switches on a control voltage is quietly wrong rather than
+  refused. An LTspice current-controlled switch (`csw`) is the exception: the
+  preview refuses it by name rather than approximating it as fixed open or
+  closed. Use the desktop app's native engine for any real switching behaviour.
 - Like the native engine, the preview solves the DC operating point before a
   transient (unless the analysis specifies `uic`). If that solve is singular -
   for example an ideal source directly across an ideal inductor - the preview
@@ -147,13 +171,29 @@ one engine for the whole session.
 
 ## Corpus files that do not simulate
 
-**Measured 2026-08-06 on `auto/ltspice-parity` @ `f77b831`. The canonical gate
-is currently RED and 13 runnable circuits do not converge.** Reproduce in ~26
-seconds with `CORPUS_CANONICAL_ONLY=1 scripts/acceptance-corpus.sh`.
+**Measured 2026-08-06 on `auto/ltspice-parity`. The canonical gate is RED by a
+single file.** Reproduce in ~26 seconds with
+`CORPUS_CANONICAL_ONLY=1 scripts/acceptance-corpus.sh`.
 
 Canonical 82-file corpus: **82 imported / 81 warning-clean / 79 deck-built /
-65 op-converged.** Import, warning-clean and deck-built all sit exactly at the
-documented honest ceiling; op-converged is 14 below its floor of 79.
+78 op-converged** (capability: success 78, refusal 3, deck-guard-leak 1,
+hard failure 0). Import, warning-clean and deck-built sit exactly at the
+documented honest ceiling. Op-converged is one short of its floor of 79, and
+the single remaining `deck-guard-leak` breaches its own floor of zero.
+
+Earlier the same day this measured **65 op-converged with 13 hard failures**.
+Those 13 were one bug: `buildPinOverride` preferred the installed LTspice
+`.asy`'s pin list over Tau's curated `LTSPICE_PINS` entry, then mapped it
+*positionally* onto `getLocalPins(kind)`. For `e.asy` the installed SpiceOrder
+is `out+,out-,ctrl+,ctrl-` while Tau's local order is `cp,cn,op,on`, so every
+imported VCVS had its **output and control terminals swapped**. It only
+reproduced when an installed LTspice symbol library was present, which is why
+the built-in-layout path always looked correct. Fixed in
+`apps/desktop/src/io/ascImport.ts` by preferring the curated entry for
+primitives while leaving `subckt` on the `.asy` (whose pin count is genuinely
+variable — AD8029's sixth DISABLE port). Worth knowing when reading older
+results: a swapped VCVS that happened to converge produced a *wrong answer*
+rather than an error.
 
 Three files are refused at deck build. These are the expected, documented
 refusals and are *not* regressions — Tau declines rather than substituting
@@ -165,27 +205,21 @@ something it cannot model:
 - `Educational/Royer.asc` — the encrypted `LT1184F` subcircuit is undefined, so
   the `unresolvedSubckts` guard stops the run before ngspice sees it.
 
-Thirteen files build a valid deck and are then rejected by ngspice at `.op`.
-These *are* real failures, in two groups:
+One file remains, and it is the sole reason the gate is red:
 
-- **XSPICE Laplace lowering — `Educational/TwoTau.asc`, `Draft8.asc`.**
-  ngspice reports `singular matrix: check node a_e2#branch_1_0` (and
-  `a_e1#branch_1_0`). The `s_xfer` lowering emits both the original VCVS and an
-  XSPICE `A` block without linking their node names: in `TwoTau` the `A`
-  device's input is node `b`, the VCVS's control is node `c`, neither node is
-  referenced anywhere else in the deck, and both paths drive `n002`.
-  `Educational/PLL.asc` and `PLL2.asc` also use `s_xfer` and do converge, so
-  this is specific to the dual-deck Laplace path rather than to `s_xfer`.
-- **Operating-point non-convergence — 11 files.** `class-d_starter.asc`,
-  `deadtime.asc`, `Draft9.asc`, `Draft10.asc`, `Educational/Electrometer.asc`,
-  `Howland.asc`, `LoopGain.asc`, `LoopGain2.asc`, `phono.asc`, `relax.asc`,
-  `Wien.asc`. No singular matrix is reported; dynamic gmin stepping, true gmin
-  stepping, source stepping and the transient operating point all fail in turn.
-  Several of these decks also draw ngspice "Model issue" warnings for
-  LTspice-only model parameters (`Iave`/`Vpk` on a `D`, `Vk`/`Alpha` on an
-  `NJF`) and LTspice-only model types (`sidiode`, `VDMOS`). Those parameters are
-  ignored by ngspice rather than fatal, and have **not** been confirmed as the
-  cause — the root cause of this group is still open.
+- `Educational/ISO16750-2_example.asc` — classified **deck-guard-leak**, and
+  root-caused: a subcircuit-name sanitisation mismatch. ngspice rejects a `-`
+  in a subcircuit name, so Tau maps it to `_` on instance references
+  (`sanitizeSubcktName`, `apps/desktop/src/engine/bundledSubcircuits.ts`). Tau's
+  own bundled copy of `ISO16750-2.lib` is stored pre-sanitised, but the user's
+  *installed* `LTspice/lib/sub/ISO16750-2.lib` is auto-resolved ahead of it and
+  is not, so the deck ends up with `.subckt 4-6-3_12V_StartingProfile` defined
+  and `XU1 … 4_6_3_12V_StartingProfile` referenced. Fixing it means sanitising
+  `.subckt`/`.ends` names in attached and auto-resolved library text as well —
+  including any nested references *inside* those libraries, which is why it is
+  not a one-line change. The guard should also catch this before the native
+  round trip: a user currently sees a cryptic ngspice error rather than "this
+  part is undefined".
 
 Note when debugging: the corpus reporter truncates the engine error at 320
 characters, which hides the actual `singular matrix` / `Error:` lines. To see
