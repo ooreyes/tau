@@ -36,6 +36,10 @@ that does not exist, and a reader will believe it.
 | Discrete states across channels | [Dot matrix](#8-dot-matrix) | A line chart of a digital signal is a lie |
 | A series with a current position | [Bar series + now-marker](#9-bar-series-with-a-now-marker) | Without the marker there is no "now" |
 | Run state, pass/fail, convergence | [Status lamp](#10-status-lamp-and-word) | A chart of a boolean is noise |
+| Two related series (V and I, in and out) | [Mirrored pair](#9b-mirrored-pair) | Two stacked plots waste height and break comparison |
+| A signal judged against bands (regions, limits) | [Zone band](#9c-zone-band) | A bare trace cannot be judged without its limits |
+| Discrete state across a timeline | [State strip](#9d-state-strip) | A line chart of a digital signal is a lie |
+| Measured versus expected | [Comparison pair](#9e-comparison-pair) | Two numbers lose the divergence |
 | Unbounded and non-temporal (impedance, count) | [Value block](#2-the-value-block) | Any gauge implies a maximum you invented |
 
 When two forms both fit, prefer the one with less ink.
@@ -58,7 +62,12 @@ Rules that matter:
   hierarchy has collapsed and the module reads as a form field.
 - `--font-mono` with tabular figures, always. A value that changes must not
   reflow its neighbours.
-- Unit travels with the number. `2.5 V`, never `2.5` with `V` in a header.
+- Unit travels with the number, and is **subordinate to it**: one step down the
+  scale and dimmer, set immediately against the digits on the same baseline.
+  Look at `2H 56M` and `126 mg/dL` on plate 5 — the digits carry the weight and
+  the unit rides along. Never `2.5` with `V` promoted to a column header.
+- A status word may share the value's line (`GOOD`, `converged`, `~settling`)
+  in its semantic colour. This is the cheapest way to make a number judgeable.
 - Label above value. Reading order is identify-then-read; a trailing label
   makes the eye backtrack.
 - No container. Grouping comes from proximity.
@@ -81,8 +90,14 @@ waveform, a convergence history, an FFT envelope.
   and implies integration.
 - Baseline: `--border-subtle` hairline, only when zero is meaningful.
 - Now-marker: 1px `--accent-line` vertical, plus a dot at the intersection.
-- No gridlines, no ticks, no axis labels. If the reader needs values, pair it
-  with a value block; if they need to measure, they should be in the scope.
+- No gridlines and no ticks. Where the reader needs numbers, put **two or three
+  values on the y-axis and bold the current one** — the power-curve module on
+  plate 4 shows `310 / 261 / 210` with the live value emphasised in place. That
+  is lighter than a separate readout and keeps the number next to its position.
+- Min and max belong on the axis as annotations (`▲35`, `▼-16`), not in their
+  own module.
+- Prefer a relative time axis when the absolute time is meaningless:
+  `40 MIN AGO → NOW` beats two timestamps.
 - Endpoints may be labelled at `--fs-micro`/`--muted` when the domain is not
   obvious.
 
@@ -201,6 +216,72 @@ Use for binned data: FFT bins, a histogram, per-step results, per-month runs.
 - Now-marker: label it (`NOW`) at `--fs-micro`; position alone is ambiguous.
 
 ---
+
+## 9b. Mirrored pair
+
+Two series sharing one plot, drawn above and below a common zero line — the
+network-throughput module on plate 4.
+
+Use when two quantities are read together and their *relative* size is the
+point: V and I on one node, input versus output, source versus load current.
+
+- Zero line: `--border-subtle` hairline across the full width.
+- Upper series and lower series each take their own `--trace-*` colour.
+- Axis labels mirror around zero (`0.4 / 0 / 0.4`); label each side's quantity
+  and unit at the top corners.
+- Only legitimate when both series genuinely share a time axis and a sign
+  convention. If one is a voltage and the other a current, say so in the corner
+  labels — the shared axis must not imply a shared unit.
+
+Saves the vertical space two stacked plots would take and makes phase
+relationships visible at a glance.
+
+## 9c. Zone band
+
+Shaded horizontal regions behind a trace, with inline labels — the heart-rate
+zone module on plate 4. **The single most transferable idea for Tau.**
+
+Use whenever a signal is judged against thresholds rather than read absolutely:
+saturation and cutoff regions, supply rails, a spec limit, a safe operating
+area, a noise floor.
+
+- Band fill: the semantic colour at very low alpha (`--*-soft` tokens), never
+  a solid.
+- Band label: inline at the left edge of the band, `--fs-micro`, `--muted`.
+- The trace draws *over* the bands at full strength.
+- Boundaries are values, so label them on the y-axis.
+- Two or three bands. More becomes a heatmap and the trace gets lost.
+
+A trace with bands can be judged in a glance; a bare trace requires the reader
+to remember the limits.
+
+## 9d. State strip
+
+A horizontal timeline of stacked coloured segments — the sleep-quality module
+on plate 2.
+
+Use for discrete state over time: a digital signal, a switching phase, per-step
+run outcomes, convergence attempts.
+
+- Full-width track, 8–12px, `--r-xs`.
+- Each state its own colour; adjacent identical states merge into one segment.
+- Endpoints labelled with the time domain; a summary value beneath
+  (`QUALITY 79%` in the reference).
+- Segments below a couple of pixels get merged rather than drawn — a strip of
+  invisible slivers is noise pretending to be data.
+
+## 9e. Comparison pair
+
+Two lines on one plot, one measured and one reference, with a status word —
+the traffic module on plate 2.
+
+Use for measured versus expected: a `.meas` result against its target, this run
+against the last, Tau against a reference simulator.
+
+- Measured: full-strength `--trace-*`. Reference: `--muted`, or dashed.
+- Divergence is the message, so do not autoscale them apart — share one axis.
+- Status word (`within tolerance`, `12% high`) in semantic colour, top right.
+- Legend both lines. Two unlabelled lines is a puzzle.
 
 ## 10. Status lamp and word
 

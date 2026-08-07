@@ -40,11 +40,28 @@ If a design needs a color the tokens do not have, that is a design-system
 decision: add the token to `:root` in both themes, document it in
 `DESIGN_SYSTEM.md`, and re-run the validator. Do not inline it.
 
+## Look at the reference plates first
+
+Five images live in `references/images/`. **Open them with the Read tool before
+you design anything** — at minimum `05-complications-large.png` (the clearest
+statement of type hierarchy) and `04-instrument-cluster.png` (the closest
+analogue to a Tau waveform card). They are the specification; the prose here is
+a summary of them, and a summary always loses detail that matters at the pixel
+level.
+
+| File | Read it when |
+|---|---|
+| `05-complications-large.png` | Any type, spacing, or unit-treatment decision. Highest resolution. |
+| `04-instrument-cluster.png` | Building a plot, sparkline, axis, or multi-series readout. |
+| `02-complications-dense.png` | Laying out several modules together; state-over-time strips. |
+| `01-complications-grid.png` | The core vocabulary at a glance. |
+| `03-radial-set.png` | Only when a dial or arc is genuinely justified. |
+
+`references/imagery.md` maps each plate to the specific modules worth copying.
+
 ## What the aesthetic actually is
 
-The reference imagery in `references/images/` is Apple Watch complications and
-instrument clusters. Study it before designing — see `references/imagery.md`
-for what to take from each plate and what to leave. The transferable ideas:
+The transferable ideas:
 
 **1. Black is the substrate, not a background.** True black (`--bg: #000000`)
 reads as an unlit instrument face. Modules sit *on* it. They are separated by
@@ -60,6 +77,13 @@ the signature move: `6,317` over `STEPS`, `45.3` beside `VO₂ MAX`. Two steps o
 the scale, not five. The value dominates; the label is a whisper that only has
 to be found once. In Tau terms: `--fs-display`/`--fs-heading` for the number,
 `--fs-micro`/`--fs-caption` with `--tracking-wide` and `--muted` for the label.
+
+**3b. The unit is part of the number, and smaller than it.** Look closely at
+`2H 56M`, `126 mg/dL`, `28MM`, `0.4 ↑Mbps`: the unit sits immediately against
+the numeral, baseline-aligned, one step down and dimmer. It never gets its own
+line and never leaves for a column header. For Tau this means `±157 mV` renders
+as a `--fs-heading` mantissa with a `--fs-caption`/`--muted` unit — the value
+stays scannable and the unit stays attached to it.
 
 **4. One accent per module.** A module is grayscale plus a single hue that
 means something. Cyan for a voltage trace, amber for the running lamp, red for
@@ -166,11 +190,16 @@ top of its own resistor's value.
 
 ## Reference files
 
-- `references/imagery.md` — the reference plates, what each demonstrates, and
-  which ideas transfer to an EDA tool versus which are watch-specific.
-- `references/modules.md` — the readout module catalog: every micro-visualization
-  form, when each is the right choice, and how to build it from Tau tokens.
-  Read before creating any new readout, gauge, chart, or badge.
+- `references/imagery.md` — an index into the five plates: which module on which
+  image demonstrates what, and which ideas are watch-specific. Read it
+  alongside the images, not instead of them.
+- `references/modules.md` — the readout module catalog: every form, when each is
+  the right choice, and how to build it from Tau tokens. Read before creating
+  any new readout, gauge, chart, or badge.
+- `references/applying-to-tau.md` — concrete proposals for Tau's actual surfaces
+  (measurement cards, waveform plots, zone bands, probe identity, step sweeps),
+  ordered by payoff. Start here when the task is "improve this screen" rather
+  than "build this component".
 - `references/antipatterns.md` — the failure modes this language exists to
   prevent, each with the specific damage it does.
 
