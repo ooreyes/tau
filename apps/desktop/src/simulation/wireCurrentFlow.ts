@@ -7,7 +7,7 @@ import type { Point, SchematicWire } from "../schematic/types";
 import type { ExtractedCircuit } from "../schematic/netlist";
 import { deriveDcRcBranches, findCurrentTrace } from "./currents";
 import type { AnalysisResult } from "./linearTransient";
-import type { ValueRange } from "./quantity";
+import { settledReading, type SettledReading } from "./settlement";
 import { primaryBranches, type OperatingPointResult } from "./operatingPoint";
 
 export type PinIndex = Map<string, { componentId: string; pinId: string }[]>;
@@ -86,48 +86,32 @@ export function tranNetVoltages(
   return out;
 }
 
-export function tranNetVoltageRanges(
+/** Settled node voltages. Deliberately NOT whole-run min/max: that mixed the
+ *  turn-on excursion into a number the schematic presents as the operating
+ *  value. See `settlement.ts`. */
+export function tranNetVoltagesSettled(
   result: Extract<AnalysisResult, { ok: true }>,
-): Map<string, ValueRange> {
-  const out = new Map<string, ValueRange>();
+): Map<string, SettledReading> {
+  const out = new Map<string, SettledReading>();
   for (const trace of result.traces) {
     if (trace.unit !== "V" || trace.values.length === 0) continue;
-    let min = Infinity;
-    let max = -Infinity;
-    for (let i = 0; i < trace.values.length; i += 1) {
-      const v = trace.values[i]!;
-      if (Number.isFinite(v)) {
-        if (v < min) min = v;
-        if (v > max) max = v;
-      }
-    }
-    if (Number.isFinite(min) && Number.isFinite(max)) {
-      out.set(trace.id, { min, max });
-    }
+    const reading = settledReading(trace.values);
+    if (reading) out.set(trace.id, reading);
   }
   return out;
 }
 
-export function tranComponentCurrentRanges(
+/** Settled branch currents, on the same basis as `tranNetVoltagesSettled`. */
+export function tranComponentCurrentsSettled(
   result: Extract<AnalysisResult, { ok: true }>,
-): Map<string, ValueRange> {
-  const out = new Map<string, ValueRange>();
+): Map<string, SettledReading> {
+  const out = new Map<string, SettledReading>();
   for (const { component } of result.circuit.components) {
     if (!component.label) continue;
     const trace = findCurrentTrace(result.currents, component.label);
     if (!trace || trace.values.length === 0) continue;
-    let min = Infinity;
-    let max = -Infinity;
-    for (let i = 0; i < trace.values.length; i += 1) {
-      const amps = trace.values[i]!;
-      if (Number.isFinite(amps)) {
-        if (amps < min) min = amps;
-        if (amps > max) max = amps;
-      }
-    }
-    if (Number.isFinite(min) && Number.isFinite(max)) {
-      out.set(component.id, { min, max });
-    }
+    const reading = settledReading(trace.values);
+    if (reading) out.set(component.id, reading);
   }
   return out;
 }

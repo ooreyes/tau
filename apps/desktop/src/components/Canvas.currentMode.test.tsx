@@ -68,8 +68,10 @@ describe("Canvas - current mode on editor", () => {
 
     const volts = [...document.querySelectorAll(".op-annotation.voltage")].map((el) => el.textContent);
     const amps = [...document.querySelectorAll(".op-annotation.current")].map((el) => el.textContent);
-    expect(volts).toEqual(expect.arrayContaining(["10 V", "5 V"]));
-    expect(amps).toEqual(expect.arrayContaining(["-5 mA", "5 mA"]));
+    // Each readout names its quantity, so the cyan/green convention is not the
+    // only thing telling a voltage from a current.
+    expect(volts).toEqual(expect.arrayContaining(["V 10 V", "V 5 V"]));
+    expect(amps).toEqual(expect.arrayContaining(["I -5 mA", "I 5 mA"]));
     // No stale "Current mode" chrome on Canvas itself — badge lives in App sim header.
     expect(screen.queryByLabelText("Current mode on")).toBeNull();
   });

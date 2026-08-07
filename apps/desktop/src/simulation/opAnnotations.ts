@@ -6,15 +6,16 @@
  */
 import { primaryBranches, type OperatingPointResult } from "./operatingPoint";
 import type { ExtractedCircuit } from "../schematic/netlist";
-import { formatEngineeringRange, type ValueRange } from "./quantity";
+import { formatEngineeringRange, formatSettledReading, type ValueRange } from "./quantity";
+import type { SettledReading } from "./settlement";
 import { deriveDcRcBranches } from "./currents";
 import type { AnalysisResult } from "./linearTransient";
 import {
   nearestSampleIndex,
   tranComponentCurrents,
-  tranComponentCurrentRanges,
+  tranComponentCurrentsSettled,
   tranNetVoltages,
-  tranNetVoltageRanges,
+  tranNetVoltagesSettled,
 } from "./wireCurrentFlow";
 
 export interface OpAnnotation {
@@ -35,9 +36,29 @@ function netAnchor(points: readonly { x: number; y: number }[]): { x: number; y:
   return best;
 }
 
+/**
+ * Readouts carry their quantity as a one-letter prefix. Colour alone was
+ * carrying that meaning - cyan for a node voltage, green for a branch current -
+ * which is invisible to anyone who has not been told the convention, and to
+ * anyone who cannot separate the two hues. Two characters is the cheapest fix
+ * that does not put more text over the drawing.
+ */
+const QUANTITY_PREFIX = { voltage: "V", current: "I" } as const;
+
+const readingText = (
+  value: number | ValueRange | SettledReading,
+  unit: string,
+  kind: OpAnnotation["kind"],
+): string => {
+  const body = typeof value === "object" && "amplitude" in value
+    ? formatSettledReading(value, unit, 3)
+    : formatEngineeringRange(value, unit, 3);
+  return `${QUANTITY_PREFIX[kind]} ${body}`;
+};
+
 function voltageAnnotations(
   circuit: ExtractedCircuit,
-  voltageByNet: ReadonlyMap<string, number | ValueRange>,
+  voltageByNet: ReadonlyMap<string, number | ValueRange | SettledReading>,
 ): OpAnnotation[] {
   const annotations: OpAnnotation[] = [];
   for (const [netId, voltage] of voltageByNet) {
@@ -49,7 +70,7 @@ function voltageAnnotations(
       key: `v:${netId}`,
       x: anchor.x,
       y: anchor.y,
-      text: formatEngineeringRange(voltage, "V", 3),
+      text: readingText(voltage, "V", "voltage"),
       kind: "voltage",
     });
   }
@@ -58,14 +79,15 @@ function voltageAnnotations(
 
 function currentAnnotations(
   circuit: ExtractedCircuit,
-  currents: ReadonlyMap<string, number | ValueRange>,
+  currents: ReadonlyMap<string, number | ValueRange | SettledReading>,
 ): OpAnnotation[] {
   const annotations: OpAnnotation[] = [];
   for (const [id, current] of currents) {
     const extracted = circuit.components.find((c) => c.component.id === id);
     if (!extracted) continue;
-    const isNearZero = (c: number | ValueRange) => {
+    const isNearZero = (c: number | ValueRange | SettledReading) => {
       if (typeof c === "number") return Math.abs(c) < 1e-15;
+      if ("amplitude" in c) return Math.abs(c.offset) < 1e-15 && Math.abs(c.amplitude) < 1e-15;
       return Math.abs(c.min) < 1e-15 && Math.abs(c.max) < 1e-15;
     };
     // Skip empty R/C spam; still label sources/inductors that report 0 A.
@@ -82,7 +104,7 @@ function currentAnnotations(
       key: `i:${id}`,
       x: extracted.component.x,
       y: extracted.component.y,
-      text: formatEngineeringRange(current, "A", 3),
+      text: readingText(current, "A", "current"),
       kind: "current",
     });
   }
@@ -123,9 +145,12 @@ export function opAnnotations(
 }
 
 /**
- * EveryCircuit-style static settlement readout from a successful `.tran`:
- * voltage and branch current ranges across settlement/steady state. Same
- * cyan/green labels as OP mode.
+ * Static settlement readout from a successful `.tran`: the STEADY-STATE
+ * voltage and branch current, not the whole-run extremes.
+ *
+ * With an explicit `timeSeconds` this still reports the instantaneous sample -
+ * that path is driven by a scope cursor, where the reader is deliberately
+ * asking "what is it at this instant".
  */
 export function tranAnnotations(
   result: AnalysisResult | null,
@@ -142,8 +167,8 @@ export function tranAnnotations(
       ...currentAnnotations(circuit, currents),
     ];
   }
-  const voltageByNet = tranNetVoltageRanges(result);
-  const currents = tranComponentCurrentRanges(result);
+  const voltageByNet = tranNetVoltagesSettled(result);
+  const currents = tranComponentCurrentsSettled(result);
   return [
     ...voltageAnnotations(circuit, voltageByNet),
     ...currentAnnotations(circuit, currents),

@@ -112,3 +112,40 @@ export function formatEngineeringRange(
   return `${strMin} … ${strMax}`;
 }
 
+/** An offset this small relative to the swing is a sampling artefact, not a
+ *  real DC bias, so the reading is written as a plain "±A". */
+const SYMMETRIC_OFFSET_FRACTION = 0.02;
+/** Below this fraction of the offset there is no meaningful swing: the node is
+ *  sitting at a DC level and a "± 0" tail would be noise. */
+const DC_AMPLITUDE_FRACTION = 0.005;
+
+/**
+ * A settled transient reading, written the way it would be read off a scope.
+ *
+ *   DC level          `5 V`
+ *   symmetric swing   `±157 mV`
+ *   biased swing      `2.5 V ±157 mV`
+ *
+ * An unsettled waveform keeps its numbers but is marked, because the honest
+ * statement is "this is where it is heading", not "this is what it does".
+ */
+export function formatSettledReading(
+  reading: { offset: number; amplitude: number; settled: boolean },
+  unit = "",
+  digits = 3,
+): string {
+  const { offset, amplitude, settled } = reading;
+  if (!Number.isFinite(offset) || !Number.isFinite(amplitude)) return "--";
+  const scale = Math.max(Math.abs(offset), Math.abs(amplitude));
+  const suffix = settled ? "" : " ~settling";
+
+  if (scale === 0) return `0 ${unit}`.trim() + suffix;
+  if (amplitude <= DC_AMPLITUDE_FRACTION * scale) {
+    return formatEngineering(offset, unit, digits) + suffix;
+  }
+  if (Math.abs(offset) <= SYMMETRIC_OFFSET_FRACTION * scale) {
+    return `±${formatEngineering(amplitude, unit, digits)}${suffix}`;
+  }
+  return `${formatEngineering(offset, unit, digits)} ±${formatEngineering(amplitude, unit, digits)}${suffix}`;
+}
+

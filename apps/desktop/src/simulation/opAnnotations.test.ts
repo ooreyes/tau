@@ -41,10 +41,10 @@ describe("opAnnotations", () => {
     expect(volts).toHaveLength(2); // source net + divider midpoint; grounds skipped
     // Source net spans (0,0)..(64,0): anchor (0,0), 10 V.
     const src = volts.find((a) => a.x === 0 && a.y === 0);
-    expect(src?.text).toBe("10 V");
+    expect(src?.text).toBe("V 10 V");
     // Mid net spans (128,0)..(192,0): anchor (128,0), 5 V.
     const mid = volts.find((a) => a.x === 128 && a.y === 0);
-    expect(mid?.text).toBe("5 V");
+    expect(mid?.text).toBe("V 5 V");
   });
 
   it("labels the voltage source with its branch current at the component position", () => {
@@ -55,9 +55,9 @@ describe("opAnnotations", () => {
     const v1 = amps.find((a) => a.key === "i:vs-1");
     expect(v1).toMatchObject({ x: 0, y: 32, key: "i:vs-1" });
     // MNA branch current for a sourcing battery is negative: −10V/2k = −5 mA.
-    expect(v1?.text).toBe("-5 mA");
-    expect(amps.find((a) => a.key === "i:r-1")?.text).toBe("5 mA");
-    expect(amps.find((a) => a.key === "i:r-2")?.text).toBe("5 mA");
+    expect(v1?.text).toBe("I -5 mA");
+    expect(amps.find((a) => a.key === "i:r-1")?.text).toBe("I 5 mA");
+    expect(amps.find((a) => a.key === "i:r-2")?.text).toBe("I 5 mA");
   });
 
   it("returns [] for a null, failed, or geometry-less input", () => {
@@ -82,7 +82,7 @@ describe("opAnnotations", () => {
     // No V-source MNA branch without returnBranches, but R currents still come
     // from node voltages (EveryCircuit-style current mode).
     expect(anns.find((a) => a.key === "i:vs-1")).toBeUndefined();
-    expect(anns.find((a) => a.key === "i:r-1")?.text).toBe("5 mA");
+    expect(anns.find((a) => a.key === "i:r-1")?.text).toBe("I 5 mA");
   });
 
   it("draws one current label per part when a branch list carries per-terminal entries", () => {
@@ -106,7 +106,7 @@ describe("opAnnotations", () => {
 
     // Primary V1 + R1 + R2; terminal Ib/Ie entries must not multiply V1's label.
     expect(amps.filter((a) => a.key === "i:vs-1")).toHaveLength(1);
-    expect(amps.find((a) => a.key === "i:vs-1")?.text).toBe("-5 mA");
+    expect(amps.find((a) => a.key === "i:vs-1")?.text).toBe("I -5 mA");
     // Every render key is distinct, which is what the collision would break.
     expect(new Set(amps.map((a) => a.key)).size).toBe(amps.length);
   });
@@ -121,11 +121,11 @@ describe("tranAnnotations (transient current mode)", () => {
     expect(result.ok).toBe(true);
     const circuit = extractCircuit(components, wires, []);
     const anns = tranAnnotations(result, circuit);
-    expect(anns.find((a) => a.x === 0 && a.y === 0 && a.kind === "voltage")?.text).toBe("10 V");
-    expect(anns.find((a) => a.x === 128 && a.y === 0 && a.kind === "voltage")?.text).toBe("5 V");
-    expect(anns.find((a) => a.key === "i:vs-1")?.text).toBe("-5 mA");
-    expect(anns.find((a) => a.key === "i:r-1")?.text).toBe("5 mA");
-    expect(anns.find((a) => a.key === "i:r-2")?.text).toBe("5 mA");
+    expect(anns.find((a) => a.x === 0 && a.y === 0 && a.kind === "voltage")?.text).toBe("V 10 V");
+    expect(anns.find((a) => a.x === 128 && a.y === 0 && a.kind === "voltage")?.text).toBe("V 5 V");
+    expect(anns.find((a) => a.key === "i:vs-1")?.text).toBe("I -5 mA");
+    expect(anns.find((a) => a.key === "i:r-1")?.text).toBe("I 5 mA");
+    expect(anns.find((a) => a.key === "i:r-2")?.text).toBe("I 5 mA");
   });
 
   it("labels static settlement voltage and current ranges for dynamic waveforms", () => {
@@ -151,32 +151,90 @@ describe("tranAnnotations (transient current mode)", () => {
     const anns = tranAnnotations(result, circuit);
     const vAnn = anns.find((a) => a.kind === "voltage");
     const iAnn = anns.find((a) => a.kind === "current");
-    // A symmetric swing collapses to "±X" - same information as
-    // "-488 mV … 488 mV", less than half the schematic covered up.
-    expect(vAnn?.text).toBe("±488 mV");
-    expect(iAnn?.text).toBe("±494 µA");
+    // A symmetric swing reads as "±A", and the quantity is spelled out rather
+    // than left to colour alone.
+    // Three samples is too short a run to claim the waveform has settled, so
+    // the reading is marked rather than presented as a steady operating value.
+    expect(vAnn?.text).toBe("V ±488 mV ~settling");
+    expect(iAnn?.text).toBe("I ±494 µA ~settling");
   });
 
-  it("keeps the full range when the swing is not symmetric", () => {
+  it("reports the settled swing, not the turn-on excursion", () => {
+    // The reported failure: a 1 V/1 kHz source into R 1k + C 1µ showed
+    // "-157 mV … 254 mV" on the capacitor node. The +254 mV is a one-time
+    // first-cycle overshoot while the cap charges from zero; the node actually
+    // settles to a symmetric ±157 mV. Whole-run min/max presented that
+    // excursion as the operating value.
     const circuit = extractCircuit(components, wires, []);
     const nonGndNet = circuit.nets.find((n) => !n.isGround);
 
+    // First half: a big one-time excursion. Second half: settled ±100 mV.
+    const startup = [0, 0.254, -0.05, 0.2, -0.09, 0.16];
+    const settled = [0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.1];
+    const values = [...startup, ...settled];
+
     const result: Extract<AnalysisResult, { ok: true }> = {
       ok: true,
-      title: "Offset ramp",
-      times: [0, 0.5, 1],
+      title: "RC turn-on",
+      times: values.map((_, i) => i * 1e-4),
       traces: [
-        { id: nonGndNet!.id, label: `V(${nonGndNet!.id})`, unit: "V", color: "#000", values: [0, 2.5, 5] },
+        { id: nonGndNet!.id, label: `V(${nonGndNet!.id})`, unit: "V", color: "#000", values },
       ],
-      currents: [{ ref: "R1", label: "I(R1)", values: [0, 0.0025, 0.005] }],
+      currents: [],
       circuit,
-      stats: { sampleCount: 3, netCount: 2, componentCount: 2, stopTime: 1e-3, stepSize: 1e-5 },
+      stats: { sampleCount: values.length, netCount: 2, componentCount: 2, stopTime: 1e-3, stepSize: 1e-4 },
       warnings: [],
     };
 
-    const anns = tranAnnotations(result, circuit);
-    expect(anns.find((a) => a.kind === "voltage")?.text).toBe("0 V … 5 V");
-    expect(anns.find((a) => a.kind === "current")?.text).toBe("0 A … 5 mA");
+    const vAnn = tranAnnotations(result, circuit).find((a) => a.kind === "voltage");
+    expect(vAnn?.text).toBe("V ±100 mV");
+    expect(vAnn?.text).not.toContain("254");
+  });
+
+  it("marks a waveform that has not settled instead of quoting it as steady", () => {
+    const circuit = extractCircuit(components, wires, []);
+    const nonGndNet = circuit.nets.find((n) => !n.isGround);
+    // A monotonic ramp never settles: the tail keeps moving.
+    const values = Array.from({ length: 16 }, (_, i) => i * 0.5);
+
+    const result: Extract<AnalysisResult, { ok: true }> = {
+      ok: true,
+      title: "Ramp",
+      times: values.map((_, i) => i * 1e-4),
+      traces: [
+        { id: nonGndNet!.id, label: `V(${nonGndNet!.id})`, unit: "V", color: "#000", values },
+      ],
+      currents: [],
+      circuit,
+      stats: { sampleCount: values.length, netCount: 2, componentCount: 2, stopTime: 1e-3, stepSize: 1e-4 },
+      warnings: [],
+    };
+
+    const vAnn = tranAnnotations(result, circuit).find((a) => a.kind === "voltage");
+    expect(vAnn?.text).toContain("~settling");
+  });
+
+  it("writes a biased swing as offset ± amplitude", () => {
+    const circuit = extractCircuit(components, wires, []);
+    const nonGndNet = circuit.nets.find((n) => !n.isGround);
+    // Settled oscillation riding on a 2.5 V rail.
+    const values = Array.from({ length: 16 }, (_, i) => 2.5 + (i % 2 === 0 ? 0.1 : -0.1));
+
+    const result: Extract<AnalysisResult, { ok: true }> = {
+      ok: true,
+      title: "Biased ripple",
+      times: values.map((_, i) => i * 1e-4),
+      traces: [
+        { id: nonGndNet!.id, label: `V(${nonGndNet!.id})`, unit: "V", color: "#000", values },
+      ],
+      currents: [],
+      circuit,
+      stats: { sampleCount: values.length, netCount: 2, componentCount: 2, stopTime: 1e-3, stepSize: 1e-4 },
+      warnings: [],
+    };
+
+    const vAnn = tranAnnotations(result, circuit).find((a) => a.kind === "voltage");
+    expect(vAnn?.text).toBe("V 2.5 V ±100 mV");
   });
 
   it("returns [] for failed/null transient input", () => {
