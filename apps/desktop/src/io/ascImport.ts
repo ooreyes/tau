@@ -1060,7 +1060,16 @@ function buildPinOverride(
     ? symbolMetadata.pins.map((pin) => ({ name: pin.name, dx: pin.x, dy: pin.y }))
     : null;
   const key = ltPinKey(symbol.type);
-  const ltPins = metadataPins ?? (key ? LTSPICE_PINS[key] : null);
+  const curatedPins = key ? LTSPICE_PINS[key] : null;
+  // A curated LTSPICE_PINS entry wins over the installed `.asy`. Below, a
+  // non-subckt kind is mapped by POSITION against `getLocalPins(kind)`, and the
+  // installed pins arrive in SpiceOrder - which is not Tau's local pin order.
+  // For `e.asy` SpiceOrder is out+,out-,ctrl+,ctrl-, while `getLocalPins("vcvs")`
+  // is cp,cn,op,on, so zipping positionally bound the OUTPUT to the CONTROL
+  // terminals and silently inverted every imported VCVS. The curated entries are
+  // written in Tau's own pin order for exactly this reason, so prefer them and
+  // fall back to `.asy` geometry only for symbols nobody has curated.
+  const ltPins = curatedPins ?? metadataPins;
   if (!ltPins) return null;
   const tauPins = getLocalPins(kind);
   if (ltPins.length === 0 || tauPins.length === 0) return null;
