@@ -19,8 +19,11 @@ describes layers not yet built; those are marked _(planned)_. See
 4. **Two simulation modes, one engine.**
    - **Live mode** _(planned)_ - continuous, animated, interactive transient for
      small circuits (the EveryCircuit-like "feel").
-   - **Analysis mode** _(planned)_ - full SPICE analyses (transient, AC, DC
-     sweep, op, noise, parametric, Monte Carlo) with a waveform viewer.
+   - **Analysis mode** - full SPICE analyses with a waveform viewer. Transient,
+     AC, DC sweep, op, transfer function, noise and parametric (`.step`) all
+     ship on the native engine. Monte Carlo is _(planned)_: LTspice's
+     statistical functions parse and evaluate at nominal so a deck using them
+     still runs deterministically rather than failing.
 5. **Never hide the math; make it legible.** Beginner mode explains; expert mode
    exposes raw directives, netlists, model parameters, and solver settings.
 
@@ -30,7 +33,7 @@ describes layers not yet built; those are marked _(planned)_. See
 ┌──────────────────────────────────────────────────────────────┐
 │  FRONTEND  (apps/desktop/src - React + TypeScript)             │
 │                                                                │
-│  Toolbar · Palette · Command palette (planned)                 │
+│  Toolbar · Palette · Command palette                           │
 │  Schematic Canvas (SVG→Canvas2D/WebGL)   Zustand doc + undo    │
 │  Net extractor → SPICE deck exporter → typed results           │
 │  Plotter UI   Probe manager                                    │
@@ -55,7 +58,7 @@ describes layers not yet built; those are marked _(planned)_. See
 | Module | Location | Responsibility |
 |---|---|---|
 | `@tau/desktop` | `apps/desktop` | The app: UI, canvas, Rust shell |
-| `@tau/schematic-core` | `packages/schematic-core` | Canonical document model & types (net extraction, IR - planned) |
+| `@tau/schematic-core` | `packages/schematic-core` | **Aspirational, not yet wired.** Intended canonical document model & types. Nothing imports it today: the live model is `apps/desktop/src/schematic/types.ts`, whose 52 `ComponentKind`s have outgrown this package's 20. Treat that file as authoritative and this package as a not-yet-performed extraction. |
 | `ngspice-sys` _(planned)_ | `crates/ngspice-sys` | Raw FFI bindings to `libngspice` |
 | `ngspice-rs` _(planned)_ | `crates/ngspice-rs` | Safe wrapper + result streaming via ngspice callbacks |
 | `sim-orchestrator` _(planned)_ | `crates/sim-orchestrator` | Run scheduling, parallel sweeps/Monte Carlo |
@@ -64,8 +67,9 @@ describes layers not yet built; those are marked _(planned)_. See
 
 - **Mechanism:** Rust dynamically loads the bundled `libngspice` and serializes
   calls behind one Tauri command because ngspice has global process state. It
-  returns completed vector data for `.tran`, `.op`, and `.ac`; streaming remains
-  future work.
+  returns completed vector data for `.tran`, `.op`, `.ac`, `.dc`, `.tf`,
+  `.noise` and `.step` families (see the `runNative*` exports in
+  `apps/desktop/src/engine/nativeSpice.ts`); streaming remains future work.
 - **Build:** `scripts/build-ngspice.sh` pins and builds ngspice with
   `--with-ngshared`, KLU enabled, OpenMP disabled, then stages resources under
   `apps/desktop/src-tauri/resources/ngspice/` for Tauri bundling.
@@ -79,11 +83,26 @@ describes layers not yet built; those are marked _(planned)_. See
 
 ## Browser fallback
 
-`apps/desktop/src/simulation/` retains a small TypeScript MNA implementation
-only for `pnpm dev:web`. `apps/desktop/src/engine/` exports schematic documents
-to SPICE and adapts the native command result into the existing plotter types.
-The desktop app must not silently fall back when native ngspice loading fails;
-that failure is shown to the user.
+`apps/desktop/src/simulation/` holds the TypeScript MNA preview solver, reached
+in the packaged app only when there is no native runtime (`pnpm dev:web`). It is
+no longer small — ~14k non-test lines — because it also owns machinery the
+native path depends on: measurements, waveform math, `.step` family expansion
+and eligibility, and the analysis result types. Do not read its size as native
+coverage; as a *solver* it stays a strict subset (linear R/C/L, sources, diodes,
+ideal op amps) and refuses everything else rather than approximating it.
+
+`apps/desktop/src/engine/` exports schematic documents to SPICE and adapts the
+native command result into the existing plotter types.
+
+The desktop app must not silently fall back when native ngspice fails, and does
+not: `executeNative` returns `null` only when there is no native runtime to
+reach, an ngspice error propagates as a thrown error, and a result that fails
+conversion is returned as a *native-badged failure* rather than degraded to the
+preview solver. Every displayed result carries its engine
+(`simulation/engineProvenance.ts`). The one other `null` path is a capability
+refusal, not a failure: a `.step` shape the native single-deck path cannot
+express falls back to preview, correctly badged, with a reason available from
+`nativeStepPathRefusal`.
 
 ## Decisions locked
 

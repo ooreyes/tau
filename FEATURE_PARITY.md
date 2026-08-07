@@ -20,6 +20,34 @@
 > of Done). The old "≥80/82" deck/op DoD wording is retired — honest ceiling
 > on this 82-set is **79** deck/op; do not weaken the three refusals.
 
+> **🔴 GATE IS RED — measured 2026‑08‑06 on `auto/ltspice-parity` @ `f77b831`.**
+> `CORPUS_CANONICAL_ONLY=1 scripts/acceptance-corpus.sh` (26 s) reports
+> **82 imported / 81 warning‑clean / 79 deck‑built / 65 op‑converged**.
+> Import, warning‑clean and deck‑built all sit exactly at the documented
+> ceiling; **op‑converged is 14 below the floor of 79**, so three soft
+> assertions fail: `opConverged ≥ 79`, `capability.failure === 0` (13), and
+> `capability.deck_guard_leak === 0` (1). The three capability refusals are
+> still the expected ones (NIGBT, Chan‑core NonLinearTransformer, Royer's
+> LT1184F). The 13 hard failures all build a deck and are then rejected by
+> ngspice at `.op`, in two groups:
+>
+> - **XSPICE Laplace lowering (TwoTau, Draft8)** — `singular matrix: check node
+>   a_e2#branch_1_0` / `a_e1#branch_1_0`. The `s_xfer` lowering emits *both* the
+>   original VCVS and an XSPICE `A` block with unlinked node names (in TwoTau the
+>   `A` device's input is `b`, the VCVS's control is `c`, neither is connected to
+>   anything else, and both paths drive `n002`). `PLL`/`PLL2` also use `s_xfer`
+>   and pass, so this is specific to the dual‑deck path, not to `s_xfer` itself.
+> - **Genuine OP non‑convergence (11 files)** — class‑d_starter, deadtime,
+>   Draft9, Draft10, Electrometer, Howland, LoopGain, LoopGain2, phono, relax,
+>   Wien. No singular matrix; gmin/source stepping and the transient OP all fail.
+>   Several carry ngspice "Model issue" warnings for LTspice‑only parameters
+>   (`Iave`/`Vpk` on `D`, `Vk`/`Alpha` on `NJF`, plus `sidiode`/`VDMOS` types),
+>   which are *not* yet confirmed as the cause.
+>
+> Reproduce the untruncated engine output with `CORPUS_DECK_DIR=<dir>` to dump
+> the generated `.cir`, then pipe it to `target/debug/tau --tau-spice-worker`;
+> the corpus reporter itself truncates the error at 320 characters.
+
 ---
 
 ## 🎯 KEY GOAL (the acceptance test)

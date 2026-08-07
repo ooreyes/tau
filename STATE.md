@@ -206,7 +206,7 @@ Check for each before calling a unit done.
 4. **A "hardcoded color" scan that misses keywords.** `color-mix(..., white)`
    is invisible to a hex/rgba grep and made the light-mode Run button
    unreadable.
-5. **Reading the full suite's red as a regression.** `pnpm test` runs 147 files
+5. **Reading the full suite's red as a regression.** `pnpm test` runs 213 files
    at full worker concurrency and this machine has very little free RAM, so
    jsdom `render()` calls time out at 5 s and 20-40 tests fail *non-
    deterministically on a clean tree too*. Do not spend a fire bisecting it.

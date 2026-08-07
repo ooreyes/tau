@@ -17,9 +17,12 @@
 > [examples/](examples/README.md), and an optional AI circuit assistant.
 >
 > **Transient, operating point, AC, DC sweep, transfer function and noise all
-> run on the embedded ngspice engine.** Current-controlled switches are not
-> modelled. Read [KNOWN_ISSUES.md](KNOWN_ISSUES.md) before trusting a result;
-> it is specific about what is and is not real.
+> run on the embedded ngspice engine.** Current-controlled switches imported
+> from LTspice (`csw.asy`) simulate as real `W` devices; there is no native Tau
+> palette symbol for one yet, and a `.asc` holding one still refuses to save
+> because its two pins cannot carry the control pair Tau draws. Read
+> [KNOWN_ISSUES.md](KNOWN_ISSUES.md) before trusting a result; it is specific
+> about what is and is not real.
 >
 > Tau is an LTspice-compatible simulator, not a drop-in LTspice replacement.
 
@@ -55,14 +58,27 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
 
 ## Current component library
 
-Tau ships an owned generic SPICE-style starter library: squiggly resistor,
-capacitor, inductor, DC/AC voltage and current sources, ground, diode/LED/zener,
-NMOS/PMOS, NPN/PNP, op amp, potentiometer, switch, transformer, and test point.
+Tau ships an owned generic SPICE-style starter library of 52 component kinds
+(the authoritative list is `COMPONENT_KINDS` in
+[`apps/desktop/src/schematic/types.ts`](apps/desktop/src/schematic/types.ts)):
 
-The native desktop app exports the current library to ngspice. R/C/L, DC and
-AC sources, diodes, LEDs, zeners, NMOS/PMOS, NPN/PNP, ideal op amps,
-potentiometers, switches, transformers, grounds, and test points therefore run
-through real SPICE analysis. Tau supplies conservative generic models only for
+- **Passives** — resistor, capacitor, polarized capacitor, inductor,
+  potentiometer, transformer, center-tapped transformer, transmission line, bulb
+- **Sources** — DC voltage/current, AC voltage/current, pulse, behavioural
+  (`bsource`), logic constant, and all four controlled sources
+  (VCVS, VCCS, CCCS, CCVS)
+- **Discretes** — diode, LED, zener, photodiode, NPN/PNP, NMOS/PMOS,
+  N-JFET/P-JFET
+- **Analog ICs** — op amp, comparator, 555 timer, sample-and-hold, modulator,
+  ADC, DAC
+- **Digital** — logic gates, D/SR/T/JK flip-flops, counter, seven-segment display
+- **Electromechanical** — switch, push button, SPDT, relay, motor
+- **Structural** — subcircuit instance, ground, test point
+
+The native desktop app exports the whole library to ngspice: every device kind
+above emits a real SPICE card and runs through real analysis (the structural
+kinds define nets and probe points rather than devices). Tau supplies
+conservative generic models only for
 symbols the user deliberately leaves generic. If a schematic names a vendor
 device, Tau resolves the exact model or refuses the run; it never presents a
 generic device's waveform as that named part.

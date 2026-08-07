@@ -30,8 +30,15 @@ export function withEngine<T extends object>(result: T, engine: SimulationEngine
 /**
  * The native-first pattern every analysis follows, with the engine recorded as
  * a consequence of the choice rather than as a separate statement that could
- * disagree with it. A native runner returns `null` only when there is no native
- * runtime to reach, so a non-null result always came from ngspice.
+ * disagree with it. A non-null result always came from ngspice, so the badge
+ * cannot overstate the engine.
+ *
+ * A native runner returns `null` in exactly two cases, neither of them an
+ * ngspice failure: there is no native runtime to reach, or the analysis shape
+ * is one the native path declines up front (a `.step` family the single-deck
+ * path cannot express - see `nativeStepPathRefusal`). An ngspice error throws
+ * and propagates; a native result that fails conversion is returned as a
+ * failed *native* result. Neither is ever downgraded to the preview solver.
  *
  * `fallback` is a thunk because the preview solver must not run when ngspice
  * already answered.
