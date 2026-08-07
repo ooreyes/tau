@@ -63,6 +63,94 @@ describe("settledReading", () => {
   });
 });
 
+/**
+ * Waveform shapes from circuit classes the browser preview solver refuses, so
+ * they never reach the end-to-end sweep: switching converters, rectifiers and
+ * digital logic all run only on native ngspice. Settlement is engine-agnostic -
+ * it sees an array of numbers - so the shapes are what need covering.
+ */
+describe("settledReading across circuit classes", () => {
+  it("reads a buck converter output as DC with ripple, not as a 0-to-Vin swing", () => {
+    // Switching node averaged into an LC output: 5 V with 100 mV of ripple at
+    // the switching frequency, after a startup ramp.
+    const ramp = Array.from({ length: 40 }, (_, i) => 5 * (i / 40));
+    const steady = Array.from({ length: 160 }, (_, i) => 5 + 0.1 * (i % 8 < 4 ? 1 : -1));
+    const r = settledReading([...ramp, ...steady])!;
+    expect(r.settled).toBe(true);
+    expect(r.offset).toBeCloseTo(5, 1);
+    expect(r.amplitude).toBeCloseTo(0.1, 2);
+  });
+
+  it("reads inductor ripple current as an average plus a triangle", () => {
+    // Triangular ripple on a 2 A average - the classic continuous-conduction
+    // inductor current.
+    const tri = (i: number) => (i % 20 < 10 ? -0.5 + (i % 20) * 0.1 : 0.5 - ((i % 20) - 10) * 0.1);
+    const r = settledReading(Array.from({ length: 200 }, (_, i) => 2 + tri(i)))!;
+    expect(r.settled).toBe(true);
+    expect(r.offset).toBeCloseTo(2, 1);
+    expect(r.amplitude).toBeCloseTo(0.5, 1);
+  });
+
+  it("reads a rectifier output as DC with sawtooth ripple", () => {
+    const saw = Array.from({ length: 240 }, (_, i) => 12 - 0.4 * ((i % 24) / 24));
+    const r = settledReading(saw)!;
+    expect(r.settled).toBe(true);
+    expect(r.offset).toBeCloseTo(11.8, 1);
+    expect(r.amplitude).toBeLessThan(0.3);
+  });
+
+  it("reads a digital square as its two logic levels", () => {
+    const clk = Array.from({ length: 160 }, (_, i) => (i % 10 < 5 ? 0 : 5));
+    const r = settledReading(clk)!;
+    expect(r.settled).toBe(true);
+    expect(r.offset).toBeCloseTo(2.5, 2);
+    expect(r.amplitude).toBeCloseTo(2.5, 2);
+  });
+
+  it("handles an asymmetric duty cycle without inventing a bias", () => {
+    // 20% duty. Offset and amplitude still describe the two levels; the mark
+    // ratio is not something a min/max reading can or should claim to show.
+    const pwm = Array.from({ length: 200 }, (_, i) => (i % 10 < 2 ? 5 : 0));
+    const r = settledReading(pwm)!;
+    expect(r.settled).toBe(true);
+    expect(r.offset).toBeCloseTo(2.5, 2);
+    expect(r.amplitude).toBeCloseTo(2.5, 2);
+  });
+
+  it("does not claim settlement for a chaotic trace", () => {
+    // Deterministic pseudo-noise with a growing envelope - no period, no
+    // steady state. Must not be presented as an operating value.
+    let x = 0.3;
+    const values = Array.from({ length: 256 }, (_, i) => {
+      x = 3.99 * x * (1 - x);
+      return (1 + i / 64) * (x - 0.5);
+    });
+    expect(settledReading(values)!.settled).toBe(false);
+  });
+
+  it("survives NaN samples in a trace", () => {
+    const values = Array.from({ length: 64 }, (_, i) => (i === 5 ? NaN : Math.sin(i / 3)));
+    const r = settledReading(values)!;
+    expect(Number.isFinite(r.offset)).toBe(true);
+    expect(Number.isFinite(r.amplitude)).toBe(true);
+  });
+
+  it("survives an all-NaN trace without producing a fake reading", () => {
+    expect(settledReading(Array(32).fill(NaN))).toBeNull();
+  });
+
+  it("stays cheap on a long run", () => {
+    // 200k samples is well past any real `.tran`; the detector downsamples, so
+    // cost must not track the sample count.
+    const big = Array.from({ length: 200_000 }, (_, i) => Math.sin((2 * Math.PI * i) / 997));
+    const started = performance.now();
+    const r = settledReading(big)!;
+    const elapsed = performance.now() - started;
+    expect(r.settled).toBe(true);
+    expect(elapsed).toBeLessThan(400);
+  });
+});
+
 describe("formatSettledReading", () => {
   const settled = (offset: number, amplitude: number) => ({ offset, amplitude, settled: true });
 

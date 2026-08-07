@@ -80,4 +80,51 @@ describe("Canvas - current mode on editor", () => {
     render(<Canvas interactive />);
     expect(document.querySelectorAll(".op-annotation")).toHaveLength(0);
   });
+
+  it("keeps readouts static while Live playback scrubs the waveform", async () => {
+    // The reported complaint was numbers "actively cycling". Live playback
+    // drives `readoutTime` every animation frame to animate the flow dots; the
+    // READOUTS must stay on the settled value regardless, or the schematic goes
+    // back to flickering through instantaneous samples. This is a structural
+    // guarantee - `tranAnnotations` is called without a time - and structural
+    // guarantees are exactly the ones a later edit reinstates by accident.
+    // The waveform must actually MOVE, or the test cannot tell a settled
+    // reading from an instantaneous one: on a DC divider every sample equals
+    // the settled value, and passing `readoutTime` through would go unnoticed.
+    const { extractCircuit } = await import("../schematic/netlist");
+    const circuit = extractCircuit([VS, R1, R2, GND_VS, GND_R2], wires, []);
+    const net = circuit.nets.find((n) => !n.isGround)!;
+    const samples = 64;
+    const times = Array.from({ length: samples }, (_, i) => (i / (samples - 1)) * 1e-3);
+    const sine = times.map((_, i) => 5 * Math.sin((2 * Math.PI * i) / 16));
+
+    const tran = {
+      ok: true as const,
+      title: "Live scrub fixture",
+      times,
+      traces: [{ id: net.id, label: `V(${net.id})`, unit: "V", color: "#000", values: sine }],
+      currents: [{ ref: "R1", label: "I(R1)", values: sine.map((v) => v / 1000) }],
+      circuit,
+      stats: { sampleCount: samples, netCount: 2, componentCount: 3, stopTime: 1e-3, stepSize: 1e-5 },
+      warnings: [],
+    };
+    // Sanity: the trace really does swing, so a per-sample readout would differ.
+    expect(Math.max(...sine) - Math.min(...sine)).toBeGreaterThan(1);
+
+    const readAll = () => [...document.querySelectorAll(".op-annotation")]
+      .map((el) => el.textContent);
+
+    render(<Canvas tran={tran as never} interactive readoutTime={null} />);
+    const paused = readAll();
+    expect(paused.length).toBeGreaterThan(0);
+    cleanup();
+
+    // Sweep the scrub position across the whole waveform, as Live does.
+    for (const fraction of [0, 0.17, 0.4, 0.63, 0.85, 1]) {
+      const t = times[0]! + fraction * (times[times.length - 1]! - times[0]!);
+      render(<Canvas tran={tran as never} interactive readoutTime={t} />);
+      expect(readAll(), `readouts changed at scrub fraction ${fraction}`).toEqual(paused);
+      cleanup();
+    }
+  });
 });
