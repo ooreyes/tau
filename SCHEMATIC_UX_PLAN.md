@@ -58,9 +58,9 @@ User's requests (his words, paraphrased), all for the SCHEMATIC tab:
       a deterministic set: manually dragged labels reserve their chosen boxes first, then auto
       labels reserve slots in document order. The Canvas callsite passes wires + probes.
 - [x] 2. Hop-over arcs at unconnected wire crossings — WireView/pathFromPoints in Canvas.tsx
-      (~line 1193-1221). Plan implemented: compute crossings between HORIZONTAL segments of each
+      (`WireView` now ~line 1660). Plan implemented: compute crossings between HORIZONTAL segments of each
       wire and VERTICAL segments of all other wires; a crossing point that is NOT in the
-      `junctions` set (Canvas.tsx ~line 172, same semantics as net extraction) and not an
+      `junctions` set (Canvas.tsx now ~line 243, same semantics as net extraction) and not an
       endpoint of either segment gets a semicircular hop (r=4, bulge up / −y) in the horizontal
       wire's path. Multiple crossings per segment sorted along travel direction; path arcs via
       `A 4 4 0 0 sweep` with sweep flipped for right-to-left segments so the bump always points up.
@@ -69,7 +69,7 @@ User's requests (his words, paraphrased), all for the SCHEMATIC tab:
 - [x] 3. Cleanest-path auto-routing — `routeWireSmart` (Canvas.geometry.ts, now ~line 1118) already
       generates channel candidates and scores by `hits/length/corners`. Added two scoring terms
       between hits and length: `crossings` (count of intersections with existing wires — requires
-      passing `wires` into the router; callsites: Canvas.tsx addWire (~line 383) and
+      passing `wires` into the router; callsites: Canvas.tsx addWire (now ~line 522) and
       `rerouteMovedWires`) and `overlap` (length of collinear overlap with existing wire segments,
       to stop wires riding on top of each other). Existing segments also contribute one-grid
       clearance and end-run channels, so the router can find a clean alternative instead of only
