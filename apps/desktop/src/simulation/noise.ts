@@ -200,7 +200,6 @@ const NOISE_SUPPORTED = new Set<ComponentKind>([
   "switch",
   "pushButton",
   "spdt",
-  "testpoint",
   "ground",
 ]);
 
@@ -347,7 +346,7 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
     const unsupported = components.filter((c) => !NOISE_SUPPORTED.has(c.kind));
     if (unsupported.length > 0) {
       return fail(
-        `${unsupported.map((c) => c.label || c.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} not supported by this noise solver, which currently handles R/C/L, sources, ideal op amps, switches, grounds, and test points (only resistors generate noise). Full device noise needs the native ngspice engine, which the desktop app runs.`,
+        `${unsupported.map((c) => c.label || c.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} not supported by this noise solver, which currently handles R/C/L, sources, ideal op amps, switches, and grounds (only resistors generate noise). Full device noise needs the native ngspice engine, which the desktop app runs.`,
         circuit,
       );
     }
@@ -504,7 +503,6 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
             stampCAdmittance(matrix, com, thrown, { re: 1e9, im: 0 });
             break;
           }
-          case "testpoint":
           case "ground":
             break;
         }

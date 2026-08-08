@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateSchematicDocument } from "./documentValidation";
+import { retiredKindNotices, validateSchematicDocument } from "./documentValidation";
 
 const validDocument = () => ({
   components: [
@@ -16,6 +16,34 @@ const validDocument = () => ({
 describe("schematic document validation", () => {
   it("accepts a bounded Tau document and preserves annotations", () => {
     expect(validateSchematicDocument(validDocument())).toEqual(validDocument());
+  });
+
+  it("opens a saved document holding a retired kind, dropping it by name", () => {
+    const base = validDocument();
+    const saved = {
+      ...base,
+      components: [
+        ...base.components,
+        { id: "tp1", kind: "testpoint", x: 0, y: 0, rotation: 0, value: "", label: "TP1" },
+      ],
+    };
+    // The document must still open, and must not keep the retired part.
+    const document = validateSchematicDocument(saved);
+    expect(document.components).toEqual(base.components);
+    // Dropping it silently would change the drawing with no explanation.
+    const notices = retiredKindNotices(saved);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain("TP1");
+    expect(notices[0]).toContain("Test Point");
+  });
+
+  it("still refuses a kind that was never a Tau part", () => {
+    const base = validDocument();
+    expect(() => validateSchematicDocument({
+      ...base,
+      components: [{ ...base.components[0], kind: "flux_capacitor" }],
+    })).toThrow(/not supported/);
+    expect(retiredKindNotices({ components: [{ kind: "flux_capacitor" }] })).toEqual([]);
   });
 
   it("preserves imported pin geometry and voltage/current probe identity", () => {

@@ -5,14 +5,20 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 22:52 CDT - Recursive exact-model % harness landed.
-Stdout: NAMED-DEVICE-RECURSIVE exact-rate=15.1% (exact=399 refuse=2139
-silent=0 hard-failure=103 encrypted-excluded=1371). ≥95% DoD unchecked.
-Shippable? NO.
+**Status:** IDLE 2026-08-08 - `MISSION_COMPONENT_LIBRARY.md` item 0 landed
+(Test Point deleted, both load paths migrated). The priority mission is now
+that file, not the audit backlog below; work its items in order.
 
-**Next unit:** Cut unencrypted hard-failure (103→0) and raise exact-rate
-toward ≥95%; or Educational steptemp/stepmodelparam / Class-D
-AC·DC·noise·tf / §10.
+**Next unit:** mission item 1, the generic parameter codec. It blocks items 2,
+4, 5, 6 and 9, and the mission's architecture notes warn that adding a
+multi-field `SCHEMA` entry without matching `decodeParams`/`encodeParams`
+branches erases a component's value on the first keystroke. Widen
+`params.test.ts` first, then refactor under a green suite.
+
+**Gate caveat for the next fire:** `cargo test --lib` cannot run on this host -
+`build.rs` panics on a stale, gitignored `resources/ngspice/build-info.json`
+that predates the `files` digest. See FIX_BUGS.md 2026-08-08. Needs one full
+`scripts/build-ngspice.sh` run to clear; it is not a code regression.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -117,6 +123,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-08 - COMPONENT-LIBRARY item 0: `testpoint` kind deleted (26 files); retired kinds now drop-and-name on BOTH load paths (`.asc` carrier would have become a 1T resistor, `.sim` would have refused the whole document); `Markers` palette section gone with its only entry.
 - 2026-08-04 - NAMED-DEVICE RECURSIVE %: harness + stdout
   unencrypted=2641 exact=399 refuse=2139 silent=0 hard-failure=103
   encrypted-excluded=1371 exact-rate=15.1%. ≥95% DoD unchecked.

@@ -1034,6 +1034,20 @@ SYMATTR InstName X1`;
     expect(r.components.filter((c) => c.kind === "resistor")).toHaveLength(0);
   });
 
+  it("drops a retired test point and names it in a notice", () => {
+    const result = importAsc([
+      "Version 4",
+      "SHEET 1 880 680",
+      "SYMBOL res 0 0 R0",
+      "SYMATTR InstName TP1",
+      "SYMATTR Value 1T",
+      "SYMATTR TauKind testpoint",
+      "",
+    ].join("\n"));
+    expect(result.components).toHaveLength(0);
+    expect(result.warnings.some((w) => w.includes("TP1") && w.includes("Test Point"))).toBe(true);
+  });
+
   it("flattens CELL schematics with .asy defaults and instance overrides", () => {
     const cellAsy = `Version 4
 SymbolType CELL

@@ -121,7 +121,6 @@ const OP_SUPPORTED = new Set<ComponentKind>([
   "pushButton",
   "spdt",
   "motor",
-  "testpoint",
   "ground",
   "diode",
   "led",
@@ -172,7 +171,7 @@ export function runOperatingPoint(
     const unsupported = components.filter((component) => !OP_SUPPORTED.has(component.kind));
     if (unsupported.length > 0) {
       return fail(
-        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but operating point currently supports only R/C/L, voltage/current sources, AC sources at 0 DC, diodes/LEDs/zeners, op-amps, controlled sources, switches, grounds, and test points.`,
+        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but operating point currently supports only R/C/L, voltage/current sources, AC sources at 0 DC, diodes/LEDs/zeners, op-amps, controlled sources, switches, and grounds.`,
         circuit,
       );
     }
@@ -515,7 +514,6 @@ export function runOperatingPoint(
           // Nonlinear - stamped per Newton iteration below, not here.
           break;
 
-        case "testpoint":
         case "ground":
           // Ground pins are absorbed into the reference - nothing to stamp
           break;

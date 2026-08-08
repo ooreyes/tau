@@ -184,7 +184,7 @@ export function serializeAscDocument(doc: AscDocument): string {
  * `ltspiceTypeToKind` recognizes, choosing the variant whose pin geometry is
  * banked in `LTSPICE_PINS` so a re-import reconstructs the same `pinOverride`.
  * Returns `null` for kinds with no LTspice symbol of their own (`ground` is a
- * FLAG, `testpoint` is a Tau-only probe marker).
+ * FLAG).
  */
 export function kindToLtspiceType(kind: ComponentKind): string | null {
   const map: Partial<Record<ComponentKind, string>> = {
@@ -312,7 +312,7 @@ export const LOSSY_CARRIER_KINDS: ReadonlySet<string> = new Set([
   "tflop", "jkflop", "counter", "timer555", "adc", "dac", "sevenSeg",
   // CT transformer expands to 3×L + K; no single LTspice 5-pin CT symbol.
   "ctTransformer",
-  "subckt", "testpoint",
+  "subckt",
 ]);
 
 /**

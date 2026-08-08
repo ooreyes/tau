@@ -184,7 +184,7 @@ deck. What exists to build on:
 
 ## The items
 
-### 0. Delete Test Point — BLOCKS NOTHING, do it first
+### 0. Delete Test Point — DONE 2026-08-08
 Remove the `testpoint` kind and its ~32 references across types, catalog,
 params, pins, symbols, paletteItems, netlist, spiceNetlist, terminalRoles, the
 four solvers, measurementModel, ascExport and assistantContext. A saved document
@@ -192,6 +192,26 @@ containing one must still open — migrate it, do not fail.
 
 **Done when:** the kind is gone, `catalogContract.test.tsx` passes, and a
 document containing a test point opens with a named notice.
+
+Landed across 26 files. Three consequences worth knowing before item 3:
+
+- `testpoint` was the only `Markers` catalog entry, so that palette section is
+  gone from `PALETTE_SECTIONS` too. The catalog runs Sources → Passives →
+  Semiconductors → Analog → Digital → Electromechanical.
+- **There are two load paths, and deleting a kind breaks both differently.**
+  `schematic/retiredKinds.ts` is the single registry; retiring any future kind
+  means adding a row there, not just deleting the enum member.
+  - `.asc`: checked in the symbol loop *before* `TauKind` resolution. Without
+    it the saved carrier (`SYMBOL res` + `Value 1T` + `SYMATTR TauKind
+    testpoint`) resolves to its carrier and the marker becomes a real 1 TΩ
+    resistor - a silent wrong answer.
+  - `.sim`: `documentValidation.ts` rejects any kind not in `CATALOG_BY_KIND`,
+    so without the carve-out the *entire document* refuses to open. Retired
+    kinds now drop and report; every other unknown kind still hard-fails, so
+    the guard is not widened.
+- Both drops are reported: the `.asc` notice reaches the Diagnostics panel via
+  `importWarningsByPath`, the `.sim` notice rides `openDocument`'s `notice`
+  toast. Each has a regression test that was checked against its own reversion.
 
 ### 1. Generic parameter codec — BLOCKS items 2, 4, 5, 6, 9
 Replace the hand-rolled `decodeParams`/`encodeParams` ladders with a declarative

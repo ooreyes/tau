@@ -167,8 +167,8 @@ describe("flow visualizer: every component in the library", () => {
     // most kinds would be a modelling mistake rather than physics.
     const inert = COMPONENT_KINDS.filter((kind) =>
       getLocalPins(kind).every((p) => terminalRole(kind, p.id).role === "none"));
-    // Only a test point is legitimately inert: it is an instrument tap.
-    expect(inert).toEqual(["testpoint"]);
+    // No kind may be inert now that the test point marker is gone.
+    expect(inert).toEqual([]);
   });
 });
 

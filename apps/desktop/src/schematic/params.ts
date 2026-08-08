@@ -76,7 +76,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
     { key: "kp", label: "KP", unit: "A/V²" },
     { key: "vto", label: "Vt (VTO)", unit: "V" },
   ],
-  // opamp uses a dedicated model chooser; testpoint / ground take no parameters.
+  // opamp uses a dedicated model chooser; ground takes no parameters.
 };
 
 const CHARGE_CAPACITOR_FIELDS: ParamField[] = [

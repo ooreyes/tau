@@ -256,13 +256,13 @@ describe("buildAssistantContext", () => {
     const { text, canApplyCurrent } = buildAssistantContext(baseInput({
       components: [
         component("ground", "g1", "", "", 0, 64),
-        component("testpoint", "tp1", "TP1", "", 0, 0),
+        component("counter", "u1", "U1", "", 0, 0),
       ],
       wires: [],
     }));
     expect(canApplyCurrent).toBe(true);
     expect(text).not.toContain("unavailable for safe revision");
-    expect(text).toContain("SYMATTR TauKind testpoint");
+    expect(text).toContain("SYMATTR TauKind counter");
   });
 
   it("truncates the whole context and flags it when the analysis section alone blows the cap", () => {

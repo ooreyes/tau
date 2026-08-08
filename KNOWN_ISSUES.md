@@ -22,7 +22,7 @@ says what is missing instead of drawing a flat trace at the bottom of the plot.
 
 Outside the desktop app there is no native engine, so noise there falls back to
 Tau's own smaller solver. Its supported set is narrower than the other preview
-analyses: R/C/L, sources, ideal op amps, switches, grounds and test points, and
+analyses: R/C/L, sources, ideal op amps, switches and grounds, and
 **only resistors actually generate noise**. Diodes, controlled sources and
 transistors are all refused by name rather than quietly contributing zero (see
 `NOISE_SUPPORTED` in `apps/desktop/src/simulation/noise.ts`).

@@ -19,7 +19,6 @@ describe("Library catalog contract", () => {
       "Analog",
       "Digital",
       "Electromechanical",
-      "Markers",
     ]);
     // Every catalog entry uses a known section label.
     for (const entry of CATALOG) {

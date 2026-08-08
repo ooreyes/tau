@@ -181,7 +181,6 @@ describe("kindToLtspiceType", () => {
 
   it("returns null for kinds with no LTspice symbol of their own", () => {
     expect(kindToLtspiceType("ground")).toBeNull();
-    expect(kindToLtspiceType("testpoint")).toBeNull();
     // The exact Digital symbol is selected from the function in Value, so a
     // kind-only query cannot choose one without the complete component.
     expect(kindToLtspiceType("digitalGate")).toBeNull();
@@ -346,21 +345,6 @@ describe("schematicToAsc", () => {
       { x1: 16, y1: 0, x2: 16, y2: 16 },
     ]);
     expect(warnings).toEqual([]);
-  });
-
-  it("persists Tau-only test points through a harmless carrier symbol", () => {
-    const { text, warnings } = schematicToAsc({
-      components: [
-        { id: "tp1", kind: "testpoint", x: 0, y: 0, rotation: 0, value: "", label: "TP1" },
-      ],
-      wires: [],
-      netLabels: [],
-    });
-    expectOnlyCarrierWarnings(warnings);
-    expect(warnings).toHaveLength(1);
-    const round = importAsc(text);
-    expect(round.warnings).toEqual([]);
-    expect(round.components[0]).toMatchObject({ kind: "testpoint", value: "", label: "TP1" });
   });
 
   it("persists composite Tau components without blocking save", () => {

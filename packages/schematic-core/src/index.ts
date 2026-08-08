@@ -27,7 +27,6 @@ export type ComponentKind =
   | "potentiometer"
   | "switch"
   | "transformer"
-  | "testpoint"
   | "ground";
 
 /** Allowed component rotations, in degrees. */

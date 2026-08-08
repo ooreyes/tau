@@ -243,7 +243,7 @@ export function ascSaveBlockReason(
   // Nor may a lossy-carrier notice. Those parts DO round-trip through Tau via
   // their `Tau*` attributes - the notice only says the file reads differently
   // in LTspice. Blocking on it would refuse to save any schematic containing a
-  // switch, subcircuit, comparator, CCCS, CCVS or test point.
+  // switch, subcircuit, comparator, CCCS or CCVS.
   const blocking = exportWarnings.filter((warning) => !isLossyCarrierWarning(warning));
   if (blocking.length > 0) return blocking[0];
   return null;

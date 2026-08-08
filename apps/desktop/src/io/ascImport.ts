@@ -42,6 +42,7 @@ import {
 } from "../schematic/hierarchyProvenance";
 import { buildPartialParamScope, inlineFuncCalls, parseParamAssignments, substituteKnownBraces, substituteBehavioralBraces, substituteScopeIdentifiers, substituteIdentifierExpressions } from "../simulation/paramScope";
 import { isComponentKind } from "../schematic/types";
+import { retiredKindNotice } from "../schematic/retiredKinds";
 import { getLocalPins, transformPoint } from "../schematic/pins";
 import { parseIcValue } from "../engine/icSpec";
 import { MAX_COMPONENTS, MAX_WIRES } from "../schematic/documentValidation";
@@ -1911,6 +1912,13 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
           { x: symbol.x + p2.x, y: symbol.y + p2.y },
         ],
       });
+      continue;
+    }
+    const retired = symbol.attrs.TauKind
+      ? retiredKindNotice(symbol.attrs.TauKind, symbol.attrs.InstName ?? "")
+      : null;
+    if (retired) {
+      warnings.push(retired);
       continue;
     }
     const tauKind = isComponentKind(symbol.attrs.TauKind) ? symbol.attrs.TauKind : null;

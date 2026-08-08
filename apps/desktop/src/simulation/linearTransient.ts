@@ -142,7 +142,6 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
   "switch",
   "pushButton",
   "spdt",
-  "testpoint",
   "ground",
   "diode",
   "led",
@@ -244,7 +243,7 @@ export async function runTransientAnalysis(
     if (unsupported.length > 0) {
       return fail(
         "Unsupported model",
-        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but this preview solver only supports R/C/L, voltage/current sources, AC sine sources, diodes/LEDs/zeners, switches, grounds, and test points. Full device models need the ngspice engine, which runs in the desktop app.`,
+        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but this preview solver only supports R/C/L, voltage/current sources, AC sine sources, diodes/LEDs/zeners, switches, and grounds. Full device models need the ngspice engine, which runs in the desktop app.`,
         circuit,
       );
     }
@@ -677,7 +676,6 @@ export async function runTransientAnalysis(
             stampConductance(matrix, com, thrown, 1e9);
             break;
           }
-          case "testpoint":
           case "ground":
             break;
         }

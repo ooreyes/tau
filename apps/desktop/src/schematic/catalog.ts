@@ -18,7 +18,7 @@ export interface CatalogEntry {
 /**
  * Palette section labels — EveryCircuit-like browse order.
  * Sources first (power), then Passives → Semiconductors → Analog → Digital →
- * Electromechanical → Markers. Do not derive order from CATALOG insertion
+ * Electromechanical. Do not derive order from CATALOG insertion
  * (a Digital entry mid-Sources used to hoist Digital above Semiconductors).
  */
 export const PALETTE_SECTIONS = [
@@ -28,7 +28,6 @@ export const PALETTE_SECTIONS = [
   "Analog",
   "Digital",
   "Electromechanical",
-  "Markers",
 ] as const;
 
 export type CatalogSection = (typeof PALETTE_SECTIONS)[number];
@@ -125,9 +124,6 @@ export const CATALOG: CatalogEntry[] = [
   // already self-describes each token - LTspice shows it as raw text, and a
   // two-word "unit" suffixed onto the whole string was never meaningful.
   { kind: "tline",         section: "Electromechanical", name: "Transmission Line", hotkey: "", prefix: "T",   defaultValue: "Td=50n Z0=50", unit: "" },
-
-  // ── Markers ──────────────────────────────────────────────────────────────
-  { kind: "testpoint",     section: "Markers",           name: "Test Point",      hotkey: "x", prefix: "TP",  defaultValue: "",      unit: "" },
 ];
 
 export const CATALOG_BY_KIND: Record<ComponentKind, CatalogEntry> =

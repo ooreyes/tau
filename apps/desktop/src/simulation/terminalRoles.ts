@@ -160,7 +160,6 @@ export const TERMINAL_ROLES: Readonly<
   sevenSeg: unknownPins("a", "b", "c", "d", "e", "f", "g", "dp", "com"),
 
   // ── Structural ───────────────────────────────────────────────────────────
-  testpoint: { tp: NONE },
   /** Ground is where a net's current LEAVES. It is not zero-injection — the
    *  old model treated it that way and every wire running to a ground symbol
    *  read 0 A. It is the slack node, handled by the solver. */

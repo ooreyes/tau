@@ -344,7 +344,6 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "p1", label: "1", x: -32, y: 0 },
     { id: "p2", label: "2", x: 32, y: 0 },
   ],
-  testpoint: [{ id: "tp", label: "TP", x: 0, y: 0 }],
   ground: [{ id: "g", label: "0", x: 0, y: 0 }],
 };
 

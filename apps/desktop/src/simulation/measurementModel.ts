@@ -325,10 +325,10 @@ function deriveSeriesBranchCurrents(
   const pinCountByNet = new Map<string, number>();
 
   for (const { component, pins } of circuitComponents) {
-    // Ground/test-point symbols name or observe a net; they are not conductive
-    // branches and therefore do not make an otherwise two-branch node a KCL
+    // A ground symbol names the reference net; it is not a conductive branch
+    // and therefore does not make an otherwise two-branch node a KCL
     // junction.
-    if (component.kind !== "ground" && component.kind !== "testpoint") {
+    if (component.kind !== "ground") {
       for (const net of Object.values(pins)) {
         pinCountByNet.set(net, (pinCountByNet.get(net) ?? 0) + 1);
       }

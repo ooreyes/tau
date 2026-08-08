@@ -95,7 +95,6 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   ctTransformer: { minX: -24, minY: -32, maxX: 24, maxY: 32 },
   tline: { minX: -20, minY: -16, maxX: 20, maxY: 16 },
   subckt: { minX: -24, minY: -20, maxX: 24, maxY: 20 },
-  testpoint: { minX: -11, minY: -16, maxX: 11, maxY: 14 },
   ground: { minX: -12, minY: -3, maxX: 12, maxY: 22 },
 };
 
@@ -151,7 +150,6 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   ctTransformer: { halfW: 24, halfH: 32 },
   tline: { halfW: 20, halfH: 18 },
   subckt: { halfW: 26, halfH: 22 },
-  testpoint: { halfW: 11, halfH: 16 },
   ground: { halfW: 12, halfH: 22 },
 };
 
@@ -918,15 +916,6 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           <line x1={-32} y1={0} x2={-24} y2={0} />
           <line x1={24} y1={0} x2={32} y2={0} />
           <path d="M -7 -7 L 7 7 M -7 7 L 7 -7" />
-        </>
-      );
-
-    case "testpoint":
-      return (
-        <>
-          <circle cx={0} cy={0} r={10} />
-          <line x1={0} y1={10} x2={0} y2={28} />
-          <path d="M -8 -14 H 8 M 0 -14 V -2" />
         </>
       );
 

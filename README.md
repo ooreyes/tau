@@ -73,7 +73,7 @@ Tau ships an owned generic SPICE-style starter library of 52 component kinds
   ADC, DAC
 - **Digital** — logic gates, D/SR/T/JK flip-flops, counter, seven-segment display
 - **Electromechanical** — switch, push button, SPDT, relay, motor
-- **Structural** — subcircuit instance, ground, test point
+- **Structural** — subcircuit instance, ground
 
 The native desktop app exports the whole library to ngspice: every device kind
 above emits a real SPICE card and runs through real analysis (the structural

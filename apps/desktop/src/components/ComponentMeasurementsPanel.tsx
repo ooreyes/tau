@@ -256,7 +256,6 @@ const KIND_DISPLAY: Partial<Record<ComponentMeasurement["kind"], string>> = {
   sevenSeg: "7-segment",
   sampleHold: "Sample & hold",
   modulator: "Modulator",
-  testpoint: "Test point",
   ground: "Ground",
 };
 

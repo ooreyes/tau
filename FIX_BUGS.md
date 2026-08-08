@@ -13,6 +13,27 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-08-08 — the Rust gate cannot run against a pre-digest ngspice staging dir (CONFIRMED, OPEN)
+
+`cargo test --lib` fails inside `build.rs` before compiling anything:
+
+```
+thread 'main' panicked at build.rs:58:9:
+build-info.json has no "files" digest object.
+```
+
+`apps/desktop/src-tauri/resources/ngspice/build-info.json` on this host carries
+only `repository`, `commit`, `host` and `library`. The `files` digest that
+`staged_engine::verify_staged_engine` requires (`staged_engine.rs:220-222`) is
+written by `scripts/build-ngspice.sh:253`, which was added *after* this host's
+engine was staged. The whole resource directory is gitignored
+(`.gitignore:14`), so no commit can repair it, and a fresh clone that runs the
+build script is unaffected - this is a stale local artifact, not a code defect.
+
+Consequence: a fire that touches Rust sees a red gate it did not cause, and a
+fire that touches only TypeScript cannot prove the Rust gate green either way.
+Fix is one full `scripts/build-ngspice.sh` run (~25 min - budget a whole fire).
+
 ## 2026-08-04 — the React suite times out under load and looks like a red baseline (CONFIRMED, OPEN)
 
 Vitest's default 5 s `testTimeout` is not enough for the full-`App` render

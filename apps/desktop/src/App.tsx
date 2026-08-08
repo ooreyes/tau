@@ -141,7 +141,7 @@ import {
   remapMovedProjectPath,
   serializeSchematicFile,
 } from "./project/types";
-import { validateSchematicDocument } from "./schematic/documentValidation";
+import { retiredKindNotices, validateSchematicDocument } from "./schematic/documentValidation";
 import { importProjectAsc } from "./io/projectAscImport";
 import { importDroppedFile } from "./io/fileImport";
 import { pathExists, readTextFile } from "./project/fsBridge";
@@ -1291,7 +1291,17 @@ function App() {
     try {
       const parsed = JSON.parse(json) as unknown;
       const doc = validateSchematicDocument(parsed);
-      openDocument(doc, title, path, [], { diskFingerprint: diskContentFingerprint(json) });
+      // Retired parts are dropped rather than refused, so the open has to say
+      // which ones went - the drawing changing on its own is not acceptable.
+      const retired = retiredKindNotices(parsed);
+      const alsoDropped = retired.length - 1;
+      const dropped = alsoDropped > 0
+        ? `${retired[0]} ${alsoDropped} more ${alsoDropped === 1 ? "was" : "were"} dropped as well.`
+        : retired[0];
+      openDocument(doc, title, path, [], {
+        diskFingerprint: diskContentFingerprint(json),
+        ...(dropped ? { notice: `Opened ${title}. ${dropped}` } : {}),
+      });
     } catch (error) {
       showNotice(userFacingErrorMessage(error, "Could not open .sim file."));
     }

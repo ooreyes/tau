@@ -836,9 +836,9 @@ describe("AssistantPanel", () => {
   it("keeps current-circuit apply for a persisted Tau-native component", () => {
     saveAssistantApiKey("test-key");
     const unsupported: SchematicComponent = {
-      id: "tp1",
-      kind: "testpoint",
-      label: "TP1",
+      id: "u1",
+      kind: "counter",
+      label: "U1",
       value: "",
       x: 0,
       y: 0,

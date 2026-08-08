@@ -1617,7 +1617,6 @@ describe("buildSpiceDeck", () => {
       component("potentiometer", "RV1", "10k", 672, 0),
       component("switch", "S1", "closed", 768, 0),
       component("transformer", "T1", "1:2", 864, 0),
-      component("testpoint", "TP1", "", 960, 0),
       component("ground", "", "", 1024, 0),
     ];
 
@@ -1633,7 +1632,6 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain("R_RV1_a");
     expect(deck.netlist).toContain("R_S1");
     expect(deck.netlist).toContain("K_T1");
-    expect(deck.netlist).not.toContain("TP1 ");
   });
 
   // A switched load: V1 -> S1 -> R1 -> ground, with S1's NC+/NC- pair driven by

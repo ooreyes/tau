@@ -2070,7 +2070,6 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       }
       return [`${name} ${nodes.join(" ")} ${sanitizeSubcktName(subName)}${params ? ` ${params}` : ""}`];
     }
-    case "testpoint":
     case "ground":
       return [];
   }
@@ -2319,7 +2318,7 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   logicConstant: "V",
   diode: "D", led: "D", zener: "D", photodiode: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", srflop: "A", tflop: "A", jkflop: "A", counter: "A", timer555: "X", adc: "B", dac: "B", sevenSeg: "R", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
   potentiometer: "R", bulb: "R", switch: "S", pushButton: "S", spdt: "S", relay: "S", motor: "L",
-  transformer: "L", ctTransformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
+  transformer: "L", ctTransformer: "L", tline: "T", subckt: "X", ground: "X",
 };
 
 function componentSpicePrefix(component: SchematicComponent): string {
@@ -2353,7 +2352,7 @@ function resolveInstanceNames(components: readonly ExtractedComponent[]): Map<nu
   const used = new Map<string, string>();
   const resolved = new Map<number, string>();
   const named = (component: SchematicComponent) =>
-    component.kind !== "ground" && component.kind !== "testpoint";
+    component.kind !== "ground";
   components.forEach(({ component }, index) => {
     if (!named(component)) return;
     const name = requestedInstanceName(component);

@@ -57,7 +57,6 @@ export type ComponentKind =
   | "ctTransformer"
   | "tline"
   | "subckt"
-  | "testpoint"
   | "ground";
 
 /** Runtime companion to ComponentKind for validating persisted/imported data. */
@@ -68,7 +67,7 @@ export const COMPONENT_KINDS = [
   "tflop", "jkflop", "counter", "timer555", "adc", "dac", "sevenSeg", "sampleHold",
   "modulator", "vcvs", "vccs", "cccs", "ccvs", "bsource", "nmos", "pmos", "njf", "pjf",
   "npn", "pnp", "potentiometer", "bulb", "switch", "pushButton", "spdt", "relay", "motor",
-  "transformer", "ctTransformer", "tline", "subckt", "testpoint",
+  "transformer", "ctTransformer", "tline", "subckt",
   "ground",
 ] as const satisfies readonly ComponentKind[];
 

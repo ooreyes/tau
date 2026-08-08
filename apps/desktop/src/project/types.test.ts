@@ -697,7 +697,7 @@ describe("ascSaveBlockReason and lossy-carrier notices", () => {
     // Regression: the carrier notice was introduced so a colleague opening the
     // file in LTspice learns a switch became a resistor. Treating it as a block
     // would refuse to save any schematic containing a switch, subcircuit,
-    // comparator, CCCS, CCVS or test point - far worse than the silent loss.
+    // comparator, CCCS or CCVS - far worse than the silent loss.
     const notice = "S1: saved as a placeholder resistor. Tau reopens it as a switch, "
       + "but in LTspice it reads as an open circuit.";
     expect(isLossyCarrierWarning(notice)).toBe(true);

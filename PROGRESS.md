@@ -1,15 +1,89 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~15:10 CDT**
+**Status: DONE - 2026-08-08**
 
-Unit: **Applications/AD8237.asc authored .tran → pass=115** — plaintext
-AD8237.lib + installed OpAmps .asy; v(vout) nRms≈1e-4. Resources/help
-exhausted. Broad-differential **not** matrix-complete.
-SHIPPABLE? **NO** (ND≪95%).
+Unit: **component-library item 0 - Test Point deleted, both load paths
+migrated.** The `testpoint` kind is gone from 26 files; retired kinds now
+drop-and-name through one registry instead of resolving to something wrong.
+Gates: typecheck green, full vitest suite green, design-system-drift green.
+`cargo test --lib` could NOT be run - see the caveat below; no Rust changed.
 
-**SHIPPABLE?** **NO**
+**SHIPPABLE?** **NO** (unchanged by this unit)
 
+**Next:** component-library item 1, the generic parameter codec.
 
+**Open gate caveat:** `cargo test --lib` panics in `build.rs` on this host
+because the gitignored `resources/ngspice/build-info.json` predates the `files`
+digest that `staged_engine` requires. It is a stale local artifact, not a code
+regression, and no commit can repair it. Logged in FIX_BUGS.md 2026-08-08;
+clearing it needs one full `scripts/build-ngspice.sh` run.
+
+---
+
+### 2026-08-08 - component library item 0: delete Test Point
+
+**Why this unit**
+
+`MISSION_COMPONENT_LIBRARY.md` (opened 2026-08-08 by the repo owner) outranks
+the audit backlog and says to work its items in dependency order. Item 0 is
+first and blocks nothing, so it is the cheapest way to open the mission.
+
+**What changed**
+
+The `testpoint` kind is removed from the kind union and `COMPONENT_KINDS`, the
+catalog, pins, symbols (`SYMBOL_BODY`, `SYMBOL_BOX`, the JSX case), params,
+terminal roles, all four TS solvers, `measurementModel`, `spiceNetlist` (case,
+prefix map, instance naming), `ascExport`'s lossy-carrier set, the measurements
+panel, and `packages/schematic-core`.
+
+It was the only `Markers` catalog entry, so `PALETTE_SECTIONS` loses that
+section too. The palette now runs Sources, Passives, Semiconductors, Analog,
+Digital, Electromechanical.
+
+**The part that was not mechanical**
+
+A saved document had to keep opening. There are two load paths and deleting a
+kind breaks each in a different, non-obvious way:
+
+- `.asc`: a test point was persisted under a carrier symbol (`SYMBOL res`,
+  `Value 1T`, `SYMATTR TauKind testpoint`). With the kind gone,
+  `isComponentKind` rejects the `TauKind` and the importer falls through to the
+  carrier - so a marker silently became a real 1 TOhm resistor. That is exactly
+  the class of silent wrong answer this project refuses to ship.
+- `.sim`: `documentValidation` fails any kind not in `CATALOG_BY_KIND`, so the
+  *entire document* refused to open with "components[N].kind is not supported."
+
+Both now consult one registry, `schematic/retiredKinds.ts`: the part is dropped
+and reported by name. Every other unrecognized kind still hard-fails, so the
+validator's allowlist is not widened. The `.asc` notice reaches the Diagnostics
+panel through `importWarningsByPath`; the `.sim` notice rides `openDocument`'s
+existing `notice` toast.
+
+**Evidence**
+
+Each regression test was checked against its own reversion rather than assumed:
+
+- Removing the `.asc` migration block: the test fails with
+  `expected [ { id: 'c-1', ... } ] to have a length of +0 but got 1` - the
+  marker had become a component.
+- Removing the `.sim` carve-out: the test fails with
+  `Invalid Tau schematic: components[1].kind is not supported.` - the document
+  refused to open.
+
+A companion test pins that an invented kind (`flux_capacitor`) still throws, so
+the drop path cannot be mistaken for a general escape hatch.
+
+**Rescue-branch reconciliation**
+
+`origin/auto/ltspice-parity-wip` was checked and retired. Its tip was
+`21c298d` ("wip: rescued checkpoint 2026-08-05T05:36:11Z"), branching from
+`8806939`, which the work branch is now roughly 51,000 lines past. Diffed
+against the work branch it contributed exactly two unique files:
+`simulation/opAnnotations.ts` (+ its test), the per-part on-canvas operating
+point annotation that was deliberately removed for covering the drawing and
+that `MISSION_COMPONENT_LIBRARY.md` explicitly says not to restore, and
+`components/VscodeExplorerIcons.tsx`, an unrelated icon experiment. Nothing was
+worth re-applying, so the ref was deleted rather than carried forward.
 
 ---
 

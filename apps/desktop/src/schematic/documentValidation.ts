@@ -1,4 +1,5 @@
 import { CATALOG_BY_KIND } from "./catalog";
+import { isRetiredKind, retiredKindNotice } from "./retiredKinds";
 import type {
   ComponentKind,
   LtspiceExtraAttrs,
@@ -136,9 +137,13 @@ function point(value: unknown, name: string): Point {
   return { x: coordinate(source.x, `${name}.x`), y: coordinate(source.y, `${name}.y`) };
 }
 
-function component(value: unknown, index: number): SchematicComponent {
+function component(value: unknown, index: number): SchematicComponent | null {
   const source = record(value, `components[${index}]`);
   const kind = text(source.kind, `components[${index}].kind`) as ComponentKind;
+  // A kind Tau has retired is dropped, not rejected: refusing it would make the
+  // whole document unopenable over a part the user never has to care about.
+  // Everything else unrecognized still fails - this is not a widened allowlist.
+  if (isRetiredKind(kind)) return null;
   if (!(kind in CATALOG_BY_KIND)) fail(`components[${index}].kind is not supported.`);
   const rotation = source.rotation;
   if (typeof rotation !== "number" || !ROTATIONS.has(rotation as Rotation)) {
@@ -491,6 +496,27 @@ function schematicSheet(value: unknown): SchematicSheet {
   };
 }
 
+/**
+ * Notices for the parts {@link validateSchematicDocument} silently drops as
+ * retired. Read from the same untrusted value, and defensively: this runs
+ * before validation, so nothing here may assume a well-formed document.
+ */
+export function retiredKindNotices(value: unknown): string[] {
+  if (typeof value !== "object" || value === null) return [];
+  const components = (value as { components?: unknown }).components;
+  if (!Array.isArray(components)) return [];
+  const notices: string[] = [];
+  for (const candidate of components.slice(0, MAX_COMPONENTS)) {
+    if (typeof candidate !== "object" || candidate === null) continue;
+    const { kind, label } = candidate as { kind?: unknown; label?: unknown };
+    if (typeof kind !== "string") continue;
+    const named = typeof label === "string" ? label.slice(0, MAX_ID_LENGTH) : "";
+    const notice = retiredKindNotice(kind, named);
+    if (notice) notices.push(notice);
+  }
+  return notices;
+}
+
 /** Parse only the versioned schematic shape Tau can safely render and simulate. */
 export function validateSchematicDocument(value: unknown): SchematicDocument {
   const source = record(value, "document");
@@ -533,7 +559,9 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   }
 
   const remainingPoints = { value: MAX_WIRE_POINTS };
-  const validatedComponents = source.components.map(component);
+  const validatedComponents = source.components
+    .map(component)
+    .filter((entry): entry is SchematicComponent => entry !== null);
   const validatedWires = source.wires.map((candidate, index) => wire(candidate, index, remainingPoints));
   const validatedProbes = probes.map(probe);
   const validatedLabels = netLabels.map(netLabel);
