@@ -16,6 +16,7 @@ import { ascRewriteRisks, ascSaveBlockReason, schematicTopologySignature } from 
 import { CATALOG } from "../schematic/catalog";
 import { withOpampModel } from "../engine/opampModel";
 import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
+import { getLocalPins } from "../schematic/pins";
 
 // The same representative LTspice grammar the importer tests use, minus the
 // drawing primitive (which the serializer canonicalizes away).
@@ -423,15 +424,15 @@ describe("schematicToAsc", () => {
 
   it("round-trips every digital gate leaf with exact pin roles and no duplicated function attribute", () => {
     const cases = [
-      { leaf: "and", pins: ["in1", "in2", "in3", "in4", "in5", "qbar", "q", "com"] },
-      { leaf: "or", pins: ["in1", "in2", "in3", "in4", "in5", "qbar", "q", "com"] },
-      { leaf: "xor", pins: ["in1", "in2", "in3", "in4", "in5", "qbar", "q", "com"] },
-      { leaf: "buf", pins: ["in1", "qbar", "q", "com"] },
-      { leaf: "buf1", pins: ["in1", "q", "com"] },
-      { leaf: "inv", pins: ["in1", "qbar", "com"] },
-      { leaf: "schmitt", pins: ["in1", "qbar", "q", "com"] },
-      { leaf: "schmtbuf", pins: ["in1", "q", "com"] },
-      { leaf: "schmtinv", pins: ["in1", "qbar", "com"] },
+      { leaf: "and", inputs: 5, pins: ["in1", "in2", "in3", "in4", "in5", "qbar", "q", "com"] },
+      { leaf: "or", inputs: 5, pins: ["in1", "in2", "in3", "in4", "in5", "qbar", "q", "com"] },
+      { leaf: "xor", inputs: 5, pins: ["in1", "in2", "in3", "in4", "in5", "qbar", "q", "com"] },
+      { leaf: "buf", inputs: 1, pins: ["in1", "qbar", "q", "com"] },
+      { leaf: "buf1", inputs: 1, pins: ["in1", "q", "com"] },
+      { leaf: "inv", inputs: 1, pins: ["in1", "qbar", "com"] },
+      { leaf: "schmitt", inputs: 1, pins: ["in1", "qbar", "q", "com"] },
+      { leaf: "schmtbuf", inputs: 1, pins: ["in1", "q", "com"] },
+      { leaf: "schmtinv", inputs: 1, pins: ["in1", "qbar", "com"] },
     ] as const;
     const params = "Vhigh=5 Vlow=0 Vt=2.5 Vhys=0.2 Td=10n";
 
@@ -441,6 +442,13 @@ describe("schematicToAsc", () => {
       const component = seed.components[0];
       expect(component.kind).toBe("digitalGate");
       expect(component.pinOverride?.map((pin) => pin.id), gate.leaf).toEqual(gate.pins);
+      // The symbol's own input count reaches the value, so the drawn bank and
+      // the imported pin bank are the same width. `and.asy` is a five-input
+      // part; a two-input body would leave three terminals off the drawing.
+      expect(
+        getLocalPins("digitalGate", component.value).filter((pin) => /^in\d+$/.test(pin.id)).length,
+        gate.leaf,
+      ).toBe(gate.inputs);
 
       const names = new Map<string, string>();
       const netLabels = (component.pinOverride ?? []).map((pin, index) => {
@@ -452,17 +460,46 @@ describe("schematicToAsc", () => {
       expect(exported.warnings, gate.leaf).toEqual([]);
       const symbol = parseAsc(exported.text).symbols[0];
       expect(symbol.type, gate.leaf).toBe(`Digital\\\\${gate.leaf}`);
+      // Byte-identical to the source. The count is Tau's reading of the symbol,
+      // not something the file said, so it must not appear on an A-device
+      // parameter list LTspice will try to parse.
       expect(symbol.attrs.Value, gate.leaf).toBe(params);
+      expect(symbol.attrs.Value, gate.leaf).not.toMatch(/inputs/i);
 
       const round = importAsc(exported.text);
       expect(round.warnings, gate.leaf).toEqual([]);
       const roundComponent = round.components[0];
-      expect(roundComponent.value, gate.leaf).toBe(`${gate.leaf} ${params}`);
+      // …and Tau still gets the same value back, because the count is derived
+      // from the same symbol on the way in.
+      expect(roundComponent.value, gate.leaf).toBe(component.value);
       expect(roundComponent.pinOverride?.map((pin) => pin.id), gate.leaf).toEqual(gate.pins);
       const extracted = extractCircuit(round.components, round.wires, round.netLabels);
       const pins = extracted.components.find((entry) => entry.component.label === "A1")?.pins;
       for (const pin of gate.pins) expect(pins?.[pin], `${gate.leaf}.${pin}`).toBe(names.get(pin));
     }
+  });
+
+  it("keeps a Tau-placed gate's input count out of the LTspice Value and still reopens it", () => {
+    // A gate placed in Tau can be any width from two to five. `Digital\and` in
+    // LTspice is always the five-input symbol and its A-device Value holds only
+    // Vhigh/Vlow/Vt/Vhys/Td, so the count rides the Tau-only slot instead of
+    // being written as a parameter LTspice would try to parse.
+    const gate: SchematicComponent = {
+      id: "a1", kind: "digitalGate", x: 320, y: 256, rotation: 0,
+      value: "and Inputs=3 Vhigh=5", label: "A1",
+    };
+    const exported = schematicToAsc({ components: [gate], wires: [], netLabels: [] });
+    expect(exported.warnings).toEqual([]);
+    const symbol = parseAsc(exported.text).symbols[0];
+    expect(symbol.type).toBe("Digital\\\\and");
+    expect(symbol.attrs.Value).toBe("Vhigh=5");
+    expect(symbol.attrs.TauValue).toBe("and Inputs=3 Vhigh=5");
+
+    const round = importAsc(exported.text);
+    expect(round.warnings).toEqual([]);
+    expect(round.components[0].value).toBe("and Inputs=3 Vhigh=5");
+    expect(getLocalPins("digitalGate", round.components[0].value)
+      .filter((pin) => /^in\d+$/.test(pin.id)).length).toBe(3);
   });
 
   it("round-trips a dflop with exact role connectivity through Digital\\dflop", () => {

@@ -261,6 +261,25 @@ const DIGITAL_GATE_LEAFS = new Set([
 const VERBATIM_UNSAFE_LEAFS = new Set(["npn4", "pnp4", "varistor", "diac"]);
 
 /**
+ * Drop Tau's `Inputs=` count from a gate's LTspice `Value`.
+ *
+ * The count is not something an `.asc` ever said. LTspice puts a gate's input
+ * count in the symbol - `Digital\and` **is** a five-input part, `Digital\inv` a
+ * one-input one - and its A-device `Value` holds only `Vhigh=/Vlow=/Vt=/Vhys=/
+ * Td=`. `ascImport` writes the count into the Tau value so the body draws the
+ * terminals the symbol really has; emitting it back would put a key LTspice
+ * does not know on the device, and would make an imported file no longer
+ * re-export byte-identically.
+ *
+ * Nothing is lost either way. An imported gate re-derives the count from the
+ * same symbol on reopen, and a gate placed in Tau writes its whole value to
+ * `SYMATTR TauValue` beside the symbol, which is what Tau reads back.
+ */
+function stripGateInputCount(params: string): string {
+  return params.replace(/(^|[\s,])inputs\s*=\s*[^\s,]+/gi, "$1").replace(/\s+/g, " ").trim();
+}
+
+/**
  * Whether an imported LTspice symbol name can be re-emitted verbatim by the
  * exporter with full fidelity: re-importing the emitted SYMBOL line must yield
  * the same kind, the same banked pin positions, and the same value. Kinds
@@ -450,6 +469,7 @@ function componentToLtspiceSymbol(component: SchematicComponent): LtspiceCompone
   }
   if (component.kind === "digitalGate") {
     const value = component.value.trim();
+    // (see `stripGateInputCount` below for why the count does not go out)
     const match = /^([^\s,]+)(?:[\s,]+|$)/.exec(value);
     const candidate = match?.[1].toLowerCase() ?? "";
     // Never reinterpret an unknown function as an AND gate. That would emit a
@@ -459,7 +479,7 @@ function componentToLtspiceSymbol(component: SchematicComponent): LtspiceCompone
     // LTspice encodes the function in `SYMBOL Digital\\<leaf>`, not Value.
     // Leaving it in Value would re-import as e.g. `and and Vhigh=5` because
     // the importer correctly prepends the symbol leaf.
-    const params = value.slice(match?.[0].length ?? 0).trim();
+    const params = stripGateInputCount(value.slice(match?.[0].length ?? 0).trim());
     return { type: `Digital\\\\${leaf}`, value: params };
   }
   const type = kindToLtspiceType(component.kind);

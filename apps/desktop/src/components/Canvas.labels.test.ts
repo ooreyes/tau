@@ -32,6 +32,16 @@ describe("sourceValueLabel", () => {
     expect(sourceValueLabel("vsource", "PWL(0 0 1m 5 2m 0)")).toBe("Piecewise · 3 points");
   });
 
+  it("names a potentiometer's track and tap as two quantities, not one string", () => {
+    // The tap became a canvas control under mission item 6, so `Wiper=` reaches
+    // this label constantly. The catalog unit belongs to the track only.
+    expect(sourceValueLabel("potentiometer", "10k")).toBe(`10k${thin}Ω`);
+    expect(sourceValueLabel("potentiometer", "10k Wiper=0.5")).toBe(`10k${thin}Ω`);
+    expect(sourceValueLabel("potentiometer", "10k Wiper=0.8")).toBe(`10k${thin}Ω · 80%`);
+    expect(sourceValueLabel("potentiometer", "10k Wiper=0")).toBe(`10k${thin}Ω · 0%`);
+    expect(sourceValueLabel("potentiometer", "10k Wiper=1")).toBe(`10k${thin}Ω · 100%`);
+  });
+
   it("formats the comparator as high/low volts, not a garbled unit suffix", () => {
     expect(sourceValueLabel("comparator", "1 0")).toBe(`1${thin}V/0${thin}V`);
     expect(sourceValueLabel("comparator", "")).toBe(`1${thin}V/0${thin}V`); // default spec

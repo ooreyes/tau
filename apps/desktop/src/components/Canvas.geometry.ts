@@ -4,6 +4,7 @@ import type { ComponentKind, NetLabel, Point, Rotation, SchematicAscShape, Schem
 import { getComponentPins, getLocalPins, transformPoint } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
 import { decodeIndependentSourceValue } from "../schematic/sourceValue";
+import { DEFAULT_WIPER, parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { isNativeMultiPinSubcircuit, nativeSubcircuitBody } from "../schematic/subcircuitGeometry";
 
 export const snap = (v: number) => {
@@ -298,6 +299,18 @@ export const sourceValueLabel = (kind: ComponentKind, value: string): string => 
     const low = explicitUnit(params.low ?? "0", "V");
     const high = explicitUnit(params.high ?? "5", "V");
     return `${low}→${high} @ ${explicitUnit(params.frequency ?? "100k", "Hz")}`;
+  }
+  if (kind === "potentiometer") {
+    // The tap is now a canvas control (mission item 6), so it reaches this
+    // label constantly. Suffixing the catalog unit onto the raw string spelled
+    // it "10k Wiper=0.8 Ω" — the track resistance and the tap are two
+    // quantities, and only one of them is in ohms.
+    const { resistanceText, wiper } = parsePotentiometerSpec(value);
+    const track = explicitUnit(resistanceText, "Ω");
+    // A centred wiper is the resting state and every schematic saved before the
+    // control existed; it reads as a plain resistance, exactly as it always did.
+    if (wiper === DEFAULT_WIPER) return track;
+    return `${track} · ${Math.round(wiper * 100)}%`;
   }
   if (kind === "comparator") {
     const params = decodeParams(kind, value);

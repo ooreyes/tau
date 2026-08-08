@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAsc, parseAsy, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic, importAsc, componentValueFromAttrs, makeSubcircuitResolver, type SubcircuitResolver } from "./ascImport";
 import { extractCircuit } from "../schematic/netlist";
+import { getLocalPins } from "../schematic/pins";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { buildParamScope, resolveComponentValues } from "../simulation/paramScope";
 
@@ -1298,7 +1299,10 @@ SYMATTR InstName A1`;
     const doc = ascToSchematic(parseAsc(src));
     const a1 = doc.components.find((c) => c.label === "A1");
     expect(a1?.kind).toBe("digitalGate");
-    expect(a1?.value).toBe("and");
+    // `and.asy` is a five-input symbol. Tau's value grammar defaults to two, so
+    // the count the symbol exposes has to be written down or the body draws two
+    // leads while three of the imported terminals hang off it.
+    expect(a1?.value).toBe("and Inputs=5");
     const pins = Object.fromEntries((a1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
     expect(pins.in1).toEqual({ x: 1872, y: 240 });
     expect(pins.in5).toEqual({ x: 1872, y: 304 });
@@ -1306,6 +1310,40 @@ SYMATTR InstName A1`;
     expect(pins.qbar).toEqual({ x: 1936, y: 288 });
     expect(pins.com).toEqual({ x: 1888, y: 304 });
     expect(doc.warnings.filter((w) => /A1/i.test(w))).toHaveLength(0);
+  });
+
+  it("draws a lead for every terminal an imported gate actually has", () => {
+    // The bug this closes: an imported AND carried five absolute input pins
+    // while its value named no count, so `getLocalPins` gave the body two rows
+    // and the other three terminals were reached only by dangling repair leads
+    // starting off the body. The two banks must be the same width.
+    for (const [leaf, expected] of [["AND", 5], ["OR", 5], ["XOR", 5], ["INV", 1], ["BUF", 1]] as const) {
+      const doc = ascToSchematic(parseAsc(
+        `Version 4\nSHEET 1 880 680\nSYMBOL DIGITAL\\${leaf} 1904 208 R0\nSYMATTR InstName A1\n`,
+      ));
+      const gate = doc.components.find((c) => c.label === "A1");
+      const overrideInputs = (gate?.pinOverride ?? []).filter((p) => /^in\d+$/.test(p.id)).length;
+      const drawnInputs = getLocalPins("digitalGate", gate!.value)
+        .filter((p) => /^in\d+$/.test(p.id)).length;
+      expect(overrideInputs, leaf).toBe(expected);
+      expect(drawnInputs, leaf).toBe(overrideInputs);
+      // Every imported terminal now sits on a row the body draws.
+      for (const pin of gate!.pinOverride ?? []) {
+        expect(
+          getLocalPins("digitalGate", gate!.value).some((local) => local.id === pin.id),
+          `${leaf}.${pin.id}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("leaves an input count the file already states alone", () => {
+    // A value that says what it means is not second-guessed - that is what lets
+    // a Tau-written gate keep the count it was given.
+    const doc = ascToSchematic(parseAsc(
+      `Version 4\nSHEET 1 880 680\nSYMBOL DIGITAL\\AND 1904 208 R0\nSYMATTR InstName A1\nSYMATTR Value Inputs=3\n`,
+    ));
+    expect(doc.components.find((c) => c.label === "A1")?.value).toBe("and Inputs=3");
   });
 
   it("imports DIGITAL\\INV with only its .asy pin subset (in1/qbar/com)", () => {

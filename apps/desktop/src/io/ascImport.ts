@@ -45,6 +45,7 @@ import { isComponentKind } from "../schematic/types";
 import { retiredKindNotice } from "../schematic/retiredKinds";
 import { getLocalPins, transformPoint } from "../schematic/pins";
 import { parseIcValue } from "../engine/icSpec";
+import { gateInputCount, parseDigitalGate } from "../engine/digitalGateSpec";
 import { MAX_COMPONENTS, MAX_WIRES } from "../schematic/documentValidation";
 import { ltspiceModelFileFromSymbolAttrs } from "./ltspiceModelFile";
 
@@ -1143,6 +1144,40 @@ function buildPinOverride(
   return override;
 }
 
+/**
+ * Record how many inputs an imported gate's symbol actually exposes.
+ *
+ * LTspice encodes a gate's input count in the symbol, not its value:
+ * `Digital\and` is a five-input part, and `Digital\inv` a one-input one. Tau's
+ * value grammar has no such information and defaults to two, so an imported AND
+ * arrived carrying five absolute input positions - any of which the source file
+ * may have wired - while its body drew two leads and the other three terminals
+ * hung off it on repair leads.
+ *
+ * The count is Tau's pin-bank fact rather than something the file said, so
+ * `ascExport` strips the token again on the way out: the emitted `Value` is
+ * byte-identical to the source, LTspice never sees a key it does not know, and
+ * a re-import derives the same count from the same symbol.
+ */
+export function gateValueWithSymbolInputs(
+  value: string,
+  pinOverride: PinOverride[] | undefined,
+): string {
+  if (!pinOverride?.length) return value;
+  // A value that already names a count says what it means; do not second-guess
+  // it. That covers a hand-edited file and anything Tau wrote itself.
+  if (/\binputs\s*=/i.test(value)) return value;
+  const exposed = pinOverride.filter((pin) => /^in\d+$/.test(pin.id)).length;
+  if (exposed === 0) return value;
+  const spec = parseDigitalGate(value);
+  // `gateInputCount` is the same clamp the drawing and the deck use, so a
+  // single-input function (buffer, inverter, Schmitt) still resolves to one and
+  // gets no redundant token.
+  const declared = gateInputCount(spec.fn, exposed);
+  if (declared === spec.inputs) return value;
+  return `${value.trim()} Inputs=${declared}`.trim();
+}
+
 const pointOnImportedWire = (point: { x: number; y: number }, wire: SchematicWire): boolean => {
   for (let index = 1; index < wire.points.length; index += 1) {
     const a = wire.points[index - 1];
@@ -2039,7 +2074,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       : leaf === "csw"
         ? currentSwitchValueFromAttrs(symbol.attrs)
         : kind === "digitalGate"
-          ? `${leaf} ${authoredValue}`.trim()
+          ? gateValueWithSymbolInputs(`${leaf} ${authoredValue}`.trim(), pinOverride)
           : kind === "subckt"
             ? subcktValueFromSymbol(leaf, symbol.attrs, symbolMetadata?.attrs)
             : kind === "isource" && (leaf === "load" || leaf === "load2")
