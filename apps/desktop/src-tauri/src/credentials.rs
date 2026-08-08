@@ -138,7 +138,7 @@ fn header_allowed_from_renderer(name: &str) -> bool {
 fn auth_header_for(provider: &str, api_key: &str) -> Result<(&'static str, String), String> {
     match provider {
         "anthropic" => Ok(("x-api-key", api_key.to_string())),
-        "gemini" => Ok(("Authorization", format!("Bearer {api_key}"))),
+        "gemini" | "openai" => Ok(("Authorization", format!("Bearer {api_key}"))),
         other => Err(format!("Unknown assistant provider: {other}")),
     }
 }
@@ -235,13 +235,34 @@ mod tests {
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
         )
         .is_ok());
+        // OpenAI became a first-class provider when Settings gained a
+        // three-provider Model configuration page; this line previously
+        // asserted the opposite.
+        assert!(allowed_cloud_url("openai", "https://api.openai.com/v1/chat/completions").is_ok());
         assert!(allowed_cloud_url("anthropic", "https://evil.example/v1/messages").is_err());
         assert!(allowed_cloud_url(
             "gemini",
             "https://api.anthropic.com/v1/messages"
         )
         .is_err());
-        assert!(allowed_cloud_url("openai", "https://api.openai.com/v1/chat/completions").is_err());
+        // The allowlist stays per-provider: a known provider may not borrow
+        // another's host.
+        assert!(allowed_cloud_url("openai", "https://api.anthropic.com/v1/messages").is_err());
+        assert!(allowed_cloud_url("mistral", "https://api.mistral.ai/v1/chat").is_err());
+    }
+
+    #[test]
+    fn every_supported_provider_maps_to_its_own_keychain_account() {
+        let accounts = ["anthropic", "gemini", "openai"]
+            .map(|provider| super::account_for(provider).expect("supported provider"));
+        // Distinct entries: one provider's key must never overwrite another's.
+        assert_eq!(
+            accounts.len(),
+            accounts.iter().collect::<std::collections::HashSet<_>>().len()
+        );
+        // The set stays closed - an arbitrary id cannot name a keychain item.
+        assert!(super::account_for("../../etc/passwd").is_err());
+        assert!(super::account_for("").is_err());
     }
 
     #[test]
@@ -261,5 +282,9 @@ mod tests {
         let (name, value) = auth_header_for("gemini", "AIza").unwrap();
         assert_eq!(name, "Authorization");
         assert_eq!(value, "Bearer AIza");
+        let (name, value) = auth_header_for("openai", "sk-proj").unwrap();
+        assert_eq!(name, "Authorization");
+        assert_eq!(value, "Bearer sk-proj");
+        assert!(auth_header_for("mistral", "x").is_err());
     }
 }

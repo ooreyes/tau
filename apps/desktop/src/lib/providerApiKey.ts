@@ -89,6 +89,14 @@ export function createProviderKeyStore(provider: string): ProviderKeyStore {
   return { load, hasKey, hydrate, save, useHasKey };
 }
 
+const openAiStore = createProviderKeyStore("openai");
+
+export const loadOpenAiApiKey = openAiStore.load;
+export const hasOpenAiApiKey = openAiStore.hasKey;
+export const hydrateOpenAiApiKey = openAiStore.hydrate;
+export const saveOpenAiApiKey = openAiStore.save;
+export const useHasOpenAiApiKey = openAiStore.useHasKey;
+
 const geminiStore = createProviderKeyStore("gemini");
 
 export const loadGeminiApiKey = geminiStore.load;

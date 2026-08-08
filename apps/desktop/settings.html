@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Second entry point, same origin as index.html. Same origin is what lets
+         the app's strict CSP cover this window unchanged, and what lets the two
+         windows share localStorage so a preference set here reaches the
+         schematic window. -->
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#F5F6F8" />
+    <title>Tau Settings</title>
+    <script>
+      /* FOUC guard, identical to index.html: a settings window that flashes the
+         wrong theme is the first thing a user sees after clicking Settings. */
+      (function () {
+        var mode = "light";
+        try {
+          var raw = localStorage.getItem("tau.ui.theme");
+          if (raw === "light" || raw === "dark" || raw === "system") mode = raw;
+        } catch (e) {}
+        var root = document.documentElement;
+        var darkOs =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var dark = mode === "dark" || (mode === "system" && darkOs);
+        if (mode === "system") root.removeAttribute("data-theme");
+        else root.setAttribute("data-theme", mode);
+        root.style.colorScheme = dark ? "dark" : "light";
+        root.style.background = dark ? "#000" : "#F5F6F8";
+        root.style.color = dark ? "#f5f5f7" : "#111418";
+      })();
+    </script>
+    <style>
+      html, body { background: #F5F6F8; color: #111418; }
+      html[data-theme="dark"], html[data-theme="dark"] body {
+        background: #000;
+        color: #f5f5f7;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme]), html:not([data-theme]) body {
+          background: #000;
+          color: #f5f5f7;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="settings-root"></div>
+    <script type="module" src="/src/settings-main.tsx"></script>
+  </body>
+</html>
