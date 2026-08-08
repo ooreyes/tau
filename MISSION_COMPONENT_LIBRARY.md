@@ -319,6 +319,29 @@ attaches where `App.tsx` sets a transient or operating-point result rather than
 in the deck. Audit every consumer of that warning list first - `ShellPanels.tsx`
 spreads it, and a warning that becomes a blocker is trap 3 in `STATE.md`.
 
+**Half B, the polarity - DONE 2026-08-08.** `simulation/polarizedCapacitor.ts`
+inspects a finished transient rather than changing the netlist. Pin `a` is the
+positive terminal, agreed independently by the pin label, the `+` glyph beside
+the straight plate in the symbol, and the node order the netlist emits; the
+check re-verifies that pairing instead of trusting `TERMINAL_PAIRS` order,
+because reordering that table would silently invert the test.
+
+Threshold is `max(1 mV, 1e-3 x peak |V|)`, modelled on ngspice's own
+reltol/vntol criterion - a fixed floor alone reports phantom reversals on a
+12 V rail, a relative floor alone has nothing to scale against at 0 V. It is a
+numerical floor, deliberately **not** a device rating: real electrolytics
+tolerate about a volt, but Tau has no per-part rating data and inventing one is
+what the LED advisory already refuses to do. The whole waveform is inspected and
+the three cases are named separately (still reversed at the end, reversed only
+while settling, intermittent); "sustained" is phrased as measured rather than as
+steady state, because one transient cannot prove steady state.
+
+The advisory rides `ComponentMeasurement.advisories`, not `result.warnings`, so
+it cannot become a run blocker. It is transient-only; there is no operating-point
+advisory path today.
+
+Item 2 is closed.
+
 ### 3. Redraw: bulb, potentiometer, opamp, comparator, transformer, ctTransformer
 Fix the "+"/"−" collision on every amplifier-derived symbol. Close the
 transformer lead gaps and land the CT tap on the coil junction. Make the
@@ -351,6 +374,37 @@ behaviour (momentary vs latching, NO vs NC). Resolve the re-run question above.
 
 **Done when:** clicking a switch mid-simulation changes the result without the
 user touching Run, and the drawing shows the contact moving.
+
+**Behaviour and re-run - DONE 2026-08-08. The drawing does not move yet.**
+
+`schematic/actuation.ts` is the pure model: given a part and a press or a
+release, what should its value become. A switch latches and ignores the
+release; a push button springs back; an SPDT throws; a relay is refused **by
+name with a reason**, because it has a moving contact a reader will certainly
+click but it is driven by its coil.
+
+Two conventions are load-bearing and tested:
+- The contact state stays the **leading bare token** of the value string,
+  because the solver reads the raw string's first word (`isStaticContactClosed`).
+  Moving it behind a `state=` key makes every closed button read as open.
+- A momentary button records where it rests **on the way in**. After one press
+  an NC button reads "open" and nothing left in the value would say it should
+  spring back to closed, so `form` falls back to *unset* rather than to "no":
+  an omitted form still means "the state on disk is the rest state", and the
+  catalog default stays spelled exactly `open`.
+
+Both were found by tests that failed first.
+
+The re-run answer: every component change runs `invalidateAnalysis`, which
+nulls every result because the plot no longer describes the circuit. Throwing a
+switch is the one edit whose purpose is to see the new result, so it re-solves
+instead of blanking. The flag rides a ref so the invalidation effect keeps its
+original dependencies.
+
+**Still open on this item:** the symbol does not show the contact moving
+(`symbols.tsx` was owned by another change in flight), the potentiometer wiper
+is not yet draggable, and there is no hover affordance telling a reader a part
+is operable.
 
 ### 7. LEDs glow with current
 Brightness from the current through the part, tracking the existing time cursor.
