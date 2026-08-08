@@ -400,7 +400,7 @@ quantity; `parseQuantity`'s pattern is anchored and rejects it, and
 `parsedNumberFrom` (`spiceNetlist.ts:2456`) turns that into "F1 needs a valid
 A/A value." by name rather than guessing a number.
 
-### 4b. Behavioral source, VCO and Subcircuit — comprehensible configuration
+### 4b. Behavioral source, VCO and Subcircuit — DONE 2026-08-08
 
 **Added 2026-08-08 after an audit found it missing.** The owner raised this
 twice in the original request and it never made it into this file, so nine
@@ -538,6 +538,27 @@ logarithmic between 50 uA and 20 mA because perception is -- linear would put
 dark. Deliberately **not** behind Current Mode: the flow dots are a debugging
 aid, a lit lamp is what the part does. Every LED is amber because Tau does not
 model wavelength.
+
+## Status at 2026-08-08 15:20 — items 0-9 and 4b all closed
+
+Gates: typecheck clean, **3668 tests passed / 8 skipped**, drift 10/10, cargo
+`--lib` 77 passed.
+
+The three tails are done. Reversion was checked on each after the fact, because
+the agents that wrote them were cut off mid-verification:
+disabling `strandedTerminals` fails 5; stubbing `checkBehavioral` to always
+accept fails 8; making the wiper drag absolute fails 3.
+
+**Tail 3 moved nothing, deliberately.** A saved document records where its wires
+end, not which pin they meant, so a moved terminal silently disconnects and the
+circuit still opens, still runs, and solves differently. Relocation was
+considered and rejected on the evidence: the DAC's VREF crossed from the left
+edge to the right and the 7-segment was re-banked onto two columns, so
+reattaching an endpoint would route a conductor through the body, and the
+16-unit moves would leave a bend the user never drew. Redrawing somebody's
+schematic to match a new symbol is worse than telling them which two wires to
+move. Named, not repaired — the same contract as `retiredKinds`. Redrawing a
+part in future means adding a row to `relocatedPins.ts`.
 
 ## Left open (small, named)
 
