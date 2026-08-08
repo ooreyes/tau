@@ -400,7 +400,7 @@ quantity; `parseQuantity`'s pattern is anchored and rejects it, and
 `parsedNumberFrom` (`spiceNetlist.ts:2456`) turns that into "F1 needs a valid
 A/A value." by name rather than guessing a number.
 
-### 5. Digital parts: pinouts and settings
+### 5. Digital parts: pinouts and settings — DONE 2026-08-08
 SR/D/T/JK, counter, 555, ADC, DAC, 7-segment, sample & hold. Labelled pins on
 the drawing (555 must show TRIG/OUT/RESET/CTRL/THRES/DISCH/VCC/GND), and real
 properties for the shared logic grammar. Nothing may clip in the palette preview.
@@ -447,7 +447,7 @@ original dependencies.
 is not yet draggable, and there is no hover affordance telling a reader a part
 is operable.
 
-### 7. LEDs glow with current
+### 7. LEDs glow with current — DONE 2026-08-08
 Brightness from the current through the part, tracking the existing time cursor.
 No glow without a result. Document the mapping.
 
@@ -462,7 +462,7 @@ Both paths must simulate correctly and be tested.
 **Done when:** a freshly placed diode drops its ideal forward voltage, an
 imported `.asc` diode is unchanged, and the corpus gate has not moved.
 
-### 9. Configurable gate input count
+### 9. Configurable gate input count — DONE 2026-08-08
 AND/OR/NAND/NOR/XOR/XNOR get an input-count control (minimum 2). The symbol
 redraws with that many inputs; the netlist emits the matching gate. The five
 always-drawn input leads go away.
@@ -471,6 +471,56 @@ always-drawn input leads go away.
 3-input gate, and the palette icons for the seven gate types are distinguishable.
 
 ---
+
+## Status at 2026-08-08 12:40
+
+**Every item 0-9 is closed** except the three tails listed under "Left open"
+below. Gates: typecheck clean, **3581 tests passed / 8 skipped**, drift 10/10,
+cargo `--lib` 77 passed.
+
+### Item 5, 9 notes
+The gate is now derived geometry: `gateInputRows()` on a 16 pitch (even banks
+skip the centre so nothing lands on +/-8), seven distinguishable silhouettes,
+and the inversion bubble sits on the output that **actually** carries the
+inverted sense -- the old always-bubble-qbar drawing mislabelled every NAND,
+NOR, XNOR and NOT. `getLocalPins(kind, value?)` is now two things on purpose:
+with a value it is the instance's bank, without one it is the kind's full
+dictionary, because `ascImport`'s `buildPinOverride` maps an `.asy`'s pin names
+through it and narrowing by kind alone would drop `in2..in5` from every
+imported AND.
+
+All ten digital parts draw their pin names, the 555 included, and no digital
+terminal passes |y| = 32 any more, so nothing clips the preview box.
+
+**Pin captions turn with the body**, corrected only for the half-turn that
+would invert them and the flip that would mirror them. Upright-at-every-angle
+was built first and rejected on looking at it: at 90 degrees the 555's five
+left captions land on one horizontal line 16 units apart while RESET alone is
+21 wide.
+
+### Item 7 notes
+An overlay, not a symbol change, for the reason the flow layer is one:
+`ComponentSymbol` is a pure function of kind and value. Brightness is
+logarithmic between 50 uA and 20 mA because perception is -- linear would put
+1 mA at 0.05. Reverse bias, a non-finite current, and no result at all are all
+dark. Deliberately **not** behind Current Mode: the flow dots are a debugging
+aid, a lit lamp is what the part does. Every LED is amber because Tau does not
+model wavelength.
+
+## Left open (small, named)
+
+- **Item 6:** the potentiometer wiper is not draggable, and there is no hover
+  affordance telling a reader a contact is operable. Behaviour and drawing both
+  work.
+- **Item 8:** nothing outstanding in the models; the Advanced disclosure landed.
+- **`io/ascImport.ts`:** an imported `Digital\and` keeps five `pinOverride`
+  inputs while its value names no count, so the body draws two leads and three
+  import leads start 8 units off it. Appending `Inputs=<n>` at import fixes it,
+  but that changes the exported `Value` attribute which `ascExport.test.ts`
+  round-trips -- do both together.
+- **Saved documents wired to the old digital pin positions** need those wires
+  re-attached. Pin ids and order did not change, only coordinates, and there is
+  no endpoint-relocation path today.
 
 ## Status at 2026-08-08 11:00
 
