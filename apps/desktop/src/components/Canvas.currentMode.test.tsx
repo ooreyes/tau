@@ -15,6 +15,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { Canvas } from "./Canvas";
 import { useSchematic } from "../store/useSchematic";
 import { runOperatingPoint } from "../simulation/operatingPoint";
+import { extractCircuit } from "../schematic/netlist";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 
 class ResizeObserverStub {
@@ -159,5 +160,72 @@ describe("Canvas - reduced motion", () => {
     const first = at();
     await new Promise((r) => setTimeout(r, 250));
     expect(at()).not.toBe(first);
+  });
+});
+
+/**
+ * An LED that looks identical passing 20 mA and nothing at all throws away the
+ * reason it was drawn. Unlike the flow dots this is not a debugging aid, so it
+ * is deliberately NOT behind the Current Mode toggle -- but it is held to the
+ * same honesty bar: no result, no light.
+ */
+describe("Canvas - LED glow", () => {
+  const LED = { id: "d-1", kind: "led", x: 224, y: 0, rotation: 0, value: "LED", label: "D1" } as SchematicComponent;
+  const withLed = () => useSchematic.setState({ components: [VS, R1, LED, GND_VS, GND_R2], wires });
+  // `tranComponentCurrents` walks `result.circuit`, so the fixture carries a
+  // real extracted circuit rather than a hand-shaped stub.
+  const tranAt = (amps: number, parts = [VS, R1, LED, GND_VS, GND_R2]) => ({
+    ok: true as const,
+    times: [0, 1e-3],
+    traces: [],
+    currents: [{ ref: "D1", label: "I(D1)", values: [amps, amps] }],
+    circuit: extractCircuit(parts, wires, []),
+    stats: { netCount: 3, componentCount: parts.length, sampleCount: 2, stopTime: 1e-3, stepSize: 5e-4 },
+    warnings: [],
+    title: "tran",
+  });
+
+  it("draws nothing before a run", () => {
+    withLed();
+    render(<Canvas interactive={false} />);
+    expect(document.querySelectorAll(".led-glow")).toHaveLength(0);
+  });
+
+  it("lights the LED from a solved forward current", () => {
+    withLed();
+    render(<Canvas interactive={false} tran={tranAt(18e-3) as never} />);
+    const glow = document.querySelectorAll(".led-glow");
+    expect(glow).toHaveLength(1);
+    // Near the 20 mA rating, so the halo should be close to its full radius.
+    expect(Number(glow[0].getAttribute("r"))).toBeGreaterThan(20);
+  });
+
+  it("stays dark when the same LED is reverse-biased", () => {
+    withLed();
+    render(<Canvas interactive={false} tran={tranAt(-18e-3) as never} />);
+    expect(document.querySelectorAll(".led-glow")).toHaveLength(0);
+  });
+
+  it("does not need Current Mode switched on", () => {
+    // The flow overlay is opt-in; a lit lamp is what the part does.
+    withLed();
+    render(<Canvas interactive={false} currentVisualizer={false} tran={tranAt(18e-3) as never} />);
+    expect(document.querySelectorAll(".led-glow")).toHaveLength(1);
+  });
+
+  it("grows with drive, so two LEDs at different currents read differently", () => {
+    const D2 = { ...LED, id: "d-2", label: "D2", x: 320 } as SchematicComponent;
+    useSchematic.setState({ components: [VS, R1, LED, D2, GND_VS, GND_R2], wires });
+    const result = {
+      ...tranAt(18e-3, [VS, R1, LED, D2, GND_VS, GND_R2]),
+      currents: [
+        { ref: "D1", label: "I(D1)", values: [18e-3, 18e-3] },
+        { ref: "D2", label: "I(D2)", values: [3e-4, 3e-4] },
+      ],
+    };
+    render(<Canvas interactive={false} tran={result as never} />);
+    const radii = [...document.querySelectorAll(".led-glow")].map((e) => Number(e.getAttribute("r")));
+    expect(radii).toHaveLength(2);
+    expect(Math.max(...radii)).toBeGreaterThan(Math.min(...radii) + 4);
   });
 });

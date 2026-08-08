@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
+  GATE_INPUTS_DEFAULT,
+  GATE_INPUTS_MAX,
+  GATE_INPUTS_MIN,
+  gateInputCount,
+  isSingleInputGateFn,
   parseDigitalGate,
   digitalGateDeckLines,
   dflopDeckLines,
@@ -11,7 +16,7 @@ import {
 describe("parseDigitalGate", () => {
   it("defaults to a 0/1 V buffer with midpoint threshold", () => {
     expect(parseDigitalGate("")).toEqual({
-      fn: "buf", invertOut: false, vhigh: 1, vlow: 0, vt: 0.5, vhys: 0, td: 0,
+      fn: "buf", invertOut: false, inputs: 1, vhigh: 1, vlow: 0, vt: 0.5, vhys: 0, td: 0,
     });
   });
 
@@ -33,7 +38,7 @@ describe("parseDigitalGate", () => {
 
   it("honors key=value params with SI suffixes", () => {
     expect(parseDigitalGate("and Vhigh=5 Vlow=-5 Vt=1.2 Vhys=0.5 Td=10n")).toEqual({
-      fn: "and", invertOut: false, vhigh: 5, vlow: -5, vt: 1.2, vhys: 0.5, td: 10e-9,
+      fn: "and", invertOut: false, inputs: 2, vhigh: 5, vlow: -5, vt: 1.2, vhys: 0.5, td: 10e-9,
     });
   });
 
@@ -47,6 +52,49 @@ describe("parseDigitalGate", () => {
   it("ignores unknown tokens and unparsable values", () => {
     expect(parseDigitalGate("and Trise=10n bogus Vhigh=oops").fn).toBe("and");
     expect(parseDigitalGate("and Trise=10n bogus Vhigh=oops").vhigh).toBe(1);
+  });
+});
+
+describe("gate input count (mission item 9)", () => {
+  it("defaults a multi-input gate to two, the fewest that make it that function", () => {
+    for (const fn of ["and", "or", "xor", "nand", "nor", "xnor"]) {
+      expect(parseDigitalGate(fn).inputs, fn).toBe(GATE_INPUTS_DEFAULT);
+    }
+    expect(GATE_INPUTS_DEFAULT).toBe(2);
+  });
+
+  it("reads Inputs= from the value, case-insensitively, across the whole range", () => {
+    expect(parseDigitalGate("and Inputs=3").inputs).toBe(3);
+    expect(parseDigitalGate("or inputs=5").inputs).toBe(5);
+    expect(parseDigitalGate("xor Vhigh=5 INPUTS=4 Td=10n").inputs).toBe(4);
+    // The count is a pin bank, so it may not be a fraction of a terminal.
+    expect(parseDigitalGate("and Inputs=3.4").inputs).toBe(3);
+  });
+
+  it("clamps to what the netlist can emit instead of trusting the value", () => {
+    // spiceNetlist reads in1..in5; a value asking for 9 would draw leads that
+    // no deck line could ever reference.
+    expect(parseDigitalGate("and Inputs=9").inputs).toBe(GATE_INPUTS_MAX);
+    expect(parseDigitalGate("and Inputs=1").inputs).toBe(GATE_INPUTS_MIN);
+    expect(parseDigitalGate("and Inputs=0").inputs).toBe(GATE_INPUTS_MIN);
+    expect(parseDigitalGate("and Inputs=-4").inputs).toBe(GATE_INPUTS_MIN);
+    expect(parseDigitalGate("and Inputs=oops").inputs).toBe(GATE_INPUTS_DEFAULT);
+  });
+
+  it("holds the single-input functions at one input whatever the value asks", () => {
+    // A buffer, an inverter and a Schmitt trigger have one input by
+    // construction; obeying Inputs= would draw leads the deck cannot read.
+    for (const fn of ["buf", "buf1", "inv", "not", "schmitt", "schmtbuf", "schmtinv"]) {
+      expect(parseDigitalGate(`${fn} Inputs=5`).inputs, fn).toBe(1);
+      expect(isSingleInputGateFn(parseDigitalGate(fn).fn), fn).toBe(true);
+    }
+  });
+
+  it("exposes the clamp on its own so pins and artwork can share it", () => {
+    expect(gateInputCount("and", null)).toBe(GATE_INPUTS_DEFAULT);
+    expect(gateInputCount("and", 4)).toBe(4);
+    expect(gateInputCount("buf", 4)).toBe(1);
+    expect(gateInputCount("and", Number.NaN)).toBe(GATE_INPUTS_DEFAULT);
   });
 });
 

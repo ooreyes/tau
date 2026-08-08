@@ -12,6 +12,7 @@ import {
 } from "../schematic/subcircuitGeometry";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { OpCurrentFlowLayer } from "./OpCurrentFlowLayer";
+import { LedGlowLayer } from "./LedGlowLayer";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { resolveAmmeterTarget } from "../schematic/ammeterAttach";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -209,6 +210,25 @@ export function Canvas({
     if (useTranReadout || op?.ok) return extractCircuit(components, wires, netLabels);
     return null;
   }, [currentVisualizer, useTranReadout, op, components, wires, netLabels]);
+
+  /**
+   * LED brightness runs off the same solved currents as the flow overlay, but
+   * on its own memo: a lit LED is not a debugging aid, it is what the part
+   * does, so it must not be gated behind the Current Mode toggle. The circuit
+   * is only extracted when there is actually an LED to light.
+   */
+  const ledCurrents = useMemo(() => {
+    if (!components.some((component) => component.kind === "led")) return null;
+    if (useTranReadout && tran?.ok) {
+      const sample =
+        readoutTime == null
+          ? tran.times.length - 1
+          : nearestSampleIndex(tran.times, readoutTime);
+      return tranComponentCurrents(tran, sample);
+    }
+    if (op?.ok) return opComponentCurrents(op, extractCircuit(components, wires, netLabels));
+    return null;
+  }, [components, wires, netLabels, useTranReadout, tran, readoutTime, op]);
 
   // Primary AND per-terminal currents. A transistor's base/emitter wires can
   // only be animated from the terminal vectors, which both engines report and
@@ -1443,6 +1463,7 @@ export function Canvas({
             })}
           </g>
 
+          <LedGlowLayer components={components} currents={ledCurrents} />
           <OpCurrentFlowLayer
             currents={flowCurrents}
             terminals={flow?.terminals}

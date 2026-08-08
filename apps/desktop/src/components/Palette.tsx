@@ -29,9 +29,13 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
 
   const [query, setQuery] = useState("");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(initialOpen);
-  const [preview, setPreview] = useState<{ kind: ComponentKind; name: string }>({
+  // The preview carries the row's VALUE as well as its kind: a logic gate's
+  // drawing is its function and input count, and a contact's is its position,
+  // so a kind-only preview showed all seven gates as the same picture.
+  const [preview, setPreview] = useState<{ kind: ComponentKind; name: string; value?: string }>({
     kind: "resistor",
     name: "Resistor",
+    value: "1k",
   });
 
   const trimmed = query.trim().toLowerCase();
@@ -47,7 +51,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
     (tool.value === undefined ? item.value === undefined || item.id === item.kind : tool.value === item.value);
 
   const place = (item: PaletteItemSpec) => {
-    setPreview({ kind: item.kind, name: item.name });
+    setPreview({ kind: item.kind, name: item.name, value: item.value });
     startPlacing(item.kind, item.value);
   };
 
@@ -207,7 +211,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
         <div>
           <svg viewBox="-44 -40 88 80">
             <g className="symbol">
-              <ComponentSymbol kind={preview.kind} />
+              <ComponentSymbol kind={preview.kind} value={preview.value} />
             </g>
           </svg>
           <strong>{preview.name}</strong>
@@ -240,7 +244,7 @@ function PaletteItem({ item, active, onPlace }: PaletteItemProps) {
     >
       <svg className="palette-icon" viewBox="-42 -40 84 80">
         <g className="symbol">
-          <ComponentSymbol kind={item.kind} />
+          <ComponentSymbol kind={item.kind} value={item.value} />
         </g>
       </svg>
       <span className="palette-name">{item.name}</span>

@@ -9011,3 +9011,20 @@ button.bottom-panel-head:focus-visible {
   font-feature-settings: "tnum" 1, "lnum" 1;
   letter-spacing: -0.02em;
 }
+
+/* An LED lit by its own solved current. Amber because Tau does not model an
+   LED's wavelength -- guessing red or green would be a confident statement
+   about something the solver has no opinion on. Nothing is drawn at all
+   without a result, so this can never imply a part is on when it is not. */
+.led-glow {
+  fill: var(--signal-glow);
+  stroke: var(--signal);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* The halo is measured data, not decoration, so it does not animate: a pulsing
+   readout reads as unstable and on a measured value it actively misleads. */
+@media (prefers-reduced-motion: reduce) {
+  .led-glow { transition: none; }
+}

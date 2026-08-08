@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getLocalPins, type LocalPin } from "./pins";
-import { ComponentSymbol, SYMBOL_BODY, SYMBOL_BOX } from "./symbols";
-import type { ComponentKind } from "./types";
+import {
+  ComponentSymbol,
+  PART_CAPTIONS,
+  PIN_LABEL_LAYOUT,
+  SYMBOL_BODY,
+  SYMBOL_BOX,
+  gateInputRows,
+} from "./symbols";
+import { GATE_INPUTS_MAX, GATE_INPUTS_MIN } from "../engine/digitalGateSpec";
+import type { ComponentKind, Rotation } from "./types";
+
+const ROTATIONS: Rotation[] = [0, 90, 180, 270];
 
 /**
  * Geometry tests for the symbols redrawn under MISSION_COMPONENT_LIBRARY items
@@ -67,6 +77,19 @@ const render = (kind: ComponentKind): string =>
     </svg>,
   );
 
+/** Same, for the parts whose drawing depends on their value or orientation. */
+const renderWith = (
+  kind: ComponentKind,
+  value?: string,
+  rotation: Rotation = 0,
+  mirrored = false,
+): string =>
+  renderToStaticMarkup(
+    <svg>
+      <ComponentSymbol kind={kind} value={value} rotation={rotation} mirrored={mirrored} />
+    </svg>,
+  );
+
 const elementTags = (markup: string, name: string): string[] =>
   markup.match(new RegExp(`<${name}\\b[^>]*>`, "g")) ?? [];
 
@@ -126,6 +149,21 @@ function pathSegments(d: string): Seg[] {
     segments.push({ a: cursor, b: point });
     cursor = point;
   };
+  /** Flatten a cubic to a polyline; `reflect` carries S's implicit control. */
+  let reflect: Pt | null = null;
+  const curveTo = (c1: Pt, c2: Pt, end: Pt) => {
+    const from = cursor;
+    const steps = 32;
+    for (let k = 1; k <= steps; k += 1) {
+      const t = k / steps;
+      const u = 1 - t;
+      lineTo({
+        x: u * u * u * from.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * end.x,
+        y: u * u * u * from.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * end.y,
+      });
+    }
+    reflect = { x: 2 * end.x - c2.x, y: 2 * end.y - c2.y };
+  };
   while (index < tokens.length) {
     if (/^[A-Za-z]$/.test(tokens[index])) {
       command = tokens[index];
@@ -156,6 +194,18 @@ function pathSegments(d: string): Seg[] {
         const end = { x: next(), y: next() };
         for (const point of arcSegments(cursor, end, rx, large, sweep)) lineTo(point);
         cursor = end;
+        break;
+      }
+      case "C": {
+        const c1 = { x: next(), y: next() };
+        const c2 = { x: next(), y: next() };
+        curveTo(c1, c2, { x: next(), y: next() });
+        break;
+      }
+      case "S": {
+        const c1 = reflect ?? cursor;
+        const c2 = { x: next(), y: next() };
+        curveTo(c1, c2, { x: next(), y: next() });
         break;
       }
       case "Z":
@@ -548,5 +598,454 @@ describe("leads connect pins to the body", () => {
     expect(drawn.maxX, `${kind} right`).toBeLessThanOrEqual(PREVIEW_HALF_W);
     expect(drawn.minY, `${kind} top`).toBeGreaterThanOrEqual(-PREVIEW_HALF_H);
     expect(drawn.maxY, `${kind} bottom`).toBeLessThanOrEqual(PREVIEW_HALF_H);
+  });
+});
+
+// ── item 9: the gate is drawn from its value, not from a hard-coded picture ──
+
+/** The seven rows the Digital section of the palette places (paletteItems.ts). */
+const GATE_PRESETS = ["and", "or", "not", "nand", "nor", "xor", "xnor"] as const;
+
+/** Input leads: elements with one endpoint exactly on an `inN` pin. */
+const inputLeadCount = (kind: ComponentKind, value: string): number => {
+  const inputs = getLocalPins(kind, value).filter((pin) => pin.id.startsWith("in"));
+  return drawnElements(renderWith(kind, value)).filter((element) =>
+    element.segments.some((s) => inputs.some((pin) => samePoint(s.a, pin) || samePoint(s.b, pin))),
+  ).length;
+};
+
+describe("logic gate input count (item 9)", () => {
+  it("exposes exactly the inputs the value asks for", () => {
+    for (let n = GATE_INPUTS_MIN; n <= GATE_INPUTS_MAX; n += 1) {
+      const ids = getLocalPins("digitalGate", `and Inputs=${n}`).map((pin) => pin.id);
+      expect(ids.filter((id) => id.startsWith("in")), `${n} inputs`).toEqual(
+        Array.from({ length: n }, (_, index) => `in${index + 1}`),
+      );
+      // The outputs and the reference are not part of the bank that resizes.
+      expect(ids.slice(n), `${n} tail`).toEqual(["q", "qbar", "com"]);
+    }
+  });
+
+  it("draws one lead per input — three for a 3-input gate, five for a 5-input", () => {
+    // The whole of item 9: the symbol used to draw five leads whatever the
+    // gate was, so a 2-input AND arrived with three terminals in mid-air.
+    expect(inputLeadCount("digitalGate", "and Inputs=3")).toBe(3);
+    expect(inputLeadCount("digitalGate", "and Inputs=5")).toBe(5);
+    expect(inputLeadCount("digitalGate", "and")).toBe(2);
+    expect(inputLeadCount("digitalGate", "not")).toBe(1);
+  });
+
+  it("keeps every input row on the 16 grid, centred, at every count", () => {
+    for (let n = 1; n <= GATE_INPUTS_MAX; n += 1) {
+      const rows = gateInputRows(n);
+      expect(rows, `${n} rows`).toHaveLength(n);
+      for (const y of rows) expect(Math.abs(y % 16), `row ${y} off grid`).toBe(0);
+      // Symmetric about the body centre (normalise -0, which is still 0).
+      expect(rows.map((y) => -y + 0).reverse()).toEqual(rows.map((y) => y + 0));
+    }
+  });
+
+  it("renders the seven palette gates as seven different drawings", () => {
+    const markup = new Map(GATE_PRESETS.map((fn) => [fn, renderWith("digitalGate", fn)] as const));
+    for (const a of GATE_PRESETS) {
+      for (const b of GATE_PRESETS) {
+        if (a === b) continue;
+        expect(markup.get(a), `${a} vs ${b}`).not.toBe(markup.get(b));
+      }
+    }
+    // …and assert WHY they differ, so a stray attribute cannot pass this.
+    const back = (fn: string) => (markup.get(fn as never) ?? "").includes('data-gate-body="or"')
+      || (markup.get(fn as never) ?? "").includes('data-gate-body="xor"');
+    for (const fn of ["or", "nor", "xor", "xnor"]) expect(back(fn), `${fn} curved back`).toBe(true);
+    for (const fn of ["and", "nand", "not"]) expect(back(fn), `${fn} flat back`).toBe(false);
+    for (const fn of ["xor", "xnor"]) {
+      expect(markup.get(fn as never), `${fn} second arc`).toContain("data-gate-xor-arc");
+    }
+    for (const fn of ["and", "or", "nand", "nor"]) {
+      expect(markup.get(fn as never), `${fn} has no xor arc`).not.toContain("data-gate-xor-arc");
+    }
+    expect(markup.get("not"), "not buffer glyph").toContain('data-gate-glyph="buf"');
+  });
+
+  it("bubbles the output that really carries the inverted sense", () => {
+    // digitalGateSpec swaps the levels driven onto q and qbar for the N-
+    // variants, so on a NAND it is q that is inverted. The old symbol always
+    // bubbled qbar and therefore mislabelled every inverting gate.
+    for (const fn of ["and", "or", "xor"]) {
+      expect(renderWith("digitalGate", fn), fn).toContain('data-gate-invert="qbar"');
+    }
+    for (const fn of ["nand", "nor", "xnor", "not"]) {
+      expect(renderWith("digitalGate", fn), fn).toContain('data-gate-invert="q"');
+    }
+  });
+
+  it("terminates every lead on its pin and every lead end on the body", () => {
+    for (const value of ["and", "or Inputs=3", "xnor Inputs=5", "not", "schmitt"]) {
+      const pins = getLocalPins("digitalGate", value);
+      const elements = drawnElements(renderWith("digitalGate", value));
+      for (const pin of pins) {
+        const touched = elements.some((element) =>
+          element.segments.some((s) => samePoint(s.a, pin) || samePoint(s.b, pin)),
+        );
+        expect(touched, `"${value}" pin ${pin.id} has no lead`).toBe(true);
+      }
+      const bodySegments = elements
+        .filter((element) => !isLead(element, pins))
+        .flatMap((element) => element.segments);
+      for (const element of elements) {
+        if (!isLead(element, pins)) continue;
+        for (const segment of element.segments) {
+          for (const end of [segment.a, segment.b]) {
+            if (pins.some((pin) => samePoint(end, pin))) continue;
+            expect(
+              minDistanceToSegments(end, bodySegments),
+              `"${value}" lead end (${end.x}, ${end.y}) floats free`,
+            ).toBeLessThanOrEqual(0.775);
+          }
+        }
+      }
+    }
+  });
+
+  it("declares a SYMBOL_BODY that covers the gate at every input count", () => {
+    // One static box has to hold a drawing that grows, so it is declared at the
+    // largest gate. Under-declaring it is what let the old `maxX: 28` sit while
+    // the nose reached x = 40.
+    const declared = SYMBOL_BODY.digitalGate;
+    for (const value of ["buf", "and", "or Inputs=3", "xor Inputs=4", "xnor Inputs=5"]) {
+      const pins = getLocalPins("digitalGate", value);
+      const drawn = drawnElements(renderWith("digitalGate", value))
+        .filter((element) => !isLead(element, pins))
+        .map((element) => element.box)
+        .reduce(union);
+      expect(declared.minX, `${value} minX`).toBeLessThanOrEqual(drawn.minX + 0.05);
+      expect(declared.minY, `${value} minY`).toBeLessThanOrEqual(drawn.minY + 0.05);
+      expect(declared.maxX, `${value} maxX`).toBeGreaterThanOrEqual(drawn.maxX - 0.05);
+      expect(declared.maxY, `${value} maxY`).toBeGreaterThanOrEqual(drawn.maxY - 0.05);
+    }
+    expect(SYMBOL_BOX.digitalGate.halfW).toBeGreaterThanOrEqual(
+      Math.max(-declared.minX, declared.maxX),
+    );
+    expect(SYMBOL_BOX.digitalGate.halfH).toBeGreaterThanOrEqual(
+      Math.max(-declared.minY, declared.maxY),
+    );
+  });
+});
+
+// ── item 5: the digital parts must be readable without a datasheet ─────────
+
+const DIGITAL_KINDS: ComponentKind[] = [
+  "digitalGate",
+  "dflop",
+  "srflop",
+  "tflop",
+  "jkflop",
+  "counter",
+  "timer555",
+  "adc",
+  "dac",
+  "sevenSeg",
+  "sampleHold",
+  "modulator",
+];
+
+/** SF Mono at 7px (`.subckt-pin-label`) advances a shade over 0.6em per
+ *  character - measured against the rendered 555, whose "RESET" spans about 22
+ *  units. Combining marks (the overline in `Q̅`) add no width, so they are not
+ *  counted. */
+const LABEL_EM = 4.4;
+const LABEL_HEIGHT = 7;
+const glyphCount = (text: string): number => [...text].filter((c) => !/\p{M}/u.test(c)).length;
+
+interface DrawnText {
+  text: string;
+  x: number;
+  y: number;
+  transform: string;
+}
+
+function drawnText(markup: string): DrawnText[] {
+  const out: DrawnText[] = [];
+  const pattern = /<text\b([^>]*)>([^<]*)<\/text>/g;
+  let match = pattern.exec(markup);
+  while (match !== null) {
+    const attrs = match[1];
+    const transform = /transform="([^"]*)"/.exec(attrs)?.[1] ?? "";
+    const translate = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(transform);
+    out.push({
+      text: match[2],
+      x: translate ? Number(translate[1]) : 0,
+      y: translate ? Number(translate[2]) : 0,
+      transform,
+    });
+    match = pattern.exec(markup);
+  }
+  return out;
+}
+
+const textBox = (label: DrawnText): Box => {
+  const halfW = (glyphCount(label.text) * LABEL_EM) / 2;
+  return {
+    minX: label.x - halfW,
+    maxX: label.x + halfW,
+    minY: label.y - LABEL_HEIGHT / 2,
+    maxY: label.y + LABEL_HEIGHT / 2,
+  };
+};
+
+const overlaps = (a: Box, b: Box): boolean =>
+  a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
+
+// ── 2×3 affine matrices, so "upright" can be measured instead of eyeballed ──
+
+type Mat = [number, number, number, number, number, number]; // a b c d e f
+const IDENTITY: Mat = [1, 0, 0, 1, 0, 0];
+const multiply = (m: Mat, n: Mat): Mat => [
+  m[0] * n[0] + m[2] * n[1],
+  m[1] * n[0] + m[3] * n[1],
+  m[0] * n[2] + m[2] * n[3],
+  m[1] * n[2] + m[3] * n[3],
+  m[0] * n[4] + m[2] * n[5] + m[4],
+  m[1] * n[4] + m[3] * n[5] + m[5],
+];
+const rotateMat = (deg: number): Mat => {
+  const r = (deg * Math.PI) / 180;
+  return [Math.cos(r), Math.sin(r), -Math.sin(r), Math.cos(r), 0, 0];
+};
+
+/** Parse the transform list Tau's symbols emit (translate / rotate / scale). */
+function parseTransform(value: string): Mat {
+  let result = IDENTITY;
+  const pattern = /(translate|rotate|scale)\(([^)]*)\)/g;
+  let match = pattern.exec(value);
+  while (match !== null) {
+    const args = match[2].trim().split(/[\s,]+/).map(Number);
+    const op: Mat = match[1] === "translate"
+      ? [1, 0, 0, 1, args[0], args[1] ?? 0]
+      : match[1] === "rotate"
+        ? rotateMat(args[0])
+        : [args[0], 0, 0, args[1] ?? args[0], 0, 0];
+    result = multiply(result, op);
+    match = pattern.exec(value);
+  }
+  return result;
+}
+
+describe("digital parts carry a readable pinout (item 5)", () => {
+  it.each(DIGITAL_KINDS)("%s: nothing is drawn outside the ±42 × ±40 preview", (kind) => {
+    // sevenSeg reached y = 56, the flip-flops ±48 and every `com` 48, so the
+    // palette and the inspector cut the bottom off half the digital section.
+    const drawn = drawnElements(render(kind)).map((element) => element.box).reduce(union);
+    const boxes = [drawn, ...drawnText(render(kind)).map(textBox)];
+    for (const box of boxes) {
+      expect(box.minX, `${kind} left`).toBeGreaterThanOrEqual(-PREVIEW_HALF_W);
+      expect(box.maxX, `${kind} right`).toBeLessThanOrEqual(PREVIEW_HALF_W);
+      expect(box.minY, `${kind} top`).toBeGreaterThanOrEqual(-PREVIEW_HALF_H);
+      expect(box.maxY, `${kind} bottom`).toBeLessThanOrEqual(PREVIEW_HALF_H);
+    }
+  });
+
+  it("fits a configured gate in the preview too, at every input count", () => {
+    for (let n = GATE_INPUTS_MIN; n <= GATE_INPUTS_MAX; n += 1) {
+      const drawn = drawnElements(renderWith("digitalGate", `and Inputs=${n}`))
+        .map((element) => element.box)
+        .reduce(union);
+      expect(drawn.minX, `${n} left`).toBeGreaterThanOrEqual(-PREVIEW_HALF_W);
+      expect(drawn.maxX, `${n} right`).toBeLessThanOrEqual(PREVIEW_HALF_W);
+      expect(drawn.minY, `${n} top`).toBeGreaterThanOrEqual(-PREVIEW_HALF_H);
+      expect(drawn.maxY, `${n} bottom`).toBeLessThanOrEqual(PREVIEW_HALF_H);
+    }
+  });
+
+  it("names every pin of every labelled part, spelled as the pin itself is", () => {
+    for (const [kind, layout] of Object.entries(PIN_LABEL_LAYOUT)) {
+      const pins = getLocalPins(kind as ComponentKind);
+      expect(
+        layout.map((label) => label.pin).sort(),
+        `${kind} labels every pin`,
+      ).toEqual(pins.map((pin) => pin.id).sort());
+      for (const label of layout) {
+        const pin = pins.find((candidate) => candidate.id === label.pin);
+        expect(label.text, `${kind}.${label.pin} caption`).toBe(pin?.label);
+      }
+    }
+  });
+
+  it("labels the 555 with the roles the datasheet uses", () => {
+    const markup = render("timer555");
+    for (const role of ["TRIG", "OUT", "RESET", "CTRL", "THRES", "DISCH", "VCC", "GND"]) {
+      expect(markup, `555 ${role}`).toContain(`data-pin-label="${role}"`);
+    }
+    // The part caption survives, and rides the same counter-rotation now.
+    expect(markup).toContain('data-pin-label="555"');
+  });
+
+  it("keeps every caption inside the body it annotates", () => {
+    for (const kind of Object.keys(PIN_LABEL_LAYOUT) as ComponentKind[]) {
+      const body = SYMBOL_BODY[kind];
+      for (const label of drawnText(render(kind))) {
+        const box = textBox(label);
+        expect(box.minX, `${kind} "${label.text}" left`).toBeGreaterThanOrEqual(body.minX);
+        expect(box.maxX, `${kind} "${label.text}" right`).toBeLessThanOrEqual(body.maxX);
+        expect(box.minY, `${kind} "${label.text}" top`).toBeGreaterThanOrEqual(body.minY);
+        expect(box.maxY, `${kind} "${label.text}" bottom`).toBeLessThanOrEqual(body.maxY);
+      }
+    }
+  });
+
+  it("never overlaps one caption with another", () => {
+    for (const kind of Object.keys(PIN_LABEL_LAYOUT) as ComponentKind[]) {
+      const labels = drawnText(render(kind));
+      for (let i = 0; i < labels.length; i += 1) {
+        for (let j = i + 1; j < labels.length; j += 1) {
+          expect(
+            overlaps(textBox(labels[i]), textBox(labels[j])),
+            `${kind}: "${labels[i].text}" overlaps "${labels[j].text}"`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("never draws pin text upside-down or mirrored, at any of the four rotations", () => {
+    // A <text> inside a symbol inherits the wrapper's `rotate(R) scale(-1 1)`.
+    // Nothing corrected it, so the 555's caption read BACKWARDS when the part
+    // was flipped and UPSIDE-DOWN at 180°. Compose the wrapper with the
+    // caption's own transform and require the product to be a pure rotation of
+    // 0° or 90°: readable head-on or side-on, never inverted, never mirrored.
+    //
+    // (Undoing the rotation entirely instead was measured and rejected: at 90°
+    // the 555's five left captions land on one line 16 apart while "RESET" is
+    // 21 wide. Turning with the body keeps each caption in its own lane.)
+    for (const kind of [...Object.keys(PIN_LABEL_LAYOUT), ...Object.keys(PART_CAPTIONS)] as ComponentKind[]) {
+      for (const rotation of ROTATIONS) {
+        for (const mirrored of [false, true]) {
+          const labels = drawnText(renderWith(kind, undefined, rotation, mirrored));
+          expect(labels.length, `${kind} draws captions`).toBeGreaterThan(0);
+          const wrapper = mirrored
+            ? multiply(rotateMat(rotation), [-1, 0, 0, 1, 0, 0])
+            : rotateMat(rotation);
+          for (const label of labels) {
+            const composed = multiply(wrapper, parseTransform(label.transform));
+            const where = `${kind} "${label.text}" at ${rotation}°${mirrored ? " mirrored" : ""}`;
+            // determinant +1 ⇒ the glyphs are not flipped.
+            expect(composed[0] * composed[3] - composed[1] * composed[2], `${where} mirrored`)
+              .toBeCloseTo(1, 9);
+            const angle = Math.round((Math.atan2(composed[1], composed[0]) * 180) / Math.PI);
+            expect([0, 90], `${where} reads at ${angle}°`).toContain(angle);
+          }
+        }
+      }
+    }
+  });
+
+  it("draws every caption exactly horizontally at 0° and at 180°", () => {
+    // The half-turn is the whole of the old "555" bug: at 180° the body is
+    // upside-down and the caption must not be.
+    for (const rotation of [0, 180] as Rotation[]) {
+      for (const label of drawnText(renderWith("timer555", undefined, rotation))) {
+        const composed = multiply(rotateMat(rotation), parseTransform(label.transform));
+        for (const [index, expected] of [1, 0, 0, 1].entries()) {
+          expect(composed[index], `"${label.text}" at ${rotation}°`).toBeCloseTo(expected, 9);
+        }
+      }
+    }
+  });
+
+  it("lands each caption on the point it annotates, whatever the orientation", () => {
+    // Counter-rotating is only half of it: the caption also has to end up
+    // where the pin ended up, or it names the wrong terminal.
+    const kind: ComponentKind = "timer555";
+    const layout = PIN_LABEL_LAYOUT[kind] ?? [];
+    for (const rotation of ROTATIONS) {
+      const wrapper = rotateMat(rotation);
+      const labels = new Map(drawnText(renderWith(kind, undefined, rotation)).map((l) => [l.text, l]));
+      for (const spec of layout) {
+        const composed = multiply(wrapper, parseTransform(labels.get(spec.text)?.transform ?? ""));
+        const expected = multiply(wrapper, [1, 0, 0, 1, spec.x, spec.y]);
+        expect(composed[4], `${spec.pin} x at ${rotation}°`).toBeCloseTo(expected[4], 6);
+        expect(composed[5], `${spec.pin} y at ${rotation}°`).toBeCloseTo(expected[5], 6);
+      }
+    }
+  });
+
+  it.each(DIGITAL_KINDS)("%s: every pin is the endpoint of a drawn lead", (kind) => {
+    const value = kind === "digitalGate" ? "and" : undefined;
+    const pins = getLocalPins(kind, value);
+    const elements = drawnElements(renderWith(kind, value));
+    for (const pin of pins) {
+      const touched = elements.some((element) =>
+        element.segments.some((s) => samePoint(s.a, pin) || samePoint(s.b, pin)),
+      );
+      expect(touched, `${kind} pin ${pin.id} has no lead`).toBe(true);
+    }
+  });
+
+  it("draws no degenerate zero-length element", () => {
+    // sevenSeg carried `<line x1=32 y1=-24 x2=32 y2=-24 />`, which paints
+    // nothing and hides a pin that looks connected in the source.
+    for (const kind of DIGITAL_KINDS) {
+      for (const element of drawnElements(render(kind))) {
+        const box = element.box;
+        expect(
+          box.maxX - box.minX + (box.maxY - box.minY),
+          `${kind} degenerate element ${element.tag}`,
+        ).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+// ── item 6: an operated contact has to be seen to move ─────────────────────
+
+describe("contacts draw their state (item 6)", () => {
+  const conducts = (kind: ComponentKind, value: string, from: string, to: string): boolean => {
+    const pins = getLocalPins(kind);
+    const segments = drawnElements(renderWith(kind, value)).flatMap((element) => element.segments);
+    return reachable(segments, pins.find((p) => p.id === from)!, pins.find((p) => p.id === to)!);
+  };
+
+  it("draws a switch closed only when its value says it is closed", () => {
+    expect(conducts("switch", "closed", "a", "b")).toBe(true);
+    expect(conducts("switch", "open", "a", "b")).toBe(false);
+    // The spellings the solver already accepts (kindGroups.isStaticContactClosed)
+    // must move the blade too, or a hand-typed value draws the wrong circuit.
+    for (const closed of ["closed", "CLOSED", "on", "1", "pressed"]) {
+      expect(conducts("switch", closed, "a", "b"), closed).toBe(true);
+    }
+    for (const open of ["", "open", "no", "0"]) {
+      expect(conducts("switch", open, "a", "b"), `"${open}"`).toBe(false);
+    }
+  });
+
+  it("drops the push button's plate onto its contacts when pressed", () => {
+    expect(conducts("pushButton", "closed", "a", "b")).toBe(true);
+    expect(conducts("pushButton", "open", "a", "b")).toBe(false);
+    // The plate travels: the open and closed drawings are not the same picture
+    // with a different attribute on it.
+    expect(renderWith("pushButton", "open")).toContain('data-contact="open"');
+    expect(renderWith("pushButton", "closed")).toContain('data-contact="closed"');
+  });
+
+  it("throws the SPDT blade to the pole its value selects", () => {
+    expect(conducts("spdt", "no", "com", "no")).toBe(true);
+    expect(conducts("spdt", "no", "com", "nc")).toBe(false);
+    expect(conducts("spdt", "nc", "com", "nc")).toBe(true);
+    expect(conducts("spdt", "nc", "com", "no")).toBe(false);
+    // Catalog default is `no`, and a blank value must not float between poles.
+    expect(conducts("spdt", "", "com", "no")).toBe(true);
+  });
+
+  it("pivots the moving part on the same fixed contacts either way", () => {
+    for (const kind of ["switch", "pushButton", "spdt"] as const) {
+      const open = drawnElements(renderWith(kind, kind === "spdt" ? "nc" : "open"));
+      const closed = drawnElements(renderWith(kind, kind === "spdt" ? "no" : "closed"));
+      const contacts = (elements: Elem[]) =>
+        elements
+          .filter((element) => element.tag.startsWith("<circle"))
+          .map((element) => `${element.box.minX},${element.box.minY}`)
+          .sort();
+      expect(contacts(open), `${kind} contacts move`).toEqual(contacts(closed));
+    }
   });
 });

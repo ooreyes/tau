@@ -1,6 +1,6 @@
 import { GATE_INPUTS_MAX, parseDigitalGate } from "../engine/digitalGateSpec";
 import type { ComponentKind, Point, Rotation, SchematicComponent } from "./types";
-import { GATE_COM_X, SOURCE_PIN_Y, gateComY, gateInputRows } from "./symbols";
+import { SOURCE_PIN_Y, gateComPoint, gateInputRows } from "./symbols";
 
 export interface LocalPin {
   id: string;
@@ -45,7 +45,7 @@ function digitalGatePins(inputs: number): LocalPin[] {
     })),
     { id: "q", label: "Q", x: 32, y: -16 },
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: GATE_COM_X, y: gateComY(inputs) },
+    { id: "com", label: "COM", ...gateComPoint(inputs) },
   ];
 }
 
@@ -101,22 +101,26 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
   // (every terminal the kind can expose); `getLocalPins(kind, value)` narrows it
   // to the instance. Imported gates override it with the .asy's exact subset.
   digitalGate: digitalGatePins(GATE_INPUTS_MAX),
-  // ── Digital chips. Every terminal is on a side column at x = ±40 against a
-  //    ±32 body, and no terminal passes |y| = 32, so the whole part clears the
-  //    ±42 × ±40 palette/inspector preview. They used to run to y = 48 (the
-  //    flip-flops' PRE/CLR and every `com`) and y = 56 (the 7-segment common),
-  //    which the previews simply cut off. Inputs read down the left column and
-  //    outputs down the right, so the pinout is legible without the datasheet.
-  // Edge-triggered D flip-flop (LTspice Digital\dflop.asy roles): data, clock
-  // and the active-high preset/clear on the left, complementary outputs right.
+  // ── Digital parts. No terminal passes |y| = 32 any more, so the whole part
+  //    clears the ±42 × ±40 palette/inspector preview - the flip-flops' PRE and
+  //    CLR used to reach 48 and the 7-segment common 56, and the previews
+  //    simply cut them off. On the 8-pin chips inputs read down the left column
+  //    and outputs down the right, so the pinout is legible without a datasheet.
+  // ── Flip-flops. One shared ±24 body: data and clock on the left, PRE/CLR
+  //    above and below, Q / Q̅ / COM on the right. Every terminal is inside
+  //    |y| = 32, where PRE and CLR used to sit at 48 and be cut off by the
+  //    palette preview. The geometry is otherwise the one that was already on
+  //    disk, deliberately: the assistant's auto-layout aligns pins by their
+  //    offsets, and moving a whole column re-routes circuits it had solved.
+  // Edge-triggered D flip-flop (LTspice Digital\dflop.asy roles).
   dflop: [
     { id: "d", label: "D", x: -32, y: -16 },
-    { id: "clk", label: "CLK", x: -32, y: 0 },
-    { id: "pre", label: "PRE", x: -32, y: -32 },
-    { id: "clr", label: "CLR", x: -32, y: 16 },
+    { id: "clk", label: "CLK", x: -32, y: 16 },
+    { id: "pre", label: "PRE", x: 0, y: -32 },
+    { id: "clr", label: "CLR", x: 0, y: 32 },
     { id: "q", label: "Q", x: 32, y: -16 },
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: 32, y: 32 },
+    { id: "com", label: "COM", x: -32, y: 32 },
   ],
   // Async SR latch (LTspice Digital\srflop.asy): S/R left, complementary outs.
   srflop: [
@@ -124,28 +128,28 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "r", label: "R", x: -32, y: 16 },
     { id: "q", label: "Q", x: 32, y: -16 },
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: 32, y: 32 },
+    { id: "com", label: "COM", x: -32, y: 32 },
   ],
   // Edge-triggered T flip-flop (XSPICE d_tff): T/CLK left, PRE/CLR, Q/Q̅.
   tflop: [
     { id: "t", label: "T", x: -32, y: -16 },
-    { id: "clk", label: "CLK", x: -32, y: 0 },
-    { id: "pre", label: "PRE", x: -32, y: -32 },
-    { id: "clr", label: "CLR", x: -32, y: 16 },
+    { id: "clk", label: "CLK", x: -32, y: 16 },
+    { id: "pre", label: "PRE", x: 0, y: -32 },
+    { id: "clr", label: "CLR", x: 0, y: 32 },
     { id: "q", label: "Q", x: 32, y: -16 },
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: 32, y: 32 },
+    { id: "com", label: "COM", x: -32, y: 32 },
   ],
   // Edge-triggered JK flip-flop (XSPICE d_jkff): J/K/CLK left, PRE/CLR, Q/Q̅.
   jkflop: [
     { id: "j", label: "J", x: -32, y: -16 },
     { id: "k", label: "K", x: -32, y: 0 },
     { id: "clk", label: "CLK", x: -32, y: 16 },
-    { id: "pre", label: "PRE", x: -32, y: -32 },
-    { id: "clr", label: "CLR", x: -32, y: 32 },
+    { id: "pre", label: "PRE", x: 0, y: -32 },
+    { id: "clr", label: "CLR", x: 0, y: 32 },
     { id: "q", label: "Q", x: 32, y: -16 },
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: 32, y: 32 },
+    { id: "com", label: "COM", x: -32, y: 32 },
   ],
   // 4-bit ripple counter: CLK/RST/COM left, Q0..Q3 right.
   counter: [

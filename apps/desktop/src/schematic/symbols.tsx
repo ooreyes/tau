@@ -112,34 +112,38 @@ export function gateBodyHalfHeight(inputs: number): number {
   return reach + 8;
 }
 
-/**
- * Where the `com` reference leaves the body.
- *
- * It rides the body, not a fixed row, because the body grows with the input
- * count: pinning it at y = 48 (as it was) put a 2-input gate's reference lead
- * 8 units outside the ±40 palette preview, and pinning it at 32 would bury it
- * inside a 5-input body. Changing the input count already re-lays the input
- * bank, so the whole terminal bank moving together is the consistent rule.
- */
-export function gateComY(inputs: number): number {
-  return gateBodyHalfHeight(inputs) + 8;
+/** x where the nose crosses height `y` — where a lead on that row starts. */
+function gateNoseCrossX(halfHeight: number, y: number): number {
+  const centre = GATE_NOSE_TIP_X - halfHeight;
+  return centre + Math.sqrt(Math.max(0, halfHeight * halfHeight - y * y));
 }
 
-/**
- * x where the `com` lead leaves the body floor.
- *
- * The floor runs from the back to where the nose begins, which is
- * `GATE_NOSE_TIP_X - halfHeight` — as low as x = -12 for a five-input gate. A
- * lead at x = 0 would have hung off the end of the floor on the tall gates, so
- * the reference leaves at -16 instead: on the grid and on the floor at every
- * input count.
- */
-export const GATE_COM_X = -16;
+/** Row the `com` reference sits on, whatever the gate's height. */
+export const GATE_COM_Y = 32;
+/** Where a short gate's reference drops from the floor. The floor runs from the
+ *  back to `GATE_NOSE_TIP_X - halfHeight`, so x = 0 would hang off the end of a
+ *  tall gate's floor; -16 is on the grid and on the floor of a short one. */
+const GATE_COM_FLOOR_X = -16;
 
-/** x where the nose crosses an output row — where that output's lead starts. */
-function gateNoseCrossX(halfHeight: number): number {
-  const centre = GATE_NOSE_TIP_X - halfHeight;
-  return centre + Math.sqrt(halfHeight * halfHeight - GATE_OUT_Y * GATE_OUT_Y);
+/**
+ * Where the `com` reference terminal sits.
+ *
+ * It follows the body, because the body grows with the input count and the
+ * terminal has to stay on it AND inside the ±42 × ±40 preview. A short gate
+ * (up to three inputs) drops its reference from the floor; a tall one has no
+ * floor left under y = 32, so the reference leaves the nose on that row
+ * instead. Both are on the 16 grid and both fit the preview - pinning the
+ * reference at y = 48, as it was, put every gate 8 units outside it.
+ *
+ * The bank re-lays anyway at that transition (the input rows go from ±16 to
+ * ±32), so the reference moving with it is the consistent rule rather than an
+ * extra surprise.
+ */
+export function gateComPoint(inputs: number): { x: number; y: number } {
+  const half = gateBodyHalfHeight(inputs);
+  return half > GATE_COM_Y
+    ? { x: 32, y: GATE_COM_Y }
+    : { x: GATE_COM_FLOOR_X, y: GATE_COM_Y };
 }
 
 /** Radius of a circular arc spanning `2 * half` that bulges `depth` sideways. */
@@ -180,7 +184,8 @@ function DigitalGateArtwork({ value }: { value?: string }) {
     ? `M ${GATE_BACK_X} ${-half} ${nose} A ${backRadius} ${backRadius} 0 0 0 ${GATE_BACK_X} ${-half}`
     : `M ${GATE_BACK_X} ${-half} ${nose} Z`;
   const xorRadius = arcRadius(half, GATE_XOR_ARC_BULGE);
-  const crossX = gateNoseCrossX(half);
+  const crossX = gateNoseCrossX(half, GATE_OUT_Y);
+  const com = gateComPoint(spec.inputs);
   // q first: it is the output whose sense `invertOut` flips.
   const outputs = [
     { id: "q", y: -GATE_OUT_Y, bubble: spec.invertOut },
@@ -216,7 +221,11 @@ function DigitalGateArtwork({ value }: { value?: string }) {
       )}
       {spec.fn === "buf" && <path data-gate-glyph="buf" d="M -10 -7 L 4 0 L -10 7 Z" />}
       {spec.fn === "schmitt" && <path data-gate-glyph="schmitt" d="M -9 5 H -1 V -5 H 7" />}
-      <line x1={GATE_COM_X} y1={half} x2={GATE_COM_X} y2={gateComY(spec.inputs)} />
+      {com.x > 0 ? (
+        <line x1={gateNoseCrossX(half, com.y)} y1={com.y} x2={com.x} y2={com.y} />
+      ) : (
+        <line x1={com.x} y1={half} x2={com.x} y2={com.y} />
+      )}
     </>
   );
 }
@@ -356,23 +365,26 @@ const CHIP_PIN_X = 40;
 /** Centre of the label column inside each side of a chip body. */
 const CHIP_LABEL_X = 20;
 /**
- * Flip-flops keep the narrower ±24 body and ±32 terminals they have always
- * had. Widening them to the 8-pin chip footprint is not just cosmetic: the
- * assistant's auto-router picks wire channels from the gaps between symbols,
- * and 16 fewer units of channel was enough to route one shift-register stage's
- * Q net through the next stage's, which `assistantCircuitPlan.stress.test.ts`
- * caught as two nets that were supposed to stay isolated.
+ * Flip-flops keep the ±24 body and ±32 terminals they have always had, and only
+ * PRE / CLR / COM move (in from |y| = 48, which the preview cut off). Holding
+ * the rest still is not conservatism: the assistant's auto-layout aligns parts
+ * by their pin offsets and routes wires through the gaps between symbols, and
+ * every variant that moved a whole column re-routed one shift-register stage's
+ * Q net through the next stage's - which `assistantCircuitPlan.stress.test.ts`
+ * catches as two nets that were supposed to stay isolated.
  */
 const FLOP_HALF_W = 24;
+const FLOP_HALF_H = 24;
 const FLOP_PIN_X = 32;
+const FLOP_PIN_Y = 32;
 const FLOP_LABEL_X = 13;
 /** Same, for the nose-bodied parts (sample & hold, modulator). */
 const NOSE_HALF_W = 24;
 const NOSE_PIN_X = 32;
 
 /** Body rectangle shared by every digital chip. */
-function ChipBody({ halfW = CHIP_HALF_W }: { halfW?: number }) {
-  return <rect x={-halfW} y={-CHIP_HALF_H} width={halfW * 2} height={CHIP_HALF_H * 2} rx={2} />;
+function ChipBody({ halfW = CHIP_HALF_W, halfH = CHIP_HALF_H }: { halfW?: number; halfH?: number }) {
+  return <rect x={-halfW} y={-halfH} width={halfW * 2} height={halfH * 2} rx={2} />;
 }
 
 /** Nose body shared by sample & hold and the modulator. */
@@ -409,17 +421,30 @@ function ChipLeads({
  * A pin name drawn inside the body.
  *
  * `<text>` in a symbol inherits the wrapper's `rotate(R) scale(-1 1)`, so a
- * naive caption is upside-down at 180° and side-on at 90°/270°. That was a real
- * bug, not a hypothetical: the old "555" caption did exactly this, and adding
- * eight more captions would have multiplied it by eight.
+ * naive caption is MIRRORED when the part is flipped and UPSIDE-DOWN at 180°.
+ * That was a real bug, not a hypothetical: the old "555" caption did exactly
+ * this, and adding eight more captions would have multiplied it by eight.
  *
- * The wrapper applies `A = rotate(R)·M`. Giving the text `T = translate(a)·M·
- * rotate(−R)` makes `A·T` a pure translation to `A·a`: the caption lands on the
- * point it annotates and its glyphs stay upright, whatever the part's
- * orientation. Anchoring is `middle` for the same reason — a start/end anchored
- * caption would grow the opposite way once the body turned, pushing the text
- * out through the body edge.
+ * The fix is the EDA convention, not a full counter-rotation. Undoing the
+ * rotation entirely was tried and measured: at 90° the 555's five left-hand
+ * captions land on one horizontal line 16 units apart, and "RESET" alone is
+ * 21 units wide, so they overlap into an unreadable smear. Turning the caption
+ * WITH the body keeps each one in the lane the layout gave it at every
+ * orientation; all that has to be corrected is the half-turn that would leave
+ * it upside-down, and the flip that would mirror the glyphs.
+ *
+ * So the caption's own transform is `translate(a) · M · rotate(θ)` with
+ * θ ∈ {0°, 180°} chosen so the composed angle is 0° or 90° — never 180° or
+ * 270° — and `M = scale(-1 1)` when the part is mirrored, which cancels the
+ * wrapper's flip. The translation part is untouched either way, so the caption
+ * still lands exactly on the point it annotates. Anchoring is `middle` so a
+ * caption grows symmetrically about that point instead of running out through
+ * the body edge when the part turns.
  */
+function labelHalfTurn(rotation: Rotation): 0 | 180 {
+  return rotation > 90 && rotation <= 270 ? 180 : 0;
+}
+
 function PinLabel({
   text,
   x,
@@ -435,7 +460,8 @@ function PinLabel({
 }) {
   const parts = [`translate(${x} ${y})`];
   if (mirrored) parts.push("scale(-1 1)");
-  if (rotation !== 0) parts.push(`rotate(${-rotation})`);
+  const turn = labelHalfTurn(rotation);
+  if (turn !== 0) parts.push(`rotate(${turn})`);
   return (
     <text
       className="subckt-pin-label"
@@ -464,40 +490,43 @@ const F = FLOP_LABEL_X;
 const NL = 10; // nose-body label column
 
 export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPlacement[]>> = {
+  // CLK / R ride 4 units above their own row and COM sits below them: the
+  // reference terminal leaves the bottom-left CORNER, so its caption has to
+  // share the left column with the last input rather than sit beside a lead.
   dflop: [
-    { pin: "pre", text: "PRE", x: -F, y: -32 },
     { pin: "d", text: "D", x: -F, y: -16 },
-    { pin: "clk", text: "CLK", x: -F, y: 0 },
-    { pin: "clr", text: "CLR", x: -F, y: 16 },
+    { pin: "clk", text: "CLK", x: -F, y: 12 },
+    { pin: "com", text: "COM", x: -F, y: 20 },
+    { pin: "pre", text: "PRE", x: 2, y: -19 },
+    { pin: "clr", text: "CLR", x: 2, y: 19 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q̅", x: F, y: 16 },
-    { pin: "com", text: "COM", x: F, y: 32 },
   ],
   srflop: [
     { pin: "s", text: "S", x: -F, y: -16 },
-    { pin: "r", text: "R", x: -F, y: 16 },
+    { pin: "r", text: "R", x: -F, y: 12 },
+    { pin: "com", text: "COM", x: -F, y: 20 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q̅", x: F, y: 16 },
-    { pin: "com", text: "COM", x: F, y: 32 },
   ],
   tflop: [
-    { pin: "pre", text: "PRE", x: -F, y: -32 },
     { pin: "t", text: "T", x: -F, y: -16 },
-    { pin: "clk", text: "CLK", x: -F, y: 0 },
-    { pin: "clr", text: "CLR", x: -F, y: 16 },
+    { pin: "clk", text: "CLK", x: -F, y: 12 },
+    { pin: "com", text: "COM", x: -F, y: 20 },
+    { pin: "pre", text: "PRE", x: 2, y: -19 },
+    { pin: "clr", text: "CLR", x: 2, y: 19 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q̅", x: F, y: 16 },
-    { pin: "com", text: "COM", x: F, y: 32 },
   ],
   jkflop: [
-    { pin: "pre", text: "PRE", x: -F, y: -32 },
     { pin: "j", text: "J", x: -F, y: -16 },
     { pin: "k", text: "K", x: -F, y: 0 },
-    { pin: "clk", text: "CLK", x: -F, y: 16 },
-    { pin: "clr", text: "CLR", x: -F, y: 32 },
+    { pin: "clk", text: "CLK", x: -F, y: 12 },
+    { pin: "com", text: "COM", x: -F, y: 20 },
+    { pin: "pre", text: "PRE", x: 2, y: -19 },
+    { pin: "clr", text: "CLR", x: 2, y: 19 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q̅", x: F, y: 16 },
-    { pin: "com", text: "COM", x: F, y: 32 },
   ],
   counter: [
     { pin: "clk", text: "CLK", x: -L, y: -16 },
@@ -615,27 +644,33 @@ function SymbolPinLabels({
  * rows against the pin table.
  */
 function FlopBody({
-  inputs,
-  outputs,
-  reference,
+  left,
   clockRow,
+  asyncControls = false,
 }: {
-  inputs: readonly number[];
-  outputs: readonly number[];
-  reference: number;
+  left: readonly number[];
   clockRow?: number;
+  asyncControls?: boolean;
 }) {
   return (
     <>
-      <ChipBody halfW={FLOP_HALF_W} />
-      <ChipLeads rows={inputs} side={-1} pinX={FLOP_PIN_X} bodyX={FLOP_HALF_W} />
+      <ChipBody halfW={FLOP_HALF_W} halfH={FLOP_HALF_H} />
+      <ChipLeads rows={left} side={-1} pinX={FLOP_PIN_X} bodyX={FLOP_HALF_W} />
       {clockRow !== undefined && (
         // Edge-trigger wedge, kept short so the CLK caption clears it.
-        <path d={`M ${-FLOP_HALF_W} ${clockRow - 5} L -20 ${clockRow} L ${-FLOP_HALF_W} ${clockRow + 5}`} />
+        <path d={`M ${-FLOP_HALF_W} ${clockRow - 5} L -21 ${clockRow} L ${-FLOP_HALF_W} ${clockRow + 5}`} />
       )}
-      <ChipLeads rows={outputs} side={1} pinX={FLOP_PIN_X} bodyX={FLOP_HALF_W} />
+      {asyncControls && (
+        <>
+          <line x1={0} y1={-FLOP_PIN_Y} x2={0} y2={-FLOP_HALF_H} />
+          <line x1={0} y1={FLOP_HALF_H} x2={0} y2={FLOP_PIN_Y} />
+        </>
+      )}
+      <line x1={FLOP_HALF_W} y1={-16} x2={FLOP_PIN_X} y2={-16} />
       <InvertedOutputLead y={16} bodyX={FLOP_HALF_W} pinX={FLOP_PIN_X} />
-      <ChipLeads rows={[reference]} side={1} pinX={FLOP_PIN_X} bodyX={FLOP_HALF_W} />
+      {/* COM leaves the bottom-left corner: the left column is full at the
+          rows the inputs need, and both side columns are on the 16 grid. */}
+      <line x1={-FLOP_HALF_W} y1={FLOP_HALF_H} x2={-FLOP_PIN_X} y2={FLOP_PIN_Y} />
     </>
   );
 }
@@ -689,11 +724,11 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   // (five inputs), so hit-testing and label clearance never under-cover it.
   // `minX` is the XOR's outer arc, `maxX` the nose tip plus an inversion bubble.
   digitalGate: { minX: -32, minY: -40, maxX: 31, maxY: 40 },
-  // Flip-flops: shared ±24 × ±36 body plus the Q̅ inversion bubble at x = 27.
-  dflop: { minX: -24, minY: -36, maxX: 30, maxY: 36 },
-  srflop: { minX: -24, minY: -36, maxX: 30, maxY: 36 },
-  tflop: { minX: -24, minY: -36, maxX: 30, maxY: 36 },
-  jkflop: { minX: -24, minY: -36, maxX: 30, maxY: 36 },
+  // Flip-flops: shared ±24 body plus the Q̅ inversion bubble reaching x = 30.
+  dflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
+  srflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
+  tflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
+  jkflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
   counter: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
   timer555: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
   adc: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
@@ -747,10 +782,10 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   opamp: { halfW: 32, halfH: 34 },
   comparator: { halfW: 32, halfH: 34 },
   digitalGate: { halfW: 32, halfH: 40 },
-  dflop: { halfW: 30, halfH: 38 },
-  srflop: { halfW: 30, halfH: 38 },
-  tflop: { halfW: 30, halfH: 38 },
-  jkflop: { halfW: 30, halfH: 38 },
+  dflop: { halfW: 30, halfH: 26 },
+  srflop: { halfW: 30, halfH: 26 },
+  tflop: { halfW: 30, halfH: 26 },
+  jkflop: { halfW: 30, halfH: 26 },
   counter: { halfW: 34, halfH: 38 },
   timer555: { halfW: 34, halfH: 38 },
   adc: { halfW: 34, halfH: 38 },
@@ -1019,51 +1054,36 @@ function symbolArtwork(kind: ComponentKind, value?: string) {
     case "dflop":
       return (
         <>
-          <FlopBody
-            inputs={[-32, -16, 0, 16]}
-            outputs={[-16]}
-            reference={32}
-            clockRow={0}
-          />
+          <FlopBody left={[-16, 16]} clockRow={16} asyncControls />
           {/* D-flop glyph */}
-          <path d="M -5 -6 H 0 A 6 6 0 0 1 0 6 H -5 Z" />
+          <path d="M -4 -5 H -1 A 5 5 0 0 1 -1 5 H -4 Z" />
         </>
       );
 
     case "srflop":
       return (
         <>
-          <FlopBody inputs={[-16, 16]} outputs={[-16]} reference={32} />
+          <FlopBody left={[-16, 16]} />
           {/* SR glyph: crossed set/reset hint */}
-          <path d="M -5 -6 L 5 6 M -5 6 L 5 -6" />
+          <path d="M -4 -5 L 4 5 M -4 5 L 4 -5" />
         </>
       );
 
     case "tflop":
       return (
         <>
-          <FlopBody
-            inputs={[-32, -16, 0, 16]}
-            outputs={[-16]}
-            reference={32}
-            clockRow={0}
-          />
+          <FlopBody left={[-16, 16]} clockRow={16} asyncControls />
           {/* T glyph */}
-          <path d="M -5 -6 H 5 M 0 -6 V 6" />
+          <path d="M -4 -5 H 4 M 0 -5 V 5" />
         </>
       );
 
     case "jkflop":
       return (
         <>
-          <FlopBody
-            inputs={[-32, -16, 0, 16, 32]}
-            outputs={[-16]}
-            reference={32}
-            clockRow={16}
-          />
+          <FlopBody left={[-16, 0, 16]} clockRow={16} asyncControls />
           {/* JK glyph */}
-          <path d="M -5 -6 V 6 M -5 0 L 0 6 M 3 -6 V 6 M 3 0 L 8 -6 M 3 0 L 8 6" />
+          <path d="M -4 -5 V 5 M -4 0 L -1 5 M 1 -5 V 5 M 1 0 L 4.5 -5 M 1 0 L 4.5 5" />
         </>
       );
 

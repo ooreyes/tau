@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getComponentPins, transformPoint } from "./pins";
+import { getComponentPins, getLocalPins, transformPoint } from "./pins";
 import type { SchematicComponent } from "./types";
 
 describe("getComponentPins", () => {
@@ -92,5 +92,69 @@ describe("transformPoint", () => {
     const p = { x: 3, y: 9 };
     const once = transformPoint(p, 0, true);
     expect(transformPoint(once, 0, true)).toEqual(p);
+  });
+});
+
+describe("value-driven terminal banks (mission item 9)", () => {
+  const gate = (value: string): SchematicComponent => ({
+    id: "a1", kind: "digitalGate", label: "A1", value, x: 0, y: 0, rotation: 0,
+  });
+
+  it("gives a placed gate the inputs its value asks for, not a fixed five", () => {
+    expect(getComponentPins(gate("and")).map((p) => p.id))
+      .toEqual(["in1", "in2", "q", "qbar", "com"]);
+    expect(getComponentPins(gate("or Inputs=4")).map((p) => p.id))
+      .toEqual(["in1", "in2", "in3", "in4", "q", "qbar", "com"]);
+    expect(getComponentPins(gate("not")).map((p) => p.id))
+      .toEqual(["in1", "q", "qbar", "com"]);
+  });
+
+  it("keeps every input terminal on the 16 grid and centred on the body", () => {
+    const rows = getComponentPins(gate("and Inputs=5"))
+      .filter((pin) => pin.id.startsWith("in"))
+      .map((pin) => pin.y);
+    expect(rows).toEqual([-32, -16, 0, 16, 32]);
+    for (const y of rows) expect(Math.abs(y % 16)).toBe(0);
+  });
+
+  it("rotates the resized bank like any other geometry", () => {
+    const rotated = getComponentPins({ ...gate("and"), rotation: 90 });
+    const by = Object.fromEntries(rotated.map((pin) => [pin.id, { x: pin.x, y: pin.y }]));
+    // in1 is local (-32,-16); rotate 90° → (16,-32).
+    expect(by.in1).toEqual({ x: 16, y: -32 });
+    expect(by.in3).toBeUndefined();
+  });
+
+  it("keeps the kind-only lookup as the full dictionary the importer needs", () => {
+    // `buildPinOverride` maps an .asy's pin NAMES onto Tau roles through this
+    // table, so narrowing it by kind alone would drop in2..in5 from every
+    // imported AND and leave a five-input gate wired to one terminal.
+    expect(getLocalPins("digitalGate").map((pin) => pin.id))
+      .toEqual(["in1", "in2", "in3", "in4", "in5", "q", "qbar", "com"]);
+  });
+
+  it("leaves every other kind's bank independent of its value", () => {
+    const resistor: SchematicComponent = {
+      id: "r1", kind: "resistor", label: "R1", value: "1k", x: 0, y: 0, rotation: 0,
+    };
+    expect(getComponentPins(resistor).map((p) => p.id))
+      .toEqual(getComponentPins({ ...resistor, value: "10meg" }).map((p) => p.id));
+  });
+});
+
+describe("digital terminals clear the palette preview (mission item 5)", () => {
+  it("keeps every digital pin inside the ±42 × ±40 preview box", () => {
+    // The flip-flops' PRE/CLR and every `com` used to sit at |y| = 48 and the
+    // 7-segment common at 56, so the palette and inspector cut them off.
+    const kinds = [
+      "dflop", "srflop", "tflop", "jkflop", "counter", "timer555",
+      "adc", "dac", "sevenSeg", "sampleHold", "modulator",
+    ] as const;
+    for (const kind of kinds) {
+      for (const pin of getLocalPins(kind)) {
+        expect(Math.abs(pin.x), `${kind}.${pin.id} x`).toBeLessThanOrEqual(42);
+        expect(Math.abs(pin.y), `${kind}.${pin.id} y`).toBeLessThanOrEqual(40);
+      }
+    }
   });
 });
