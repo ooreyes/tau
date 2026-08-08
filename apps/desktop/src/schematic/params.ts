@@ -114,6 +114,48 @@ const AC_SOURCE = (unit: string): ParamSpec => ({
   codec: { form: "positional", split: /[\s,;@]+/ },
 });
 
+/** The `Laplace=` token itself, matched the way `engine/laplace.ts` matches it
+ *  so the panel and the deck agree on where the expression starts. */
+const LAPLACE_HEAD = /(?:^|\s)laplace\s*=\s*/i;
+
+/**
+ * An LTspice `Laplace=H(s)` value on an E or G source is a transfer function,
+ * not a gain, and the two spellings are mutually exclusive: neither engine has
+ * an E/G form carrying a constant gain AND a Laplace expression, so a value
+ * holding both would be a string Tau writes into a `.asc` that LTspice cannot
+ * read. It is therefore a value VARIANT (the charge-defined capacitor's
+ * mechanism) rather than a second box - a source whose value is a transfer
+ * function shows a transfer-function control, and one whose value is a number
+ * shows its gain. Anything sitting in front of the `Laplace=` token rides
+ * through an edit under `EXTRA_PARAM_KEY`, as in the keyed grammar, so editing
+ * the expression cannot delete syntax the panel does not model.
+ */
+const LAPLACE_TRANSFER: ParamSpec = {
+  when: /(?:^|\s)laplace\s*=/i,
+  fields: [{
+    key: "laplace",
+    label: "Transfer H(s)",
+    unit: "",
+    description: "Transfer function in LTspice spelling, for example 1/(1+0.001*s). It replaces the constant gain: the output follows H(s) applied to the control voltage.",
+  }],
+  codec: {
+    form: "custom",
+    decode: (value) => {
+      const text = value.trim();
+      const match = LAPLACE_HEAD.exec(text);
+      if (!match) return { laplace: "" };
+      const head = text.slice(0, match.index).trim();
+      const out: Record<string, string> = { laplace: text.slice(match.index + match[0].length).trim() };
+      if (head) out[EXTRA_PARAM_KEY] = head;
+      return out;
+    },
+    encode: (values) => {
+      const head = (values[EXTRA_PARAM_KEY] ?? "").trim();
+      return `${head ? `${head} ` : ""}Laplace=${(values.laplace ?? "").trim()}`;
+    },
+  },
+};
+
 const MOSFET = (model: string): ParamSpec => ({
   // `MODEL W=<w> L=<l> KP=<kp> VTO=<vto>`; omitted keys keep netlist defaults.
   fields: [
@@ -261,6 +303,50 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
         return Number(vhyst) ? `${vhigh} ${vlow} ${vhyst}` : `${vhigh} ${vlow}`;
       },
     },
+  },
+  // Controlled sources. The value is one number, so the codec is the plain
+  // `single` one; what the panel adds is the NAME of that number and the unit
+  // the deck emits it in - `spiceNetlist.ts` hands exactly these unit strings
+  // to `numberValue`, so a mismatch here would be a mislabelled quantity.
+  // Four identical-looking pins make the control port the thing a reader
+  // actually needs told, which is what the descriptions carry.
+  vcvs: [LAPLACE_TRANSFER, {
+    fields: [{
+      key: "gain",
+      label: "Voltage gain",
+      unit: "V/V",
+      kind: "number",
+      description: "Output voltage is the gain times the voltage across the control pins C+ and C-. The control port draws no current, so it does not load the circuit it measures.",
+    }],
+  }],
+  vccs: [LAPLACE_TRANSFER, {
+    fields: [{
+      key: "gain",
+      label: "Transconductance",
+      unit: "A/V",
+      kind: "number",
+      description: "Output current is the transconductance times the voltage across the control pins C+ and C-, flowing from the + output pin through the source to the - pin. The control port draws no current.",
+    }],
+  }],
+  // No Laplace variant on the current-controlled pair: F and H sources take a
+  // constant only, in both engines.
+  cccs: {
+    fields: [{
+      key: "gain",
+      label: "Current gain",
+      unit: "A/A",
+      kind: "number",
+      description: "Output current is the gain times the current sensed at the control pins C+ and C-. That sense path is Tau's own zero-volt source, so a CCCS cannot watch an existing source such as V1. Wire C+ and C- in series with the branch whose current you want.",
+    }],
+  },
+  ccvs: {
+    fields: [{
+      key: "gain",
+      label: "Transresistance",
+      unit: "V/A",
+      kind: "number",
+      description: "Output voltage is the transresistance times the current sensed at the control pins C+ and C-, so 1k gives 1 V per mA. That sense path is Tau's own zero-volt source, so a CCVS cannot watch an existing source such as V1. Wire C+ and C- in series with the branch whose current you want.",
+    }],
   },
   nmos: MOSFET("NMOS"),
   pmos: MOSFET("PMOS"),

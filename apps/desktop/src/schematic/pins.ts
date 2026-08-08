@@ -1,5 +1,6 @@
+import { GATE_INPUTS_MAX, parseDigitalGate } from "../engine/digitalGateSpec";
 import type { ComponentKind, Point, Rotation, SchematicComponent } from "./types";
-import { SOURCE_PIN_Y } from "./symbols";
+import { GATE_COM_X, SOURCE_PIN_Y, gateComY, gateInputRows } from "./symbols";
 
 export interface LocalPin {
   id: string;
@@ -24,6 +25,29 @@ const SOURCE_PINS: LocalPin[] = [
   { id: "p", label: "+", x: 0, y: -SOURCE_PIN_Y },
   { id: "n", label: "-", x: 0, y: SOURCE_PIN_Y },
 ];
+
+/**
+ * Terminal bank for a logic gate with `inputs` inputs.
+ *
+ * The gate is the one kind whose pin count is set by its value rather than by
+ * its kind: the deck has always read only the inputs that are wired, so a
+ * 2-input AND used to arrive with three terminals nobody could explain. The
+ * rows and the reference row come from the same helpers the artwork uses
+ * (`symbols.tsx`), so the drawing cannot disagree with the bank.
+ */
+function digitalGatePins(inputs: number): LocalPin[] {
+  return [
+    ...gateInputRows(inputs).map((y, index) => ({
+      id: `in${index + 1}`,
+      label: String(index + 1),
+      x: -32,
+      y,
+    })),
+    { id: "q", label: "Q", x: 32, y: -16 },
+    { id: "qbar", label: "Q̅", x: 32, y: 16 },
+    { id: "com", label: "COM", x: GATE_COM_X, y: gateComY(inputs) },
+  ];
+}
 
 const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
   resistor: TWO_TERMINAL_PINS,
@@ -71,31 +95,28 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "in-", label: "-", x: -32, y: -16 },
     { id: "out", label: "OUT", x: 32, y: 0 },
   ],
-  // LTspice-style idealized digital gate (Digital\*.asy): up to five inputs on
-  // the left, true (q) and complementary (qbar) outputs on the right, and a
-  // com reference. Imported gates override this with the .asy's exact subset;
-  // natively placed gates expose the full bank (extra pins are harmless - a
-  // floating input is ignored, per LTspice semantics).
-  digitalGate: [
-    { id: "in1", label: "1", x: -32, y: -32 },
-    { id: "in2", label: "2", x: -32, y: -16 },
-    { id: "in3", label: "3", x: -32, y: 0 },
-    { id: "in4", label: "4", x: -32, y: 16 },
-    { id: "in5", label: "5", x: -32, y: 32 },
-    { id: "q", label: "Q", x: 32, y: -16 },
-    { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: 0, y: 48 },
-  ],
-  // Edge-triggered D flip-flop (LTspice Digital\dflop.asy roles): data/clock on
-  // the left, active-high preset/clear top/bottom, complementary outputs right.
+  // LTspice-style idealized digital gate (Digital\*.asy): the inputs the gate's
+  // own value asks for on the left, true (q) and complementary (qbar) outputs
+  // on the right, and a com reference. This entry is the kind's full DICTIONARY
+  // (every terminal the kind can expose); `getLocalPins(kind, value)` narrows it
+  // to the instance. Imported gates override it with the .asy's exact subset.
+  digitalGate: digitalGatePins(GATE_INPUTS_MAX),
+  // ── Digital chips. Every terminal is on a side column at x = ±40 against a
+  //    ±32 body, and no terminal passes |y| = 32, so the whole part clears the
+  //    ±42 × ±40 palette/inspector preview. They used to run to y = 48 (the
+  //    flip-flops' PRE/CLR and every `com`) and y = 56 (the 7-segment common),
+  //    which the previews simply cut off. Inputs read down the left column and
+  //    outputs down the right, so the pinout is legible without the datasheet.
+  // Edge-triggered D flip-flop (LTspice Digital\dflop.asy roles): data, clock
+  // and the active-high preset/clear on the left, complementary outputs right.
   dflop: [
     { id: "d", label: "D", x: -32, y: -16 },
-    { id: "clk", label: "CLK", x: -32, y: 16 },
-    { id: "pre", label: "PRE", x: 0, y: -48 },
-    { id: "clr", label: "CLR", x: 0, y: 48 },
+    { id: "clk", label: "CLK", x: -32, y: 0 },
+    { id: "pre", label: "PRE", x: -32, y: -32 },
+    { id: "clr", label: "CLR", x: -32, y: 16 },
     { id: "q", label: "Q", x: 32, y: -16 },
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: -32, y: 48 },
+    { id: "com", label: "COM", x: 32, y: 32 },
   ],
   // Async SR latch (LTspice Digital\srflop.asy): S/R left, complementary outs.
   srflop: [
@@ -103,30 +124,30 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "r", label: "R", x: -32, y: 16 },
     { id: "q", label: "Q", x: 32, y: -16 },
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: -32, y: 48 },
+    { id: "com", label: "COM", x: 32, y: 32 },
   ],
   // Edge-triggered T flip-flop (XSPICE d_tff): T/CLK left, PRE/CLR, Q/Q̅.
   tflop: [
     { id: "t", label: "T", x: -32, y: -16 },
-    { id: "clk", label: "CLK", x: -32, y: 16 },
-    { id: "pre", label: "PRE", x: 0, y: -48 },
-    { id: "clr", label: "CLR", x: 0, y: 48 },
+    { id: "clk", label: "CLK", x: -32, y: 0 },
+    { id: "pre", label: "PRE", x: -32, y: -32 },
+    { id: "clr", label: "CLR", x: -32, y: 16 },
     { id: "q", label: "Q", x: 32, y: -16 },
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: -32, y: 48 },
+    { id: "com", label: "COM", x: 32, y: 32 },
   ],
   // Edge-triggered JK flip-flop (XSPICE d_jkff): J/K/CLK left, PRE/CLR, Q/Q̅.
   jkflop: [
-    { id: "j", label: "J", x: -32, y: -24 },
+    { id: "j", label: "J", x: -32, y: -16 },
     { id: "k", label: "K", x: -32, y: 0 },
-    { id: "clk", label: "CLK", x: -32, y: 24 },
-    { id: "pre", label: "PRE", x: 0, y: -48 },
-    { id: "clr", label: "CLR", x: 0, y: 48 },
+    { id: "clk", label: "CLK", x: -32, y: 16 },
+    { id: "pre", label: "PRE", x: -32, y: -32 },
+    { id: "clr", label: "CLR", x: -32, y: 32 },
     { id: "q", label: "Q", x: 32, y: -16 },
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", x: -32, y: 48 },
+    { id: "com", label: "COM", x: 32, y: 32 },
   ],
-  // 4-bit ripple counter: CLK/RST left, Q0..Q3 right, com below.
+  // 4-bit ripple counter: CLK/RST/COM left, Q0..Q3 right.
   counter: [
     { id: "clk", label: "CLK", x: -40, y: -16 },
     { id: "rst", label: "RST", x: -40, y: 16 },
@@ -134,15 +155,17 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "q1", label: "Q1", x: 40, y: -8 },
     { id: "q2", label: "Q2", x: 40, y: 8 },
     { id: "q3", label: "Q3", x: 40, y: 24 },
-    { id: "com", label: "COM", x: 0, y: 48 },
+    { id: "com", label: "COM", x: -40, y: 32 },
   ],
-  // Classic 555 / NE555 pinout (SpiceOrder 1..8).
+  // Classic 555 / NE555 pinout (SpiceOrder 1..8). Supplies and trigger down the
+  // left, timing network and output down the right, as the datasheet draws it.
   timer555: [
     { id: "gnd", label: "GND", x: -40, y: 32 },
     { id: "trig", label: "TRIG", x: -40, y: 16 },
     { id: "out", label: "OUT", x: 40, y: 0 },
     { id: "reset", label: "RESET", x: -40, y: -32 },
-    { id: "cont", label: "CONT", x: 40, y: -32 },
+    // Spelled CTRL on the drawing and here: "CONT" reads as a continuation.
+    { id: "cont", label: "CTRL", x: 40, y: -32 },
     { id: "thres", label: "THRES", x: 40, y: 16 },
     { id: "disch", label: "DISCH", x: 40, y: 32 },
     { id: "vcc", label: "VCC", x: -40, y: -16 },
@@ -155,50 +178,52 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "d1", label: "D1", x: 40, y: -8 },
     { id: "d2", label: "D2", x: 40, y: 8 },
     { id: "d3", label: "D3", x: 40, y: 24 },
-    { id: "com", label: "COM", x: 0, y: 48 },
+    { id: "com", label: "COM", x: -40, y: 32 },
   ],
-  // 4-bit weighted DAC.
+  // 4-bit weighted DAC: the code word down the left, reference and output right.
   dac: [
     { id: "d0", label: "D0", x: -40, y: -24 },
     { id: "d1", label: "D1", x: -40, y: -8 },
     { id: "d2", label: "D2", x: -40, y: 8 },
     { id: "d3", label: "D3", x: -40, y: 24 },
-    { id: "vref", label: "VREF", x: -40, y: 40 },
+    { id: "vref", label: "VREF", x: 40, y: -32 },
     { id: "out", label: "OUT", x: 40, y: 0 },
-    { id: "com", label: "COM", x: 0, y: 48 },
+    { id: "com", label: "COM", x: 40, y: 32 },
   ],
-  // Raw 7-segment + optional DP (no BCD decoder).
+  // Raw 7-segment + optional DP (no BCD decoder). Segments are split left/right
+  // the way they sit on the digit: F/G/E left, B/C right, A top of the left
+  // column and D top-ish of the right, with the common cathode/anode last.
   sevenSeg: [
-    { id: "a", label: "A", x: -8, y: -48 },
-    { id: "b", label: "B", x: 32, y: -24 },
-    { id: "c", label: "C", x: 32, y: 24 },
-    { id: "d", label: "D", x: -8, y: 48 },
-    { id: "e", label: "E", x: -32, y: 24 },
-    { id: "f", label: "F", x: -32, y: -24 },
+    { id: "a", label: "A", x: -40, y: -32 },
+    { id: "b", label: "B", x: 40, y: -32 },
+    { id: "c", label: "C", x: 40, y: -16 },
+    { id: "d", label: "D", x: 40, y: 0 },
+    { id: "e", label: "E", x: -40, y: 16 },
+    { id: "f", label: "F", x: -40, y: -16 },
     { id: "g", label: "G", x: -40, y: 0 },
-    { id: "dp", label: "DP", x: 40, y: 40 },
-    { id: "com", label: "COM", x: 0, y: 56 },
+    { id: "dp", label: "DP", x: 40, y: 16 },
+    { id: "com", label: "COM", x: -40, y: 32 },
   ],
   // Behavioral sample-and-hold (LTspice SpecialFunctions\sample): differential
   // analog input plus CLK (rising-edge sample) and S/H (track-while-high)
-  // controls on the left, analog output right, com reference below. Imported
-  // parts override this with the .asy's exact geometry.
+  // controls on the left, analog output right, com reference last on the left.
+  // Imported parts override this with the .asy's exact geometry.
   sampleHold: [
     { id: "in+", label: "+", x: -32, y: -32 },
     { id: "in-", label: "-", x: -32, y: -16 },
     { id: "clk", label: "CLK", x: -32, y: 0 },
     { id: "sh", label: "S/H", x: -32, y: 16 },
     { id: "out", label: "OUT", x: 32, y: 0 },
-    { id: "com", label: "COM", x: 0, y: 48 },
+    { id: "com", label: "COM", x: -32, y: 32 },
   ],
   // Behavioral VCO/modulator (LTspice SpecialFunctions\modulate): FM and AM
-  // control inputs on the left, sine output right, com reference below.
+  // control inputs on the left, sine output right, com reference last.
   // Imported parts override this with the .asy's exact geometry.
   modulator: [
     { id: "fm", label: "FM", x: -32, y: -16 },
     { id: "am", label: "AM", x: -32, y: 16 },
     { id: "out", label: "Q", x: 32, y: 0 },
-    { id: "com", label: "COM", x: 0, y: 48 },
+    { id: "com", label: "COM", x: -32, y: 32 },
   ],
   // Voltage-controlled sources (4-terminal 2-port): control pair on the left,
   // output pair on the right. cp/cn sense the controlling voltage; op/on drive.
@@ -347,7 +372,25 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
   ground: [{ id: "g", label: "0", x: 0, y: 0 }],
 };
 
-export const getLocalPins = (kind: ComponentKind): LocalPin[] => LOCAL_PINS[kind];
+/**
+ * Local (unrotated) terminals for a kind.
+ *
+ * Called with a `value` this is the bank **this instance** exposes — the only
+ * kind that differs today is `digitalGate`, whose input count is configurable.
+ * Called with only a kind it is the full DICTIONARY of terminals the kind can
+ * ever expose, which is what the LTspice importer needs: `buildPinOverride`
+ * maps an `.asy`'s pin names onto Tau roles through this table, so narrowing it
+ * there would drop `in2`..`in5` from every imported AND.
+ *
+ * Prefer {@link getComponentPins}, which has the component and therefore its
+ * value, whenever the caller is asking about a real part on the sheet.
+ */
+export function getLocalPins(kind: ComponentKind, value?: string): LocalPin[] {
+  if (kind === "digitalGate" && value !== undefined) {
+    return digitalGatePins(parseDigitalGate(value).inputs);
+  }
+  return LOCAL_PINS[kind];
+}
 
 export function getComponentPins(component: SchematicComponent): ComponentPin[] {
   // Imported parts (e.g. from LTspice) carry absolute world pin positions that
@@ -363,7 +406,7 @@ export function getComponentPins(component: SchematicComponent): ComponentPin[] 
       kind: component.kind,
     }));
   }
-  return getLocalPins(component.kind).map((pin) => {
+  return getLocalPins(component.kind, component.value).map((pin) => {
     const t = transformPoint(pin, component.rotation, component.mirrored ?? false);
     return {
       ...pin,

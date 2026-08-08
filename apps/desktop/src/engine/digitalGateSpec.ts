@@ -25,6 +25,42 @@ import { parseQuantity } from "../simulation/quantity";
  */
 export type DigitalGateFn = "buf" | "and" | "or" | "xor" | "schmitt";
 
+/**
+ * Input-count bounds for a multi-input gate.
+ *
+ * The deck has always supported 1..5 — `spiceNetlist.ts` builds the condition
+ * from whichever input pins are wired — but the symbol drew five leads whatever
+ * the gate was, so a two-input AND arrived with three dangling terminals. The
+ * count is now carried in the value (`Inputs=`) and drives both the pin bank
+ * and the drawing. Two is the floor because an AND/OR/XOR of one input is not
+ * that function at all, it is a buffer, which is a different `fn`.
+ */
+export const GATE_INPUTS_MIN = 2;
+export const GATE_INPUTS_MAX = 5;
+export const GATE_INPUTS_DEFAULT = 2;
+
+/** Functions that take exactly one input whatever `Inputs=` says. */
+export function isSingleInputGateFn(fn: DigitalGateFn): boolean {
+  return fn === "buf" || fn === "schmitt";
+}
+
+/**
+ * How many inputs a gate of this function really has.
+ *
+ * A buffer/inverter/Schmitt is single-input by construction, so `Inputs=` is
+ * ignored rather than obeyed: honouring it would draw an inverter with three
+ * leads that the deck could never read. Everything else is clamped into
+ * {@link GATE_INPUTS_MIN}..{@link GATE_INPUTS_MAX} — the range the netlist can
+ * actually emit — instead of trusting a hand-typed number.
+ */
+export function gateInputCount(fn: DigitalGateFn, requested: number | null | undefined): number {
+  if (isSingleInputGateFn(fn)) return 1;
+  if (requested === null || requested === undefined || !Number.isFinite(requested)) {
+    return GATE_INPUTS_DEFAULT;
+  }
+  return Math.min(GATE_INPUTS_MAX, Math.max(GATE_INPUTS_MIN, Math.round(requested)));
+}
+
 export interface DigitalGateSpec {
   fn: DigitalGateFn;
   /**
@@ -33,6 +69,13 @@ export interface DigitalGateSpec {
    * `q` gets the inverted levels; `qbar` gets the non-inverted ones.
    */
   invertOut: boolean;
+  /**
+   * Input terminals this gate exposes, already clamped and already reduced to
+   * 1 for the single-input functions. Drives `LOCAL_PINS.digitalGate` and the
+   * drawn leads; the deck still counts only the pins that are wired, so an
+   * imported `.asy` with its own pin bank is unaffected.
+   */
+  inputs: number;
   /** Output level for logic true (LTspice default 1 V). */
   vhigh: number;
   /** Output level for logic false (LTspice default 0 V). */
@@ -65,20 +108,22 @@ const FN_ALIASES: Record<string, { fn: DigitalGateFn; invertOut?: boolean }> = {
   schmtinv: { fn: "schmitt" },
 };
 
-const KEY_ALIASES: Record<string, keyof Omit<DigitalGateSpec, "fn">> = {
+const KEY_ALIASES: Record<string, keyof Omit<DigitalGateSpec, "fn" | "invertOut">> = {
   vhigh: "vhigh",
   vlow: "vlow",
   vt: "vt",
   vhys: "vhys",
   td: "td",
+  inputs: "inputs",
 };
 
 /**
  * Parse a digital gate's value string: a leading function token (`and`, `inv`,
  * `schmtbuf`, …) followed by optional LTspice A-device `key=value` params
- * (`Vhigh=5 Vlow=0 Vt=2.5 Vhys=0.5 Td=10n`, case-insensitive, SI suffixes).
- * Unknown tokens are ignored so a partial spec still yields a usable gate.
- * Defaults are LTspice's: vhigh=1, vlow=0, vt=midpoint, vhys=0.
+ * (`Vhigh=5 Vlow=0 Vt=2.5 Vhys=0.5 Td=10n`, case-insensitive, SI suffixes),
+ * plus Tau's own `Inputs=` count. Unknown tokens are ignored so a partial spec
+ * still yields a usable gate. Defaults are LTspice's: vhigh=1, vlow=0,
+ * vt=midpoint, vhys=0; `Inputs=` defaults to {@link GATE_INPUTS_DEFAULT}.
  */
 export function parseDigitalGate(value: string): DigitalGateSpec {
   const tokens = (value ?? "").trim().split(/[\s,]+/).filter(Boolean);
@@ -89,6 +134,7 @@ export function parseDigitalGate(value: string): DigitalGateSpec {
   let vt: number | null = null;
   let vhys = 0;
   let td = 0;
+  let inputs: number | null = null;
 
   for (const token of tokens) {
     const eq = token.indexOf("=");
@@ -101,6 +147,7 @@ export function parseDigitalGate(value: string): DigitalGateSpec {
       else if (key === "vlow") vlow = parsed;
       else if (key === "vt") vt = parsed;
       else if (key === "vhys") vhys = parsed;
+      else if (key === "inputs") inputs = parsed;
       else td = parsed;
       continue;
     }
@@ -114,6 +161,7 @@ export function parseDigitalGate(value: string): DigitalGateSpec {
   return {
     fn,
     invertOut,
+    inputs: gateInputCount(fn, inputs),
     vhigh,
     vlow,
     vt: vt ?? (vhigh + vlow) / 2,

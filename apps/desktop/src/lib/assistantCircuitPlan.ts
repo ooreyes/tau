@@ -134,9 +134,13 @@ export const TAU_CIRCUIT_PLAN_TOOL = {
 /** The pins a plan may reference for a kind. A switch is lowered to a plain
  *  resistor and accepts only open/closed, so its NC+/NC- control pair cannot be
  *  placed: advertising it would invite plans the compiler has to reject, and
- *  requiring nets on it would reject every valid switch plan. */
+ *  requiring nets on it would reject every valid switch plan.
+ *
+ *  The bank is read at the kind's DEFAULT VALUE, not from the kind alone: a
+ *  logic gate's input count follows its value, so `getLocalPins(kind)` would
+ *  advertise in3..in5 on a part the planner then places as a 2-input AND. */
 function plannablePins(kind: ComponentKind) {
-  return getLocalPins(kind).filter(
+  return getLocalPins(kind, CATALOG_BY_KIND[kind].defaultValue).filter(
     ({ id }) => !(kind === "switch" && (id === "cp" || id === "cn")),
   );
 }
@@ -1386,6 +1390,9 @@ function validateNativeTopology(
     const actualNode = [...actualNodes][0];
     const otherNet = actualToExpected.get(actualNode);
     if (otherNet && otherNet !== net.name) {
+      console.log("DBG node", actualNode, "nets", otherNet, net.name);
+      for (const c of circuit.components) console.log("DBG comp", c.component.label, c.component.x, c.component.y, JSON.stringify(c.pins));
+      for (const w of wires) console.log("DBG wire", JSON.stringify(w.points));
       throw new Error(`Tau could not preserve requested isolation between nets ${otherNet} and ${net.name}`);
     }
     actualToExpected.set(actualNode, net.name);

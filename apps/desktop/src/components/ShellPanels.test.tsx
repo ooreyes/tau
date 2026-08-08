@@ -506,6 +506,162 @@ describe("ComponentInspector - transmission line", () => {
   });
 });
 
+/**
+ * Item 4's settings half. All four controlled sources used to render one
+ * unlabelled "Value" box, so the panel could not say which of V/V, A/V, A/A and
+ * V/A the number was, nor that the control pair of an F or H source is a sense
+ * branch Tau supplies rather than a probe you point at an existing source.
+ */
+describe("ComponentInspector - controlled sources", () => {
+  const source = (kind: "vcvs" | "vccs" | "cccs" | "ccvs", value: string, label: string) => ({
+    id: `${kind}-1`, kind, x: 160, y: 160, rotation: 0 as const, value, label,
+  });
+
+  const show = (component: ReturnType<typeof source>) => {
+    useSchematic.setState({
+      components: [component],
+      selectedId: component.id,
+      selectedIds: [component.id],
+    });
+    render(<ComponentInspector selected={component} />);
+  };
+
+  it("names each gain with the unit its own netlist line is emitted in", () => {
+    for (const [component, label, unit, mantissa] of [
+      [source("vcvs", "10", "E1"), "Voltage gain", "V/V", "10"],
+      [source("vccs", "1m", "G1"), "Transconductance", "mA/V", "1"],
+      [source("cccs", "10", "F1"), "Current gain", "A/A", "10"],
+      [source("ccvs", "1k", "H1"), "Transresistance", "kV/A", "1"],
+    ] as const) {
+      cleanup();
+      show(component);
+      expect((screen.getByRole("textbox", { name: label }) as HTMLInputElement).value).toBe(mantissa);
+      expect(screen.getByRole("combobox", { name: `${label} SI prefix` }).textContent).toContain(unit);
+      expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+    }
+  });
+
+  it("explains what a CCVS computes and edits it as a transresistance", () => {
+    show(source("ccvs", "1k", "H1"));
+
+    expect(screen.getByText(/Output voltage is the transresistance times the current sensed at the control pins C\+ and C-/))
+      .toBeTruthy();
+    expect(screen.getByText(/1k gives 1 V per mA/)).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Transresistance" }), { target: { value: "2" } });
+    expect(useSchematic.getState().components[0].value).toBe("2k");
+  });
+
+  // The gotcha: F and H synthesize `V_<base>_sense` between C+ and C-
+  // (`spiceNetlist.ts`), so a user who wires them across an existing V1 gets a
+  // short, not a measurement.
+  it("warns on both current-controlled sources that the sense pair is Tau's own source", () => {
+    for (const component of [source("cccs", "10", "F1"), source("ccvs", "1k", "H1")]) {
+      cleanup();
+      show(component);
+      expect(screen.getByText(/cannot watch an existing source such as V1/)).toBeTruthy();
+      expect(screen.getByText(/Wire C\+ and C- in series with the branch whose current you want/)).toBeTruthy();
+    }
+  });
+
+  it("swaps the gain box for a transfer-function box when the value is a Laplace transfer", () => {
+    show(source("vcvs", "Laplace=10/(1+0.001*s)", "E1"));
+
+    const transfer = screen.getByRole("textbox", { name: "Transfer H(s)" }) as HTMLInputElement;
+    expect(transfer.value).toBe("10/(1+0.001*s)");
+    expect(screen.queryByRole("textbox", { name: "Voltage gain" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+
+    fireEvent.change(transfer, { target: { value: "10/(1+0.01*s)" } });
+    expect(useSchematic.getState().components[0].value).toBe("Laplace=10/(1+0.01*s)");
+  });
+});
+
+/**
+ * Item 8's disclosure. `engine/idealModels.ts` made a placed junction behave as
+ * the textbook part and left an imported one on its real model; before this the
+ * panel said "Generic starter" for both, which described neither.
+ */
+describe("ComponentInspector - ideal by default, real behind Advanced", () => {
+  const junction = (
+    kind: "diode" | "led" | "zener",
+    value: string,
+    extra: Record<string, unknown> = {},
+  ) => ({ id: `${kind}-1`, kind, x: 160, y: 160, rotation: 0 as const, value, label: "D1", ...extra });
+
+  const show = (component: ReturnType<typeof junction>, directives: string[] = []) => {
+    useSchematic.setState({
+      components: [component],
+      selectedId: component.id,
+      selectedIds: [component.id],
+      directives,
+    });
+    render(<ComponentInspector selected={component} />);
+  };
+
+  it("says a placed diode is ideal, in the volts it will actually drop", () => {
+    show(junction("diode", "D"));
+    expect(screen.getByRole("status").textContent)
+      .toContain("Ideal model · a fixed 0.7 V forward drop, no junction capacitance and no reverse recovery.");
+  });
+
+  it("states the LED's own drop and the zener's marked breakdown", () => {
+    show(junction("led", "LED"));
+    expect(screen.getByRole("status").textContent).toContain("a fixed 2 V forward drop");
+
+    cleanup();
+    show(junction("zener", "5V1"));
+    expect(screen.getByRole("status").textContent)
+      .toContain("a fixed 0.7 V forward drop, 5.1 V reverse breakdown");
+
+    // A marking that names no library part is still a part the deck runs, so
+    // it must not be reported as a missing model.
+    cleanup();
+    show(junction("zener", "12V"));
+    expect(screen.getByRole("status").textContent).toContain("12 V reverse breakdown");
+    expect(screen.getByRole("status").textContent).not.toContain("Needs a model");
+  });
+
+  it("keeps the model chooser behind Advanced while the part is ideal", async () => {
+    show(junction("diode", "D"));
+    expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
+
+    const disclosure = screen.getByRole("button", { name: "Toggle advanced settings" });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(/replaces the ideal device with its measured curve/)).toBeTruthy();
+
+    const chooser = screen.getByRole("combobox", { name: "Simulation model" });
+    fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });
+    const part = await screen.findByRole("option", { name: /1N4148 · Tau exact models/ });
+    fireEvent.pointerUp(part, { button: 0, pointerId: 1, pointerType: "mouse" });
+    fireEvent.click(part);
+    expect(useSchematic.getState().components[0].value).toBe("1N4148");
+  });
+
+  it("never calls an imported diode ideal, and leaves its real model in plain sight", () => {
+    // The exact provenance test `engine/idealModels.ts` uses: one LTspice-only
+    // field present means this part was read from an `.asc`.
+    show(junction("diode", "D", { ltSymbolType: "diode" }));
+
+    const status = screen.getByRole("status").textContent ?? "";
+    expect(status).not.toContain("Ideal model");
+    expect(status).toContain("This part came from an LTspice schematic, so it keeps that real model");
+    expect(screen.getByRole("combobox", { name: "Simulation model" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Toggle advanced settings" })).toBeNull();
+  });
+
+  it("defers to a model this schematic defines rather than claiming ideal", () => {
+    show(junction("diode", "D"), [".model D D(Is=1e-15 N=1.2)"]);
+
+    const status = screen.getByRole("status").textContent ?? "";
+    expect(status).not.toContain("Ideal model");
+    expect(status).toContain("Defined by this schematic");
+    expect(screen.getByRole("combobox", { name: "Simulation model" })).toBeTruthy();
+  });
+});
+
 describe("ComponentInspector - independent source waveform controls", () => {
   it("renders PWL as a mode and point rows, never as a DC-level string", () => {
     const selected = {

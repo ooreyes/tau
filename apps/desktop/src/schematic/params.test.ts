@@ -252,6 +252,73 @@ describe("potentiometer wiper", () => {
   });
 });
 
+/**
+ * The four controlled sources share one number and four identical-looking
+ * pins, so everything that distinguishes them lives in the field data: the
+ * unit `spiceNetlist.ts` emits that number in, and what the control pair is.
+ */
+describe("controlled source gains", () => {
+  it("names each gain with the unit its own netlist line uses", () => {
+    expect(paramFields("vcvs", "10").map((f) => [f.label, f.unit])).toEqual([["Voltage gain", "V/V"]]);
+    expect(paramFields("vccs", "1m").map((f) => [f.label, f.unit])).toEqual([["Transconductance", "A/V"]]);
+    expect(paramFields("cccs", "10").map((f) => [f.label, f.unit])).toEqual([["Current gain", "A/A"]]);
+    expect(paramFields("ccvs", "1k").map((f) => [f.label, f.unit])).toEqual([["Transresistance", "V/A"]]);
+  });
+
+  it("describes the control port of every one of them", () => {
+    for (const kind of ["vcvs", "vccs", "cccs", "ccvs"] as const) {
+      expect(paramFields(kind, "1")[0].description).toMatch(/control pins C\+ and C-/);
+    }
+  });
+
+  // F and H synthesize their own `V_<base>_sense` between C+ and C-, so
+  // wiring one across an existing V1 shorts it instead of measuring it.
+  it("says on the current-controlled pair that the sense branch is Tau's own", () => {
+    for (const kind of ["cccs", "ccvs"] as const) {
+      expect(paramFields(kind, "1")[0].description).toMatch(/cannot watch an existing source such as V1/);
+      expect(paramFields(kind, "1")[0].description).toMatch(/in series with the branch/);
+    }
+    for (const kind of ["vcvs", "vccs"] as const) {
+      expect(paramFields(kind, "1")[0].description).not.toMatch(/in series/);
+    }
+  });
+
+  it("stores the gain as the whole value, unchanged", () => {
+    expect(decodeParams("ccvs", " 1k ")).toEqual({ gain: "1k" });
+    expect(encodeParams("vccs", { gain: "2m" })).toBe("2m");
+  });
+});
+
+/**
+ * `Laplace=H(s)` is a transfer function, not a gain, and no E/G syntax carries
+ * both, so it is a value variant rather than a second box. F and H take a
+ * constant only and must keep their gain control whatever is typed.
+ */
+describe("Laplace transfer on the voltage-controlled sources", () => {
+  it("swaps in a transfer-function field for a Laplace value", () => {
+    expect(paramFields("vcvs", "Laplace=1/(1+s)").map((f) => f.key)).toEqual(["laplace"]);
+    expect(paramFields("vccs", "Laplace=1/(1+s)").map((f) => f.key)).toEqual(["laplace"]);
+    expect(paramFields("vcvs", "10").map((f) => f.key)).toEqual(["gain"]);
+  });
+
+  it("shows the expression without the user retyping the Laplace= prefix", () => {
+    expect(decodeParams("vcvs", "Laplace=10/(1+0.001*s)")).toEqual({ laplace: "10/(1+0.001*s)" });
+    expect(encodeParams("vcvs", { laplace: "10/(1+0.01*s)" })).toBe("Laplace=10/(1+0.01*s)");
+    expect(decodeParams("vcvs", "laplace = 1/s")).toEqual({ laplace: "1/s" });
+  });
+
+  it("carries a token in front of the transfer through an edit instead of deleting it", () => {
+    const decoded = decodeParams("vcvs", "10 Laplace=1/(1+s)");
+    expect(decoded.laplace).toBe("1/(1+s)");
+    expect(encodeParams("vcvs", { ...decoded, laplace: "2/(1+s)" })).toBe("10 Laplace=2/(1+s)");
+  });
+
+  it("leaves the current-controlled pair on its gain field", () => {
+    expect(paramFields("cccs", "Laplace=1/(1+s)").map((f) => f.key)).toEqual(["gain"]);
+    expect(paramFields("ccvs", "Laplace=1/(1+s)").map((f) => f.key)).toEqual(["gain"]);
+  });
+});
+
 describe("kinds without a parameter schema", () => {
   it("decodes to nothing rather than inventing fields", () => {
     expect(paramFields("diode", "1N4148")).toEqual([]);

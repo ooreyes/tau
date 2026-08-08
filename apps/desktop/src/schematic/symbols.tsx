@@ -1,4 +1,6 @@
-import type { ComponentKind } from "./types";
+import { parseDigitalGate } from "../engine/digitalGateSpec";
+import { isSpdtThrowToNo, isStaticContactClosed } from "./kindGroups";
+import type { ComponentKind, Rotation } from "./types";
 
 /** World pixels per grid cell. Components span a few cells; pins land on grid. */
 export const GRID = 16;
@@ -55,6 +57,166 @@ function AmplifierBody() {
       <line x1={AMP_APEX_X} y1={0} x2={32} y2={0} />
       <path data-amp-glyph="+" d={AMP_PLUS_PATH} />
       <path data-amp-glyph="-" d={AMP_MINUS_PATH} />
+    </>
+  );
+}
+
+/* ── Logic gate geometry (mission item 9) ────────────────────────────────────
+ *
+ * The gate used to draw five input leads whatever it was, declare `maxX: 28`
+ * while its nose reached x = 40, and hide both output leads and the inversion
+ * bubble INSIDE the body arc. All three are the same root cause: one hard-coded
+ * silhouette that knew nothing about the gate it was drawing.
+ *
+ * Everything below is derived from the input count instead, so the pin bank in
+ * `pins.ts` and the artwork are two readings of one geometry. The netlist
+ * already supported 1..5 inputs (it counts wired pins), so this is the drawing
+ * catching up with the deck rather than a new capability.
+ */
+
+/** Back edge of every gate body. Input leads run from the pin (x = -32) to here. */
+const GATE_BACK_X = -24;
+/** Nose tip. Fixed, so a gate keeps its width as the input bank grows taller. */
+const GATE_NOSE_TIP_X = 28;
+/** Rows the true/complementary outputs sit on. */
+const GATE_OUT_Y = 16;
+/** How far an OR/XOR back bulges into the body, and where the XOR's second arc sits. */
+const GATE_BACK_BULGE = 8;
+const GATE_XOR_ARC_X = -32;
+const GATE_XOR_ARC_BULGE = 6;
+/** Inversion bubble radius, and the clear space a lead needs beside the body. */
+const GATE_BUBBLE_R = 3;
+
+/**
+ * Input rows for an N-input gate: symmetric about the body centre, every row on
+ * a multiple of {@link GRID}.
+ *
+ * At a 16-unit pitch an even bank would straddle the centre at ±8, which is off
+ * the connection grid, so an even bank skips the centre row instead — the
+ * classic gate layout, and the same "keep every terminal on the grid" rule
+ * `subcircuitGeometry.verticalOffsets` applies to a subcircuit's pin bank.
+ */
+export function gateInputRows(inputs: number): number[] {
+  const count = Math.max(1, Math.round(inputs));
+  if (count === 1) return [0];
+  const even = count % 2 === 0;
+  return Array.from({ length: count }, (_, index) => {
+    const step = index - (count - 1) / 2;
+    return (even ? (step > 0 ? Math.ceil(step) : Math.floor(step)) : step) * GRID;
+  });
+}
+
+/** Body half-height: enough to clear the input bank and both output rows. */
+export function gateBodyHalfHeight(inputs: number): number {
+  const reach = Math.max(GATE_OUT_Y, ...gateInputRows(inputs).map(Math.abs));
+  return reach + 8;
+}
+
+/**
+ * Where the `com` reference leaves the body.
+ *
+ * It rides the body, not a fixed row, because the body grows with the input
+ * count: pinning it at y = 48 (as it was) put a 2-input gate's reference lead
+ * 8 units outside the ±40 palette preview, and pinning it at 32 would bury it
+ * inside a 5-input body. Changing the input count already re-lays the input
+ * bank, so the whole terminal bank moving together is the consistent rule.
+ */
+export function gateComY(inputs: number): number {
+  return gateBodyHalfHeight(inputs) + 8;
+}
+
+/**
+ * x where the `com` lead leaves the body floor.
+ *
+ * The floor runs from the back to where the nose begins, which is
+ * `GATE_NOSE_TIP_X - halfHeight` — as low as x = -12 for a five-input gate. A
+ * lead at x = 0 would have hung off the end of the floor on the tall gates, so
+ * the reference leaves at -16 instead: on the grid and on the floor at every
+ * input count.
+ */
+export const GATE_COM_X = -16;
+
+/** x where the nose crosses an output row — where that output's lead starts. */
+function gateNoseCrossX(halfHeight: number): number {
+  const centre = GATE_NOSE_TIP_X - halfHeight;
+  return centre + Math.sqrt(halfHeight * halfHeight - GATE_OUT_Y * GATE_OUT_Y);
+}
+
+/** Radius of a circular arc spanning `2 * half` that bulges `depth` sideways. */
+const arcRadius = (half: number, depth: number): number => (depth * depth + half * half) / (2 * depth);
+
+/** x of an OR/XOR's concave back at height `y` — where that input lead ends. */
+function gateCurvedBackX(halfHeight: number, y: number): number {
+  const radius = arcRadius(halfHeight, GATE_BACK_BULGE);
+  const centre = GATE_BACK_X + GATE_BACK_BULGE - radius;
+  return centre + Math.sqrt(Math.max(0, radius * radius - y * y));
+}
+
+/**
+ * The seven palette gates used to render byte-identical markup: one hard-coded
+ * AND silhouette with five leads, whatever function the value named. The
+ * function is now visible in the outline, the way every logic diagram draws it:
+ *
+ *  - AND / NAND      flat back, round nose
+ *  - OR / NOR        concave back, round nose
+ *  - XOR / XNOR      the same, plus the second arc outside the back
+ *  - BUF / NOT       one input and a buffer triangle inside the body
+ *  - Schmitt         one input and the hysteresis glyph
+ *
+ * The inversion bubble sits on whichever output actually carries the inverted
+ * sense. `invertOut` (NAND/NOR/XNOR/NOT) swaps the levels driven onto q and
+ * qbar — see `engine/digitalGateSpec.ts` — so on those parts the bubble belongs
+ * on q, not on qbar. The old symbol always bubbled qbar and so mislabelled
+ * every inverting gate on the sheet.
+ */
+function DigitalGateArtwork({ value }: { value?: string }) {
+  const spec = parseDigitalGate(value ?? "");
+  const half = gateBodyHalfHeight(spec.inputs);
+  const noseStart = GATE_NOSE_TIP_X - half;
+  const curvedBack = spec.fn === "or" || spec.fn === "xor";
+  const nose = `L ${noseStart} ${-half} A ${half} ${half} 0 0 1 ${noseStart} ${half} L ${GATE_BACK_X} ${half}`;
+  const backRadius = arcRadius(half, GATE_BACK_BULGE);
+  const body = curvedBack
+    ? `M ${GATE_BACK_X} ${-half} ${nose} A ${backRadius} ${backRadius} 0 0 0 ${GATE_BACK_X} ${-half}`
+    : `M ${GATE_BACK_X} ${-half} ${nose} Z`;
+  const xorRadius = arcRadius(half, GATE_XOR_ARC_BULGE);
+  const crossX = gateNoseCrossX(half);
+  // q first: it is the output whose sense `invertOut` flips.
+  const outputs = [
+    { id: "q", y: -GATE_OUT_Y, bubble: spec.invertOut },
+    { id: "qbar", y: GATE_OUT_Y, bubble: !spec.invertOut },
+  ];
+  return (
+    <>
+      <path data-gate-body={spec.fn} d={body} />
+      {spec.fn === "xor" && (
+        <path
+          data-gate-xor-arc=""
+          d={`M ${GATE_XOR_ARC_X} ${-half} A ${xorRadius} ${xorRadius} 0 0 1 ${GATE_XOR_ARC_X} ${half}`}
+        />
+      )}
+      {gateInputRows(spec.inputs).map((y) => (
+        <line
+          key={`in-${y}`}
+          x1={-32}
+          y1={y}
+          x2={curvedBack ? gateCurvedBackX(half, y) : GATE_BACK_X}
+          y2={y}
+        />
+      ))}
+      {outputs.map((output) =>
+        output.bubble ? (
+          <g key={output.id} data-gate-invert={output.id}>
+            <circle cx={crossX + GATE_BUBBLE_R} cy={output.y} r={GATE_BUBBLE_R} />
+            <line x1={crossX + GATE_BUBBLE_R * 2} y1={output.y} x2={32} y2={output.y} />
+          </g>
+        ) : (
+          <line key={output.id} x1={crossX} y1={output.y} x2={32} y2={output.y} />
+        ),
+      )}
+      {spec.fn === "buf" && <path data-gate-glyph="buf" d="M -10 -7 L 4 0 L -10 7 Z" />}
+      {spec.fn === "schmitt" && <path data-gate-glyph="schmitt" d="M -9 5 H -1 V -5 H 7" />}
+      <line x1={GATE_COM_X} y1={half} x2={GATE_COM_X} y2={gateComY(spec.inputs)} />
     </>
   );
 }
@@ -175,6 +337,327 @@ export function valueLooksLikeSine(value: string | undefined): boolean {
   return /^\s*(SINE|SIN)\s*\(/i.test(value ?? "");
 }
 
+/* ── Digital chips: one body, labelled pins (mission item 5) ─────────────────
+ *
+ * Every digital IC now draws its pin names, because a 64×72 rectangle with
+ * eight anonymous stubs tells a reader nothing at all — the 555 in particular
+ * was a box with "555" in it and no way to tell TRIG from THRES.
+ *
+ * Two rules make that safe:
+ *  - Terminals live in two side columns at x = ±CHIP_PIN_X against a
+ *    ±CHIP_HALF_W × ±CHIP_HALF_H body, and none passes |y| = 32. Nothing is
+ *    drawn outside the ±42 × ±40 palette/inspector preview any more.
+ *  - The names are drawn by {@link PinLabel}, which undoes the wrapper's
+ *    rotation so the text is upright at all four orientations.
+ */
+const CHIP_HALF_W = 32;
+const CHIP_HALF_H = 36;
+const CHIP_PIN_X = 40;
+/** Centre of the label column inside each side of a chip body. */
+const CHIP_LABEL_X = 20;
+/**
+ * Flip-flops keep the narrower ±24 body and ±32 terminals they have always
+ * had. Widening them to the 8-pin chip footprint is not just cosmetic: the
+ * assistant's auto-router picks wire channels from the gaps between symbols,
+ * and 16 fewer units of channel was enough to route one shift-register stage's
+ * Q net through the next stage's, which `assistantCircuitPlan.stress.test.ts`
+ * caught as two nets that were supposed to stay isolated.
+ */
+const FLOP_HALF_W = 24;
+const FLOP_PIN_X = 32;
+const FLOP_LABEL_X = 13;
+/** Same, for the nose-bodied parts (sample & hold, modulator). */
+const NOSE_HALF_W = 24;
+const NOSE_PIN_X = 32;
+
+/** Body rectangle shared by every digital chip. */
+function ChipBody({ halfW = CHIP_HALF_W }: { halfW?: number }) {
+  return <rect x={-halfW} y={-CHIP_HALF_H} width={halfW * 2} height={CHIP_HALF_H * 2} rx={2} />;
+}
+
+/** Nose body shared by sample & hold and the modulator. */
+function NoseBody() {
+  return (
+    <path
+      d={`M ${-NOSE_HALF_W} ${-CHIP_HALF_H} L 16 ${-CHIP_HALF_H} L ${NOSE_HALF_W} 0 L 16 ${CHIP_HALF_H} L ${-NOSE_HALF_W} ${CHIP_HALF_H} Z`}
+    />
+  );
+}
+
+/** One lead per row, from the pin column to the body edge. */
+function ChipLeads({
+  rows,
+  side,
+  pinX = CHIP_PIN_X,
+  bodyX = CHIP_HALF_W,
+}: {
+  rows: readonly number[];
+  side: -1 | 1;
+  pinX?: number;
+  bodyX?: number;
+}) {
+  return (
+    <>
+      {rows.map((y) => (
+        <line key={`${side}-${y}`} x1={side * pinX} y1={y} x2={side * bodyX} y2={y} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * A pin name drawn inside the body.
+ *
+ * `<text>` in a symbol inherits the wrapper's `rotate(R) scale(-1 1)`, so a
+ * naive caption is upside-down at 180° and side-on at 90°/270°. That was a real
+ * bug, not a hypothetical: the old "555" caption did exactly this, and adding
+ * eight more captions would have multiplied it by eight.
+ *
+ * The wrapper applies `A = rotate(R)·M`. Giving the text `T = translate(a)·M·
+ * rotate(−R)` makes `A·T` a pure translation to `A·a`: the caption lands on the
+ * point it annotates and its glyphs stay upright, whatever the part's
+ * orientation. Anchoring is `middle` for the same reason — a start/end anchored
+ * caption would grow the opposite way once the body turned, pushing the text
+ * out through the body edge.
+ */
+function PinLabel({
+  text,
+  x,
+  y,
+  rotation,
+  mirrored,
+}: {
+  text: string;
+  x: number;
+  y: number;
+  rotation: Rotation;
+  mirrored: boolean;
+}) {
+  const parts = [`translate(${x} ${y})`];
+  if (mirrored) parts.push("scale(-1 1)");
+  if (rotation !== 0) parts.push(`rotate(${-rotation})`);
+  return (
+    <text
+      className="subckt-pin-label"
+      data-pin-label={text}
+      textAnchor="middle"
+      // Half the 7px cap height, so the caption's midline sits on its own row.
+      y={2.4}
+      transform={parts.join(" ")}
+    >
+      {text}
+    </text>
+  );
+}
+
+/** Where each pin's name is drawn. `text` must match the pin's own label -
+ *  `symbols.test.tsx` checks that against `getLocalPins` for every kind here. */
+export interface PinLabelPlacement {
+  pin: string;
+  text: string;
+  x: number;
+  y: number;
+}
+
+const L = CHIP_LABEL_X;
+const F = FLOP_LABEL_X;
+const NL = 10; // nose-body label column
+
+export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPlacement[]>> = {
+  dflop: [
+    { pin: "pre", text: "PRE", x: -F, y: -32 },
+    { pin: "d", text: "D", x: -F, y: -16 },
+    { pin: "clk", text: "CLK", x: -F, y: 0 },
+    { pin: "clr", text: "CLR", x: -F, y: 16 },
+    { pin: "q", text: "Q", x: F, y: -16 },
+    { pin: "qbar", text: "Q̅", x: F, y: 16 },
+    { pin: "com", text: "COM", x: F, y: 32 },
+  ],
+  srflop: [
+    { pin: "s", text: "S", x: -F, y: -16 },
+    { pin: "r", text: "R", x: -F, y: 16 },
+    { pin: "q", text: "Q", x: F, y: -16 },
+    { pin: "qbar", text: "Q̅", x: F, y: 16 },
+    { pin: "com", text: "COM", x: F, y: 32 },
+  ],
+  tflop: [
+    { pin: "pre", text: "PRE", x: -F, y: -32 },
+    { pin: "t", text: "T", x: -F, y: -16 },
+    { pin: "clk", text: "CLK", x: -F, y: 0 },
+    { pin: "clr", text: "CLR", x: -F, y: 16 },
+    { pin: "q", text: "Q", x: F, y: -16 },
+    { pin: "qbar", text: "Q̅", x: F, y: 16 },
+    { pin: "com", text: "COM", x: F, y: 32 },
+  ],
+  jkflop: [
+    { pin: "pre", text: "PRE", x: -F, y: -32 },
+    { pin: "j", text: "J", x: -F, y: -16 },
+    { pin: "k", text: "K", x: -F, y: 0 },
+    { pin: "clk", text: "CLK", x: -F, y: 16 },
+    { pin: "clr", text: "CLR", x: -F, y: 32 },
+    { pin: "q", text: "Q", x: F, y: -16 },
+    { pin: "qbar", text: "Q̅", x: F, y: 16 },
+    { pin: "com", text: "COM", x: F, y: 32 },
+  ],
+  counter: [
+    { pin: "clk", text: "CLK", x: -L, y: -16 },
+    { pin: "rst", text: "RST", x: -L, y: 16 },
+    { pin: "com", text: "COM", x: -L, y: 32 },
+    { pin: "q0", text: "Q0", x: L, y: -24 },
+    { pin: "q1", text: "Q1", x: L, y: -8 },
+    { pin: "q2", text: "Q2", x: L, y: 8 },
+    { pin: "q3", text: "Q3", x: L, y: 24 },
+  ],
+  timer555: [
+    { pin: "reset", text: "RESET", x: -L, y: -32 },
+    { pin: "vcc", text: "VCC", x: -L, y: -16 },
+    { pin: "trig", text: "TRIG", x: -L, y: 16 },
+    { pin: "gnd", text: "GND", x: -L, y: 32 },
+    { pin: "cont", text: "CTRL", x: L, y: -32 },
+    { pin: "out", text: "OUT", x: L, y: 0 },
+    { pin: "thres", text: "THRES", x: L, y: 16 },
+    { pin: "disch", text: "DISCH", x: L, y: 32 },
+  ],
+  adc: [
+    { pin: "vin", text: "VIN", x: -L, y: -16 },
+    { pin: "vref", text: "VREF", x: -L, y: 16 },
+    { pin: "com", text: "COM", x: -L, y: 32 },
+    { pin: "d0", text: "D0", x: L, y: -24 },
+    { pin: "d1", text: "D1", x: L, y: -8 },
+    { pin: "d2", text: "D2", x: L, y: 8 },
+    { pin: "d3", text: "D3", x: L, y: 24 },
+  ],
+  dac: [
+    { pin: "d0", text: "D0", x: -L, y: -24 },
+    { pin: "d1", text: "D1", x: -L, y: -8 },
+    { pin: "d2", text: "D2", x: -L, y: 8 },
+    { pin: "d3", text: "D3", x: -L, y: 24 },
+    { pin: "vref", text: "VREF", x: L, y: -32 },
+    { pin: "out", text: "OUT", x: L, y: 0 },
+    { pin: "com", text: "COM", x: L, y: 32 },
+  ],
+  sevenSeg: [
+    { pin: "a", text: "A", x: -24, y: -32 },
+    { pin: "f", text: "F", x: -24, y: -16 },
+    { pin: "g", text: "G", x: -24, y: 0 },
+    { pin: "e", text: "E", x: -24, y: 16 },
+    { pin: "com", text: "COM", x: -24, y: 32 },
+    { pin: "b", text: "B", x: 24, y: -32 },
+    { pin: "c", text: "C", x: 24, y: -16 },
+    { pin: "d", text: "D", x: 24, y: 0 },
+    { pin: "dp", text: "DP", x: 24, y: 16 },
+  ],
+  sampleHold: [
+    { pin: "in+", text: "+", x: -NL, y: -32 },
+    { pin: "in-", text: "-", x: -NL, y: -16 },
+    { pin: "clk", text: "CLK", x: -NL, y: 0 },
+    { pin: "sh", text: "S/H", x: -NL, y: 16 },
+    { pin: "com", text: "COM", x: -NL, y: 32 },
+    { pin: "out", text: "OUT", x: 6, y: 0 },
+  ],
+  modulator: [
+    { pin: "fm", text: "FM", x: -11, y: -16 },
+    { pin: "am", text: "AM", x: -11, y: 16 },
+    { pin: "com", text: "COM", x: -11, y: 32 },
+    { pin: "out", text: "Q", x: 14, y: 0 },
+  ],
+};
+
+/** Part captions — the one piece of symbol text that names a part rather than
+ *  a terminal. They ride the same counter-rotation, because the 555's caption
+ *  is precisely the label that used to read upside down at 180°. */
+export const PART_CAPTIONS: Partial<Record<ComponentKind, { text: string; x: number; y: number }>> = {
+  timer555: { text: "555", x: 0, y: -8 },
+};
+
+function SymbolPinLabels({
+  kind,
+  rotation,
+  mirrored,
+}: {
+  kind: ComponentKind;
+  rotation: Rotation;
+  mirrored: boolean;
+}) {
+  const layout = PIN_LABEL_LAYOUT[kind];
+  const caption = PART_CAPTIONS[kind];
+  if (!layout && !caption) return null;
+  return (
+    <>
+      {layout?.map((label) => (
+        <PinLabel
+          key={label.pin}
+          text={label.text}
+          x={label.x}
+          y={label.y}
+          rotation={rotation}
+          mirrored={mirrored}
+        />
+      ))}
+      {caption && (
+        <PinLabel
+          text={caption.text}
+          x={caption.x}
+          y={caption.y}
+          rotation={rotation}
+          mirrored={mirrored}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * The frame every flip-flop shares: inputs down the left, the true output and
+ * the bubbled complement on the right, and the reference below them. `Q̅` is
+ * the one output that is always inverted, so it is the one that always carries
+ * a bubble - reading the drawing tells you which pin is which without counting
+ * rows against the pin table.
+ */
+function FlopBody({
+  inputs,
+  outputs,
+  reference,
+  clockRow,
+}: {
+  inputs: readonly number[];
+  outputs: readonly number[];
+  reference: number;
+  clockRow?: number;
+}) {
+  return (
+    <>
+      <ChipBody halfW={FLOP_HALF_W} />
+      <ChipLeads rows={inputs} side={-1} pinX={FLOP_PIN_X} bodyX={FLOP_HALF_W} />
+      {clockRow !== undefined && (
+        // Edge-trigger wedge, kept short so the CLK caption clears it.
+        <path d={`M ${-FLOP_HALF_W} ${clockRow - 5} L -20 ${clockRow} L ${-FLOP_HALF_W} ${clockRow + 5}`} />
+      )}
+      <ChipLeads rows={outputs} side={1} pinX={FLOP_PIN_X} bodyX={FLOP_HALF_W} />
+      <InvertedOutputLead y={16} bodyX={FLOP_HALF_W} pinX={FLOP_PIN_X} />
+      <ChipLeads rows={[reference]} side={1} pinX={FLOP_PIN_X} bodyX={FLOP_HALF_W} />
+    </>
+  );
+}
+
+/** An output lead carrying its inversion bubble, drawn just outside a chip. */
+function InvertedOutputLead({
+  y,
+  bodyX = CHIP_HALF_W,
+  pinX = CHIP_PIN_X,
+}: {
+  y: number;
+  bodyX?: number;
+  pinX?: number;
+}) {
+  return (
+    <>
+      <circle cx={bodyX + 3} cy={y} r={3} />
+      <line x1={bodyX + 6} y1={y} x2={pinX} y2={y} />
+    </>
+  );
+}
+
 /** Accurate local bounding box of each symbol's drawn body (excludes pin leads).
  *  Unlike SYMBOL_BOX these are NOT assumed symmetric about the origin - e.g.
  *  ground is drawn entirely below its pin - so they give correct hit-testing
@@ -202,18 +685,22 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   photodiode: { minX: -13, minY: -20, maxX: 16, maxY: 15 },
   opamp: { minX: -24, minY: -32, maxX: 30, maxY: 32 },
   comparator: { minX: -24, minY: -32, maxX: 30, maxY: 32 },
-  digitalGate: { minX: -24, minY: -38, maxX: 28, maxY: 40 },
-  dflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
-  srflop: { minX: -24, minY: -24, maxX: 24, maxY: 40 },
-  tflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
-  jkflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
-  counter: { minX: -32, minY: -32, maxX: 32, maxY: 40 },
-  timer555: { minX: -32, minY: -40, maxX: 32, maxY: 40 },
-  adc: { minX: -32, minY: -32, maxX: 32, maxY: 40 },
-  dac: { minX: -32, minY: -40, maxX: 32, maxY: 40 },
-  sevenSeg: { minX: -28, minY: -40, maxX: 28, maxY: 48 },
-  sampleHold: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
-  modulator: { minX: -24, minY: -32, maxX: 24, maxY: 32 },
+  // The gate's body grows with its input count; this is the largest it gets
+  // (five inputs), so hit-testing and label clearance never under-cover it.
+  // `minX` is the XOR's outer arc, `maxX` the nose tip plus an inversion bubble.
+  digitalGate: { minX: -32, minY: -40, maxX: 31, maxY: 40 },
+  // Flip-flops: shared ±24 × ±36 body plus the Q̅ inversion bubble at x = 27.
+  dflop: { minX: -24, minY: -36, maxX: 30, maxY: 36 },
+  srflop: { minX: -24, minY: -36, maxX: 30, maxY: 36 },
+  tflop: { minX: -24, minY: -36, maxX: 30, maxY: 36 },
+  jkflop: { minX: -24, minY: -36, maxX: 30, maxY: 36 },
+  counter: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
+  timer555: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
+  adc: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
+  dac: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
+  sevenSeg: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
+  sampleHold: { minX: -24, minY: -36, maxX: 24, maxY: 36 },
+  modulator: { minX: -24, minY: -36, maxX: 24, maxY: 36 },
   vcvs: { minX: -24, minY: -22, maxX: 24, maxY: 22 },
   vccs: { minX: -24, minY: -22, maxX: 24, maxY: 22 },
   cccs: { minX: -24, minY: -22, maxX: 24, maxY: 22 },
@@ -228,7 +715,9 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   potentiometer: { minX: -25, minY: -18, maxX: 25, maxY: 10 },
   bulb: { minX: -14, minY: -14, maxX: 14, maxY: 14 },
   switch: { minX: -18, minY: -20, maxX: 18, maxY: 20 },
-  pushButton: { minX: -14, minY: -18, maxX: 14, maxY: 14 },
+  // The plate spans ±18 and the plunger reaches y = -22; the old ±14 × -18
+  // box did not contain either, so a button's label could land on its stem.
+  pushButton: { minX: -18, minY: -22, maxX: 18, maxY: 3 },
   spdt: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   relay: { minX: -18, minY: -20, maxX: 18, maxY: 22 },
   motor: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
@@ -257,18 +746,18 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   photodiode: { halfW: 18, halfH: 22 },
   opamp: { halfW: 32, halfH: 34 },
   comparator: { halfW: 32, halfH: 34 },
-  digitalGate: { halfW: 28, halfH: 40 },
-  dflop: { halfW: 26, halfH: 42 },
-  srflop: { halfW: 26, halfH: 34 },
-  tflop: { halfW: 26, halfH: 42 },
-  jkflop: { halfW: 26, halfH: 42 },
-  counter: { halfW: 34, halfH: 42 },
-  timer555: { halfW: 34, halfH: 42 },
-  adc: { halfW: 34, halfH: 42 },
-  dac: { halfW: 34, halfH: 46 },
-  sevenSeg: { halfW: 32, halfH: 52 },
-  sampleHold: { halfW: 26, halfH: 42 },
-  modulator: { halfW: 26, halfH: 34 },
+  digitalGate: { halfW: 32, halfH: 40 },
+  dflop: { halfW: 30, halfH: 38 },
+  srflop: { halfW: 30, halfH: 38 },
+  tflop: { halfW: 30, halfH: 38 },
+  jkflop: { halfW: 30, halfH: 38 },
+  counter: { halfW: 34, halfH: 38 },
+  timer555: { halfW: 34, halfH: 38 },
+  adc: { halfW: 34, halfH: 38 },
+  dac: { halfW: 34, halfH: 38 },
+  sevenSeg: { halfW: 34, halfH: 38 },
+  sampleHold: { halfW: 26, halfH: 38 },
+  modulator: { halfW: 26, halfH: 38 },
   vcvs: { halfW: 26, halfH: 24 },
   vccs: { halfW: 26, halfH: 24 },
   cccs: { halfW: 26, halfH: 24 },
@@ -283,7 +772,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   potentiometer: { halfW: 27, halfH: 19 },
   bulb: { halfW: 16, halfH: 16 },
   switch: { halfW: 14, halfH: 20 },
-  pushButton: { halfW: 14, halfH: 18 },
+  pushButton: { halfW: 18, halfH: 22 },
   spdt: { halfW: 16, halfH: 22 },
   relay: { halfW: 16, halfH: 22 },
   motor: { halfW: 16, halfH: 16 },
@@ -303,10 +792,36 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
  *  - vertical source parts:        pins at (0, -SOURCE_PIN_Y) and (0, SOURCE_PIN_Y)
  *  - ground:                       single pin at (0, 0)
  *
- * Optional `value` lets a DC `vsource`/`isource` whose value is an explicit
- * SINE(...) draw the AC sine glyph so a waveform change matches the body.
+ * `value` drives the drawing wherever the part's value changes what it *is*:
+ * a DC source whose value is an explicit SINE(...) gets the AC glyph, a logic
+ * gate draws the function and the input count its value asks for, and a
+ * switch / push button / SPDT draws its contact where the value says it sits.
+ *
+ * `rotation` / `mirrored` are only needed by parts that carry text: the wrapper
+ * `<g>` rotates the whole symbol, so a caption has to be told how far to turn
+ * back. Everything else ignores them, and a preview that passes neither gets
+ * the upright drawing it wants.
  */
-export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: string }) {
+export function ComponentSymbol({
+  kind,
+  value,
+  rotation = 0,
+  mirrored = false,
+}: {
+  kind: ComponentKind;
+  value?: string;
+  rotation?: Rotation;
+  mirrored?: boolean;
+}) {
+  return (
+    <>
+      {symbolArtwork(kind, value)}
+      <SymbolPinLabels kind={kind} rotation={rotation} mirrored={mirrored} />
+    </>
+  );
+}
+
+function symbolArtwork(kind: ComponentKind, value?: string) {
   const r = SOURCE_CIRCLE_R;
   const pin = SOURCE_PIN_Y;
   switch (kind) {
@@ -499,191 +1014,123 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
       );
 
     case "digitalGate":
-      return (
-        <>
-          {/* Rounded-nose gate body (LTspice-style AND silhouette); the value
-              text (and/or/xor/inv/…) names the function next to the symbol. */}
-          <path d="M -24 -38 L 2 -38 A 38 38 0 0 1 2 38 L -24 38 Z" />
-          {/* input leads on the ±16 grid rows */}
-          <line x1={-32} y1={-32} x2={-24} y2={-32} />
-          <line x1={-32} y1={-16} x2={-24} y2={-16} />
-          <line x1={-32} y1={0} x2={-24} y2={0} />
-          <line x1={-32} y1={16} x2={-24} y2={16} />
-          <line x1={-32} y1={32} x2={-24} y2={32} />
-          {/* q / qbar output leads (qbar gets the inversion bubble) */}
-          <line x1={26} y1={-16} x2={32} y2={-16} />
-          <circle cx={24} cy={16} r={3} />
-          <line x1={27} y1={16} x2={32} y2={16} />
-          {/* com reference drops from the body floor */}
-          <line x1={0} y1={38} x2={0} y2={48} />
-        </>
-      );
+      return <DigitalGateArtwork value={value} />;
 
     case "dflop":
       return (
         <>
-          <rect x={-24} y={-40} width={48} height={80} rx={2} />
-          {/* D / CLK leads; CLK gets the edge-trigger wedge */}
-          <line x1={-32} y1={-16} x2={-24} y2={-16} />
-          <line x1={-32} y1={16} x2={-24} y2={16} />
-          <path d="M -24 10 L -16 16 L -24 22" fill="none" />
-          {/* PRE (top) / CLR (bottom) */}
-          <line x1={0} y1={-48} x2={0} y2={-40} />
-          <line x1={0} y1={40} x2={0} y2={48} />
-          {/* Q / Q̅ (bubble) */}
-          <line x1={24} y1={-16} x2={32} y2={-16} />
-          <circle cx={27} cy={16} r={3} />
-          <line x1={30} y1={16} x2={32} y2={16} />
-          {/* com */}
-          <line x1={-32} y1={48} x2={-24} y2={40} />
+          <FlopBody
+            inputs={[-32, -16, 0, 16]}
+            outputs={[-16]}
+            reference={32}
+            clockRow={0}
+          />
           {/* D-flop glyph */}
-          <path d="M -8 -6 H 0 A 6 6 0 0 1 0 6 H -8 Z" fill="none" />
+          <path d="M -5 -6 H 0 A 6 6 0 0 1 0 6 H -5 Z" />
         </>
       );
 
     case "srflop":
       return (
         <>
-          <rect x={-24} y={-24} width={48} height={56} rx={2} />
-          <line x1={-32} y1={-16} x2={-24} y2={-16} />
-          <line x1={-32} y1={16} x2={-24} y2={16} />
-          <line x1={24} y1={-16} x2={32} y2={-16} />
-          <circle cx={27} cy={16} r={3} />
-          <line x1={30} y1={16} x2={32} y2={16} />
-          <line x1={-32} y1={48} x2={-24} y2={32} />
+          <FlopBody inputs={[-16, 16]} outputs={[-16]} reference={32} />
           {/* SR glyph: crossed set/reset hint */}
-          <path d="M -6 -4 L 6 4 M -6 4 L 6 -4" fill="none" />
+          <path d="M -5 -6 L 5 6 M -5 6 L 5 -6" />
         </>
       );
 
     case "tflop":
       return (
         <>
-          <rect x={-24} y={-40} width={48} height={80} rx={2} />
-          <line x1={-32} y1={-16} x2={-24} y2={-16} />
-          <line x1={-32} y1={16} x2={-24} y2={16} />
-          <path d="M -24 10 L -16 16 L -24 22" fill="none" />
-          <line x1={0} y1={-48} x2={0} y2={-40} />
-          <line x1={0} y1={40} x2={0} y2={48} />
-          <line x1={24} y1={-16} x2={32} y2={-16} />
-          <circle cx={27} cy={16} r={3} />
-          <line x1={30} y1={16} x2={32} y2={16} />
-          <line x1={-32} y1={48} x2={-24} y2={40} />
+          <FlopBody
+            inputs={[-32, -16, 0, 16]}
+            outputs={[-16]}
+            reference={32}
+            clockRow={0}
+          />
           {/* T glyph */}
-          <path d="M -6 -6 H 6 M 0 -6 V 6" fill="none" />
+          <path d="M -5 -6 H 5 M 0 -6 V 6" />
         </>
       );
 
     case "jkflop":
       return (
         <>
-          <rect x={-24} y={-40} width={48} height={80} rx={2} />
-          <line x1={-32} y1={-24} x2={-24} y2={-24} />
-          <line x1={-32} y1={0} x2={-24} y2={0} />
-          <line x1={-32} y1={24} x2={-24} y2={24} />
-          <path d="M -24 18 L -16 24 L -24 30" fill="none" />
-          <line x1={0} y1={-48} x2={0} y2={-40} />
-          <line x1={0} y1={40} x2={0} y2={48} />
-          <line x1={24} y1={-16} x2={32} y2={-16} />
-          <circle cx={27} cy={16} r={3} />
-          <line x1={30} y1={16} x2={32} y2={16} />
-          <line x1={-32} y1={48} x2={-24} y2={40} />
+          <FlopBody
+            inputs={[-32, -16, 0, 16, 32]}
+            outputs={[-16]}
+            reference={32}
+            clockRow={16}
+          />
           {/* JK glyph */}
-          <path d="M -8 -8 V 8 M -8 0 L 0 8 M 4 -8 V 8 M 4 0 L 10 -8 M 4 0 L 10 8" fill="none" />
+          <path d="M -5 -6 V 6 M -5 0 L 0 6 M 3 -6 V 6 M 3 0 L 8 -6 M 3 0 L 8 6" />
         </>
       );
 
     case "counter":
       return (
         <>
-          <rect x={-32} y={-32} width={64} height={72} rx={2} />
-          <line x1={-40} y1={-16} x2={-32} y2={-16} />
-          <line x1={-40} y1={16} x2={-32} y2={16} />
-          <path d="M -32 -22 L -24 -16 L -32 -10" fill="none" />
-          <line x1={32} y1={-24} x2={40} y2={-24} />
-          <line x1={32} y1={-8} x2={40} y2={-8} />
-          <line x1={32} y1={8} x2={40} y2={8} />
-          <line x1={32} y1={24} x2={40} y2={24} />
-          <line x1={0} y1={40} x2={0} y2={48} />
+          <ChipBody />
+          <ChipLeads rows={[-16, 16, 32]} side={-1} />
+          <path d="M -32 -22 L -24 -16 L -32 -10" />
+          <ChipLeads rows={[-24, -8, 8, 24]} side={1} />
           {/* binary stair glyph */}
-          <path d="M -14 20 H -6 V 12 H 2 V 4 H 10 V -4" fill="none" />
+          <path d="M -10 8 H -4 V 2 H 2 V -4 H 8 V -10" />
         </>
       );
 
     case "timer555":
       return (
         <>
-          <rect x={-32} y={-40} width={64} height={80} rx={2} />
-          <line x1={-40} y1={-32} x2={-32} y2={-32} />
-          <line x1={-40} y1={-16} x2={-32} y2={-16} />
-          <line x1={-40} y1={16} x2={-32} y2={16} />
-          <line x1={-40} y1={32} x2={-32} y2={32} />
-          <line x1={32} y1={-32} x2={40} y2={-32} />
-          <line x1={32} y1={0} x2={40} y2={0} />
-          <line x1={32} y1={16} x2={40} y2={16} />
-          <line x1={32} y1={32} x2={40} y2={32} />
-          <text x={0} y={4} textAnchor="middle" fontSize={11} fill="currentColor" stroke="none">
-            555
-          </text>
+          <ChipBody />
+          <ChipLeads rows={[-32, -16, 16, 32]} side={-1} />
+          <ChipLeads rows={[-32, 0, 16, 32]} side={1} />
         </>
       );
 
     case "adc":
       return (
         <>
-          <rect x={-32} y={-32} width={64} height={72} rx={2} />
-          <line x1={-40} y1={-16} x2={-32} y2={-16} />
-          <line x1={-40} y1={16} x2={-32} y2={16} />
-          <line x1={32} y1={-24} x2={40} y2={-24} />
-          <line x1={32} y1={-8} x2={40} y2={-8} />
-          <line x1={32} y1={8} x2={40} y2={8} />
-          <line x1={32} y1={24} x2={40} y2={24} />
-          <line x1={0} y1={40} x2={0} y2={48} />
-          <path d="M -16 0 L -4 -10 L -4 10 Z" fill="none" />
-          <path d="M 4 -8 H 16 M 4 0 H 12 M 4 8 H 16" fill="none" />
+          <ChipBody />
+          <ChipLeads rows={[-16, 16, 32]} side={-1} />
+          <ChipLeads rows={[-24, -8, 8, 24]} side={1} />
+          {/* analog ramp into a bit field */}
+          <path d="M -10 6 L -2 -6 L -2 6 Z" />
+          <path d="M 2 -6 H 10 M 2 0 H 7 M 2 6 H 10" />
         </>
       );
 
     case "dac":
       return (
         <>
-          <rect x={-32} y={-40} width={64} height={80} rx={2} />
-          <line x1={-40} y1={-24} x2={-32} y2={-24} />
-          <line x1={-40} y1={-8} x2={-32} y2={-8} />
-          <line x1={-40} y1={8} x2={-32} y2={8} />
-          <line x1={-40} y1={24} x2={-32} y2={24} />
-          <line x1={-40} y1={40} x2={-32} y2={40} />
-          <line x1={32} y1={0} x2={40} y2={0} />
-          <line x1={0} y1={40} x2={0} y2={48} />
-          <path d="M -14 -8 H -4 M -14 0 H -8 M -14 8 H -2" fill="none" />
-          <path d="M 4 -10 L 16 0 L 4 10 Z" fill="none" />
+          <ChipBody />
+          <ChipLeads rows={[-24, -8, 8, 24]} side={-1} />
+          <ChipLeads rows={[-32, 0, 32]} side={1} />
+          {/* bit field into an analog ramp */}
+          <path d="M -10 -6 H -2 M -10 0 H -5 M -10 6 H -2" />
+          <path d="M 2 -6 L 10 0 L 2 6 Z" />
         </>
       );
 
     case "sevenSeg":
       return (
         <>
-          {/* Clear "8." glyph — raw segment pins, no digit decode. */}
-          <rect x={-28} y={-40} width={56} height={88} rx={2} />
-          <line x1={-8} y1={-48} x2={-8} y2={-40} />
-          <line x1={32} y1={-24} x2={32} y2={-24} />
-          <line x1={28} y1={-24} x2={32} y2={-24} />
-          <line x1={28} y1={24} x2={32} y2={24} />
-          <line x1={-8} y1={40} x2={-8} y2={48} />
-          <line x1={-32} y1={24} x2={-28} y2={24} />
-          <line x1={-32} y1={-24} x2={-28} y2={-24} />
-          <line x1={-40} y1={0} x2={-28} y2={0} />
-          <line x1={28} y1={40} x2={40} y2={40} />
-          <line x1={0} y1={48} x2={0} y2={56} />
-          {/* segment "8" */}
-          <path d="M -12 -28 H 12" fill="none" strokeWidth={2.5} />
-          <path d="M 14 -26 V -4" fill="none" strokeWidth={2.5} />
-          <path d="M 14 4 V 26" fill="none" strokeWidth={2.5} />
-          <path d="M -12 28 H 12" fill="none" strokeWidth={2.5} />
-          <path d="M -14 4 V 26" fill="none" strokeWidth={2.5} />
-          <path d="M -14 -26 V -4" fill="none" strokeWidth={2.5} />
-          <path d="M -12 0 H 12" fill="none" strokeWidth={2.5} />
-          <circle cx={18} cy={30} r={2.5} fill="currentColor" stroke="none" />
+          {/* Raw segment pins, no digit decode - so the digit is a legend for
+              which lead lights which bar, and every lead is named beside it.
+              (The old drawing also carried a zero-length <line> at (32,-24),
+              a degenerate element that painted nothing.) */}
+          <ChipBody />
+          <ChipLeads rows={[-32, -16, 0, 16, 32]} side={-1} />
+          <ChipLeads rows={[-32, -16, 0, 16]} side={1} />
+          {/* segment "8." — narrow, so the pin names own the two side columns */}
+          <path d="M -6 -22 H 6" strokeWidth={2.5} />
+          <path d="M 8 -20 V -3" strokeWidth={2.5} />
+          <path d="M 8 3 V 20" strokeWidth={2.5} />
+          <path d="M -6 22 H 6" strokeWidth={2.5} />
+          <path d="M -8 3 V 20" strokeWidth={2.5} />
+          <path d="M -8 -20 V -3" strokeWidth={2.5} />
+          <path d="M -6 0 H 6" strokeWidth={2.5} />
+          <circle className="symbol-arrow" cx={12} cy={22} r={2} />
         </>
       );
 
@@ -692,19 +1139,12 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
         <>
           {/* Box with a pointed right nose toward the analog output (echoes
               LTspice's SpecialFunctions\sample silhouette). */}
-          <path d="M -24 -40 L 16 -40 L 24 0 L 16 40 L -24 40 Z" />
-          {/* in+ / in- / CLK / S/H leads; CLK gets the edge-trigger wedge */}
-          <line x1={-32} y1={-32} x2={-24} y2={-32} />
-          <line x1={-32} y1={-16} x2={-24} y2={-16} />
-          <line x1={-32} y1={0} x2={-24} y2={0} />
-          <path d="M -24 -6 L -16 0 L -24 6" fill="none" />
-          <line x1={-32} y1={16} x2={-24} y2={16} />
+          <NoseBody />
+          {/* in+ / in- / CLK / S/H / com leads; CLK gets the edge-trigger wedge */}
+          <ChipLeads rows={[-32, -16, 0, 16, 32]} side={-1} pinX={NOSE_PIN_X} bodyX={NOSE_HALF_W} />
+          <path d="M -24 -5 L -18 0 L -24 5" />
           {/* analog output from the nose */}
-          <line x1={24} y1={0} x2={32} y2={0} />
-          {/* com drops from the body floor */}
-          <line x1={0} y1={40} x2={0} y2={48} />
-          {/* staircase glyph: a held sample */}
-          <path d="M -12 26 H -4 V 18 H 4 V 26 H 12" fill="none" />
+          <line x1={NOSE_HALF_W} y1={0} x2={NOSE_PIN_X} y2={0} />
         </>
       );
 
@@ -713,14 +1153,11 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
         <>
           {/* Box with a pointed right nose toward the sine output (echoes the
               sampleHold silhouette; the wave glyph marks it as a VCO). */}
-          <path d="M -24 -32 L 16 -32 L 24 0 L 16 32 L -24 32 Z" />
-          {/* FM / AM control leads */}
-          <line x1={-32} y1={-16} x2={-24} y2={-16} />
-          <line x1={-32} y1={16} x2={-24} y2={16} />
+          <NoseBody />
+          {/* FM / AM control leads plus the com reference */}
+          <ChipLeads rows={[-16, 16, 32]} side={-1} pinX={NOSE_PIN_X} bodyX={NOSE_HALF_W} />
           {/* sine output from the nose */}
-          <line x1={24} y1={0} x2={32} y2={0} />
-          {/* com drops from the body floor */}
-          <line x1={0} y1={32} x2={0} y2={48} />
+          <line x1={NOSE_HALF_W} y1={0} x2={NOSE_PIN_X} y2={0} />
           {/* sine-wave glyph: modulated carrier */}
           <CenteredSineGlyph />
         </>
@@ -898,35 +1335,66 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
         </>
       );
 
-    case "switch":
+    /* ── Contacts draw where they actually sit (mission item 6) ──────────────
+     *
+     * `schematic/actuation.ts` made these parts operable on the simulator
+     * canvas, but the drawing never moved: a switch you had just closed still
+     * showed an open blade, which is worse than a dead click because it says
+     * the circuit is one thing while the solver runs another. The contact
+     * state already lives in the value (`kindGroups.isStaticContactClosed` /
+     * `isSpdtThrowToNo` - the same readers the netlist uses, so the drawing
+     * cannot disagree with the deck), and the moving part pivots on the same
+     * fixed contacts either way.
+     *
+     * A closed contact is drawn as a genuinely continuous conductor from one
+     * terminal to the other, not merely as a blade nudged closer: that is what
+     * makes "closed" verifiable rather than a matter of a few units of slope.
+     */
+    case "switch": {
+      const closed = isStaticContactClosed(value ?? "");
       return (
         <>
           <line x1={-32} y1={0} x2={-12} y2={0} />
           <line x1={12} y1={0} x2={32} y2={0} />
           <circle cx={-12} cy={0} r={3} />
           <circle cx={12} cy={0} r={3} />
-          <line x1={-10} y1={-3} x2={11} y2={-18} />
+          {closed ? (
+            <line data-contact="closed" x1={-12} y1={0} x2={12} y2={0} />
+          ) : (
+            <line data-contact="open" x1={-12} y1={0} x2={9} y2={-15} />
+          )}
+          {/* NC+/NC− control pair (unwired → the static state above holds) */}
           <line x1={-16} y1={32} x2={-16} y2={16} />
           <line x1={16} y1={32} x2={16} y2={16} />
           <line x1={-16} y1={16} x2={16} y2={16} />
         </>
       );
+    }
 
-    case "pushButton":
+    case "pushButton": {
+      const closed = isStaticContactClosed(value ?? "");
+      // The plate rests clear of the contact faces and lands on them when
+      // pressed; the plunger travels with it, so the drawing shows the stroke.
+      const plate = closed ? -8 : -14;
       return (
         <>
           <line x1={-32} y1={0} x2={-14} y2={0} />
           <line x1={14} y1={0} x2={32} y2={0} />
           <circle cx={-14} cy={0} r={3} />
           <circle cx={14} cy={0} r={3} />
-          <line x1={-14} y1={-3} x2={-14} y2={-14} />
-          <line x1={14} y1={-3} x2={14} y2={-14} />
-          <line x1={-18} y1={-14} x2={18} y2={-14} />
-          <line x1={0} y1={-14} x2={0} y2={-22} />
+          <line x1={-14} y1={0} x2={-14} y2={-8} />
+          <line x1={14} y1={0} x2={14} y2={-8} />
+          <path
+            data-contact={closed ? "closed" : "open"}
+            d={`M -18 ${plate} L -14 ${plate} L 14 ${plate} L 18 ${plate}`}
+          />
+          <line x1={0} y1={plate} x2={0} y2={-22} />
         </>
       );
+    }
 
-    case "spdt":
+    case "spdt": {
+      const toNo = isSpdtThrowToNo(value ?? "");
       return (
         <>
           <line x1={-32} y1={0} x2={-12} y2={0} />
@@ -935,9 +1403,16 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           <circle cx={12} cy={16} r={3} />
           <line x1={12} y1={-16} x2={32} y2={-16} />
           <line x1={12} y1={16} x2={32} y2={16} />
-          <line x1={-10} y1={-2} x2={10} y2={-14} />
+          <line
+            data-contact={toNo ? "no" : "nc"}
+            x1={-12}
+            y1={0}
+            x2={12}
+            y2={toNo ? -16 : 16}
+          />
         </>
       );
+    }
 
     case "relay":
       return (

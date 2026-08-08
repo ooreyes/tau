@@ -43,6 +43,8 @@ import { Palette } from "./Palette";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import { inspectOpampModel, opampIdentity } from "../engine/opampModel";
 import { componentModelOptions, isModelComponentKind } from "../engine/componentModelCatalog";
+import { hasLtspiceProvenance, idealJunctionModel, type IdealJunctionModel } from "../engine/idealModels";
+import { definedModelNames } from "../engine/modelDirectives";
 import {
   encodeSubcircuitInstanceValue,
   parseSubcircuitInstanceValue,
@@ -1473,6 +1475,44 @@ export function BottomPanel({
   );
 }
 
+/**
+ * The ideal model this part will really run, reproducing the deck's own
+ * precedence: a `.model` this schematic defines under the same name beats the
+ * ideal part, because the user named a card (`spiceNetlist.ts`, the
+ * diode/led/zener case, which reads `definedModelNames` from the directives).
+ * Returns null whenever the part takes the real path, so the panel can never
+ * call something ideal that the engine will not run as ideal.
+ */
+function placedIdealJunction(
+  component: SchematicComponent,
+  directives: readonly string[],
+): IdealJunctionModel | null {
+  const requested = component.value.trim().split(/\s+/)[0] ?? "";
+  if (requested && definedModelNames(directives).has(requested.toLowerCase())) return null;
+  return idealJunctionModel(component);
+}
+
+/** The kinds `engine/idealModels.ts` can make ideal (its `GENERIC_VALUES`). */
+const JUNCTION_KINDS: ReadonlySet<string> = new Set(["diode", "led", "zener"]);
+
+/** What the generic option really does for this part, said without lying about
+ *  which of the two device models the deck will emit. */
+function junctionModelSummary(
+  component: SchematicComponent,
+  ideal: IdealJunctionModel | null,
+): string {
+  if (ideal) {
+    const breakdown = ideal.breakdownVolts ? `, ${ideal.breakdownVolts} V reverse breakdown` : "";
+    return `Ideal model · a fixed ${ideal.forwardVolts} V forward drop${breakdown}, no junction capacitance and no reverse recovery.`
+      + " A part placed in Tau is the textbook device; one imported from an LTspice schematic keeps its real model.";
+  }
+  if (hasLtspiceProvenance(component)) {
+    return "Generic starter · Tau's own Shockley junction, whose forward drop moves with current."
+      + " This part came from an LTspice schematic, so it keeps that real model rather than Tau's ideal one.";
+  }
+  return "Defined by this schematic · a .model of this name is declared here, so Tau runs that card rather than its ideal part.";
+}
+
 // Exported for component tests only (same pattern as the plot components).
 export function ComponentInspector({
   selected,
@@ -1524,6 +1564,13 @@ export function ComponentInspector({
   const selectedSubcircuit = subcircuitInstance
     ? availableSubcircuits.find((option) => option.name.toLowerCase() === subcircuitInstance.name.toLowerCase())
     : undefined;
+  // Ideal-by-default is invisible otherwise: the shared model dropdown reads
+  // "Tau generic D" for a placed part and for an imported one, and only the
+  // first of those is ideal. `componentModelCatalog`'s label is deliberately
+  // NOT changed - it is honest for both - so the panel states the difference
+  // beside it instead.
+  const idealJunction = selected ? placedIdealJunction(selected, directives) : null;
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const beginParamChange = (key: string) => {
     if (!selected) return;
@@ -1559,6 +1606,126 @@ export function ComponentInspector({
   const opampStatus = selected?.kind === "opamp"
     ? inspectOpampModel(selected, directives, modelLibraries.map((library) => library.text))
     : null;
+
+  // The model chooser, its per-field knobs and the library action are one set
+  // of controls that live in two places: inline for a part whose real model is
+  // the point, and behind Advanced for a part that is ideal until you go
+  // looking. Built once so the two placements cannot drift apart.
+  const modelChooserField = selected && modelKind ? (
+    <label className="property-field">
+      <span>Simulation model</span>
+      <Select
+        value={(selectedModelOption?.name ?? selectedModelName) || undefined}
+        onOpenChange={(open) => {
+          if (open) editKeyRef.current = null;
+        }}
+        onValueChange={(nextModel) => {
+          beginParamChange("model");
+          if (modelKind === "nmos" || modelKind === "pmos") {
+            const choice = modelOptions.find((option) => option.name === nextModel);
+            const next: Record<string, string> = {
+              ...decodeParams(modelKind, selected.value.trim() || entry?.defaultValue || ""),
+              model: nextModel,
+            };
+            // KP/VTO belong to Tau's editable generic Level-1 model,
+            // never to an exact vendor model. A VDMOS also has no W/L
+            // instance geometry in ngspice. Drop stale, inapplicable
+            // values at the model transition instead of emitting a
+            // plausible-looking card the selected model ignores.
+            if (choice?.source !== "generic") {
+              next.kp = "";
+              next.vto = "";
+            }
+            if (choice?.modelType === "vdmos") {
+              next.w = "";
+              next.l = "";
+            }
+            setValue(selected.id, encodeParams(modelKind, next));
+          } else {
+            setValue(selected.id, nextModel);
+          }
+        }}
+      >
+        <SelectTrigger
+          size="sm"
+          className="property-select mono-num w-full max-w-[168px]"
+          aria-label="Simulation model"
+        >
+          <SelectValue placeholder="Model" />
+        </SelectTrigger>
+        <SelectContent>
+          {!selectedModelOption && selectedModelName && (
+            <SelectItem value={selectedModelName}>
+              {/* A marking the ideal path understands (a zener's `12V`) names
+                  no library part, but it is not missing - the deck runs it. */}
+              {selectedModelName} · {idealJunction ? "Tau ideal part" : "missing or incompatible"}
+            </SelectItem>
+          )}
+          {modelOptions.map((option) => (
+            <SelectItem
+              key={`${option.source}:${option.sourceLabel}:${option.name}`}
+              value={option.name}
+            >
+              {option.name} · {option.sourceLabel}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </label>
+  ) : null;
+
+  const modelParamFields = modelKind ? visibleFields.filter((field) => {
+    if (field.key === "model") return false;
+    if (selectedModelOption?.modelType === "vdmos") return false;
+    if (selectedModelOption?.source !== "generic" && (field.key === "kp" || field.key === "vto")) return false;
+    return true;
+  }).map((field) => (
+    <label key={field.key} className="property-field">
+      <span>{field.label}</span>
+      {field.unit ? (
+        <EngineeringInput
+          label={field.label}
+          value={field.value}
+          unit={field.unit}
+          onBeginChange={() => beginParamChange(field.key)}
+          onValueChange={(value) => updateParam(field.key, value)}
+        />
+      ) : (
+        <input
+          className="mono-num"
+          value={field.value}
+          aria-label={field.label}
+          spellCheck={false}
+          onFocus={() => {
+            editKeyRef.current = null;
+          }}
+          onChange={(event) => {
+            beginParamChange(field.key);
+            updateParam(field.key, event.currentTarget.value);
+          }}
+        />
+      )}
+    </label>
+  )) : null;
+
+  const attachLibraryAction = onOpenModelLibraries
+    && (!selectedModelOption || selectedModelOption.source === "generic") ? (
+      <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
+        Attach Model Library
+      </Button>
+    ) : null;
+
+  // Ideal is tested FIRST: a zener marked `12V` names no library part, so the
+  // missing-model branch would otherwise report a part the deck runs happily.
+  const modelStatusHint = !selected || !modelKind ? "" : idealJunction
+    ? junctionModelSummary(selected, idealJunction)
+    : !selectedModelOption
+      ? `Needs a model · ${selectedModelName || "No model"} isn't available. Run won't substitute a generic ${modelKind.toUpperCase()} — attach the library or choose Generic.`
+      : selectedModelOption.source !== "generic"
+        ? `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`
+        : JUNCTION_KINDS.has(modelKind)
+          ? junctionModelSummary(selected, null)
+          : `Generic starter · fine for topology checks; not a manufacturer part.`;
 
   return (
     <div className="component-inspector">
@@ -1704,111 +1871,49 @@ export function ComponentInspector({
               )}
             </>
           ) : modelKind ? (
-            <>
-              <label className="property-field">
-                <span>Simulation model</span>
-                <Select
-                  value={(selectedModelOption?.name ?? selectedModelName) || undefined}
-                  onOpenChange={(open) => {
-                    if (open) editKeyRef.current = null;
-                  }}
-                  onValueChange={(nextModel) => {
-                    beginParamChange("model");
-                    if (modelKind === "nmos" || modelKind === "pmos") {
-                      const choice = modelOptions.find((option) => option.name === nextModel);
-                      const next: Record<string, string> = {
-                        ...decodeParams(modelKind, selected.value.trim() || entry?.defaultValue || ""),
-                        model: nextModel,
-                      };
-                      // KP/VTO belong to Tau's editable generic Level-1 model,
-                      // never to an exact vendor model. A VDMOS also has no W/L
-                      // instance geometry in ngspice. Drop stale, inapplicable
-                      // values at the model transition instead of emitting a
-                      // plausible-looking card the selected model ignores.
-                      if (choice?.source !== "generic") {
-                        next.kp = "";
-                        next.vto = "";
-                      }
-                      if (choice?.modelType === "vdmos") {
-                        next.w = "";
-                        next.l = "";
-                      }
-                      setValue(selected.id, encodeParams(modelKind, next));
-                    } else {
-                      setValue(selected.id, nextModel);
-                    }
-                  }}
-                >
-                  <SelectTrigger
-                    size="sm"
-                    className="property-select mono-num w-full max-w-[168px]"
-                    aria-label="Simulation model"
+            idealJunction ? (
+              // Ideal by default, real behind Advanced: the part already
+              // behaves as the textbook device, so the headline states that in
+              // numbers and the controls that take it off the ideal path are
+              // the disclosed ones. A part that is NOT ideal keeps them inline
+              // below - hiding the only control that describes it would be the
+              // opposite of this rule.
+              <>
+                <p className="property-hint" role="status">{modelStatusHint}</p>
+                <div className="advanced-settings property-advanced">
+                  <button
+                    type="button"
+                    className="disclosure-header"
+                    onClick={() => setAdvancedOpen((open) => !open)}
+                    aria-expanded={advancedOpen}
+                    aria-label="Toggle advanced settings"
                   >
-                    <SelectValue placeholder="Model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {!selectedModelOption && selectedModelName && (
-                      <SelectItem value={selectedModelName}>
-                        {selectedModelName} · missing or incompatible
-                      </SelectItem>
-                    )}
-                    {modelOptions.map((option) => (
-                      <SelectItem
-                        key={`${option.source}:${option.sourceLabel}:${option.name}`}
-                        value={option.name}
-                      >
-                        {option.name} · {option.sourceLabel}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              <p className="property-hint" role="status">
-                {!selectedModelOption
-                  ? `Needs a model · ${selectedModelName || "No model"} isn't available. Run won't substitute a generic ${modelKind.toUpperCase()} — attach the library or choose Generic.`
-                  : selectedModelOption.source === "generic"
-                    ? `Generic starter · fine for topology checks; not a manufacturer part.`
-                    : `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`}
-              </p>
-              {visibleFields.filter((field) => {
-                if (field.key === "model") return false;
-                if (selectedModelOption?.modelType === "vdmos") return false;
-                if (selectedModelOption?.source !== "generic" && (field.key === "kp" || field.key === "vto")) return false;
-                return true;
-              }).map((field) => (
-                <label key={field.key} className="property-field">
-                  <span>{field.label}</span>
-                  {field.unit ? (
-                    <EngineeringInput
-                      label={field.label}
-                      value={field.value}
-                      unit={field.unit}
-                      onBeginChange={() => beginParamChange(field.key)}
-                      onValueChange={(value) => updateParam(field.key, value)}
-                    />
-                  ) : (
-                    <input
-                      className="mono-num"
-                      value={field.value}
-                      aria-label={field.label}
-                      spellCheck={false}
-                      onFocus={() => {
-                        editKeyRef.current = null;
-                      }}
-                      onChange={(event) => {
-                        beginParamChange(field.key);
-                        updateParam(field.key, event.currentTarget.value);
-                      }}
-                    />
+                    <span className="disclosure-label">Advanced</span>
+                    <span className="disclosure-rule" aria-hidden="true" />
+                    <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
+                  </button>
+                  {advancedOpen && (
+                    <div className="advanced-body">
+                      <p className="property-hint">
+                        Naming a manufacturer part, or attaching a library that defines one,
+                        replaces the ideal device with its measured curve: the forward drop
+                        then moves with current and temperature.
+                      </p>
+                      {modelChooserField}
+                      {modelParamFields}
+                      {attachLibraryAction}
+                    </div>
                   )}
-                </label>
-              ))}
-              {onOpenModelLibraries && (!selectedModelOption || selectedModelOption.source === "generic") && (
-                <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
-                  Attach Model Library
-                </Button>
-              )}
-            </>
+                </div>
+              </>
+            ) : (
+              <>
+                {modelChooserField}
+                <p className="property-hint" role="status">{modelStatusHint}</p>
+                {modelParamFields}
+                {attachLibraryAction}
+              </>
+            )
           ) : selected.kind === "opamp" ? (
             <>
               {opamp?.mode === "vendor" ? (

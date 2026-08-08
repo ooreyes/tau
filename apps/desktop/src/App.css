@@ -6322,6 +6322,26 @@ button.bottom-panel-head:focus-visible {
   line-height: 1.4;
 }
 
+/* Advanced disclosure inside Properties. Same affordance as the plotter's
+   (.disclosure-header + .advanced-body), minus the 12px side gutter the plot
+   panel needs: the property grid's rows already sit flush to the rail edge, so
+   the gutter would step the revealed model row in from every row above it. */
+.property-grid .advanced-settings {
+  margin-top: var(--sp-2);
+  padding: 0;
+}
+
+.property-grid .advanced-body {
+  padding-top: 0;
+}
+
+/* The rows this reveals are .property-field, whose fixed --row-h and hairline
+   are what keeps the grid on one rhythm; the trailing hairline is dropped so
+   the disclosure closes as cleanly as the ungrouped grid does. */
+.property-grid .advanced-body > .property-field:last-child {
+  border-bottom: 0;
+}
+
 .property-parameter {
   min-width: 0;
 }
