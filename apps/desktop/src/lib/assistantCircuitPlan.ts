@@ -1089,6 +1089,13 @@ function alignConnectedPins(plan: DirectCircuitPlan, components: SchematicCompon
         for (let j = i + 1; j < endpoints.length; j += 1) {
           const left = endpoints[i];
           const right = endpoints[j];
+          // Two pins of the SAME part can never be brought together by moving
+          // that part: their offset is fixed by the symbol. Attempting it just
+          // translates the component, once per pass, until it is nowhere near
+          // the circuit - which is what a flip-flop with PRE, CLR and COM all
+          // on the ground net did, sliding 960 units off its column and
+          // shorting three signals together on the way.
+          if (left.ref === right.ref) continue;
           const dx = right.pin.x - left.pin.x;
           const dy = right.pin.y - left.pin.y;
           // Move the downstream (higher level) part toward the upstream pin.
