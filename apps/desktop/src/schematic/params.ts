@@ -166,7 +166,34 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   // names stay unavailable until a parsed library-to-symbol mapping can affect
   // the generated deck instead of being silently ignored.
   switch: { fields: [{ key: "state", label: "State (open/closed)", unit: "" }] },
-  pushButton: { fields: [{ key: "state", label: "State (open/pressed)", unit: "" }] },
+  // `state` stays the leading bare token because the solver reads the raw value
+  // with `isStaticContactClosed`, which tests the string's first word. Moving it
+  // behind a `state=` key would make every closed button read as open.
+  // `form` and `action` are omitted while they hold their defaults, so an
+  // untouched button is still spelled exactly "open" on disk.
+  pushButton: {
+    fields: [
+      { key: "state", label: "State", unit: "", kind: "choice", bare: true, fallback: "open",
+        choices: [{ value: "open", label: "Open" }, { value: "closed", label: "Closed" }] },
+      // Both fall back to unset rather than to their default word. An omitted
+      // `form` means "the state on disk is the rest state", which is what lets
+      // a button that has never been pressed describe itself; writing "no" into
+      // that slot would be indistinguishable from a real answer. An unset field
+      // encodes to nothing, so the catalog default is still spelled "open".
+      { key: "form", label: "Contact", unit: "", kind: "choice", fallback: "",
+        choices: [
+          { value: "no", label: "Normally open" },
+          { value: "nc", label: "Normally closed" },
+        ],
+        description: "Where the contact rests when nobody is pressing it." },
+      { key: "action", label: "Action", unit: "", kind: "choice", fallback: "",
+        choices: [
+          { value: "momentary", label: "Momentary" },
+          { value: "latching", label: "Latching" },
+        ],
+        description: "Momentary springs back on release; latching stays where it is clicked." },
+    ],
+  },
   spdt: { fields: [{ key: "throw", label: "Throw (no/nc)", unit: "" }] },
   photodiode: { fields: [{ key: "iph", label: "Photocurrent", unit: "A", kind: "number" }] },
   relay: { fields: [{ key: "coil", label: "Coil resistance", unit: "Ω", kind: "number" }] },
