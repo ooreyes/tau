@@ -218,6 +218,40 @@ describe("keyed values the panel does not model", () => {
   });
 });
 
+describe("potentiometer wiper", () => {
+  it("decodes a bare value to the resistance plus the default centred wiper", () => {
+    expect(decodeParams("potentiometer", "10k")).toEqual({ r: "10k", wiper: "0.5" });
+  });
+
+  it("decodes a Wiper= token alongside the resistance", () => {
+    expect(decodeParams("potentiometer", "10k Wiper=0.25")).toEqual({ r: "10k", wiper: "0.25" });
+  });
+
+  it("omits a centred wiper so an untouched default keeps the compact spelling", () => {
+    expect(encodeParams("potentiometer", { r: "10k", wiper: "0.5" })).toBe("10k");
+  });
+
+  it("emits the Wiper= token for an off-centre value", () => {
+    expect(encodeParams("potentiometer", { r: "4k7", wiper: "0.25" })).toBe("4k7 Wiper=0.25");
+  });
+
+  it("carries a token the panel does not model through an edit", () => {
+    const decoded = decodeParams("potentiometer", "10k Taper=log");
+    const edited = encodeParams("potentiometer", { ...decoded, wiper: "0.2" });
+    expect(edited).toContain("Taper=log");
+    expect(edited).toContain("Wiper=0.2");
+  });
+
+  // The netlist takes the resistance as the token that is not `Wiper=`, so the
+  // panel has to agree however the two were typed - otherwise the box would
+  // read 10k while the deck ran 4k7.
+  it("reads the resistance even when the wiper token was typed first", () => {
+    expect(decodeParams("potentiometer", "Wiper=0.8 4k7")).toEqual({ r: "4k7", wiper: "0.8" });
+    expect(encodeParams("potentiometer", decodeParams("potentiometer", "Wiper=0.8 4k7")))
+      .toBe("4k7 Wiper=0.8");
+  });
+});
+
 describe("kinds without a parameter schema", () => {
   it("decodes to nothing rather than inventing fields", () => {
     expect(paramFields("diode", "1N4148")).toEqual([]);

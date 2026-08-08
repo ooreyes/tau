@@ -42,9 +42,12 @@ codec defaults to `single` for a lone field and `keyed` otherwise, so the common
 case needs no `codec` at all. The four grammars:
 
 - `keyed` - `MODEL Key=value …`, the default and the one a new kind should want.
-  A `bare: true` field claims the leading token when it is not itself a
-  `Key=value`. Tokens no field claims are preserved under `EXTRA_PARAM_KEY` and
-  re-emitted, so editing one box never deletes syntax the panel does not model.
+  A `bare: true` field claims the first token that is not itself a `Key=value`,
+  wherever in the string it sits - it does not have to lead, because a value can
+  be hand-typed on the canvas or in a `.asc` and the panel must read it the same
+  way the netlist does. Tokens no field claims are preserved under
+  `EXTRA_PARAM_KEY` and re-emitted, so editing one box never deletes syntax the
+  panel does not model.
 - `positional` - ordered bare tokens; only for value strings already on disk and
   in `.asc` files (AC sources, vpulse, motor). `omittable` marks a leading field
   that may be absent, which is how a two-token AC source means "amplitude
@@ -56,7 +59,9 @@ case needs no `codec` at all. The four grammars:
 
 Per-field options: `token` (the `Name=` spelling, defaults to `key`), `fallback`
 (substituted when the stored value omits the field), `blank` (written when the
-user clears the box, if that differs from `fallback`), plus `kind`, `choices`,
+user clears the box, if that differs from `fallback`), `omitWhenFallback` (keyed
+only: drop the token while it still holds its default, which is how a centred
+potentiometer stays the bare `10k` already on disk), plus `kind`, `choices`,
 `min`, `max`, `advanced` and `description` for the editor. The `description`
 renders as a `.property-hint` under the field.
 
@@ -195,9 +200,10 @@ deck. What exists to build on:
 
 ### Netlist facts worth knowing
 
-- `potentiometer` emits two resistors at a **hardcoded 50 % split**
-  (`spiceNetlist.ts`); there is no wiper field anywhere in types, ASC I/O, or
-  the store. A wiper is a new encoded key **and** a netlist change.
+- `potentiometer` emits two resistors split at the wiper (item 2 half A). The
+  fraction rides in the value string as `Wiper=`, parsed by
+  `engine/potentiometerSpec.ts`; ASC I/O needs nothing, because the pot is a Tau
+  carrier kind whose whole value round-trips through `SYMATTR TauValue`.
 - `polarizedCapacitor` shares the `capacitor` case verbatim — polarity means
   nothing to the solver today.
 - `bulb` shares the `resistor` case verbatim — a filament that never heats.
@@ -285,6 +291,33 @@ properties that say what the polarity marking is for.
 
 **Done when:** a wiper sweep changes the divider output, and a reverse-biased
 polarized cap produces a named warning.
+
+The two halves are independent - one is a netlist parameter, the other inspects
+a finished result - so they land as two commits. Half A is done; the item stays
+open until half B lands.
+
+**Half A, the wiper - DONE 2026-08-08.** `engine/potentiometerSpec.ts` is the
+single parser, and `params.ts` gained the `Wiper=` key as a pure data edit, which
+is item 1 paying off. Three things worth knowing before half B or item 6:
+
+- **The 50 % constant lived in TWO places, not one.** The architecture notes
+  above named `spiceNetlist.ts`; `lib/assistantCircuitPlan.ts` lowers a
+  potentiometer into two resistors for assistant-generated circuits and had the
+  same `total / 2`. Both now go through `potentiometerLegs`. Grep for a constant
+  before assuming a netlist fact is single-sited.
+- **A bare `10k` still means a centred wiper**, and re-encodes to exactly `10k`.
+  That is a new `omitWhenFallback` field option on the keyed grammar: without it
+  the catalog default would re-encode to `10k Wiper=0.5`, which fails item 1's
+  identity test and would rewrite the value of every pot already on disk.
+- **Each leg is floored at one part per billion of the track**, so a wiper run
+  fully to either end cannot emit a zero-ohm branch. Verified on real ngspice:
+  the same divider at wiper 0 / 0.25 / 0.5 / 0.75 / 1 solves to 10 / 7.5 / 5 /
+  2.5 / ~0 V, extremes included.
+
+Half B remains: the reverse-bias check is a result-inspection path, so it
+attaches where `App.tsx` sets a transient or operating-point result rather than
+in the deck. Audit every consumer of that warning list first - `ShellPanels.tsx`
+spreads it, and a warning that becomes a blocker is trap 3 in `STATE.md`.
 
 ### 3. Redraw: bulb, potentiometer, opamp, comparator, transformer, ctTransformer
 Fix the "+"/"−" collision on every amplifier-derived symbol. Close the

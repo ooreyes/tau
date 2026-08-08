@@ -2,23 +2,128 @@
 
 **Status: DONE - 2026-08-08**
 
-Unit: **component-library item 1 - generic parameter codec.** The
-`decodeParams`/`encodeParams` dispatch ladders are replaced by one declarative
-grammar table, so giving a component kind a field set is now a data edit rather
-than an edit in three places that silently erases values when you miss one.
-Gates: typecheck green, full vitest suite green, design-system-drift green.
-`cargo test --lib` could NOT be run - see the caveat below; no Rust changed.
+Unit: **component-library item 2, half A - the potentiometer wiper.** A
+potentiometer now has a wiper position, 0 to 1, that splits its track into two
+legs; the deck stops hardcoding half. Proven on real ngspice: the same divider
+at wiper 0 / 0.25 / 0.5 / 0.75 / 1 solves to 10 / 7.5 / 5 / 2.5 / ~0 V.
+Gates: typecheck green; design-system-drift green (46/46, run alone);
+882 tests green across every file the change can reach - the params codec and
+both its consumers, the deck and netlist suites, the assistant circuit plan, the
+ASC import/export round trip and the Properties panel.
+**The full 213-file vitest suite did NOT complete this session** and is not
+being claimed: two runs were abandoned after 33 minutes with the host down to
+~68 MB of free RAM, which is the jsdom-contention trap in `STATE.md` rather than
+a signal about this diff. `cargo test --lib` could NOT be run either - see the
+caveat below; no Rust changed. **Re-run the full suite on a quiet host before
+treating this unit as fully gated.**
 
 **SHIPPABLE?** **NO** (unchanged by this unit)
 
-**Next:** component-library item 2, potentiometer wiper + polarized capacitor
-meaning.
+**Next:** component-library item 2, half B - polarized capacitor meaning. Run
+the full suite first, since this unit could not.
 
 **Open gate caveat:** `cargo test --lib` panics in `build.rs` on this host
 because the gitignored `resources/ngspice/build-info.json` predates the `files`
 digest that `staged_engine` requires. It is a stale local artifact, not a code
 regression, and no commit can repair it. Logged in FIX_BUGS.md 2026-08-08;
 clearing it needs one full `scripts/build-ngspice.sh` run.
+
+---
+
+### 2026-08-08 - component library item 2 half A: the potentiometer wiper
+
+**Why this unit**
+
+Item 2 of the component-library mission, unblocked by item 1. A potentiometer is
+the first part a student reaches for to build an adjustable divider, and Tau's
+was not adjustable: whatever resistance you typed, the deck split it exactly in
+half and there was no control anywhere in the product to say otherwise.
+
+**The defect it removes**
+
+`spiceNetlist.ts` emitted `R_<base>_a` and `R_<base>_b` at `resistance / 2`
+each. The wiper terminal existed geometrically - the symbol has an A, a B and a
+W pin, and the netlist wired all three - but electrically it was pinned to the
+centre tap. A divider built on it could not be swept, and nothing told the user
+that the third pin was decorative.
+
+`lib/assistantCircuitPlan.ts` carried the **same constant independently**. It
+lowers a potentiometer into two resistors when the assistant generates a circuit
+containing one, and it too wrote `total / 2` twice. The mission's own
+architecture notes named only the netlist site; the second one was found by
+grepping for consumers of the pot's value rather than trusting that note.
+
+**What now happens**
+
+The value string carries an optional `Wiper=<0..1>` token - `10k Wiper=0.3` -
+parsed by a new `engine/potentiometerSpec.ts`, which is the single definition
+both call sites use. `potentiometerLegs` returns the pin-A-to-wiper and
+wiper-to-pin-B resistances, and the Properties panel shows a named "Wiper
+position" control with a hint that says which end the fraction is measured from.
+
+Three decisions inside that are load-bearing:
+
+- **A bare `10k` still means a centred wiper and still re-encodes to exactly
+  `10k`.** The keyed grammar gained one field option, `omitWhenFallback`, which
+  drops a token while it still holds its default. Without it the catalog default
+  would re-encode to `10k Wiper=0.5`, which breaks the identity property item 1
+  established and would rewrite the stored value of every potentiometer already
+  on disk the moment its panel was opened.
+- **An out-of-range or unparseable fraction falls back to centred rather than
+  erroring.** The value is a free text field on the canvas as well as a numeric
+  box in the panel, and a typo must not turn into a leg the solver cannot stamp.
+- **Each leg is floored at one part per billion of the track.** A wiper run
+  fully to one end would otherwise emit a zero-ohm resistor. The floor is
+  relative rather than absolute so the conductance ratio stays well inside
+  double precision on a 10 MΩ pot as well as a 100 Ω one.
+
+Reviewing the two parsers side by side turned up a gap this unit opened in the
+shared codec, fixed here rather than left for a later item to trip over. The
+keyed grammar's bare field claimed a token only when it *led* the string, while
+the netlist's parser takes whichever token is not `Wiper=`. So a hand-typed
+`Wiper=0.3 10k` - reachable through the canvas inline editor and through a
+hand-edited `.asc`, neither of which goes through the codec - would have shown
+10 kΩ in the Properties box while the deck ran 4.7 kΩ. The bare field now claims
+the first non-`Key=value` token wherever it sits. The same change also stops a
+MOSFET spelled `W=1u NMOS` from re-encoding to `NMOS W=1u NMOS`.
+
+`parsedNumber` in `spiceNetlist.ts` was split into a text-taking
+`parsedNumberFrom` plus a thin wrapper, so the resistance keeps its exact
+component-aware error message now that it is parsed from an extracted substring
+instead of the whole value.
+
+**Evidence**
+
+- Real ngspice, one divider off a 10 V rail, legs exactly as Tau emits them:
+
+  | wiper | leg A / leg B | V(w) |
+  |---|---|---|
+  | 0 | 1e-05 / 10000 | 10.000 V |
+  | 0.25 | 2500 / 7500 | 7.500 V |
+  | 0.5 | 5000 / 5000 | 5.000 V |
+  | 0.75 | 7500 / 2500 | 2.500 V |
+  | 1 | 10000 / 1e-05 | 1.0e-08 V |
+
+  Both extremes converge, which is what the leg floor exists for.
+- `engine/spiceNetlist.test.ts` asserts `10k Wiper=0.3` emits 3000 and 7000, and
+  that a bare `10k` still emits 5000 twice - the pre-existing behaviour is
+  unchanged, not merely re-derived.
+- `engine/potentiometerSpec.test.ts` covers token order independence, spaces
+  around `=`, the out-of-range and garbage fallbacks, and a strictly positive leg
+  on both sides at wiper 0 and 1.
+- `schematic/params.test.ts` asserts the compact `10k` spelling survives a
+  centred wiper, that `4k7 Wiper=0.25` round-trips, and that a token the panel
+  does not model (`Taper=log`) survives an edit to the wiper box.
+- Item 1's catalog-driven identity test was **not** modified and still passes -
+  that is the proof `omitWhenFallback` preserved every other kind's encoding.
+- Mutation check: reverting only the `case "potentiometer"` body fails the new
+  netlist test; restoring it passes. Checked, not assumed.
+
+**Not done in this unit**
+
+Half B of item 2 - the polarized capacitor's reverse-bias check - is untouched,
+so item 2 stays open. The wiper is not draggable and the symbol does not yet
+show where it sits; those are items 6 and 3 respectively.
 
 ---
 

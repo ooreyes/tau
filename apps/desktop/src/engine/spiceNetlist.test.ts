@@ -1634,6 +1634,32 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain("K_T1");
   });
 
+  it("splits the potentiometer track at the wiper fraction instead of always halving it", () => {
+    // a/w/b pin offsets from schematic/pins.ts; wire each to its own stub so
+    // every pin resolves to a distinct net.
+    const wires = [
+      wire("wa", [{ x: -32, y: 0 }, { x: -96, y: 0 }]),
+      wire("ww", [{ x: 0, y: -32 }, { x: 0, y: -96 }]),
+      wire("wb", [{ x: 32, y: 0 }, { x: 96, y: 0 }]),
+    ];
+    const ground = component("ground", "", "", 0, 64);
+
+    const deck = buildSpiceDeck(
+      { components: [component("potentiometer", "RV1", "10k Wiper=0.3", 0, 0), ground], wires },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toMatch(/^R_RV1_a \S+ \S+ 3000$/m);
+    expect(deck.netlist).toMatch(/^R_RV1_b \S+ \S+ 7000$/m);
+
+    // Pre-existing behaviour (no Wiper= token) is unchanged: an even split.
+    const evenDeck = buildSpiceDeck(
+      { components: [component("potentiometer", "RV1", "10k", 0, 0), ground], wires },
+      { kind: "op" },
+    );
+    expect(evenDeck.netlist).toMatch(/^R_RV1_a \S+ \S+ 5000$/m);
+    expect(evenDeck.netlist).toMatch(/^R_RV1_b \S+ \S+ 5000$/m);
+  });
+
   // A switched load: V1 -> S1 -> R1 -> ground, with S1's NC+/NC- pair driven by
   // VC. Reused by the three switch cases below, which differ only in wiring.
   const switchedLoad = (controlled: boolean) => {

@@ -49,6 +49,9 @@ export interface ParamField {
   bare?: boolean;
   /** Positional grammar: may be absent from the head of the token list. */
   omittable?: boolean;
+  /** Keyed grammar: omit the token while the value still equals its fallback,
+   *  so an untouched default keeps the compact spelling already on disk. */
+  omitWhenFallback?: boolean;
 }
 
 type ParamCodec =
@@ -127,7 +130,23 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   capacitor: [CHARGE_CAPACITOR, { fields: [{ key: "c", label: "Capacitance", unit: "F", kind: "number" }] }],
   polarizedCapacitor: [CHARGE_CAPACITOR, { fields: [{ key: "c", label: "Capacitance", unit: "F", kind: "number" }] }],
   inductor: { fields: [{ key: "l", label: "Inductance", unit: "H", kind: "number" }] },
-  potentiometer: { fields: [{ key: "r", label: "Resistance", unit: "Ω", kind: "number" }] },
+  potentiometer: {
+    fields: [
+      { key: "r", label: "Resistance", unit: "Ω", kind: "number", bare: true, fallback: "10k" },
+      {
+        key: "wiper",
+        label: "Wiper position",
+        unit: "",
+        kind: "number",
+        token: "Wiper",
+        fallback: "0.5",
+        min: 0,
+        max: 1,
+        omitWhenFallback: true,
+        description: "Fraction of the track between pin A and the wiper. 0.5 is centred.",
+      },
+    ],
+  },
   bulb: { fields: [{ key: "r", label: "Filament R (cold)", unit: "Ω", kind: "number" }] },
   vsource: { fields: [{ key: "dc", label: "DC level", unit: "V", kind: "number" }] },
   isource: { fields: [{ key: "dc", label: "DC level", unit: "A", kind: "number" }] },
@@ -299,13 +318,15 @@ function decodeKeyed(fields: ParamField[], value: string): Record<string, string
   const claimsKey = (token: string) =>
     fields.some((field) => new RegExp(`^${tokenOf(field)}=`, "i").test(token));
   const extras: string[] = [];
-  let index = 0;
   const lead = fields.find((field) => field.bare);
-  if (lead && tokens.length > 0 && !claimsKey(tokens[0])) {
-    out[lead.key] = tokens[0];
-    index = 1;
-  }
-  for (; index < tokens.length; index += 1) {
+  // The bare token is the first one that is not a `Key=value`, wherever it sits.
+  // Requiring it to lead would leave a hand-typed "Wiper=0.3 10k" with the
+  // resistance in the unmodelled-token bag while the deck parsed it as the
+  // resistance anyway - the panel and the netlist disagreeing about one string.
+  const leadIndex = lead ? tokens.findIndex((token) => !claimsKey(token)) : -1;
+  if (lead && leadIndex >= 0) out[lead.key] = tokens[leadIndex];
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (index === leadIndex) continue;
     const token = tokens[index];
     const eq = token.indexOf("=");
     const name = eq > 0 ? token.slice(0, eq) : "";
@@ -325,6 +346,7 @@ function encodeKeyed(fields: ParamField[], values: Record<string, string>): stri
       parts.push(raw || blankOf(field));
       continue;
     }
+    if (field.omitWhenFallback && raw === fallbackOf(field)) continue;
     // An empty box means "leave it to the model default", so the key is omitted
     // rather than emitted with nothing after the `=`.
     if (raw) parts.push(`${tokenOf(field)}=${raw}`);

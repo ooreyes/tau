@@ -45,6 +45,7 @@ import { standardModelLine, standardModelType } from "./standardModels";
 import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
 import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL_REFUSAL_MARKER, TAU_NOISE_REFUSAL_MARKER, translateContinuousSwitchDeckLines, translateIdealDiodeDeckLines, translateSwitchModelCard } from "./userModelLibrary";
 import { tlineDeckParams } from "./tlineSpec";
+import { parsePotentiometerSpec, potentiometerLegs } from "./potentiometerSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 import { assertSimulationIntegrity } from "../simulation/simulationIntegrity";
 import { ngspiceResistorTempcoSuffix, stripTcSpec } from "../simulation/temperature";
@@ -1932,16 +1933,16 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       return [`${name} ${node("p")} ${node("n")} ${spec}`];
     }
     case "potentiometer": {
-      // Split the track into two equal halves around the wiper. ngspice does
-      // not evaluate arithmetic in a bare value field, so emit a precomputed
-      // number rather than an expression like "10000/2".
-      const resistance = parsedNumber(component, "Ohm");
+      // The track is two resistors meeting at the wiper. ngspice does not
+      // evaluate arithmetic in a bare value field, so emit precomputed numbers.
+      const { resistanceText, wiper } = parsePotentiometerSpec(component.value);
+      const resistance = parsedNumberFrom(component, resistanceText, "Ohm");
       if (resistance <= 0) throw new Error(`${component.label || component.kind} needs a positive Ohm value.`);
-      const half = (resistance / 2).toString();
+      const legs = potentiometerLegs(resistance, wiper);
       const base = safeName(component.label || `RV${index + 1}`);
       return [
-        `R_${base}_a ${node("a")} ${node("w")} ${half}`,
-        `R_${base}_b ${node("w")} ${node("b")} ${half}`,
+        `R_${base}_a ${node("a")} ${node("w")} ${legs.a}`,
+        `R_${base}_b ${node("w")} ${node("b")} ${legs.b}`,
       ];
     }
     case "switch": {
@@ -2404,14 +2405,19 @@ function numberFromText(component: SchematicComponent, text: string, unit: strin
   }
 }
 
-function parsedNumber(component: SchematicComponent, unit: string): number {
+/** `parsedNumber` over already-extracted text (a value minus its keyed tokens). */
+function parsedNumberFrom(component: SchematicComponent, text: string, unit: string): number {
   try {
-    const value = parseQuantity(component.value, unit);
-    if (!Number.isFinite(value) || value !== value) throw new Error("not finite");
+    const value = parseQuantity(text, unit);
+    if (!Number.isFinite(value)) throw new Error("not finite");
     return value;
   } catch {
     throw new Error(`${component.label || component.kind} needs a valid ${unit} value.`);
   }
+}
+
+function parsedNumber(component: SchematicComponent, unit: string): number {
+  return parsedNumberFrom(component, component.value, unit);
 }
 
 /** Parse a strictly-positive value from already-extracted text (the value minus

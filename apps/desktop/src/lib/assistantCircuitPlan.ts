@@ -4,6 +4,7 @@ import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { extractCircuit } from "../schematic/netlist";
 import { getComponentPins, getLocalPins } from "../schematic/pins";
 import { parseComparator } from "../engine/comparatorSpec";
+import { parsePotentiometerSpec, potentiometerLegs } from "../engine/potentiometerSpec";
 import { parseQuantity } from "../simulation/quantity";
 import type {
   ComponentKind,
@@ -804,12 +805,14 @@ function lowerCompositePlan(plan: CircuitPlan): DirectCircuitPlan {
     const value = component.value ?? CATALOG_BY_KIND[component.kind].defaultValue;
     switch (component.kind) {
       case "potentiometer": {
-        const total = finiteQuantity(value, component.ref, "Ohm");
+        const { resistanceText, wiper } = parsePotentiometerSpec(value);
+        const total = finiteQuantity(resistanceText, component.ref, "Ohm");
         if (total <= 0) throw new Error(`${component.ref} needs a positive Ohm value`);
+        const legs = potentiometerLegs(total, wiper);
         const upper = uniqueRef(`R_${component.ref}_A`);
         const lower = uniqueRef(`R_${component.ref}_B`);
-        add(upper, "resistor", String(total / 2));
-        add(lower, "resistor", String(total / 2));
+        add(upper, "resistor", String(legs.a));
+        add(lower, "resistor", String(legs.b));
         mapPin(`${component.ref}.a`, `${upper}.a`);
         mapPin(`${component.ref}.w`, `${upper}.b`, `${lower}.a`);
         mapPin(`${component.ref}.b`, `${lower}.b`);

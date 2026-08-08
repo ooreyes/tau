@@ -5,17 +5,26 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-08 - `MISSION_COMPONENT_LIBRARY.md` item 1 landed
-(generic parameter codec). The priority mission is that file, not the audit
-backlog below; work its items in order.
+**Status:** IDLE 2026-08-08 - `MISSION_COMPONENT_LIBRARY.md` item 2 half A
+landed (the potentiometer wiper). The priority mission is that file, not the
+audit backlog below; work its items in order.
 
-**Next unit:** mission item 2, potentiometer wiper + polarized capacitor
-meaning. Item 1 unblocked it: a wiper is a new encoded key plus a netlist
-change, and adding the key is now a data edit in `params.ts` (see the mission's
-architecture notes for the grammar table). The 50% split is hardcoded in
-`spiceNetlist.ts`.
+**Next unit:** item 2 half B, the polarized capacitor. Item 2 stays OPEN until
+it lands. It is a result-inspection path, not a netlist one: attach the
+reverse-bias check where `App.tsx` sets a transient or operating-point result,
+and audit every consumer of that warning list before adding to it -
+`ShellPanels.tsx:1380` spreads it, and a warning that becomes a blocker is
+trap 3 below. `polarizedCapacitor` currently shares the `capacitor` netlist case
+verbatim, so polarity means nothing to the solver today.
 
-**Gate caveat for the next fire:** `cargo test --lib` cannot run on this host -
+**Gate caveat for the next fire:** the full 213-file vitest suite did not
+complete on 2026-08-08 - two runs were abandoned after 33 minutes with the host
+at ~68 MB free RAM (trap 5 below, amplified). The wiper unit landed on 882
+targeted tests covering its whole reachable surface. **Run the full suite first
+next fire** and treat any failure as possibly pre-existing until reproduced on a
+clean tree.
+
+`cargo test --lib` also cannot run on this host -
 `build.rs` panics on a stale, gitignored `resources/ngspice/build-info.json`
 that predates the `files` digest. See FIX_BUGS.md 2026-08-08. Needs one full
 `scripts/build-ngspice.sh` run to clear; it is not a code regression.
@@ -123,6 +132,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-08 - COMPONENT-LIBRARY item 2 half A: potentiometer wiper 0..1 splits the track via one shared `engine/potentiometerSpec.ts`; the hardcoded 50 % lived in TWO places (`spiceNetlist.ts` AND `lib/assistantCircuitPlan.ts`, only the first named in the mission notes), and the keyed codec's bare field now claims the first non-`Key=value` token wherever it sits, so a hand-typed `Wiper=0.3 10k` cannot show one resistance in the panel and run another. Item 2 still open - half B (polarized cap) not started.
 - 2026-08-08 - COMPONENT-LIBRARY item 1: `params.ts` encode/decode ladders replaced by one declarative grammar table (single/keyed/positional/custom); `params.test.ts` 12 -> 95 tests, 87 of which pass against the OLD code too - that is the proof the refactor preserved behaviour; `tline` added as data only.
 - 2026-08-08 - COMPONENT-LIBRARY item 0: `testpoint` kind deleted (26 files); retired kinds now drop-and-name on BOTH load paths (`.asc` carrier would have become a 1T resistor, `.sim` would have refused the whole document); `Markers` palette section gone with its only entry.
 - 2026-08-04 - NAMED-DEVICE RECURSIVE %: harness + stdout
