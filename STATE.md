@@ -5,24 +5,32 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-08 - `MISSION_COMPONENT_LIBRARY.md` item 2 half A
-landed (the potentiometer wiper). The priority mission is that file, not the
-audit backlog below; work its items in order.
+**Status:** IDLE 2026-08-08 - `MISSION_COMPONENT_LIBRARY.md` item 4 is CLOSED.
+The priority mission is that file, not the audit backlog below; work its items
+in order.
 
-**Next unit:** item 2 half B, the polarized capacitor. Item 2 stays OPEN until
-it lands. It is a result-inspection path, not a netlist one: attach the
-reverse-bias check where `App.tsx` sets a transient or operating-point result,
-and audit every consumer of that warning list before adding to it -
-`ShellPanels.tsx:1380` spreads it, and a warning that becomes a blocker is
-trap 3 below. `polarizedCapacitor` currently shares the `capacitor` netlist case
-verbatim, so polarity means nothing to the solver today.
+**Next unit:** item 5, digital pinouts and settings. **Read `git show 2d43b93`
+and `8cce569` before you start it.** Those two `wip: checkpoint` commits carry a
+concurrent fire's in-flight work on `symbols.tsx` (+847), `pins.ts` and
+`digitalGateSpec.ts`, which is item 5 and item 9 territory. You are most likely
+finishing that work, not beginning it.
 
-**Gate caveat for the next fire:** the full 213-file vitest suite did not
-complete on 2026-08-08 - two runs were abandoned after 33 minutes with the host
-at ~68 MB free RAM (trap 5 below, amplified). The wiper unit landed on 882
-targeted tests covering its whole reachable surface. **Run the full suite first
-next fire** and treat any failure as possibly pre-existing until reproduced on a
-clean tree.
+**A concurrent fire raced this one, and the collision is the lesson.** Two
+sessions independently implemented item 4's settings half. The other one's
+durability net pushed first, so its implementation is what landed; this fire
+reset onto it and added only what it lacked. Before claiming an item, `git fetch`
+and check whether someone is already inside it - and note the durability net will
+force-commit whatever is in the tree, including scratch files
+(`zzscratch.test.ts` shipped that way in `2d43b93` and was removed here).
+
+**Gate caveat, now measured rather than asserted:** the full suite completed
+this fire at `--maxWorkers=2` in 19.5 minutes - **3478 passed, 22 failed, 8
+skipped over 222 files**. Every one of the 22 is `Test timed out in 5000ms` with
+no assertion failure, at 5.3 s to 25.8 s, spread across unrelated jsdom-heavy
+files. Treat the full suite as a gate this host delivers slowly and noisily, not
+as a failing gate: judge by per-test duration against the 5 s limit, not by the
+failure count. **Do not run two vitest instances at once** - doing so
+manufactured two more timeouts in an already-passing file this fire.
 
 `cargo test --lib` also cannot run on this host -
 `build.rs` panics on a stale, gitignored `resources/ngspice/build-info.json`
@@ -132,6 +140,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-08 - COMPONENT-LIBRARY item 4 (item CLOSED): the four controlled sources each name their gain with the unit `spiceNetlist.ts` emits it in (V/V, A/V, A/A, V/A) and describe their control port, as pure `SCHEMA` data. Landed by reconciling a concurrent fire that implemented the same unit and pushed first; this fire kept its better `EXTRA_PARAM_KEY` head preservation and added the correctness fix it lacked - the shared `Laplace=` description promised a VCCS a frequency response the deck never runs, since `laplaceSourceLines` guards exactness with `if (!isCurrent)`. Named control reference decided: NO, keep the physical sense pair. Also deleted `zzscratch.test.ts`, force-committed by the durability net.
 - 2026-08-08 - COMPONENT-LIBRARY item 2 half A: potentiometer wiper 0..1 splits the track via one shared `engine/potentiometerSpec.ts`; the hardcoded 50 % lived in TWO places (`spiceNetlist.ts` AND `lib/assistantCircuitPlan.ts`, only the first named in the mission notes), and the keyed codec's bare field now claims the first non-`Key=value` token wherever it sits, so a hand-typed `Wiper=0.3 10k` cannot show one resistance in the panel and run another. Item 2 still open - half B (polarized cap) not started.
 - 2026-08-08 - COMPONENT-LIBRARY item 1: `params.ts` encode/decode ladders replaced by one declarative grammar table (single/keyed/positional/custom); `params.test.ts` 12 -> 95 tests, 87 of which pass against the OLD code too - that is the proof the refactor preserved behaviour; `tline` added as data only.
 - 2026-08-08 - COMPONENT-LIBRARY item 0: `testpoint` kind deleted (26 files); retired kinds now drop-and-name on BOTH load paths (`.asc` carrier would have become a 1T resistor, `.sim` would have refused the whole document); `Markers` palette section gone with its only entry.

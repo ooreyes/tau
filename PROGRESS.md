@@ -2,25 +2,51 @@
 
 **Status: DONE - 2026-08-08**
 
-Unit: **component-library item 2, half A - the potentiometer wiper.** A
-potentiometer now has a wiper position, 0 to 1, that splits its track into two
-legs; the deck stops hardcoding half. Proven on real ngspice: the same divider
-at wiper 0 / 0.25 / 0.5 / 0.75 / 1 solves to 10 / 7.5 / 5 / 2.5 / ~0 V.
-Gates: typecheck green; design-system-drift green (46/46, run alone);
-882 tests green across every file the change can reach - the params codec and
-both its consumers, the deck and netlist suites, the assistant circuit plan, the
-ASC import/export round trip and the Properties panel.
-**The full 213-file vitest suite did NOT complete this session** and is not
-being claimed: two runs were abandoned after 33 minutes with the host down to
-~68 MB of free RAM, which is the jsdom-contention trap in `STATE.md` rather than
-a signal about this diff. `cargo test --lib` could NOT be run either - see the
-caveat below; no Rust changed. **Re-run the full suite on a quiet host before
-treating this unit as fully gated.**
+Unit: **component-library item 4 closed - what a controlled source computes.**
+The item's settings half landed and the item is now closed. This fire also
+**reconciled a collision**: a concurrent fire implemented the same unit and its
+durability net pushed the work ahead of this one mid-session. That version is
+the one that lands, because it was pushed first and is the better
+implementation - it preserves a token in front of `Laplace=` under
+`EXTRA_PARAM_KEY` rather than dropping it. What this fire adds on top is the
+correctness fix that version lacked, the decision item 4 asked for in writing,
+and the removal of a scratch file the same durability net force-committed.
+
+**The overclaim that was corrected.** The `Laplace=H(s)` variant shared one
+description across VCVS and VCCS saying the output follows H(s). That is true of
+an E source and false of a G source: `s_xfer` is a voltage-in/voltage-out code
+model, so `laplaceSourceLines` guards its exact branch with `if (!isCurrent)`
+and falls every current source back to the DC gain H(0). The shared string
+promised a VCCS user a frequency response the deck never runs - the same class
+of overclaim the 2026-08-04 audit was called to remove. The description is now
+per-kind, and a test asserts the VCCS text does not contain "exactly" so the two
+cannot be quietly re-merged.
+
+Also removed: `apps/desktop/src/zzscratch.test.ts`, a `describe("scratch") /
+it("dumps")` debugging file that the durability net force-committed in
+`2d43b93`. Scratch belongs outside the clone.
+
+Gates: typecheck green (exit 0); `params.test.ts` 121 green and
+`ShellPanels.test.tsx` 47 green on the reconciled tree; the correctness fix
+mutation-checked - restoring the shared description fails exactly the one new
+test and nothing else. No Rust changed, and `cargo test --lib` remains blocked
+by the stale staged engine described below.
+
+**Full suite, measured this session: 3478 passed, 22 failed, 8 skipped across
+222 files in 19.5 minutes.** All 22 failures are `Test timed out in 5000ms` with
+no assertion failure, at durations from 5.3 s to 25.8 s, in files unrelated to
+this unit - the host-contention trap, now quantified rather than asserted. That
+run was against this fire's pre-reconciliation tree, so it does not gate the
+commit that landed; the targeted suites above do. **Re-run the full suite on a
+quiet host before treating the reconciled tree as fully gated.**
 
 **SHIPPABLE?** **NO** (unchanged by this unit)
 
-**Next:** component-library item 2, half B - polarized capacitor meaning. Run
-the full suite first, since this unit could not.
+**Next:** component-library item 5, digital pinouts and settings. Note that the
+concurrent fire's checkpoints already carry substantial in-flight work on
+`symbols.tsx`, `pins.ts` and `digitalGateSpec.ts`, which is item 5 and item 9
+territory - read that diff before starting, and expect to finish it rather than
+begin it.
 
 **Open gate caveat:** `cargo test --lib` panics in `build.rs` on this host
 because the gitignored `resources/ngspice/build-info.json` predates the `files`

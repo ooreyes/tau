@@ -351,13 +351,54 @@ potentiometer read as adjustable. Fix `SYMBOL_BODY`/`SYMBOL_BOX` drift for each.
 width of a body edge at selection weight, and both themes look right at the
 1440×900 floor.
 
-### 4. Controlled sources: drawings + settings — DRAWINGS DONE 2026-08-08, settings open
+### 4. Controlled sources: drawings + settings — DONE 2026-08-08
 VCVS/VCCS/CCCS/CCVS get distinguishable symbols and properties that name the
 gain with its real unit (V/V, A/V, A/A, V/A) and explain the control port.
 Decide and document whether a named control reference is added.
 
 **Done when:** each of the four is identifiable from its symbol alone, and its
 Properties panel explains what it computes.
+
+**Settings half - DONE 2026-08-08.** All four were among the kinds with no
+schema at all, so they fell through to `ShellPanels.tsx`'s raw "Value" textbox:
+a transresistance reached the user as a box labelled "Value" containing `1k`.
+Each now has a named gain carrying the unit `spiceNetlist.ts` actually emits it
+in, plus a description of the control port. Pure `SCHEMA` data, no dispatch
+edit. A `Laplace=H(s)` value on an E or G source is a value variant rather than
+a second box, on the charge-capacitor's mechanism, and anything in front of the
+`Laplace=` token rides through an edit under `EXTRA_PARAM_KEY`.
+
+**The Laplace description is per-kind, and that is a correctness constraint, not
+a style choice.** `s_xfer` is a voltage-in/voltage-out code model, so
+`laplaceSourceLines` guards its exact branch with `if (!isCurrent)` and falls
+every G source back to the DC gain H(0). A single shared string saying the
+output follows H(s) would promise a VCCS user a frequency response the deck
+never runs. A test asserts the VCCS text does not contain "exactly", so the two
+cannot be quietly re-merged.
+
+Worth carrying into items 5 and 9, which will both add field sets: **giving a
+kind a numeric field with a unit is not a neutral act.** It moves the value out
+of the raw textbox into `EngineeringInput`, which only commits a parseable
+quantity. Any kind whose value may legitimately not be a quantity needs a
+`when:` variant for that spelling, or the field cannot be edited at all. Check
+what the netlist accepts before adding the field, and decode through the
+engine's own parser rather than a second pattern - the comparator and the
+Laplace variant both do, so the panel cannot disagree with the deck about what a
+value means.
+
+**Decision on a named control reference: no. Tau keeps the physical sense pair,
+and the divergence from LTspice is real and now written down.** LTspice's `f`
+and `h` symbols are two-pin and name their controlling source in the value;
+Tau's are four-pin and synthesize `V_<base>_sense` across the C+/C- pair
+(`spiceNetlist.ts:1951`, `:1960`). `ascImport.ts:976` already records that those
+two symbols stay unbanked for this reason. The pair is kept because it is the
+schematic-native answer: where the current is sensed is visible on the sheet and
+moves with the wiring, whereas a typed source name is an invisible dependency
+that breaks silently when the source it names is renamed or deleted. The cost is
+that an imported LTspice `f`/`h` carries a value like `V1 2` that is not a
+quantity; `parseQuantity`'s pattern is anchored and rejects it, and
+`parsedNumberFrom` (`spiceNetlist.ts:2456`) turns that into "F1 needs a valid
+A/A value." by name rather than guessing a number.
 
 ### 5. Digital parts: pinouts and settings
 SR/D/T/JK, counter, 555, ADC, DAC, 7-segment, sample & hold. Labelled pins on
@@ -434,9 +475,9 @@ always-drawn input leads go away.
 ## Status at 2026-08-08 11:00
 
 Closed: **0** (Test Point), **1** (parameter codec), **2** (wiper + polarity),
-**3** (redraws). Partly closed: **4** (drawings done, settings open), **6**
-(behaviour and re-run done, drawing/wiper/affordance open), **8** (ideal models
-done, Advanced disclosure open). Untouched: **5**, **7**, **9**.
+**3** (redraws), **4** (drawings + settings). Partly closed: **6** (behaviour
+and re-run done, drawing/wiper/affordance open), **8** (ideal models done,
+Advanced disclosure open). Untouched: **5**, **7**, **9**.
 
 Gates here: typecheck clean, **3482 tests passed / 8 skipped**, drift 10/10,
 cargo `--lib` 77 passed.

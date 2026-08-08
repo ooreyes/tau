@@ -317,6 +317,20 @@ describe("Laplace transfer on the voltage-controlled sources", () => {
     expect(paramFields("cccs", "Laplace=1/(1+s)").map((f) => f.key)).toEqual(["gain"]);
     expect(paramFields("ccvs", "Laplace=1/(1+s)").map((f) => f.key)).toEqual(["gain"]);
   });
+
+  /**
+   * `s_xfer` is a voltage-in/voltage-out code model, so `laplaceSourceLines`
+   * guards its exact branch with `if (!isCurrent)` and falls every G source back
+   * to the DC gain H(0). One description shared by both kinds would promise a
+   * VCCS user a frequency response the deck never runs, so the two must differ.
+   */
+  it("does not promise a VCCS the exact transfer function only a VCVS gets", () => {
+    const hint = (kind: "vcvs" | "vccs") =>
+      paramFields(kind, "Laplace=1/(1+s)")[0].description ?? "";
+    expect(hint("vcvs")).toContain("runs exactly");
+    expect(hint("vccs")).not.toContain("exactly");
+    expect(hint("vccs")).toContain("DC gain");
+  });
 });
 
 describe("kinds without a parameter schema", () => {

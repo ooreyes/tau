@@ -129,14 +129,22 @@ const LAPLACE_HEAD = /(?:^|\s)laplace\s*=\s*/i;
  * shows its gain. Anything sitting in front of the `Laplace=` token rides
  * through an edit under `EXTRA_PARAM_KEY`, as in the keyed grammar, so editing
  * the expression cannot delete syntax the panel does not model.
+ *
+ * The description is per-kind because the honest answer differs by kind.
+ * `s_xfer` is a voltage-in/voltage-out code model, so only an E source can
+ * realize a rational H(s) exactly; `laplace.ts` guards that branch with
+ * `if (!isCurrent)` and falls every G source back to the DC gain H(0). Telling
+ * a VCCS user that the output follows H(s) would promise a frequency response
+ * the deck never runs.
  */
-const LAPLACE_TRANSFER: ParamSpec = {
+const LAPLACE_TRANSFER = (description: string): ParamSpec => ({
   when: /(?:^|\s)laplace\s*=/i,
   fields: [{
     key: "laplace",
     label: "Transfer H(s)",
     unit: "",
-    description: "Transfer function in LTspice spelling, for example 1/(1+0.001*s). It replaces the constant gain: the output follows H(s) applied to the control voltage.",
+    kind: "text",
+    description,
   }],
   codec: {
     form: "custom",
@@ -154,7 +162,7 @@ const LAPLACE_TRANSFER: ParamSpec = {
       return `${head ? `${head} ` : ""}Laplace=${(values.laplace ?? "").trim()}`;
     },
   },
-};
+});
 
 const MOSFET = (model: string): ParamSpec => ({
   // `MODEL W=<w> L=<l> KP=<kp> VTO=<vto>`; omitted keys keep netlist defaults.
@@ -310,7 +318,9 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   // to `numberValue`, so a mismatch here would be a mislabelled quantity.
   // Four identical-looking pins make the control port the thing a reader
   // actually needs told, which is what the descriptions carry.
-  vcvs: [LAPLACE_TRANSFER, {
+  vcvs: [LAPLACE_TRANSFER(
+    "Transfer function in LTspice spelling, for example 1/(1+0.001*s). It replaces the constant gain. A rational H(s) runs exactly; anything else runs its DC gain, and Tau says so.",
+  ), {
     fields: [{
       key: "gain",
       label: "Voltage gain",
@@ -319,7 +329,9 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
       description: "Output voltage is the gain times the voltage across the control pins C+ and C-. The control port draws no current, so it does not load the circuit it measures.",
     }],
   }],
-  vccs: [LAPLACE_TRANSFER, {
+  vccs: [LAPLACE_TRANSFER(
+    "Transfer function in LTspice spelling, for example 1/(1+0.001*s). It replaces the constant gain. A current source has no exact form here, so Tau runs the DC gain of H(s) and reports that it did.",
+  ), {
     fields: [{
       key: "gain",
       label: "Transconductance",
