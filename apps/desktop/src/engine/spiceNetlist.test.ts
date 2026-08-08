@@ -1509,8 +1509,12 @@ describe("buildSpiceDeck", () => {
       // `all` is the whole safety of this card: a bare `.save` REPLACES
       // ngspice's default set, so without it the run comes back with the device
       // currents and nothing else - no node voltages, no source branches.
+      // D1 is a Tau-PLACED diode, so it is ideal and leaves the deck as an
+      // XSPICE `A` device with no `@d1[id]` of its own. The deck asks for its
+      // series zero-volt ammeter instead, so the part still HAS a current -
+      // see engine/idealModels.ts, and the imported case just below.
       expect(deck.netlist).toMatch(
-        /^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\] @d1\[id\] @m1\[id\] @m1\[ig\] @m1\[is\] @j1\[id\]$/m,
+        /^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\] v__tau_id_d1#branch @m1\[id\] @m1\[ig\] @m1\[is\] @j1\[id\]$/m,
       );
       // Passives have no device vector; their currents are derived from the
       // node voltages instead.
@@ -1523,7 +1527,7 @@ describe("buildSpiceDeck", () => {
         { componentId: "Q1", vector: "@q1[ic]" },
         { componentId: "Q1", vector: "@q1[ib]", terminal: "b" },
         { componentId: "Q1", vector: "@q1[ie]", terminal: "e" },
-        { componentId: "D1", vector: "@d1[id]" },
+        { componentId: "D1", vector: "v__tau_id_d1#branch" },
         { componentId: "M1", vector: "@m1[id]" },
         { componentId: "M1", vector: "@m1[ig]", terminal: "g" },
         { componentId: "M1", vector: "@m1[is]", terminal: "s" },
@@ -1534,6 +1538,26 @@ describe("buildSpiceDeck", () => {
       // and ngspice answers the card with a zero-length vector instead of an
       // error, so the part would carry an empty trace and nothing would say so.
       expect(deck.netlist).not.toContain("@m1[ib]");
+    });
+
+    it("keeps `@d1[id]` for a diode read from an LTspice file, whose model stays real", () => {
+      // The mirror of the case above. An imported diode is NOT ideal, so it is
+      // still a Berkeley `D` and still reports its own current under the name
+      // every existing reader expects. Reverting the provenance test in
+      // `idealJunctionModel` would make this pass and the one above fail; both
+      // failing at once is the only way to be sure neither side is a tautology.
+      const imported = semiconductors().map((part) => (
+        part.label === "D1"
+          ? { ...part, ltSymbolType: "diode", pinOverride: [
+            { id: "a", label: "A", x: 128, y: -32 },
+            { id: "k", label: "K", x: 128, y: 32 },
+          ] }
+          : part
+      ));
+      const deck = buildSpiceDeck({ components: imported, wires: [] }, { kind: "tran", stopTime: 1e-3, steps: 100 });
+      expect(deck.netlist).toContain("@d1[id]");
+      expect(deck.netlist).not.toContain("v__tau_id_d1");
+      expect(deck.deviceCurrents).toContainEqual({ componentId: "D1", vector: "@d1[id]" });
     });
 
     it("asks for the same device currents on an `.op` deck as on a transient deck, with node/source content otherwise unchanged", () => {

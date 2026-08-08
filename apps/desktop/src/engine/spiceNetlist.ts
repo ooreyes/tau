@@ -42,6 +42,7 @@ import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductorRefusalMessage, isCoreInductor } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
+import { idealJunctionModel, IDEAL_SENSE_PREFIX, isIdealSenseSourceName } from "./idealModels";
 import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
 import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL_REFUSAL_MARKER, TAU_NOISE_REFUSAL_MARKER, translateContinuousSwitchDeckLines, translateIdealDiodeDeckLines, translateSwitchModelCard } from "./userModelLibrary";
 import { tlineDeckParams } from "./tlineSpec";
@@ -799,6 +800,9 @@ export function buildSpiceDeck(
   const wantsDeviceCurrents = analysis.kind === "tran" || analysis.kind === "op" || analysis.kind === "ac";
   const deviceCurrents: DeviceCurrent[] = [];
   const deviceOperatingPoints: DeviceOperatingVector[] = [];
+  // `.model` cards for ideal (Tau-placed) junction parts, keyed by model name
+  // so two zeners of the same rating share one card instead of redefining it.
+  const idealModelCards = new Map<string, string>();
   circuit.components.forEach((entry, index) => {
     const directiveIc = entry.component.kind === "inductor"
       ? inductorCurrents.get(entry.component.label.trim().toLowerCase())
@@ -819,6 +823,7 @@ export function buildSpiceDeck(
       vendorOpampModels.get(index),
       circuit.warnings,
       options.emitNativeLaplace === true,
+      idealModelCards,
     );
     lines.push(...emitted);
     // Read off the lines that were actually emitted rather than off the
@@ -854,6 +859,10 @@ export function buildSpiceDeck(
   if (modelSubstitutions.length > 0) {
     throw new Error(unresolvedModelMessage(modelSubstitutions));
   }
+  // Ideal junction cards, emitted once each. They go in BEFORE the ideal-diode
+  // rewrite below, which is exactly what turns their LTspice `D(Ron=…)`
+  // spelling into ngspice's `sidiode`.
+  lines.push(...idealModelCards.values());
 
   // Non-ideal wires: series resistors between the nets at each endpoint.
   // Ideal wires already shorted those nets in extractCircuit.
@@ -878,19 +887,36 @@ export function buildSpiceDeck(
   // must become ngspice `sidiode` + `A…` the same way vendor-subckt interiors
   // already do. Without this, Ron/Ilimit are ignored on Berkeley D and circuits
   // like Educational/PAsystem/HandsFreePreamp.asc diverge from LTspice.
+  // Both rewrites below can retire a device line - a `D` becoming an XSPICE `A`,
+  // an `S` becoming a `B` - and every `@ref[param]` Tau recorded against that
+  // line goes with it. A `.save` naming a device that is no longer in the deck
+  // makes ngspice print "vector … is not available" straight into the user's
+  // warning channel, so the record is pruned to match the deck. Both the
+  // currents and the `.op` device parameters are recorded that way; only the
+  // currents used to be pruned, so `@d1[vd]` survived its own diode.
+  const pruneRetiredVectors = (deck: readonly string[]) => {
+    const live = new Set(
+      deck
+        .map((line) => line.trim().split(/\s+/)[0]?.toLowerCase())
+        .filter((name): name is string => Boolean(name) && !name.startsWith("*") && !name.startsWith(".")),
+    );
+    const retired = (vector: string): boolean => {
+      const ref = /^@([^\[]+)/.exec(vector)?.[1]?.toLowerCase();
+      return ref !== undefined && !live.has(ref);
+    };
+    for (let i = deviceCurrents.length - 1; i >= 0; i -= 1) {
+      if (retired(deviceCurrents[i]!.vector)) deviceCurrents.splice(i, 1);
+    }
+    for (let i = deviceOperatingPoints.length - 1; i >= 0; i -= 1) {
+      if (retired(deviceOperatingPoints[i]!.vector)) deviceOperatingPoints.splice(i, 1);
+    }
+  };
+
   if (options.idealDiodeAsSidiode !== false) {
     const rewritten = translateIdealDiodeDeckLines(lines);
     lines.length = 0;
     lines.push(...rewritten);
-    const instanceNames = new Set(
-      lines
-        .map((line) => line.trim().split(/\s+/)[0]?.toLowerCase())
-        .filter((name): name is string => Boolean(name) && !name.startsWith("*") && !name.startsWith(".")),
-    );
-    for (let i = deviceCurrents.length - 1; i >= 0; i -= 1) {
-      const ref = /^@([^\[]+)/.exec(deviceCurrents[i]!.vector)?.[1]?.toLowerCase();
-      if (ref && !instanceNames.has(ref)) deviceCurrents.splice(i, 1);
-    }
+    pruneRetiredVectors(lines);
   }
 
   // Negative-Vh SW → continuous B conductance (ngspice SW ignores continuous mode).
@@ -902,15 +928,7 @@ export function buildSpiceDeck(
     }
     lines.length = 0;
     lines.push(...rewritten);
-    const instanceNames = new Set(
-      lines
-        .map((line) => line.trim().split(/\s+/)[0]?.toLowerCase())
-        .filter((name): name is string => Boolean(name) && !name.startsWith("*") && !name.startsWith(".")),
-    );
-    for (let i = deviceCurrents.length - 1; i >= 0; i -= 1) {
-      const ref = /^@([^\[]+)/.exec(deviceCurrents[i]!.vector)?.[1]?.toLowerCase();
-      if (ref && !instanceNames.has(ref)) deviceCurrents.splice(i, 1);
-    }
+    pruneRetiredVectors(lines);
   }
 
   // A semiconductor's own current exists only if the deck asks for it by name.
@@ -976,6 +994,9 @@ export const DEVICE_CURRENT_PARAMS: Readonly<Record<string, string>> = {
  */
 export function deviceCurrentVector(instanceLine: string): string | undefined {
   const name = instanceLine.trim().split(/\s+/)[0] ?? "";
+  // An ideal junction's series ammeter IS that part's current, and it is the
+  // only one left after the part becomes an XSPICE `A` device.
+  if (isIdealSenseSourceName(name)) return `${name.toLowerCase()}#branch`;
   const param = DEVICE_CURRENT_PARAMS[name.slice(0, 1).toLowerCase()];
   return param ? `@${name.toLowerCase()}[${param}]` : undefined;
 }
@@ -1295,7 +1316,7 @@ export function clampedLoadSourceWarning(ref: string, flag: string): string {
   return `${ref} carries LTspice's "${flag}" flag, which clamps it so it only ever draws current. Tau's engine has no equivalent, so it ran as an ideal current source that can also deliver current. Results are unaffected while the source stays forward-biased.`;
 }
 
-function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec, vendorOpampModel?: string, warnings: string[] = [], emitNativeLaplace = false): string[] {
+function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec, vendorOpampModel?: string, warnings: string[] = [], emitNativeLaplace = false, idealModelCards: Map<string, string> = new Map()): string[] {
   const { component } = entry;
   const node = (pin: string) => requiredNode(entry, pin);
 
@@ -1510,11 +1531,31 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       return [`${name} ${node("p")} ${node("n")} DC ${voltsText}`];
     }
     case "diode":
-      return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_DIODE")}`];
     case "led":
-      return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_LED")}`];
-    case "zener":
-      return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_ZENER")}`];
+    case "zener": {
+      // Ideal by default for a part PLACED in Tau; a part read from an LTspice
+      // `.asc` keeps its real model. `idealJunctionModel` owns that decision and
+      // documents the provenance signal it reads. A value the document's own
+      // `.model` defines always wins over both - the user named a part.
+      const requested = component.value.trim().split(/\s+/)[0] ?? "";
+      const documentDefined = requested !== "" && userModels.has(requested.toLowerCase());
+      const ideal = documentDefined ? null : idealJunctionModel(component);
+      if (ideal) {
+        idealModelCards.set(ideal.model, ideal.card);
+        // Zero-volt ammeter in series: an ideal junction leaves ngspice as an
+        // XSPICE `A` device with no current of its own. See IDEAL_SENSE_PREFIX.
+        const base = safeName(name);
+        const midpoint = `tau_${base.toLowerCase()}_id`;
+        return [
+          `${name} ${node("a")} ${midpoint} ${ideal.model}`,
+          `${IDEAL_SENSE_PREFIX}${base} ${midpoint} ${node("k")} 0`,
+        ];
+      }
+      const starter = component.kind === "diode"
+        ? "TAU_DIODE"
+        : component.kind === "led" ? "TAU_LED" : "TAU_ZENER";
+      return [`${name} ${node("a")} ${node("k")} ${deviceModel(starter)}`];
+    }
     case "photodiode": {
       // Value is photocurrent (A), not a .model name — never route it through
       // deviceModel() or "100u" looks like an unresolved vendor diode.

@@ -18,6 +18,147 @@ export const CENTERED_SINE_PATH = "M -11 0 C -8 -9 -3 -9 0 0 S 8 9 11 0";
 export const SOURCE_CIRCLE_R = 15;
 export const SOURCE_PIN_Y = 32;
 
+/**
+ * Amplifier (op-amp / comparator) body triangle.
+ *
+ * The old 54×52 triangle (`M -24 -26 L -24 26 L 30 0 Z`) could not hold the
+ * "+" glyph: with the glyph on its pin row (|y| = 16) the lower hypotenuse at
+ * x = −16 sits at y = 22.148, and the vertical bar of the "+" reached y = 20.
+ * A 2.148-unit nominal gap is less than the paint: at selection weight the
+ * 2.35 stroke projects 1.304 vertically across that 25.7° slant and the round
+ * cap adds another 1.175, so the glyph overlapped the edge. The "−" is flat
+ * and had 4.222 units, which is why only the "+" collided.
+ *
+ * The fix is the triangle, not the glyph: at half-height 32 (LTspice's opamp
+ * proportions) the closest approach between any glyph centreline and any body
+ * edge is 6.0 units — more than two full selected strokes, so the painted gap
+ * is at least one whole selected-stroke width. `symbols.test.tsx` recomputes
+ * that distance rather than trusting this comment.
+ */
+const AMP_LEFT_X = -24;
+const AMP_APEX_X = 30;
+const AMP_HALF_H = 32;
+const AMP_BODY_PATH = `M ${AMP_LEFT_X} ${-AMP_HALF_H} L ${AMP_LEFT_X} ${AMP_HALF_H} L ${AMP_APEX_X} 0 Z`;
+/** y where the body edges cross x = 0: where the supply leads land. */
+const AMP_SUPPLY_Y =
+  Math.round(((AMP_HALF_H * AMP_APEX_X) / (AMP_APEX_X - AMP_LEFT_X)) * 1000) / 1000;
+/** Input polarity glyphs, both centred on x = −14, both on their pin rows. */
+const AMP_PLUS_PATH = "M -18 16 H -10 M -14 13 V 19";
+const AMP_MINUS_PATH = "M -18 -16 H -10";
+
+function AmplifierBody() {
+  return (
+    <>
+      <path data-amp-body="" d={AMP_BODY_PATH} />
+      <line x1={-32} y1={-16} x2={AMP_LEFT_X} y2={-16} />
+      <line x1={-32} y1={16} x2={AMP_LEFT_X} y2={16} />
+      <line x1={AMP_APEX_X} y1={0} x2={32} y2={0} />
+      <path data-amp-glyph="+" d={AMP_PLUS_PATH} />
+      <path data-amp-glyph="-" d={AMP_MINUS_PATH} />
+    </>
+  );
+}
+
+/**
+ * Controlled-source (E/G/F/H) shared frame.
+ *
+ * All four used to be the same rounded rect plus one tiny diamond, and the
+ * declared body (±18 × ±22) did not match the drawn rect (±14 × ±20). They now
+ * differ on both ports, which is the standard distinction:
+ *  - control port: an OPEN PAIR (two facing contacts, no conductor between
+ *    them) senses a voltage; a CLOSED conductor carrying a sense arrow carries
+ *    the controlling current.
+ *  - output: a diamond with +/− is a voltage source; a diamond with an arrow
+ *    through it is a current source.
+ */
+const CS_HALF_W = 24;
+const CS_HALF_H = 22;
+/** x of the control-port spine, and of the output diamond's centre. */
+const CS_PORT_X = -13;
+const CS_DIAMOND_CX = 10;
+/** Diamond apexes sit on the ±16 output rows, so the leads leave the vertices. */
+const CS_DIAMOND_PATH = "M 10 -16 L 20 0 L 10 16 L 0 0 Z";
+
+function ControlledSourceFrame() {
+  return (
+    <>
+      <rect
+        x={-CS_HALF_W}
+        y={-CS_HALF_H}
+        width={CS_HALF_W * 2}
+        height={CS_HALF_H * 2}
+        rx={2}
+      />
+      <path data-source-diamond="" d={CS_DIAMOND_PATH} />
+      <line x1={CS_DIAMOND_CX} y1={-16} x2={32} y2={-16} />
+      <line x1={CS_DIAMOND_CX} y1={16} x2={32} y2={16} />
+    </>
+  );
+}
+
+/** Voltage-controlled input: an open pair — the port draws no current. */
+function VoltageControlPort() {
+  return (
+    <g data-control-port="voltage">
+      <line x1={-32} y1={-16} x2={CS_PORT_X} y2={-16} />
+      <line x1={CS_PORT_X} y1={-16} x2={CS_PORT_X} y2={-9} />
+      <circle cx={CS_PORT_X} cy={-6} r={3} />
+      <line x1={-32} y1={16} x2={CS_PORT_X} y2={16} />
+      <line x1={CS_PORT_X} y1={16} x2={CS_PORT_X} y2={9} />
+      <circle cx={CS_PORT_X} cy={6} r={3} />
+    </g>
+  );
+}
+
+/** Current-controlled input: a closed sense branch with the current arrow. */
+function CurrentControlPort() {
+  return (
+    <g data-control-port="current">
+      <line x1={-32} y1={-16} x2={CS_PORT_X} y2={-16} />
+      <line x1={CS_PORT_X} y1={-16} x2={CS_PORT_X} y2={16} />
+      <line x1={-32} y1={16} x2={CS_PORT_X} y2={16} />
+      <path className="symbol-arrow" d="M -13 5 L -16.5 -3 L -9.5 -3 Z" />
+    </g>
+  );
+}
+
+/** Voltage-source output: +/− inside the diamond. */
+function VoltageSourceOutput() {
+  return (
+    <g data-source-output="voltage">
+      <path d="M 7 -5 H 13 M 10 -8 V -2" />
+      <path d="M 7 5 H 13" />
+    </g>
+  );
+}
+
+/** Current-source output: an arrow through the diamond. */
+function CurrentSourceOutput() {
+  return (
+    <g data-source-output="current">
+      <path d="M 10 -10 V 7" />
+      <path d="M 5 2 L 10 9 L 15 2" />
+    </g>
+  );
+}
+
+/**
+ * A vertical winding drawn as 8-unit semicircular turns running from `from` to
+ * `to` on the line x = `x`. Both endpoints are exact, which is the whole point:
+ * the transformer leads used to stop ~6.3 units short of the coil because the
+ * coil was three 14-unit turns and ran past its own pins. `sweep` 1 bulges
+ * right (primary), 0 bulges left (secondary) — both toward the core.
+ */
+function transformerWinding(x: number, from: number, to: number, sweep: 0 | 1): string {
+  const turns = Math.round(Math.abs(to - from) / 8);
+  const step = (to - from) / turns;
+  let d = `M ${x} ${from}`;
+  for (let i = 0; i < turns; i += 1) {
+    d += ` A ${Math.abs(step) / 2} ${Math.abs(step) / 2} 0 0 ${sweep} ${x} ${from + step * (i + 1)}`;
+  }
+  return d;
+}
+
 function CenteredSineGlyph({ y = 0 }: { y?: number }) {
   return (
     <path
@@ -59,8 +200,8 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   led: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   zener: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   photodiode: { minX: -13, minY: -20, maxX: 16, maxY: 15 },
-  opamp: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
-  comparator: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
+  opamp: { minX: -24, minY: -32, maxX: 30, maxY: 32 },
+  comparator: { minX: -24, minY: -32, maxX: 30, maxY: 32 },
   digitalGate: { minX: -24, minY: -38, maxX: 28, maxY: 40 },
   dflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
   srflop: { minX: -24, minY: -24, maxX: 24, maxY: 40 },
@@ -73,10 +214,10 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   sevenSeg: { minX: -28, minY: -40, maxX: 28, maxY: 48 },
   sampleHold: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
   modulator: { minX: -24, minY: -32, maxX: 24, maxY: 32 },
-  vcvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
-  vccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
-  cccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
-  ccvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
+  vcvs: { minX: -24, minY: -22, maxX: 24, maxY: 22 },
+  vccs: { minX: -24, minY: -22, maxX: 24, maxY: 22 },
+  cccs: { minX: -24, minY: -22, maxX: 24, maxY: 22 },
+  ccvs: { minX: -24, minY: -22, maxX: 24, maxY: 22 },
   bsource: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   nmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   pmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
@@ -84,15 +225,15 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   pjf: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   npn: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
   pnp: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
-  potentiometer: { minX: -28, minY: -18, maxX: 28, maxY: 12 },
-  bulb: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
+  potentiometer: { minX: -25, minY: -18, maxX: 25, maxY: 10 },
+  bulb: { minX: -14, minY: -14, maxX: 14, maxY: 14 },
   switch: { minX: -18, minY: -20, maxX: 18, maxY: 20 },
   pushButton: { minX: -14, minY: -18, maxX: 14, maxY: 14 },
   spdt: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   relay: { minX: -18, minY: -20, maxX: 18, maxY: 22 },
   motor: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
-  transformer: { minX: -24, minY: -27, maxX: 24, maxY: 27 },
-  ctTransformer: { minX: -24, minY: -32, maxX: 24, maxY: 32 },
+  transformer: { minX: -22, minY: -22, maxX: 22, maxY: 22 },
+  ctTransformer: { minX: -22, minY: -28, maxX: 24, maxY: 28 },
   tline: { minX: -20, minY: -16, maxX: 20, maxY: 16 },
   subckt: { minX: -24, minY: -20, maxX: 24, maxY: 20 },
   ground: { minX: -12, minY: -3, maxX: 12, maxY: 22 },
@@ -114,8 +255,8 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   led: { halfW: 18, halfH: 22 },
   zener: { halfW: 16, halfH: 18 },
   photodiode: { halfW: 18, halfH: 22 },
-  opamp: { halfW: 28, halfH: 28 },
-  comparator: { halfW: 28, halfH: 28 },
+  opamp: { halfW: 32, halfH: 34 },
+  comparator: { halfW: 32, halfH: 34 },
   digitalGate: { halfW: 28, halfH: 40 },
   dflop: { halfW: 26, halfH: 42 },
   srflop: { halfW: 26, halfH: 34 },
@@ -128,10 +269,10 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   sevenSeg: { halfW: 32, halfH: 52 },
   sampleHold: { halfW: 26, halfH: 42 },
   modulator: { halfW: 26, halfH: 34 },
-  vcvs: { halfW: 20, halfH: 24 },
-  vccs: { halfW: 20, halfH: 24 },
-  cccs: { halfW: 20, halfH: 24 },
-  ccvs: { halfW: 20, halfH: 24 },
+  vcvs: { halfW: 26, halfH: 24 },
+  vccs: { halfW: 26, halfH: 24 },
+  cccs: { halfW: 26, halfH: 24 },
+  ccvs: { halfW: 26, halfH: 24 },
   bsource: { halfW: 16, halfH: 17 },
   nmos: { halfW: 26, halfH: 20 },
   pmos: { halfW: 26, halfH: 20 },
@@ -139,15 +280,15 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   pjf: { halfW: 26, halfH: 20 },
   npn: { halfW: 22, halfH: 20 },
   pnp: { halfW: 22, halfH: 20 },
-  potentiometer: { halfW: 30, halfH: 18 },
+  potentiometer: { halfW: 27, halfH: 19 },
   bulb: { halfW: 16, halfH: 16 },
   switch: { halfW: 14, halfH: 20 },
   pushButton: { halfW: 14, halfH: 18 },
   spdt: { halfW: 16, halfH: 22 },
   relay: { halfW: 16, halfH: 22 },
   motor: { halfW: 16, halfH: 16 },
-  transformer: { halfW: 24, halfH: 27 },
-  ctTransformer: { halfW: 24, halfH: 32 },
+  transformer: { halfW: 24, halfH: 24 },
+  ctTransformer: { halfW: 26, halfH: 30 },
   tline: { halfW: 20, halfH: 18 },
   subckt: { halfW: 26, halfH: 22 },
   ground: { halfW: 12, halfH: 22 },
@@ -339,30 +480,21 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
     case "opamp":
       return (
         <>
-          <path d="M -24 -26 L -24 26 L 30 0 Z" />
-          <line x1={-32} y1={-16} x2={-24} y2={-16} />
-          <line x1={-32} y1={16} x2={-24} y2={16} />
-          <line x1={30} y1={0} x2={32} y2={0} />
-          <line x1={0} y1={-32} x2={0} y2={-14} />
-          <line x1={0} y1={14} x2={0} y2={32} />
-          <path d="M -20 16 H -12 M -16 12 V 20" />
-          <path d="M -20 -16 H -12" />
+          <AmplifierBody />
+          {/* Supply leads stop exactly where the body edges cross x = 0. */}
+          <line x1={0} y1={-32} x2={0} y2={-AMP_SUPPLY_Y} />
+          <line x1={0} y1={AMP_SUPPLY_Y} x2={0} y2={32} />
         </>
       );
 
     case "comparator":
       return (
         <>
-          {/* Same triangle body as the op-amp; pins on the −16/+16 grid. */}
-          <path d="M -24 -26 L -24 26 L 30 0 Z" />
-          <line x1={-32} y1={-16} x2={-24} y2={-16} />
-          <line x1={-32} y1={16} x2={-24} y2={16} />
-          <line x1={30} y1={0} x2={32} y2={0} />
-          {/* + on the lower input, − on the upper (matches pin geometry). */}
-          <path d="M -20 16 H -12 M -16 12 V 20" />
-          <path d="M -20 -16 H -12" />
+          {/* Same triangle body as the op-amp; no supply pins (the rails ride
+              in the value - see engine/comparatorSpec.ts). */}
+          <AmplifierBody />
           {/* hysteresis/step glyph marks it as a comparator, not an op-amp */}
-          <path d="M -8 6 H 0 V -6 H 8" fill="none" />
+          <path data-amp-glyph="hysteresis" d="M -8 6 H 0 V -6 H 8" fill="none" />
         </>
       );
 
@@ -594,79 +726,43 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
         </>
       );
 
+    // E — voltage-controlled voltage source: open control pair, +/− diamond.
     case "vcvs":
       return (
         <>
-          {/* 2-port block: control pair (left), output pair (right) */}
-          <rect x={-14} y={-20} width={28} height={40} rx={2} />
-          <line x1={-32} y1={-16} x2={-14} y2={-16} />
-          <line x1={-32} y1={16} x2={-14} y2={16} />
-          <line x1={14} y1={-16} x2={32} y2={-16} />
-          <line x1={14} y1={16} x2={32} y2={16} />
-          {/* source diamond */}
-          <path d="M 0 -11 L 9 0 L 0 11 L -9 0 Z" />
-          {/* + / − (voltage source) */}
-          <line x1={-3} y1={-5} x2={3} y2={-5} />
-          <line x1={0} y1={-8} x2={0} y2={-2} />
-          <line x1={-3} y1={6} x2={3} y2={6} />
+          <ControlledSourceFrame />
+          <VoltageControlPort />
+          <VoltageSourceOutput />
         </>
       );
 
+    // G — voltage-controlled current source: open control pair, arrow diamond.
     case "vccs":
       return (
         <>
-          {/* 2-port block: control pair (left), output pair (right) */}
-          <rect x={-14} y={-20} width={28} height={40} rx={2} />
-          <line x1={-32} y1={-16} x2={-14} y2={-16} />
-          <line x1={-32} y1={16} x2={-14} y2={16} />
-          <line x1={14} y1={-16} x2={32} y2={-16} />
-          <line x1={14} y1={16} x2={32} y2={16} />
-          {/* source diamond */}
-          <path d="M 0 -11 L 9 0 L 0 11 L -9 0 Z" />
-          {/* current arrow (top → bottom) */}
-          <line x1={0} y1={-7} x2={0} y2={6} />
-          <path d="M -3 1 L 0 7 L 3 1" />
+          <ControlledSourceFrame />
+          <VoltageControlPort />
+          <CurrentSourceOutput />
         </>
       );
 
+    // F — current-controlled current source: sense branch, arrow diamond.
     case "cccs":
       return (
         <>
-          {/* 2-port block: current-sense pair (left), output pair (right) */}
-          <rect x={-14} y={-20} width={28} height={40} rx={2} />
-          <line x1={-32} y1={-16} x2={-14} y2={-16} />
-          <line x1={-32} y1={16} x2={-14} y2={16} />
-          <line x1={14} y1={-16} x2={32} y2={-16} />
-          <line x1={14} y1={16} x2={32} y2={16} />
-          {/* control current-sense arrow on the left port (cp → cn) */}
-          <line x1={-11} y1={-12} x2={-11} y2={11} />
-          <path d="M -14 6 L -11 12 L -8 6" />
-          {/* source diamond */}
-          <path d="M 4 -11 L 13 0 L 4 11 L -5 0 Z" />
-          {/* output current arrow (top → bottom) */}
-          <line x1={4} y1={-7} x2={4} y2={6} />
-          <path d="M 1 1 L 4 7 L 7 1" />
+          <ControlledSourceFrame />
+          <CurrentControlPort />
+          <CurrentSourceOutput />
         </>
       );
 
+    // H — current-controlled voltage source: sense branch, +/− diamond.
     case "ccvs":
       return (
         <>
-          {/* 2-port block: current-sense pair (left), output pair (right) */}
-          <rect x={-14} y={-20} width={28} height={40} rx={2} />
-          <line x1={-32} y1={-16} x2={-14} y2={-16} />
-          <line x1={-32} y1={16} x2={-14} y2={16} />
-          <line x1={14} y1={-16} x2={32} y2={-16} />
-          <line x1={14} y1={16} x2={32} y2={16} />
-          {/* control current-sense arrow on the left port (cp → cn) */}
-          <line x1={-11} y1={-12} x2={-11} y2={11} />
-          <path d="M -14 6 L -11 12 L -8 6" />
-          {/* source diamond */}
-          <path d="M 4 -11 L 13 0 L 4 11 L -5 0 Z" />
-          {/* + / − (voltage source) */}
-          <line x1={1} y1={-5} x2={7} y2={-5} />
-          <line x1={4} y1={-8} x2={4} y2={-2} />
-          <line x1={1} y1={6} x2={7} y2={6} />
+          <ControlledSourceFrame />
+          <CurrentControlPort />
+          <VoltageSourceOutput />
         </>
       );
 
@@ -775,20 +871,29 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
     case "potentiometer":
       return (
         <>
-          <line x1={-32} y1={0} x2={-24} y2={0} />
-          <path d="M -24 0 L -20 -10 L -12 10 L -4 -10 L 4 10 L 12 -10 L 20 10 L 24 0" />
-          <line x1={24} y1={0} x2={32} y2={0} />
-          <line x1={0} y1={-32} x2={0} y2={-9} />
-          <path d="M -8 -16 L 0 -8 L 8 -16" />
+          {/* The track is redrawn symmetric about the wiper pin so its centre
+              peak sits at x = 0: the wiper arrow can then land ON the track
+              instead of floating 8 units above it, which is what made the part
+              read as a fixed resistor with a stray chevron. */}
+          <line x1={-32} y1={0} x2={-25} y2={0} />
+          <path data-track="" d="M -25 0 L -20 -10 L -10 10 L 0 -10 L 10 10 L 20 -10 L 25 0" />
+          <line x1={25} y1={0} x2={32} y2={0} />
+          {/* Wiper: a solid arrow whose tip touches the track — the standard
+              "adjustable" marking (the tap fraction is the Wiper= parameter). */}
+          <line x1={0} y1={-32} x2={0} y2={-18} />
+          <path data-wiper="" className="symbol-arrow" d="M 0 -10 L -4.5 -18 L 4.5 -18 Z" />
         </>
       );
 
     case "bulb":
       return (
         <>
+          {/* Glass envelope + filament cross (IEC lamp). The old circle-plus-
+              squiggle was all but identical to the motor's circle-plus-M. The
+              cross endpoints are 14/√2 so they land exactly on the glass. */}
           <line x1={-32} y1={0} x2={-14} y2={0} />
           <circle cx={0} cy={0} r={14} />
-          <path d="M -6 -4 L -3 4 L 0 -4 L 3 4 L 6 -4" />
+          <path d="M -9.9 -9.9 L 9.9 9.9 M -9.9 9.9 L 9.9 -9.9" />
           <line x1={14} y1={0} x2={32} y2={0} />
         </>
       );
@@ -862,12 +967,14 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
     case "transformer":
       return (
         <>
+          {/* Both windings span exactly their own pin rows, so every lead ends
+              on the coil instead of in mid-air. */}
           <line x1={-32} y1={-16} x2={-22} y2={-16} />
           <line x1={-32} y1={16} x2={-22} y2={16} />
-          <path d="M -22 -16 A 7 7 0 0 1 -22 -2 A 7 7 0 0 1 -22 12 A 7 7 0 0 1 -22 26" />
-          <line x1={-2} y1={-25} x2={-2} y2={25} />
-          <line x1={2} y1={-25} x2={2} y2={25} />
-          <path d="M 22 -16 A 7 7 0 0 0 22 -2 A 7 7 0 0 0 22 12 A 7 7 0 0 0 22 26" />
+          <path d={transformerWinding(-22, -16, 16, 1)} />
+          <line x1={-2} y1={-22} x2={-2} y2={22} />
+          <line x1={2} y1={-22} x2={2} y2={22} />
+          <path d={transformerWinding(22, -16, 16, 0)} />
           <line x1={22} y1={-16} x2={32} y2={-16} />
           <line x1={22} y1={16} x2={32} y2={16} />
         </>
@@ -878,11 +985,15 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
         <>
           <line x1={-32} y1={-16} x2={-22} y2={-16} />
           <line x1={-32} y1={16} x2={-22} y2={16} />
-          <path d="M -22 -16 A 7 7 0 0 1 -22 -2 A 7 7 0 0 1 -22 12 A 7 7 0 0 1 -22 26" />
-          <line x1={-2} y1={-30} x2={-2} y2={30} />
-          <line x1={2} y1={-30} x2={2} y2={30} />
-          <path d="M 22 -24 A 7 7 0 0 0 22 -10 A 7 7 0 0 0 22 4" />
-          <path d="M 22 4 A 7 7 0 0 0 22 18 A 7 7 0 0 0 22 32" />
+          <path d={transformerWinding(-22, -16, 16, 1)} />
+          <line x1={-2} y1={-28} x2={-2} y2={28} />
+          <line x1={2} y1={-28} x2={2} y2={28} />
+          {/* Secondary split at the tap: both halves meet at y = 0, which is
+              where the CT lead leaves — it used to land 4 units off the
+              junction, on a coil that overran its own s2 pin by 8. */}
+          <path d={transformerWinding(22, -24, 0, 0)} />
+          <path d={transformerWinding(22, 0, 24, 0)} />
+          <circle className="symbol-arrow" cx={22} cy={0} r={2} />
           <line x1={22} y1={-24} x2={32} y2={-24} />
           <line x1={22} y1={0} x2={32} y2={0} />
           <line x1={22} y1={24} x2={32} y2={24} />

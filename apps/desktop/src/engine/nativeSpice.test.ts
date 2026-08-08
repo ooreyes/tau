@@ -250,7 +250,12 @@ describe("native ngspice adapter", () => {
       { name: "time", real: [0, 0.001, 0.002], imaginary: null },
       { name: "v(n001)", real: [5, 5, 5], imaginary: null },
       { name: "v2#branch", real: [-0.315, -0.315, -0.315], imaginary: null },
-      { name: "@d2[id]", real: [0.315, 0.315, 0.315], imaginary: null },
+      // A Tau-PLACED LED is ideal, so it leaves the deck as an XSPICE `A`
+      // device with no `@d2[id]` of its own; the deck saves the series
+      // zero-volt ammeter's branch instead (see engine/idealModels.ts). The
+      // contract under test is unchanged - the reader looks the current up
+      // under whatever name the deck asked for.
+      { name: "v__tau_id_d2#branch", real: [0.315, 0.315, 0.315], imaginary: null },
     ]));
 
     const result = await runNativeTransient(directLedSchematic(), { stopTime: 0.002, steps: 200 });
