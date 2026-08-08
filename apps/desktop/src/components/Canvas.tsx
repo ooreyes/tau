@@ -1675,7 +1675,15 @@ function ComponentView({
             <path d="M -7 -7 L 7 7 M -7 7 L 7 -7" />
           </>
         ) : (
-          <ComponentSymbol kind={comp.kind} value={comp.value} />
+          <ComponentSymbol
+            kind={comp.kind}
+            value={comp.value}
+            // Pin captions are corrected against the body's own orientation, so
+            // the symbol has to be told what that is. Without this a part
+            // rotated 180 degrees draws every caption upside-down.
+            rotation={placement.rotation}
+            mirrored={placement.mirrored}
+          />
         )}
       </g>
       {nativeSubcircuit && subcircuitBody && subcircuitPins.map((pin) => {
@@ -1697,7 +1705,9 @@ function ComponentView({
       })}
       {showPins && (
         <g className="pin-layer" transform={overridePins ? undefined : orient}>
-          {(overridePins ?? getLocalPins(comp.kind)).map((pin) => (
+          {/* The instance's own bank, so the pin dots match the gate that is
+              actually drawn rather than always showing five inputs. */}
+          {(overridePins ?? getLocalPins(comp.kind, comp.value)).map((pin) => (
             <circle
               key={pin.id}
               className="pin-target"

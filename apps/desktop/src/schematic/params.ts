@@ -212,6 +212,25 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   vsource: { fields: [{ key: "dc", label: "DC level", unit: "V", kind: "number" }] },
   isource: { fields: [{ key: "dc", label: "DC level", unit: "A", kind: "number" }] },
   logicConstant: { fields: [{ key: "level", label: "Level (0 / 1)", unit: "V" }] },
+  // The gate function is the leading bare token the deck already reads; the
+  // input count rides the same keyed grammar. `omitWhenFallback` keeps a plain
+  // two-input gate spelled exactly "and" on disk, as every saved file has it.
+  // The parser (`engine/digitalGateSpec.ts`) clamps to what the deck can emit.
+  digitalGate: {
+    fields: [
+      { key: "fn", label: "Function", unit: "", kind: "choice", bare: true, fallback: "and",
+        choices: [
+          { value: "and", label: "AND" }, { value: "or", label: "OR" },
+          { value: "nand", label: "NAND" }, { value: "nor", label: "NOR" },
+          { value: "xor", label: "XOR" }, { value: "xnor", label: "XNOR" },
+          { value: "buf", label: "Buffer" }, { value: "not", label: "NOT" },
+          { value: "schmitt", label: "Schmitt trigger" },
+        ] },
+      { key: "inputs", label: "Inputs", unit: "", kind: "number", token: "Inputs",
+        min: 2, max: 5, fallback: "2", omitWhenFallback: true,
+        description: "How many input pins the gate exposes. A buffer, inverter or Schmitt trigger always has one." },
+    ],
+  },
   vac: AC_SOURCE("V"),
   iac: AC_SOURCE("A"),
   vpulse: {
