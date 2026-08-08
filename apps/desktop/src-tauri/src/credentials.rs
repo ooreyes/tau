@@ -5,9 +5,11 @@ use serde::{Deserialize, Serialize};
 const ASSISTANT_SERVICE: &str = "com.tau.desktop.assistant";
 const ANTHROPIC_ACCOUNT: &str = "anthropic-api-key";
 const GEMINI_ACCOUNT: &str = "gemini-api-key";
+const OPENAI_ACCOUNT: &str = "openai-api-key";
 
 const ANTHROPIC_URL_PREFIX: &str = "https://api.anthropic.com/";
 const GEMINI_URL_PREFIX: &str = "https://generativelanguage.googleapis.com/";
+const OPENAI_URL_PREFIX: &str = "https://api.openai.com/";
 const MAX_PROXY_BODY_BYTES: usize = 2 * 1024 * 1024;
 const PROXY_TIMEOUT: Duration = Duration::from_secs(600);
 
@@ -18,6 +20,7 @@ fn account_for(provider: &str) -> Result<&'static str, String> {
     match provider {
         "anthropic" => Ok(ANTHROPIC_ACCOUNT),
         "gemini" => Ok(GEMINI_ACCOUNT),
+        "openai" => Ok(OPENAI_ACCOUNT),
         other => Err(format!("Unknown assistant provider: {other}")),
     }
 }
@@ -113,6 +116,7 @@ fn allowed_cloud_url(provider: &str, url: &str) -> Result<(), String> {
     let prefix = match provider {
         "anthropic" => ANTHROPIC_URL_PREFIX,
         "gemini" => GEMINI_URL_PREFIX,
+        "openai" => OPENAI_URL_PREFIX,
         other => return Err(format!("Unknown assistant provider: {other}")),
     };
     if !url.starts_with(prefix) {
