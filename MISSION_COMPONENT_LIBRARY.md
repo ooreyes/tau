@@ -28,26 +28,58 @@ before its blockers are green.
 
 ## Architecture notes (surveyed 2026-08-08 — trust these, do not re-derive)
 
-### `schematic/params.ts` has a destructive trap
+### `schematic/params.ts` - the destructive trap is gone (item 1, 2026-08-08)
 
-`paramFields(kind, value)` returns `SCHEMA[kind] ?? []`. `decodeParams` and
-`encodeParams` are **hand-written dispatch ladders** whose fallthrough is
-`return {}` and `return ""` respectively.
+It used to be that `decodeParams`/`encodeParams` were hand-written dispatch
+ladders falling through to `{}` and `""`, so adding a multi-field `SCHEMA` entry
+without editing both ladders blanked every box and erased the component's value
+on the first keystroke. **That is fixed.** Both directions are now driven by one
+declarative table, and giving a kind a field set is a data edit.
 
-> Adding a multi-field `SCHEMA` entry **without** adding matching branches to
-> both `decodeParams` and `encodeParams` renders every box blank and **erases
-> the component's value on the first keystroke.**
+A `SCHEMA` entry is `{ fields, codec?, when? }`, or an array of those when a kind
+has variant grammars (the charge-defined capacitor is the one such kind). The
+codec defaults to `single` for a lone field and `keyed` otherwise, so the common
+case needs no `codec` at all. The four grammars:
 
-Single-field entries are safe (both functions have a generic `fields.length === 1`
-path). Nearly every kind in this mission needs multiple fields, so the first
-task is a **generic `key=value` codec** driven by the field list, not another
-hand-rolled branch. Most of the digital block already shares one grammar
-(`Vhigh= Vlow= Vt= Vhys= Td=`, parsed by `engine/digitalGateSpec.ts`), so one
-codec covers digitalGate, all four flip-flops, counter, adc, dac and sampleHold.
+- `keyed` - `MODEL Key=value …`, the default and the one a new kind should want.
+  A `bare: true` field claims the leading token when it is not itself a
+  `Key=value`. Tokens no field claims are preserved under `EXTRA_PARAM_KEY` and
+  re-emitted, so editing one box never deletes syntax the panel does not model.
+- `positional` - ordered bare tokens; only for value strings already on disk and
+  in `.asc` files (AC sources, vpulse, motor). `omittable` marks a leading field
+  that may be absent, which is how a two-token AC source means "amplitude
+  frequency" with no offset.
+- `single` - the whole trimmed value under one key.
+- `custom` - an escape hatch for a grammar with its own parser (the charge
+  capacitor, and the comparator, which decodes through the solver's own
+  `parseComparator` so the panel shows the levels it will really switch between).
 
-`ParamField` today is `{key,label,unit}`. `engine/subcircuitCatalog.ts`'s
-`SubcircuitParameter` is `{name,defaultValue,label,unit,min,max,minExclusive,description}`
-— that is the richer descriptor to grow toward.
+Per-field options: `token` (the `Name=` spelling, defaults to `key`), `fallback`
+(substituted when the stored value omits the field), `blank` (written when the
+user clears the box, if that differs from `fallback`), plus `kind`, `choices`,
+`min`, `max`, `advanced` and `description` for the editor. The `description`
+renders as a `.property-hint` under the field.
+
+`tline` was added as a data-only entry (`Td=` / `Z0=`, matching
+`engine/tlineSpec.ts`'s own defaults) to prove the claim: named Delay and
+Impedance controls, no dispatch edit. Most of the digital block already shares
+one grammar (`Vhigh= Vlow= Vt= Vhys= Td=`, parsed by `engine/digitalGateSpec.ts`),
+so `keyed` covers digitalGate, all four flip-flops, counter, adc, dac and
+sampleHold when item 5 gets there.
+
+`params.test.ts` has a catalog-driven test that, for **every** kind with a field
+set, asserts the default re-encodes to itself and that editing each field keeps
+all the others. A kind added later is covered by it the day it gets a schema.
+
+Two things to know before adding fields:
+
+- `ComponentInspector` has **two** field-render loops. The generic one renders
+  `description`; the model-chooser branch (nmos/pmos, `ShellPanels.tsx` ~1773)
+  has its own loop that does not. No MOSFET field carries a description today,
+  so nothing is dropped - but a description added there would not appear until
+  that loop renders it too.
+- `engine/subcircuitCatalog.ts`'s `SubcircuitParameter` carries a
+  `minExclusive` that `ParamField` still lacks; add it there if a kind needs it.
 
 A kind with no schema falls back to one raw "Value" textbox
 (`ShellPanels.tsx`), which writes `setValue` directly, bypassing the codec.
@@ -213,7 +245,7 @@ Landed across 26 files. Three consequences worth knowing before item 3:
   `importWarningsByPath`, the `.sim` notice rides `openDocument`'s `notice`
   toast. Each has a regression test that was checked against its own reversion.
 
-### 1. Generic parameter codec — BLOCKS items 2, 4, 5, 6, 9
+### 1. Generic parameter codec — DONE 2026-08-08 — unblocks items 2, 4, 5, 6, 9
 Replace the hand-rolled `decodeParams`/`encodeParams` ladders with a declarative
 codec driven by the field list, so adding a field set is safe by construction.
 Keep every existing round-trip working (MOSFET, charge capacitor, vac/iac,
@@ -226,6 +258,24 @@ choices?, min?, max?, advanced?: boolean, description? }`.
 **Done when:** every existing kind round-trips unchanged, a new multi-field kind
 needs no ladder edit, and a fuzz test proves encode∘decode is identity over the
 catalog defaults.
+
+Landed. The grammar table and its options are documented in the architecture
+notes above. How each clause was proved:
+
+- **Existing kinds unchanged.** `params.test.ts` went 12 -> 95 tests, written to
+  characterise every existing shape *before* the refactor. 87 of them pass
+  against both the old ladders and the new codec; that is the evidence the
+  refactor preserved behaviour rather than redefining it. The 5 that fail on the
+  old code are the new capability (`tline`, and unmodelled tokens surviving an
+  edit).
+- **No ladder edit.** `tline` is a data-only entry and reaches the panel with
+  named Delay and Impedance controls. Reverting only `params.ts` fails its tests;
+  reverting only `ShellPanels.tsx` fails the description assertion, so the hint
+  is genuinely rendered and not merely computed.
+- **Identity over catalog defaults.** The catalog-driven test walks `CATALOG`,
+  asserts `encode(decode(defaultValue)) === defaultValue.trim()` for every kind
+  with a field set, and separately asserts that editing each field preserves
+  every other one - the destructive trap, tested directly.
 
 ### 2. Potentiometer wiper + polarized capacitor meaning
 Wiper position 0..1 (default 0.5) that splits total R into two legs; the netlist

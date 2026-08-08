@@ -2,21 +2,95 @@
 
 **Status: DONE - 2026-08-08**
 
-Unit: **component-library item 0 - Test Point deleted, both load paths
-migrated.** The `testpoint` kind is gone from 26 files; retired kinds now
-drop-and-name through one registry instead of resolving to something wrong.
+Unit: **component-library item 1 - generic parameter codec.** The
+`decodeParams`/`encodeParams` dispatch ladders are replaced by one declarative
+grammar table, so giving a component kind a field set is now a data edit rather
+than an edit in three places that silently erases values when you miss one.
 Gates: typecheck green, full vitest suite green, design-system-drift green.
 `cargo test --lib` could NOT be run - see the caveat below; no Rust changed.
 
 **SHIPPABLE?** **NO** (unchanged by this unit)
 
-**Next:** component-library item 1, the generic parameter codec.
+**Next:** component-library item 2, potentiometer wiper + polarized capacitor
+meaning.
 
 **Open gate caveat:** `cargo test --lib` panics in `build.rs` on this host
 because the gitignored `resources/ngspice/build-info.json` predates the `files`
 digest that `staged_engine` requires. It is a stale local artifact, not a code
 regression, and no commit can repair it. Logged in FIX_BUGS.md 2026-08-08;
 clearing it needs one full `scripts/build-ngspice.sh` run.
+
+---
+
+### 2026-08-08 - component library item 1: generic parameter codec
+
+**Why this unit**
+
+Item 1 of the component-library mission, and the one that blocks items 2, 4, 5,
+6 and 9. Every one of those adds fields to a component kind, and the old shape
+made that unsafe.
+
+**The defect it removes**
+
+`paramFields()` read a declarative `SCHEMA` table, but `decodeParams` and
+`encodeParams` were hand-written ladders dispatching on `kind`, with `{}` and
+`""` as their fallthrough. Adding a multi-field `SCHEMA` entry without also
+adding a branch to both ladders rendered every box blank and wrote an empty
+value back on the first keystroke - the component's value was erased by the act
+of looking at it. Single-field kinds were safe by accident, because both
+functions happened to have a generic one-field path.
+
+**What changed**
+
+One table now drives both directions. An entry is `{ fields, codec?, when? }`,
+with four grammars: `keyed` (`MODEL Key=value …`, the default for multi-field
+kinds), `positional` (ordered bare tokens, kept only because those strings are
+already on disk and in `.asc` files), `single`, and `custom` for a grammar with
+its own parser. Per-field `token`/`fallback`/`blank` cover the spellings the old
+ladders open-coded, and `kind`/`choices`/`min`/`max`/`advanced`/`description`
+give the editor something to render. `description` shows as a `.property-hint`
+under the field.
+
+Two behaviour changes, both deliberate:
+
+- Tokens no field models are preserved under `EXTRA_PARAM_KEY` and re-emitted.
+  Editing W on a MOSFET written as `IRF540 W=10u AD=1p m=2` used to delete
+  `AD=1p m=2`; it no longer does.
+- `tline` gains named Delay and Impedance controls. It had no schema before, so
+  it showed one raw `Value` box. Its fallbacks match `engine/tlineSpec.ts`'s own
+  `DEFAULT_TD`/`DEFAULT_Z0`, and `parseTlineSpec` is order-independent, so the
+  encoded string parses back to the same deck line.
+
+**Evidence**
+
+`params.test.ts` went from 12 to 95 tests, written to characterise every
+existing shape before the refactor rather than after it. The load-bearing fact:
+**87 of the 95 pass against the old ladders as well.** A test suite that only
+passes on the new code would not have distinguished "preserved the behaviour"
+from "redefined it". The 5 that fail on the old code are exactly the new
+capability, and the rest are the new file's own structure.
+
+Both halves were reverted independently to check the tests are load-bearing:
+
+- old `params.ts` + new tests: 5 failed, 87 passed.
+- old `ShellPanels.tsx` + new tests: the description assertion fails, so the
+  hint is really rendered and not just computed - the failure mode this repo has
+  hit before.
+
+A catalog-driven test walks `CATALOG` and, for every kind with a field set,
+asserts `encode(decode(defaultValue)) === defaultValue.trim()` and that editing
+each field preserves every other. That is the identity proof the mission asked
+for, and it covers any kind added later automatically.
+
+**Gates**
+
+`tsc --noEmit` clean; full vitest suite green; `scripts/design-system-drift.sh`
+green (46/46 in its focused batch). No Rust touched.
+
+One process note worth keeping: running `design-system-drift.sh` and the full
+vitest suite **concurrently** flaked an async CommandPalette test that passes
+every time either runs alone. Run the gates serially; a failure observed under
+parallel load is not evidence of a regression.
 
 ---
 

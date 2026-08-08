@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import { userFacingErrorMessage } from "../lib/errorMessage";
 import { clearAllUnsavedLocalState } from "../lib/unsavedRecovery";
 import {
@@ -1919,32 +1919,35 @@ export function ComponentInspector({
           ) : (
             <>
               {visibleFields.map((field) => (
-                <label key={field.key} className="property-field">
-                  <span>{field.label}</span>
-                  {field.unit ? (
-                    <EngineeringInput
-                      label={field.label}
-                      value={field.value}
-                      unit={field.unit}
-                      onBeginChange={() => beginParamChange(field.key)}
-                      onValueChange={(value) => updateParam(field.key, value)}
-                    />
-                  ) : (
-                    <input
-                      className="mono-num"
-                      value={field.value}
-                      aria-label={field.label}
-                      spellCheck={false}
-                      onFocus={() => {
-                        editKeyRef.current = null;
-                      }}
-                      onChange={(event) => {
-                        beginParamChange(field.key);
-                        updateParam(field.key, event.currentTarget.value);
-                      }}
-                    />
-                  )}
-                </label>
+                <Fragment key={field.key}>
+                  <label className="property-field">
+                    <span>{field.label}</span>
+                    {field.unit ? (
+                      <EngineeringInput
+                        label={field.label}
+                        value={field.value}
+                        unit={field.unit}
+                        onBeginChange={() => beginParamChange(field.key)}
+                        onValueChange={(value) => updateParam(field.key, value)}
+                      />
+                    ) : (
+                      <input
+                        className="mono-num"
+                        value={field.value}
+                        aria-label={field.label}
+                        spellCheck={false}
+                        onFocus={() => {
+                          editKeyRef.current = null;
+                        }}
+                        onChange={(event) => {
+                          beginParamChange(field.key);
+                          updateParam(field.key, event.currentTarget.value);
+                        }}
+                      />
+                    )}
+                  </label>
+                  {field.description && <p className="property-hint">{field.description}</p>}
+                </Fragment>
               ))}
               {visibleFields.length === 0 && entry && (
                 <label className="property-field">

@@ -5,15 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-08 - `MISSION_COMPONENT_LIBRARY.md` item 0 landed
-(Test Point deleted, both load paths migrated). The priority mission is now
-that file, not the audit backlog below; work its items in order.
+**Status:** IDLE 2026-08-08 - `MISSION_COMPONENT_LIBRARY.md` item 1 landed
+(generic parameter codec). The priority mission is that file, not the audit
+backlog below; work its items in order.
 
-**Next unit:** mission item 1, the generic parameter codec. It blocks items 2,
-4, 5, 6 and 9, and the mission's architecture notes warn that adding a
-multi-field `SCHEMA` entry without matching `decodeParams`/`encodeParams`
-branches erases a component's value on the first keystroke. Widen
-`params.test.ts` first, then refactor under a green suite.
+**Next unit:** mission item 2, potentiometer wiper + polarized capacitor
+meaning. Item 1 unblocked it: a wiper is a new encoded key plus a netlist
+change, and adding the key is now a data edit in `params.ts` (see the mission's
+architecture notes for the grammar table). The 50% split is hardcoded in
+`spiceNetlist.ts`.
 
 **Gate caveat for the next fire:** `cargo test --lib` cannot run on this host -
 `build.rs` panics on a stale, gitignored `resources/ngspice/build-info.json`
@@ -123,6 +123,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-08 - COMPONENT-LIBRARY item 1: `params.ts` encode/decode ladders replaced by one declarative grammar table (single/keyed/positional/custom); `params.test.ts` 12 -> 95 tests, 87 of which pass against the OLD code too - that is the proof the refactor preserved behaviour; `tline` added as data only.
 - 2026-08-08 - COMPONENT-LIBRARY item 0: `testpoint` kind deleted (26 files); retired kinds now drop-and-name on BOTH load paths (`.asc` carrier would have become a 1T resistor, `.sim` would have refused the whole document); `Markers` palette section gone with its only entry.
 - 2026-08-04 - NAMED-DEVICE RECURSIVE %: harness + stdout
   unencrypted=2641 exact=399 refuse=2139 silent=0 hard-failure=103

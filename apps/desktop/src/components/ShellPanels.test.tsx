@@ -480,6 +480,32 @@ describe("ComponentInspector - charge-defined capacitor", () => {
   });
 });
 
+describe("ComponentInspector - transmission line", () => {
+  it("exposes delay and impedance as named controls and keeps the other on edit", () => {
+    const selected = {
+      id: "t-line",
+      kind: "tline" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "Td=50n Z0=75",
+      label: "T1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    // The nano prefix rides in the unit picker beside the mantissa.
+    const delay = screen.getByRole("textbox", { name: "Delay" }) as HTMLInputElement;
+    expect(delay.value).toBe("50");
+    expect((screen.getByRole("textbox", { name: "Impedance" }) as HTMLInputElement).value).toBe("75");
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+    expect(screen.getByText("Characteristic impedance of the ideal lossless line.")).toBeTruthy();
+
+    fireEvent.change(delay, { target: { value: "10" } });
+    expect(useSchematic.getState().components[0].value).toBe("Td=10n Z0=75");
+  });
+});
+
 describe("ComponentInspector - independent source waveform controls", () => {
   it("renders PWL as a mode and point rows, never as a DC-level string", () => {
     const selected = {
