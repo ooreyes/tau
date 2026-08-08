@@ -128,7 +128,18 @@ const MOSFET = (model: string): ParamSpec => ({
 const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   resistor: { fields: [{ key: "r", label: "Resistance", unit: "Ω", kind: "number" }] },
   capacitor: [CHARGE_CAPACITOR, { fields: [{ key: "c", label: "Capacitance", unit: "F", kind: "number" }] }],
-  polarizedCapacitor: [CHARGE_CAPACITOR, { fields: [{ key: "c", label: "Capacitance", unit: "F", kind: "number" }] }],
+  // The polarity marking is the only thing separating this from a plain
+  // capacitor, so the panel has to say what it costs to get it wrong. The
+  // simulation now checks it: see `simulation/polarizedCapacitor.ts`.
+  polarizedCapacitor: [CHARGE_CAPACITOR, {
+    fields: [{
+      key: "c",
+      label: "Capacitance",
+      unit: "F",
+      kind: "number",
+      description: "The terminal marked + must sit at the higher potential. Tau reports a run that drives it backwards.",
+    }],
+  }],
   inductor: { fields: [{ key: "l", label: "Inductance", unit: "H", kind: "number" }] },
   potentiometer: {
     fields: [
