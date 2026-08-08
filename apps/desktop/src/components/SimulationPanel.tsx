@@ -92,7 +92,6 @@ import { groupDelay, groupDelayYDomain } from "../simulation/groupDelay";
 import { bodeMagYDomain, dbToLinearMag, freqToFraction } from "../simulation/freqAxis";
 import {
   applyManualYToDomain,
-  parseManualYLimits,
   type ManualAxisLimits,
 } from "../simulation/manualAxisLimits";
 import type { AxisScale } from "../simulation/axisTicks";
@@ -167,6 +166,7 @@ import { usePlotViewport } from "./usePlotViewport";
 import { ScopeZoomCluster } from "./ScopeZoomCluster";
 import type { Viewport } from "../simulation/plotViewport";
 import { probeTraceOwners, visibleTransientTraces } from "../simulation/visibleTraces";
+import { AxisLimitFields } from "./AxisLimitFields";
 import { EngineeringTraceReadout } from "./EngineeringTraceReadout";
 import { traceStatistics, windowedTraceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
@@ -1315,6 +1315,8 @@ export function SimulationPanel({
             />
           </div>
 
+          <FftView result={result} preferredSignals={baseTraces.map((trace) => trace.label)} />
+
           <div className="advanced-settings">
             <button
               className="disclosure-header"
@@ -1491,8 +1493,7 @@ export function SimulationPanel({
                 </section>
 
                 <section className="advanced-group">
-                  <h4 className="advanced-group-title">Spectrum &amp; cursors</h4>
-                  <FftView result={result} preferredSignals={baseTraces.map((trace) => trace.label)} />
+                  <h4 className="advanced-group-title">Cursors</h4>
                   <CursorView
                     result={result}
                     extraTraces={exprTraces}
@@ -1962,18 +1963,12 @@ export function WaveformPlot({
     tMin: number;
     tMax: number;
   } | null>(null);
-  const [yMinDraft, setYMinDraft] = useState("");
-  const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
-  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   useEffect(() => {
     setActiveTraceId(null);
     setTraceColorOverrides({});
     setWindowStats(null);
     setManualY(null);
-    setYLimitsError(null);
-    setYMinDraft("");
-    setYMaxDraft("");
   }, [layoutKey]);
 
   // Build the full ordered trace list (all panes, all traces) the same way as
@@ -2447,73 +2442,12 @@ export function WaveformPlot({
         </div>
       )}
       {allTraces.length > 0 && (
-        <div className="meter-row analysis-meter" aria-label="Transient Y limits">
-          <label className="axis-limit-field">
-            Ymin
-            <Input
-              variant="mono"
-              size="sm"
-              className="w-20"
-              value={yMinDraft}
-              aria-label="Transient Y min"
-              placeholder={autoYBounds ? String(autoYBounds.min) : "0"}
-              onChange={(e) => {
-                setYMinDraft(e.currentTarget.value);
-                if (yLimitsError) setYLimitsError(null);
-              }}
-            />
-          </label>
-          <label className="axis-limit-field">
-            Ymax
-            <Input
-              variant="mono"
-              size="sm"
-              className="w-20"
-              value={yMaxDraft}
-              aria-label="Transient Y max"
-              placeholder={autoYBounds ? String(autoYBounds.max) : "5"}
-              onChange={(e) => {
-                setYMaxDraft(e.currentTarget.value);
-                if (yLimitsError) setYLimitsError(null);
-              }}
-            />
-          </label>
-          <Button
-            size="sm"
-            variant="outline"
-            aria-label="Apply transient Y limits"
-            onClick={() => {
-              const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
-              if (!parsed.ok) {
-                setYLimitsError(parsed.error);
-                return;
-              }
-              setManualY(parsed.limits);
-              setYLimitsError(null);
-            }}
-          >
-            Apply Y
-          </Button>
-          <Button
-            size="sm"
-            variant={manualY ? "default" : "outline"}
-            aria-label="Autoscale transient Y"
-            aria-pressed={!manualY}
-            onClick={() => {
-              setManualY(null);
-              setYLimitsError(null);
-              setYMinDraft("");
-              setYMaxDraft("");
-            }}
-          >
-            Autoscale Y
-          </Button>
-        </div>
-      )}
-      {yLimitsError && (
-        <div className="expr-error" role="alert">
-          {yLimitsError}
-        </div>
+        <AxisLimitFields
+          label="Transient"
+          value={manualY}
+          autoBounds={autoYBounds}
+          onChange={setManualY}
+        />
       )}
     </div>
     <Dialog open={windowStats !== null} onOpenChange={(open) => { if (!open) setWindowStats(null); }}>
@@ -3244,10 +3178,7 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
-  const [yMinDraft, setYMinDraft] = useState("");
-  const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
-  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
 
   const overlays = useMemo(() => {
     if (!success) return [];
@@ -3271,9 +3202,6 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
 
   useEffect(() => {
     setManualY(null);
-    setYLimitsError(null);
-    setYMinDraft("");
-    setYMaxDraft("");
   }, [yScale]);
 
   const plot = useMemo(() => {
@@ -3562,87 +3490,19 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
         <Metric label="TOT INOISE" value={formatEngineering(result.totalInputNoise, result.inoiseUnit.replace("/√Hz", ""), 3)} tone="cyan" />
         <Metric label="POINTS" value={String(result.freqs.length)} tone="cream" />
       </div>
-      <div className="meter-row analysis-meter" aria-label="Noise density Y limits">
-        <label className="axis-limit-field">
-          Ymin
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-24"
-            value={yMinDraft}
-            aria-label="Noise density Y min"
-            placeholder={
-              plot
+      <AxisLimitFields
+        label="Noise density"
+        value={manualY}
+        autoBounds={{ min: Number(plot
                 ? String(plot.yScale === "log" ? 10 ** plot.yMin : plot.yMin)
-                : "1e-9"
-            }
-            onChange={(e) => {
-              setYMinDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <label className="axis-limit-field">
-          Ymax
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-24"
-            value={yMaxDraft}
-            aria-label="Noise density Y max"
-            placeholder={
-              plot
+                : "1e-9"), max: Number(plot
                 ? String(plot.yScale === "log" ? 10 ** plot.yMax : plot.yMax)
-                : "1e-6"
-            }
-            onChange={(e) => {
-              setYMaxDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label="Apply noise density Y limits"
-          disabled={!plot}
-          onClick={() => {
-            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
-            if (!parsed.ok) {
-              setYLimitsError(parsed.error);
-              return;
-            }
-            if (yScale === "log" && (parsed.limits.yMin <= 0 || parsed.limits.yMax <= 0)) {
-              setYLimitsError("Log noise Y limits must be positive.");
-              return;
-            }
-            setManualY(parsed.limits);
-            setYLimitsError(null);
-          }}
-        >
-          Apply Y
-        </Button>
-        <Button
-          size="sm"
-          variant={manualY ? "default" : "outline"}
-          aria-label="Autoscale noise density Y"
-          aria-pressed={!manualY}
-          disabled={!plot}
-          onClick={() => {
-            setManualY(null);
-            setYLimitsError(null);
-            setYMinDraft("");
-            setYMaxDraft("");
-          }}
-        >
-          Autoscale Y
-        </Button>
-      </div>
-      {yLimitsError && (
-        <div className="expr-error" role="alert">
-          {yLimitsError}
-        </div>
-      )}
+                : "1e-6") }}
+        disabled={!plot}
+        validate={(l) => yScale === "log" && ((l.yMin ?? 1) <= 0 || (l.yMax ?? 1) <= 0)
+          ? "Log Y limits must be positive." : null}
+        onChange={setManualY}
+      />
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>
@@ -3769,10 +3629,7 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
-  const [yMinDraft, setYMinDraft] = useState("");
-  const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
-  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
@@ -3837,9 +3694,6 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
 
   useEffect(() => {
     setManualY(null);
-    setYLimitsError(null);
-    setYMinDraft("");
-    setYMaxDraft("");
   }, [chosen, windowFn]);
 
   const domain = useMemo<Viewport>(
@@ -3898,11 +3752,22 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
         aria-label="Toggle FFT spectrum"
       >
         <span className="disclosure-label">FFT spectrum</span>
+        <span className="disclosure-purpose">what frequencies a waveform contains</span>
         <span className="disclosure-rule" aria-hidden="true" />
         <span className={`disclosure-chevron${open ? " open" : ""}`}>›</span>
       </button>
       {open && (
         <>
+          {/* A spectrum answers a different question from the scope: not "what
+              does this look like over time" but "what is it made of". Saying so
+              once costs a line and saves the reader guessing whether this pane
+              is for them. */}
+          <p className="fft-purpose">
+            A transient plot shows a waveform over time; this shows what it is
+            made of. Use it to read distortion as harmonics of the fundamental,
+            find an oscillation or noise peak you cannot see in the time domain,
+            or confirm a filter is rejecting the band you expect.
+          </p>
           <div className="fft-control-bar">
             <label>
               <span>Signal</span>
@@ -4023,28 +3888,59 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
                       </g>
                     );
                   })}
-                {plot && insights && [
-                  insights.fundamental && { ...insights.fundamental, label: "PEAK" },
-                  ...insights.harmonics.slice(0, 5).map((harmonic) => ({ ...harmonic, label: `H${harmonic.order}` })),
-                ].filter((tone): tone is NonNullable<typeof tone> => Boolean(tone)).map((tone) => {
-                  if (
-                    !(tone.frequencyHz > 0)
-                    || tone.frequencyHz < viewport.xMin
-                    || tone.frequencyHz > viewport.xMax
-                    || tone.amplitudeDb < viewport.yMin
-                    || tone.amplitudeDb > viewport.yMax
-                  ) return null;
-                  const x = PLOT_PAD + ((Math.log10(tone.frequencyHz) - Math.log10(viewport.xMin))
-                    / (Math.log10(viewport.xMax) - Math.log10(viewport.xMin) || 1)) * (PLOT_WIDTH - PLOT_PAD * 2);
-                  const y = PLOT_HEIGHT - PLOT_PAD - ((tone.amplitudeDb - viewport.yMin)
-                    / (viewport.yMax - viewport.yMin || 1)) * (PLOT_HEIGHT - PLOT_PAD * 2);
-                  return (
-                    <g key={tone.label} className="fft-tone-marker" transform={`translate(${x} ${y})`}>
-                      <circle r="2.4" />
-                      <text x="4" y="-4">{tone.label}</text>
-                    </g>
-                  );
-                })}
+                {plot && insights && (() => {
+                  // Harmonics of a real signal cluster tightly on a log axis, so
+                  // a fixed label offset stacks PEAK on H2 and piles H3..H6 into
+                  // one unreadable blob - and near the frame the text runs off
+                  // the plot entirely. Place them together: keep each label
+                  // inside the frame, and push a colliding one onto the next
+                  // line instead of over its neighbour.
+                  const LABEL_H = 11;
+                  const LABEL_W = 26;
+                  const placed: { x: number; top: number; bottom: number }[] = [];
+                  return [
+                    insights.fundamental && { ...insights.fundamental, label: "PEAK" },
+                    ...insights.harmonics.slice(0, 5).map((h) => ({ ...h, label: `H${h.order}` })),
+                  ].filter((tone): tone is NonNullable<typeof tone> => Boolean(tone)).map((tone) => {
+                    if (
+                      !(tone.frequencyHz > 0)
+                      || tone.frequencyHz < viewport.xMin
+                      || tone.frequencyHz > viewport.xMax
+                      || tone.amplitudeDb < viewport.yMin
+                      || tone.amplitudeDb > viewport.yMax
+                    ) return null;
+                    const x = PLOT_PAD + ((Math.log10(tone.frequencyHz) - Math.log10(viewport.xMin))
+                      / (Math.log10(viewport.xMax) - Math.log10(viewport.xMin) || 1)) * (PLOT_WIDTH - PLOT_PAD * 2);
+                    const y = PLOT_HEIGHT - PLOT_PAD - ((tone.amplitudeDb - viewport.yMin)
+                      / (viewport.yMax - viewport.yMin || 1)) * (PLOT_HEIGHT - PLOT_PAD * 2);
+
+                    // Flip the label to the marker's left when it would cross
+                    // the right edge.
+                    const flip = x + LABEL_W > PLOT_WIDTH - PLOT_PAD;
+                    let labelY = y - 5;
+                    for (const box of placed) {
+                      const sameColumn = Math.abs(box.x - x) < LABEL_W;
+                      if (sameColumn && labelY > box.top - LABEL_H && labelY < box.bottom + 2) {
+                        labelY = box.bottom + LABEL_H;
+                      }
+                    }
+                    labelY = Math.max(PLOT_PAD + LABEL_H, Math.min(labelY, PLOT_HEIGHT - PLOT_PAD - 2));
+                    placed.push({ x, top: labelY - LABEL_H, bottom: labelY });
+
+                    return (
+                      <g key={tone.label} className="fft-tone-marker">
+                        <circle cx={x} cy={y} r="2.4" />
+                        <text
+                          x={flip ? x - 4 : x + 4}
+                          y={labelY}
+                          textAnchor={flip ? "end" : "start"}
+                        >
+                          {tone.label}
+                        </text>
+                      </g>
+                    );
+                  });
+                })()}
               </svg>
               {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
             </div>
@@ -4059,75 +3955,13 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
               )}
             </div>
           </div>
-          <div className="meter-row analysis-meter" aria-label="FFT magnitude Y limits">
-            <label className="axis-limit-field">
-              Ymin
-              <Input
-                variant="mono"
-                size="sm"
-                className="w-20"
-                value={yMinDraft}
-                aria-label="FFT magnitude Y min"
-                placeholder={plot ? String(plot.minDb) : "-60"}
-                onChange={(e) => {
-                  setYMinDraft(e.currentTarget.value);
-                  if (yLimitsError) setYLimitsError(null);
-                }}
-              />
-            </label>
-            <label className="axis-limit-field">
-              Ymax
-              <Input
-                variant="mono"
-                size="sm"
-                className="w-20"
-                value={yMaxDraft}
-                aria-label="FFT magnitude Y max"
-                placeholder={plot ? String(plot.maxDb) : "0"}
-                onChange={(e) => {
-                  setYMaxDraft(e.currentTarget.value);
-                  if (yLimitsError) setYLimitsError(null);
-                }}
-              />
-            </label>
-            <Button
-              size="sm"
-              variant="outline"
-              aria-label="Apply FFT magnitude Y limits"
-              disabled={!plot}
-              onClick={() => {
-                const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
-                if (!parsed.ok) {
-                  setYLimitsError(parsed.error);
-                  return;
-                }
-                setManualY(parsed.limits);
-                setYLimitsError(null);
-              }}
-            >
-              Apply Y
-            </Button>
-            <Button
-              size="sm"
-              variant={manualY ? "default" : "outline"}
-              aria-label="Autoscale FFT magnitude Y"
-              aria-pressed={!manualY}
-              disabled={!plot}
-              onClick={() => {
-                setManualY(null);
-                setYLimitsError(null);
-                setYMinDraft("");
-                setYMaxDraft("");
-              }}
-            >
-              Autoscale Y
-            </Button>
-          </div>
-          {yLimitsError && (
-            <div className="expr-error" role="alert">
-              {yLimitsError}
-            </div>
-          )}
+          <AxisLimitFields
+            label="FFT magnitude"
+            value={manualY}
+            autoBounds={{ min: Number(plot ? String(plot.minDb) : "-60"), max: Number(plot ? String(plot.maxDb) : "0") }}
+            disabled={!plot}
+            onChange={setManualY}
+          />
           {cursorsOn && (
             <div className="cursor-sliders">
               <label>
@@ -4435,14 +4269,8 @@ export function AcPlot({
   const [phaseWindowOpen, setPhaseWindowOpen] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
-  const [yMinDraft, setYMinDraft] = useState("");
-  const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
-  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
-  const [phaseYMinDraft, setPhaseYMinDraft] = useState("");
-  const [phaseYMaxDraft, setPhaseYMaxDraft] = useState("");
   const [phaseManualY, setPhaseManualY] = useState<ManualAxisLimits | null>(null);
-  const [phaseYLimitsError, setPhaseYLimitsError] = useState<string | null>(null);
   const phaseTicks = tickCountsFromSize(phaseSize);
   const detachedPhaseClipId = useId();
   const [detachedPhaseMeasureRef, detachedPhaseSize] = useMeasuredSize<SVGSVGElement>();
@@ -4871,7 +4699,6 @@ export function AcPlot({
             onClick={() => {
               setMagYScale("log");
               setManualY(null);
-              setYLimitsError(null);
             }}
           >
             Log Y
@@ -4883,7 +4710,6 @@ export function AcPlot({
             onClick={() => {
               setMagYScale("linear");
               setManualY(null);
-              setYLimitsError(null);
             }}
           >
             Lin Y
@@ -4895,9 +4721,6 @@ export function AcPlot({
             onClick={() => {
               setLowerMode("phase");
               setPhaseManualY(null);
-              setPhaseYLimitsError(null);
-              setPhaseYMinDraft("");
-              setPhaseYMaxDraft("");
             }}
           >
             Phase
@@ -4909,9 +4732,6 @@ export function AcPlot({
             onClick={() => {
               setLowerMode("groupDelay");
               setPhaseManualY(null);
-              setPhaseYLimitsError(null);
-              setPhaseYMinDraft("");
-              setPhaseYMaxDraft("");
             }}
           >
             Group delay
@@ -4970,156 +4790,28 @@ export function AcPlot({
         />
         <Metric label="PANES" value={String(magPaneLayout.length)} tone="cream" />
       </div>
-      <div className="meter-row analysis-meter" aria-label="Bode magnitude Y limits">
-        <label className="axis-limit-field">
-          Ymin
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMinDraft}
-            aria-label="Bode magnitude Y min"
-            placeholder={plot ? String(plot.yMin) : "-60"}
-            onChange={(e) => {
-              setYMinDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <label className="axis-limit-field">
-          Ymax
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMaxDraft}
-            aria-label="Bode magnitude Y max"
-            placeholder={plot ? String(plot.yMax) : "0"}
-            onChange={(e) => {
-              setYMaxDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label="Apply Bode magnitude Y limits"
-          disabled={!plot}
-          onClick={() => {
-            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
-            if (!parsed.ok) {
-              setYLimitsError(parsed.error);
-              return;
-            }
-            setManualY(parsed.limits);
-            setYLimitsError(null);
-          }}
-        >
-          Apply Y
-        </Button>
-        <Button
-          size="sm"
-          variant={manualY ? "default" : "outline"}
-          aria-label="Autoscale Bode magnitude Y"
-          aria-pressed={!manualY}
-          disabled={!plot}
-          onClick={() => {
-            setManualY(null);
-            setYLimitsError(null);
-            setYMinDraft("");
-            setYMaxDraft("");
-          }}
-        >
-          Autoscale Y
-        </Button>
-      </div>
-      {yLimitsError && (
-        <div className="expr-error" role="alert">
-          {yLimitsError}
-        </div>
-      )}
-      <div className="meter-row analysis-meter" aria-label="Bode phase Y limits">
-        <label className="axis-limit-field">
-          Ymin
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={phaseYMinDraft}
-            aria-label="Bode phase Y min"
-            placeholder={
-              plot
+      <AxisLimitFields
+        label="Bode magnitude"
+        value={manualY}
+        autoBounds={{ min: Number(plot ? String(plot.yMin) : "-60"), max: Number(plot ? String(plot.yMax) : "0") }}
+        disabled={!plot}
+        onChange={setManualY}
+      />
+      <AxisLimitFields
+        label="Bode phase"
+        value={phaseManualY}
+        autoBounds={{ min: Number(plot
                 ? String(lowerMode === "groupDelay" ? plot.tauYMin : plot.minPh)
                 : lowerMode === "groupDelay"
                   ? "0"
-                  : "-180"
-            }
-            onChange={(e) => {
-              setPhaseYMinDraft(e.currentTarget.value);
-              if (phaseYLimitsError) setPhaseYLimitsError(null);
-            }}
-          />
-        </label>
-        <label className="axis-limit-field">
-          Ymax
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={phaseYMaxDraft}
-            aria-label="Bode phase Y max"
-            placeholder={
-              plot
+                  : "-180"), max: Number(plot
                 ? String(lowerMode === "groupDelay" ? plot.tauYMax : plot.maxPh)
                 : lowerMode === "groupDelay"
                   ? "1e-3"
-                  : "180"
-            }
-            onChange={(e) => {
-              setPhaseYMaxDraft(e.currentTarget.value);
-              if (phaseYLimitsError) setPhaseYLimitsError(null);
-            }}
-          />
-        </label>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label="Apply Bode phase Y limits"
-          disabled={!plot}
-          onClick={() => {
-            const parsed = parseManualYLimits(phaseYMinDraft, phaseYMaxDraft);
-            if (!parsed.ok) {
-              setPhaseYLimitsError(parsed.error);
-              return;
-            }
-            setPhaseManualY(parsed.limits);
-            setPhaseYLimitsError(null);
-          }}
-        >
-          Apply φY
-        </Button>
-        <Button
-          size="sm"
-          variant={phaseManualY ? "default" : "outline"}
-          aria-label="Autoscale Bode phase Y"
-          aria-pressed={!phaseManualY}
-          disabled={!plot}
-          onClick={() => {
-            setPhaseManualY(null);
-            setPhaseYLimitsError(null);
-            setPhaseYMinDraft("");
-            setPhaseYMaxDraft("");
-          }}
-        >
-          Autoscale φY
-        </Button>
-      </div>
-      {phaseYLimitsError && (
-        <div className="expr-error" role="alert">
-          {phaseYLimitsError}
-        </div>
-      )}
+                  : "180") }}
+        disabled={!plot}
+        onChange={setPhaseManualY}
+      />
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>
@@ -5594,10 +5286,7 @@ export function DcPlot({
   /** Right-click DC legend math → add a DC expression overlay. */
   onPlotExpression?: (expression: string) => void;
 }) {
-  const [yMinDraft, setYMinDraft] = useState("");
-  const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
-  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
 
   const sweep = result?.ok ? result.sweep : [];
   const allTraces = useMemo(() => {
@@ -5707,75 +5396,12 @@ export function DcPlot({
         <Metric label="NETS" value={String(traces.length)} tone="cream" />
         <Metric label="PANES" value={String(paneLayout.length)} tone="cream" />
       </div>
-      <div className="meter-row analysis-meter" aria-label="DC sweep Y limits">
-        <label className="axis-limit-field">
-          Ymin
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMinDraft}
-            aria-label="DC sweep Y min"
-            placeholder={globalPlot ? String(globalPlot.vMin) : "0"}
-            onChange={(e) => {
-              setYMinDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <label className="axis-limit-field">
-          Ymax
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMaxDraft}
-            aria-label="DC sweep Y max"
-            placeholder={globalPlot ? String(globalPlot.vMax) : "5"}
-            onChange={(e) => {
-              setYMaxDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label="Apply DC sweep Y limits"
-          disabled={!globalPlot}
-          onClick={() => {
-            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
-            if (!parsed.ok) {
-              setYLimitsError(parsed.error);
-              return;
-            }
-            setManualY(parsed.limits);
-            setYLimitsError(null);
-          }}
-        >
-          Apply Y
-        </Button>
-        <Button
-          size="sm"
-          variant={manualY ? "default" : "outline"}
-          aria-label="Autoscale DC sweep Y"
-          aria-pressed={!manualY}
-          disabled={!globalPlot}
-          onClick={() => {
-            setManualY(null);
-            setYLimitsError(null);
-            setYMinDraft("");
-            setYMaxDraft("");
-          }}
-        >
-          Autoscale Y
-        </Button>
-      </div>
-      {yLimitsError && (
-        <div className="expr-error" role="alert">
-          {yLimitsError}
-        </div>
-      )}
+      <AxisLimitFields
+        label="DC sweep"
+        value={manualY}
+        autoBounds={{ min: Number(globalPlot ? String(globalPlot.vMin) : "0"), max: Number(globalPlot ? String(globalPlot.vMax) : "5") }}
+        onChange={setManualY}
+      />
     </>
   );
 }
@@ -6036,10 +5662,7 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
   const [cf2, setCf2] = useState(0.75);
   /** Legend click hides a step member; never allow hiding the last visible curve. */
   const [hiddenLabels, setHiddenLabels] = useState<string[]>([]);
-  const [yMinDraft, setYMinDraft] = useState("");
-  const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
-  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
 
   const exprFamily = useMemo(() => {
     if (!activeExpr) return null;
@@ -6119,9 +5742,6 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
 
   useEffect(() => {
     setManualY(null);
-    setYLimitsError(null);
-    setYMinDraft("");
-    setYMaxDraft("");
   }, [activeExpr, family?.signal]);
 
   const toggleStepMember = (label: string) => {
@@ -6418,73 +6038,12 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
           Export PNG
         </Button>
       </div>
-      <div className="meter-row analysis-meter" aria-label="Step family Y limits">
-        <label className="axis-limit-field">
-          Ymin
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMinDraft}
-            aria-label="Step family Y min"
-            placeholder={String(visibleFrame.min)}
-            onChange={(e) => {
-              setYMinDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <label className="axis-limit-field">
-          Ymax
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMaxDraft}
-            aria-label="Step family Y max"
-            placeholder={String(visibleFrame.max)}
-            onChange={(e) => {
-              setYMaxDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label="Apply step family Y limits"
-          onClick={() => {
-            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
-            if (!parsed.ok) {
-              setYLimitsError(parsed.error);
-              return;
-            }
-            setManualY(parsed.limits);
-            setYLimitsError(null);
-          }}
-        >
-          Apply Y
-        </Button>
-        <Button
-          size="sm"
-          variant={manualY ? "default" : "outline"}
-          aria-label="Autoscale step family Y"
-          aria-pressed={!manualY}
-          onClick={() => {
-            setManualY(null);
-            setYLimitsError(null);
-            setYMinDraft("");
-            setYMaxDraft("");
-          }}
-        >
-          Autoscale Y
-        </Button>
-      </div>
-      {yLimitsError && (
-        <div className="expr-error" role="alert">
-          {yLimitsError}
-        </div>
-      )}
+      <AxisLimitFields
+        label="Step family"
+        value={manualY}
+        autoBounds={{ min: Number(String(visibleFrame.min)), max: Number(String(visibleFrame.max)) }}
+        onChange={setManualY}
+      />
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>
@@ -6614,10 +6173,7 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
   const [cf2, setCf2] = useState(0.75);
   /** Legend click hides a step member; never allow hiding the last visible curve. */
   const [hiddenLabels, setHiddenLabels] = useState<string[]>([]);
-  const [yMinDraft, setYMinDraft] = useState("");
-  const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
-  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   const probeOverlay = useMemo(() => acFamilyOverlaySeries(family), [family]);
   const exprOverlay = useMemo(() => {
     if (!activeExpr) return null;
@@ -6685,9 +6241,6 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
 
   useEffect(() => {
     setManualY(null);
-    setYLimitsError(null);
-    setYMinDraft("");
-    setYMaxDraft("");
   }, [activeExpr, overlay?.signal]);
 
   const toggleAcStepMember = (label: string) => {
@@ -6907,73 +6460,12 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
           Export PNG
         </Button>
       </div>
-      <div className="meter-row analysis-meter" aria-label="AC step family Y limits">
-        <label className="axis-limit-field">
-          Ymin
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMinDraft}
-            aria-label="AC step family Y min"
-            placeholder={String(plot.min)}
-            onChange={(e) => {
-              setYMinDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <label className="axis-limit-field">
-          Ymax
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMaxDraft}
-            aria-label="AC step family Y max"
-            placeholder={String(plot.max)}
-            onChange={(e) => {
-              setYMaxDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label="Apply AC step family Y limits"
-          onClick={() => {
-            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
-            if (!parsed.ok) {
-              setYLimitsError(parsed.error);
-              return;
-            }
-            setManualY(parsed.limits);
-            setYLimitsError(null);
-          }}
-        >
-          Apply Y
-        </Button>
-        <Button
-          size="sm"
-          variant={manualY ? "default" : "outline"}
-          aria-label="Autoscale AC step family Y"
-          aria-pressed={!manualY}
-          onClick={() => {
-            setManualY(null);
-            setYLimitsError(null);
-            setYMinDraft("");
-            setYMaxDraft("");
-          }}
-        >
-          Autoscale Y
-        </Button>
-      </div>
-      {yLimitsError && (
-        <div className="expr-error" role="alert">
-          {yLimitsError}
-        </div>
-      )}
+      <AxisLimitFields
+        label="AC step family"
+        value={manualY}
+        autoBounds={{ min: Number(String(plot.min)), max: Number(String(plot.max)) }}
+        onChange={setManualY}
+      />
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>
@@ -7051,10 +6543,7 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
   const [cf2, setCf2] = useState(0.75);
   /** Legend click hides a step member; never allow hiding the last visible curve. */
   const [hiddenLabels, setHiddenLabels] = useState<string[]>([]);
-  const [yMinDraft, setYMinDraft] = useState("");
-  const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
-  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   const probeOverlay = useMemo(() => dcFamilyOverlaySeries(family), [family]);
   const exprOverlay = useMemo(() => {
     if (!activeExpr) return null;
@@ -7117,9 +6606,6 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
 
   useEffect(() => {
     setManualY(null);
-    setYLimitsError(null);
-    setYMinDraft("");
-    setYMaxDraft("");
   }, [activeExpr, overlay?.signal]);
 
   const toggleDcStepMember = (label: string) => {
@@ -7336,73 +6822,12 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
           Export PNG
         </Button>
       </div>
-      <div className="meter-row analysis-meter" aria-label="DC step family Y limits">
-        <label className="axis-limit-field">
-          Ymin
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMinDraft}
-            aria-label="DC step family Y min"
-            placeholder={String(plot.vMin)}
-            onChange={(e) => {
-              setYMinDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <label className="axis-limit-field">
-          Ymax
-          <Input
-            variant="mono"
-            size="sm"
-            className="w-20"
-            value={yMaxDraft}
-            aria-label="DC step family Y max"
-            placeholder={String(plot.vMax)}
-            onChange={(e) => {
-              setYMaxDraft(e.currentTarget.value);
-              if (yLimitsError) setYLimitsError(null);
-            }}
-          />
-        </label>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label="Apply DC step family Y limits"
-          onClick={() => {
-            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
-            if (!parsed.ok) {
-              setYLimitsError(parsed.error);
-              return;
-            }
-            setManualY(parsed.limits);
-            setYLimitsError(null);
-          }}
-        >
-          Apply Y
-        </Button>
-        <Button
-          size="sm"
-          variant={manualY ? "default" : "outline"}
-          aria-label="Autoscale DC step family Y"
-          aria-pressed={!manualY}
-          onClick={() => {
-            setManualY(null);
-            setYLimitsError(null);
-            setYMinDraft("");
-            setYMaxDraft("");
-          }}
-        >
-          Autoscale Y
-        </Button>
-      </div>
-      {yLimitsError && (
-        <div className="expr-error" role="alert">
-          {yLimitsError}
-        </div>
-      )}
+      <AxisLimitFields
+        label="DC step family"
+        value={manualY}
+        autoBounds={{ min: Number(String(plot.vMin)), max: Number(String(plot.vMax)) }}
+        onChange={setManualY}
+      />
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>

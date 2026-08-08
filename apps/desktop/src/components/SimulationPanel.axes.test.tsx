@@ -42,6 +42,28 @@ function makeTranResult(): Extract<AnalysisResult, { ok: true }> {
   };
 }
 
+/**
+ * Pin a pane's Y limits and take them off again.
+ *
+ * The old control needed an "Apply Y" press and an "Autoscale Y" press; each
+ * edge now commits on blur and an empty field autoranges. Asserting on the
+ * rendered axis rather than on button state also makes these tests check the
+ * thing that matters — that pinning actually moves the axis and clearing puts
+ * it back — instead of that two buttons toggled.
+ */
+function axisTickText(): string {
+  return [...document.querySelectorAll("text")].map((t) => t.textContent).join("|");
+}
+
+function pinYLimits(label: string, min: string, max: string) {
+  const lo = screen.getByLabelText(`${label} Y min`);
+  const hi = screen.getByLabelText(`${label} Y max`);
+  fireEvent.change(lo, { target: { value: min } });
+  fireEvent.blur(lo);
+  fireEvent.change(hi, { target: { value: max } });
+  fireEvent.blur(hi);
+}
+
 describe("WaveformPlot (TRAN) - real tick axes", () => {
   it("selects a trace color and glides an active cursor directly over the plot", async () => {
     const result = makeTranResult();
@@ -114,7 +136,7 @@ describe("WaveformPlot (TRAN) - real tick axes", () => {
     expect(Number(yTick?.getAttribute("x")) - Number(titles[1]?.getAttribute("x"))).toBeGreaterThanOrEqual(30);
   });
 
-  it("Apply Y locks transient left axis; Autoscale Y restores autorange", () => {
+  it("pins the transient left axis and restores autorange when cleared", () => {
     const result = makeTranResult();
     render(
       <WaveformPlot
@@ -125,13 +147,11 @@ describe("WaveformPlot (TRAN) - real tick axes", () => {
       />,
     );
     expect(screen.getByLabelText("Transient Y limits")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Transient Y min"), { target: { value: "0" } });
-    fireEvent.change(screen.getByLabelText("Transient Y max"), { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply transient Y limits" }));
-    const autoscale = screen.getByRole("button", { name: "Autoscale transient Y" });
-    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(autoscale);
-    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+    const auto = axisTickText();
+    pinYLimits("Transient", "0", "2");
+    expect(axisTickText(), "pinning the axis did not change it").not.toBe(auto);
+    pinYLimits("Transient", "", "");
+    expect(axisTickText(), "clearing both edges did not restore autorange").toBe(auto);
   });
 
   it("splits x/y ticks across panes in multi-pane mode and only labels the bottom pane's x axis", () => {
@@ -345,7 +365,7 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(container.querySelectorAll("path.scope-trace").length).toBeGreaterThan(0);
   });
 
-  it("Apply Y locks Bode magnitude axis; Autoscale Y restores autorange", () => {
+  it("pins the Bode magnitude axis and restores autorange when cleared", () => {
     const freqs = [10, 100, 1000, 10000];
     const result: AcResult = {
       ok: true,
@@ -354,19 +374,16 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
       warnings: [],
     };
     render(<AcPlot result={result} />);
-    const limits = screen.getByLabelText("Bode magnitude Y limits");
-    fireEvent.change(screen.getByLabelText("Bode magnitude Y min"), { target: { value: "-40" } });
-    fireEvent.change(screen.getByLabelText("Bode magnitude Y max"), { target: { value: "10" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply Bode magnitude Y limits" }));
+    expect(screen.getByLabelText("Bode magnitude Y limits")).toBeTruthy();
+    const auto = axisTickText();
+    pinYLimits("Bode magnitude", "-40", "10");
     expect(screen.queryByRole("alert")).toBeNull();
-    const autoscale = screen.getByRole("button", { name: "Autoscale Bode magnitude Y" });
-    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(autoscale);
-    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
-    expect(limits).toBeTruthy();
+    expect(axisTickText(), "pinning the axis did not change it").not.toBe(auto);
+    pinYLimits("Bode magnitude", "", "");
+    expect(axisTickText(), "clearing both edges did not restore autorange").toBe(auto);
   });
 
-  it("Apply φY locks Bode phase axis; Autoscale φY restores autorange", () => {
+  it("pins the Bode phase axis and restores autorange when cleared", () => {
     const freqs = [10, 100, 1000, 10000];
     const result: AcResult = {
       ok: true,
@@ -376,13 +393,11 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     };
     render(<AcPlot result={result} />);
     expect(screen.getByLabelText("Bode phase Y limits")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Bode phase Y min"), { target: { value: "-90" } });
-    fireEvent.change(screen.getByLabelText("Bode phase Y max"), { target: { value: "0" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply Bode phase Y limits" }));
-    const autoscale = screen.getByRole("button", { name: "Autoscale Bode phase Y" });
-    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(autoscale);
-    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+    const auto = axisTickText();
+    pinYLimits("Bode phase", "-90", "90");
+    expect(axisTickText(), "pinning the axis did not change it").not.toBe(auto);
+    pinYLimits("Bode phase", "", "");
+    expect(axisTickText(), "clearing both edges did not restore autorange").toBe(auto);
   });
 
   it("Group delay toggle swaps the lower Bode pane to τ (s)", () => {
@@ -574,7 +589,7 @@ describe("DcPlot - linear sweep/volts ticks", () => {
     expect(onPlotExpression).toHaveBeenCalledWith("abs(V(out))");
   });
 
-  it("Apply Y locks DC sweep axis; Autoscale Y restores autorange", () => {
+  it("pins the DC sweep axis and restores autorange when cleared", () => {
     const result: DcSweepResult = {
       ok: true,
       source: "V1",
@@ -584,14 +599,11 @@ describe("DcPlot - linear sweep/volts ticks", () => {
     };
     render(<DcPlot result={result} />);
     expect(screen.getByLabelText("DC sweep Y limits")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("DC sweep Y min"), { target: { value: "0" } });
-    fireEvent.change(screen.getByLabelText("DC sweep Y max"), { target: { value: "1" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply DC sweep Y limits" }));
-    expect(screen.queryByRole("alert")).toBeNull();
-    const autoscale = screen.getByRole("button", { name: "Autoscale DC sweep Y" });
-    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(autoscale);
-    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+    const auto = axisTickText();
+    pinYLimits("DC sweep", "0", "5");
+    expect(axisTickText(), "pinning the axis did not change it").not.toBe(auto);
+    pinYLimits("DC sweep", "", "");
+    expect(axisTickText(), "clearing both edges did not restore autorange").toBe(auto);
   });
 
   it("splits multiple nets into automatic one-net-per-pane cards with statistics", () => {
@@ -687,7 +699,7 @@ describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {
     expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
   });
 
-  it("Apply Y locks noise density axis; Autoscale Y restores autorange", () => {
+  it("pins the noise density axis and restores autorange when cleared", () => {
     const freqs = [10, 100, 1000, 10000];
     const onoise = [1e-8, 1e-7, 1e-6, 1e-7];
     const result: NoiseResult = {
@@ -703,14 +715,11 @@ describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {
     };
     render(<NoisePlot result={result} />);
     expect(screen.getByLabelText("Noise density Y limits")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Noise density Y min"), { target: { value: "1e-9" } });
-    fireEvent.change(screen.getByLabelText("Noise density Y max"), { target: { value: "1e-6" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply noise density Y limits" }));
-    expect(screen.queryByRole("alert")).toBeNull();
-    const autoscale = screen.getByRole("button", { name: "Autoscale noise density Y" });
-    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(autoscale);
-    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+    const auto = axisTickText();
+    pinYLimits("Noise density", "1e-9", "1e-6");
+    expect(axisTickText(), "pinning the axis did not change it").not.toBe(auto);
+    pinYLimits("Noise density", "", "");
+    expect(axisTickText(), "clearing both edges did not restore autorange").toBe(auto);
   });
 
   it("refuses non-positive noise Y limits on log density scale", () => {
@@ -728,9 +737,9 @@ describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {
       warnings: [],
     };
     render(<NoisePlot result={result} />);
-    fireEvent.change(screen.getByLabelText("Noise density Y min"), { target: { value: "0" } });
-    fireEvent.change(screen.getByLabelText("Noise density Y max"), { target: { value: "1e-6" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply noise density Y limits" }));
+    // A log axis cannot show zero or below, so this is a real refusal - unlike
+    // the "enter both" message, which the old two-field form invented.
+    pinYLimits("Noise density", "0", "1e-6");
     expect(screen.getByRole("alert").textContent).toMatch(/positive/i);
   });
 });

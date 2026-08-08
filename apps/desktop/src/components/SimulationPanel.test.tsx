@@ -106,6 +106,28 @@ function renderPanel(overrides: Partial<Parameters<typeof SimulationPanel>[0]> =
 
 // First render of the full panel is slow when the suite collects in parallel
 // under load - the 5s default flakes; these are render-once assertions.
+/**
+ * Pin a pane's Y limits and take them off again.
+ *
+ * The old control needed an "Apply Y" press and an "Autoscale Y" press; each
+ * edge now commits on blur and an empty field autoranges. Asserting on the
+ * rendered axis rather than on button state also makes these tests check the
+ * thing that matters — that pinning actually moves the axis and clearing puts
+ * it back — instead of that two buttons toggled.
+ */
+function axisTickText(): string {
+  return [...document.querySelectorAll("text")].map((t) => t.textContent).join("|");
+}
+
+function pinYLimits(label: string, min: string, max: string) {
+  const lo = screen.getByLabelText(`${label} Y min`);
+  const hi = screen.getByLabelText(`${label} Y max`);
+  fireEvent.change(lo, { target: { value: min } });
+  fireEvent.blur(lo);
+  fireEvent.change(hi, { target: { value: max } });
+  fireEvent.blur(hi);
+}
+
 describe("SimulationPanel - no redundant Run button", { timeout: 20_000 }, () => {
   it("opens on the analysis authored by the circuit without firing a second run", () => {
     const handlers = renderPanel({ circuitTitle: "filter.asc", preferredMode: "ac" });
@@ -1187,7 +1209,7 @@ describe("StepPlot measurements", () => {
     expect(container.querySelectorAll(".scope-trace").length).toBe(2);
   });
 
-  it("Apply Y locks step-family axis; Autoscale Y restores autorange", () => {
+  it("pins the step-family axis and restores autorange when cleared", () => {
     render(
       <StepPlot
         result={{
@@ -1201,14 +1223,11 @@ describe("StepPlot measurements", () => {
       />,
     );
     expect(screen.getByLabelText("Step family Y limits")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Step family Y min"), { target: { value: "0" } });
-    fireEvent.change(screen.getByLabelText("Step family Y max"), { target: { value: "1" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply step family Y limits" }));
-    expect(screen.queryByRole("alert")).toBeNull();
-    const autoscale = screen.getByRole("button", { name: "Autoscale step family Y" });
-    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(autoscale);
-    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+    const auto = axisTickText();
+    pinYLimits("Step family", "0", "3");
+    expect(axisTickText(), "pinning the axis did not change it").not.toBe(auto);
+    pinYLimits("Step family", "", "");
+    expect(axisTickText(), "clearing both edges did not restore autorange").toBe(auto);
   });
 });
 
@@ -1567,7 +1586,7 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
     expect(container.querySelectorAll(".scope-trace").length).toBe(1);
   });
 
-  it("Apply Y locks AC step-family axis; Autoscale Y restores autorange", () => {
+  it("pins the AC step-family axis and restores autorange when cleared", () => {
     const acMember = (label: string, magDb: number[]) => ({
       label,
       value: 1,
@@ -1589,17 +1608,14 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
       />,
     );
     expect(screen.getByLabelText("AC step family Y limits")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("AC step family Y min"), { target: { value: "-40" } });
-    fireEvent.change(screen.getByLabelText("AC step family Y max"), { target: { value: "0" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply AC step family Y limits" }));
-    expect(screen.queryByRole("alert")).toBeNull();
-    const autoscale = screen.getByRole("button", { name: "Autoscale AC step family Y" });
-    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(autoscale);
-    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+    const auto = axisTickText();
+    pinYLimits("AC step family", "-40", "10");
+    expect(axisTickText(), "pinning the axis did not change it").not.toBe(auto);
+    pinYLimits("AC step family", "", "");
+    expect(axisTickText(), "clearing both edges did not restore autorange").toBe(auto);
   });
 
-  it("Apply Y locks DC step-family axis; Autoscale Y restores autorange", () => {
+  it("pins the DC step-family axis and restores autorange when cleared", () => {
     const dcMember = (label: string, voltages: number[]) => ({
       label,
       value: 1,
@@ -1622,14 +1638,11 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
       />,
     );
     expect(screen.getByLabelText("DC step family Y limits")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("DC step family Y min"), { target: { value: "0" } });
-    fireEvent.change(screen.getByLabelText("DC step family Y max"), { target: { value: "1" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply DC step family Y limits" }));
-    expect(screen.queryByRole("alert")).toBeNull();
-    const autoscale = screen.getByRole("button", { name: "Autoscale DC step family Y" });
-    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(autoscale);
-    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+    const auto = axisTickText();
+    pinYLimits("DC step family", "0", "3");
+    expect(axisTickText(), "pinning the axis did not change it").not.toBe(auto);
+    pinYLimits("DC step family", "", "");
+    expect(axisTickText(), "clearing both edges did not restore autorange").toBe(auto);
   });
 });
 
@@ -2116,18 +2129,16 @@ describe("FftView manual Y limits", () => {
     };
   }
 
-  it("Apply Y locks FFT magnitude axis; Autoscale Y restores autorange", async () => {
+  it("pins the FFT magnitude axis and restores autorange when cleared", async () => {
     render(<FftView result={sineResult()} />);
     fireEvent.click(screen.getByRole("button", { name: "Toggle FFT spectrum" }));
     expect(await screen.findByLabelText("FFT magnitude Y limits")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("FFT magnitude Y min"), { target: { value: "-80" } });
-    fireEvent.change(screen.getByLabelText("FFT magnitude Y max"), { target: { value: "0" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply FFT magnitude Y limits" }));
+    const auto = axisTickText();
+    pinYLimits("FFT magnitude", "-80", "0");
     expect(screen.queryByRole("alert")).toBeNull();
-    const autoscale = screen.getByRole("button", { name: "Autoscale FFT magnitude Y" });
-    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(autoscale);
-    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+    expect(axisTickText(), "pinning the axis did not change it").not.toBe(auto);
+    pinYLimits("FFT magnitude", "", "");
+    expect(axisTickText(), "clearing both edges did not restore autorange").toBe(auto);
   });
 });
 

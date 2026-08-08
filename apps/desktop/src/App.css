@@ -2625,6 +2625,28 @@ body {
 /* In-place DC operating point labels on the schematic (simulator mode). A
    background stroke keeps them readable over wires and symbol bodies. Kept
    outside the App.css type scale (schematic canvas SVG text). */
+/* Y-limit entry. No submit button and no autoscale button: each edge commits
+   on Enter/blur, and an empty field autoranges that edge. The hint carries
+   that rule in four words rather than a paragraph of help text. */
+/* Specificity, not source order: `.meter-row` is defined later in this file,
+   so a bare `.axis-limits` would lose its `display: grid` to it. */
+.meter-row.axis-limits {
+  /* The three-column grid pushed the "empty = auto" hint to the far right and
+     left it explaining nothing. These belong together; proximity is the
+     grouping. */
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.axis-limit-hint {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-wide);
+  color: var(--faint);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 /* Clamp meter: a ring around the conductor, deliberately unlike the probe's
    filled dot. A voltage at a point and a current through a path are different
    measurements and must not share a glyph. */
@@ -2709,6 +2731,26 @@ body {
   fill: var(--trace-green);
   stroke: none;
   pointer-events: none;
+}
+
+/* What the pane is for, stated once. A spectrum answers a different question
+   from the scope, and a reader who has not met one should not have to guess. */
+.fft-purpose {
+  margin: 0 0 var(--sp-3);
+  max-width: 68ch;
+  font-size: var(--fs-body);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* Sub-label on a disclosure header: names the question the section answers,
+   without competing with the section title. */
+.disclosure-purpose {
+  margin-left: var(--sp-2);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-micro);
+  color: var(--faint);
+  white-space: nowrap;
 }
 
 .fft-view {
