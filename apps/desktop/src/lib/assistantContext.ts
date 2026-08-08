@@ -262,8 +262,11 @@ function traceLine(label: string, unit: string, times: number[], values: number[
   const classification = classifySignal(times, values);
   if (classification.kind === "periodic" && classification.frequency !== undefined) {
     bits.push(`~${formatEngineering(classification.frequency, "Hz", 3)}`);
-  } else if (classification.kind === "steady") {
-    bits.push("steady");
+  } else if (classification.kind === "steady" || classification.kind === "settled") {
+    // The assistant needs to know a node reached a DC operating point, not just
+    // that it was never touched - otherwise it reads a settled rail as a live
+    // transient and reasons about it as if something were still happening.
+    bits.push(classification.kind);
   }
   return bits.join(", ");
 }

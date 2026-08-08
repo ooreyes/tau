@@ -2309,3 +2309,65 @@ describe("FftView / NoisePlot cursor CSV", () => {
     }
   });
 });
+
+/**
+ * What the FFT readout says when the circuit has no periodic content.
+ *
+ * The transform of a step has energy in every bin, so before this the panel
+ * answered a DC circuit with a dominant tone at the first bin above DC, a THD
+ * percentage, an SFDR figure and eight harmonics - all of a waveform that never
+ * changed. Nothing in that readout may show a number now.
+ */
+describe("FftView on a circuit with no tone", () => {
+  /** A single trace over a 5 ms / 512-step run, matching a real .tran result. */
+  function tranResult(label: string, shape: (t: number) => number, n = 512) {
+    const times = Array.from({ length: n + 1 }, (_, i) => (i * 5e-3) / n);
+    return {
+      ok: true as const,
+      title: "Transient",
+      times,
+      traces: [{ id: "n1", label, unit: "V" as const, color: "var(--trace-cyan)", values: times.map(shape) }],
+      currents: [],
+      stats: { netCount: 1, componentCount: 0, sampleCount: n + 1, stopTime: 5e-3, stepSize: 5e-3 / n },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [{ id: "n1", points: [{ x: 0, y: 0 }], pins: [], isGround: false, labelCount: 0 }],
+        components: [],
+      },
+    };
+  }
+
+  const metric = (label: string) => screen.getByText(label).closest(".fft-insight-item") as HTMLElement;
+
+  it("says No tone for a settled DC rail and prints no distortion figures", async () => {
+    render(<FftView result={tranResult("V(out)", () => 5)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Toggle FFT spectrum" }));
+    await screen.findByRole("region", { name: "FFT measurements" });
+
+    expect(metric("Dominant tone").textContent).toContain("No tone");
+    expect(metric("Dominant tone").textContent).toContain("nothing periodic to measure");
+    expect(metric("Dominant tone").textContent).not.toMatch(/\d+\s*Hz/);
+    for (const label of ["THD", "THD + noise", "SFDR"]) {
+      expect(metric(label).querySelector("strong")?.textContent, `${label} showed a number`).toBe("-");
+    }
+    expect(document.querySelector(".fft-harmonics")).toBeNull();
+    // The DC term and the bin width are real measurements and still shown.
+    expect(metric("DC").querySelector("strong")?.textContent).toContain("V");
+  });
+
+  it("still names the fundamental and tabulates harmonics for a real sine", async () => {
+    render(<FftView result={tranResult("V(out)", (t) => Math.sin(2 * Math.PI * 2000 * t))} />);
+    fireEvent.click(screen.getByRole("button", { name: "Toggle FFT spectrum" }));
+    await screen.findByRole("region", { name: "FFT measurements" });
+
+    expect(metric("Dominant tone").querySelector("strong")?.textContent).toBe("2 kHz");
+    expect(metric("Dominant tone").textContent).toContain("auto-picked");
+    expect(metric("THD").querySelector("strong")?.textContent).not.toBe("-");
+    const harmonics = document.querySelector(".fft-harmonics") as HTMLElement;
+    expect(harmonics).not.toBeNull();
+    expect(harmonics.querySelectorAll("tbody tr").length).toBeGreaterThan(0);
+    expect(harmonics.textContent).toContain("H2");
+  });
+});

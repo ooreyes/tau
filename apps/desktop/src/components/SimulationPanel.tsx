@@ -4034,6 +4034,15 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
   );
 }
 
+/** What the FFT found instead of a tone. Each string names the evidence, so a
+ *  user who expected a frequency can tell whether the circuit has no periodic
+ *  content or the run was simply too short to resolve one. */
+const NO_TONE_DETAIL: Record<NonNullable<ReturnType<typeof spectrumInsights>["toneRejection"]>, string> = {
+  "no-energy": "No spectral energy above the FFT floor",
+  "dc-skirt": "DC and its skirt only — nothing periodic to measure",
+  "no-prominent-peak": "Broadband: no bin stands out from the background",
+};
+
 function SpectrumInsightsPanel({
   insights,
   unit,
@@ -4047,15 +4056,21 @@ function SpectrumInsightsPanel({
   const db = (value: number | null | undefined) => value === null || value === undefined
     ? "-"
     : `${value.toFixed(1)} dB`;
-  const hasSignal = Boolean(insights.fundamental && insights.fundamental.amplitude > 0);
+  const tone = insights.fundamental && insights.fundamental.amplitude > 0 ? insights.fundamental : null;
   return (
     <section className="fft-insights" aria-label="FFT measurements">
       <div className="fft-insight-grid">
         <SpectrumMetric
           label="Dominant tone"
-          value={hasSignal && insights.fundamental ? formatEngineering(insights.fundamental.frequencyHz, "Hz", 3) : "No tone"}
-          detail={hasSignal && insights.fundamental ? `${insights.fundamental.amplitudeDb.toFixed(1)} dB · ${formatEngineering(insights.fundamental.amplitude, unit, 3)} · auto-picked` : "No spectral energy above the FFT floor"}
+          value={tone ? formatEngineering(tone.frequencyHz, "Hz", 3) : "No tone"}
+          detail={tone
+            ? `${tone.amplitudeDb.toFixed(1)} dB · ${formatEngineering(tone.amplitude, unit, 3)} · auto-picked`
+            : NO_TONE_DETAIL[insights.toneRejection ?? "no-energy"]}
         />
+        {/* Every figure below is a ratio *to the fundamental*. With no
+            fundamental they are not "zero" or "unknown", they are undefined -
+            so they render as "-" rather than as a number the user would read
+            as a distortion measurement of a circuit that has none. */}
         <SpectrumMetric label="THD" value={percent(insights.thd?.percent)} detail={db(insights.thd?.db)} />
         <SpectrumMetric label="THD + noise" value={percent(insights.thdPlusNoise?.percent)} detail={db(insights.thdPlusNoise?.db)} />
         <SpectrumMetric label="SFDR" value={db(insights.sfdrDb)} detail="Fundamental to largest spur" />

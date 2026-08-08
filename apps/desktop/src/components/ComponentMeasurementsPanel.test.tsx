@@ -177,6 +177,37 @@ describe("ComponentMeasurementsPanel - variant=\"compact\" (telemetry dock grid)
     expect(within(c1Inspector).queryByRole("img", { name: /I\(C1\)/ })).toBeNull();
   });
 
+  it("badges only quantities the FINAL reading fails to describe", () => {
+    // The badge qualifies the number underneath it, which is labelled "final".
+    // A settled trace reached a DC operating point and holds it, so its final
+    // value is the whole answer and there is nothing to warn about - this is
+    // the whole of a DC circuit, where every part used to be badged because
+    // the solver's t=0 sample differs from its converged answer.
+    const dcCircuit: ComponentMeasurement[] = [
+      {
+        componentId: "v1",
+        ref: "V1",
+        kind: "vsource",
+        voltage: series("V(V1)", "V", [5, 5, 5], "steady"),
+        current: series("I(V1)", "A", [-3.07e-3, -3.07e-3, -3.07e-3], "settled"),
+      },
+      {
+        componentId: "d1",
+        ref: "D1",
+        kind: "led",
+        voltage: series("V(D1)", "V", [1.9268998, 1.9268818, 1.9268818], "settled"),
+        current: series("I(D1)", "A", [3.07e-3, 3.07e-3, 3.07e-3], "settled"),
+      },
+    ];
+    render(<ComponentMeasurementsPanel rows={dcCircuit} selectedId={null} onSelect={() => {}} variant="compact" />);
+    expect(screen.queryByText("Time-varying")).toBeNull();
+
+    cleanup();
+    render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} variant="compact" />);
+    // R1 is periodic and C1 is still moving at the stop time: both are badged.
+    expect(screen.getAllByText("Time-varying")).toHaveLength(2);
+  });
+
   it("does not invent transient plots for a steady component", () => {
     const steady: ComponentMeasurement = {
       componentId: "v1",

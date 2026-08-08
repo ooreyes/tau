@@ -4,6 +4,7 @@ import {
   fftRadix2,
   windowValue,
   waveformSpectrum,
+  windowMainLobeBins,
   dominantFrequency,
   spectrumThd,
   runWaveformFft,
@@ -87,7 +88,42 @@ describe("windowValue", () => {
   });
 });
 
+describe("windowMainLobeBins", () => {
+  it("gives each window the exact width of its frequency-domain kernel", () => {
+    // Rectangular: integer bin offsets fall on the Dirichlet kernel's nulls, so
+    // a component on bin 0 leaves bin 1 untouched. Hann/Hamming spread over one
+    // neighbour, Blackman over two. These are the bins in which a second
+    // component cannot be resolved from the first.
+    expect(windowMainLobeBins("rectangular")).toBe(0);
+    expect(windowMainLobeBins("hann")).toBe(1);
+    expect(windowMainLobeBins("hamming")).toBe(1);
+    expect(windowMainLobeBins("blackman")).toBe(2);
+  });
+
+  it("is measurable: a DC-only waveform lights exactly that many bins", () => {
+    const times = Array.from({ length: 257 }, (_, i) => i / 256);
+    const values = times.map(() => 4);
+    for (const window of ["rectangular", "hann", "hamming", "blackman"] as const) {
+      const s = waveformSpectrum(times, values, { window, points: 256, tStart: 0, tEnd: 1 });
+      const lobe = windowMainLobeBins(window);
+      // Every bin the kernel covers carries a real fraction of the DC term...
+      for (let k = 1; k <= lobe; k++) expect(s.magnitude[k]).toBeGreaterThan(0.01 * s.magnitude[0]);
+      // ...and the first bin past it does not. This is why the tone test in
+      // spectrumInsights refuses to call bin 1 of a Hann spectrum a tone: for a
+      // DC waveform it reads the full 4 V.
+      expect(s.magnitude[lobe + 1]).toBeLessThan(0.01 * s.magnitude[0]);
+    }
+  });
+});
+
 describe("waveformSpectrum", () => {
+  it("records the window it was taken through", () => {
+    const times = [0, 0.5, 1];
+    const values = [0, 1, 0];
+    expect(waveformSpectrum(times, values).window).toBe("hann");
+    expect(waveformSpectrum(times, values, { window: "blackman" }).window).toBe("blackman");
+  });
+
   // Build a uniformly-sampled sine of amplitude A at frequency f over an integer
   // number of cycles, so the tone lands on an exact FFT bin (no leakage).
   function sineWave(amp: number, freq: number, cycles: number, n: number) {

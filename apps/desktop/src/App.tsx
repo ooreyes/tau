@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import { Crosshair, Eye, EyeOff, Gauge, LockKeyhole, MousePointer2, Tag } from "lucide-react";
 import "./App.css";
+import "./styles/liveControls.css";
 import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
@@ -142,6 +143,7 @@ import {
   remapMovedProjectPath,
   serializeSchematicFile,
 } from "./project/types";
+import { isInteractiveSchematic, liveControlHint, liveControls } from "./schematic/liveControls";
 import { retiredKindNotices, validateSchematicDocument } from "./schematic/documentValidation";
 import { strandedTerminalNotices } from "./schematic/relocatedPins";
 import { importProjectAsc } from "./io/projectAscImport";
@@ -1122,6 +1124,22 @@ function App() {
   const stepDomain = useMemo(
     () => stepAnalysisDomain(pickAutoRunAnalysis(directives)?.kind),
     [directives],
+  );
+
+  /**
+   * The parts of this circuit a reader can operate, detected from the sheet
+   * rather than declared by the author.
+   *
+   * Recomputed with `components`, which is also what an actuation changes, so
+   * the positions below are a live readout of the circuit: throwing a switch
+   * on the canvas moves this row in the same commit that re-solves the
+   * analysis.
+   */
+  const circuitIsInteractive = useMemo(() => isInteractiveSchematic(components), [components]);
+  const circuitControls = useMemo(() => liveControls(components), [components]);
+  const circuitControlsHint = useMemo(
+    () => liveControlHint(circuitControls, preferredAnalysis),
+    [circuitControls, preferredAnalysis],
   );
 
   // The global Run command follows the first authored analysis directive, as
@@ -2459,6 +2477,35 @@ function App() {
                   <LockKeyhole size={13} strokeWidth={1.8} aria-hidden="true" />
                 </span>
               </header>
+              {/*
+                * Live controls. The simulator is otherwise strictly read-only -
+                * the padlock above says so - and the one exception, operating a
+                * contact, was discoverable only by hovering the exact symbol.
+                * This band names the controls, shows the position each one is
+                * in right now, and states what operating one costs. It renders
+                * only when the schematic actually has an operable part, so a
+                * plain RC circuit gets no chrome at all.
+                */}
+              {circuitIsInteractive && (
+                <div className="live-controls" role="group" aria-label="Live controls">
+                  <span className="live-controls-title">
+                    <span
+                      className={`live-controls-lamp${analysisRunning ? " solving" : ""}`}
+                      aria-hidden="true"
+                    />
+                    Live
+                  </span>
+                  <ul className="live-controls-list" role="status">
+                    {circuitControls.map((control) => (
+                      <li key={control.id} className="live-control">
+                        <span className="live-control-name">{control.name}</span>
+                        <span className="live-control-position">{control.position}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="live-controls-hint">{circuitControlsHint}</p>
+                </div>
+              )}
               <div className="sim-schematic-canvas">
                 <Canvas
                   op={opAnalysis}

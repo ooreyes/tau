@@ -35,7 +35,16 @@ import {
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
-import { decodeParams, encodeParams, paramFields, paramSummary } from "../schematic/params";
+import {
+  clampParamValue,
+  decodeParams,
+  encodeParams,
+  isBoundedParamField,
+  paramFields,
+  paramRangeLabel,
+  paramSummary,
+  type ParamField,
+} from "../schematic/params";
 import { buildSubcircuitPinOverride, localSubcircuitPins } from "../schematic/subcircuitGeometry";
 import { EngineeringInput } from "./EngineeringInput";
 import { BehavioralSourceEditor } from "./BehavioralSourceEditor";
@@ -1529,6 +1538,140 @@ function subcircuitPortSides(
   return pins.map((pin) => (pin.x < 0 ? "left" : pin.x > 0 ? "right" : null));
 }
 
+/**
+ * A number the schema puts bounds on.
+ *
+ * The controlled input this replaces committed every keystroke and never
+ * checked the range, so `min: 2, max: 5` on the gate's input count was a
+ * comment: typing 21000 stored 21000, the symbol drew its five-lead maximum,
+ * and the file and the drawing were describing different parts.
+ *
+ * Draft state committed on Enter or blur is the shape `OutputPointsControl`
+ * already uses for exactly this problem. It CLAMPS rather than refuses -
+ * rejecting per keystroke makes the box uneditable, because every half-typed
+ * number is out of range - and the bound is printed next to the field, so it
+ * is something you can see instead of something you hit.
+ */
+function BoundedParamInput({
+  field,
+  value,
+  onBeginChange,
+  onFocusField,
+  onCommit,
+}: {
+  field: ParamField;
+  value: string;
+  onBeginChange: () => void;
+  onFocusField: () => void;
+  onCommit: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setDraft(value);
+  }, [value]);
+
+  const commit = () => {
+    const next = clampParamValue(field, draft);
+    setDraft(next);
+    if (next.trim() === value.trim()) return;
+    onBeginChange();
+    onCommit(next);
+  };
+
+  return (
+    <input
+      className="mono-num"
+      value={draft}
+      aria-label={field.label}
+      inputMode="decimal"
+      spellCheck={false}
+      onFocus={() => {
+        focused.current = true;
+        onFocusField();
+      }}
+      onBlur={() => {
+        focused.current = false;
+        commit();
+      }}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setDraft(value);
+        }
+      }}
+    />
+  );
+}
+
+/**
+ * The editor for one schema field, whichever kind it is.
+ *
+ * Built once because bounds are a property of the SCHEMA, not of a kind: a
+ * potentiometer's wiper, a pulse source's duty and a gate's input count all
+ * declare a range, and enforcing it at one of those three call sites is how the
+ * other two stay broken.
+ */
+function ParamValueControl({
+  field,
+  value,
+  onBeginChange,
+  onFocusField,
+  onValueChange,
+}: {
+  field: ParamField;
+  value: string;
+  onBeginChange: () => void;
+  onFocusField: () => void;
+  onValueChange: (next: string) => void;
+}) {
+  const range = paramRangeLabel(field);
+  const control = field.unit ? (
+    <EngineeringInput
+      label={field.label}
+      value={value}
+      unit={field.unit}
+      min={field.min}
+      max={field.max}
+      onBeginChange={onBeginChange}
+      onValueChange={onValueChange}
+    />
+  ) : isBoundedParamField(field) ? (
+    <BoundedParamInput
+      field={field}
+      value={value}
+      onBeginChange={onBeginChange}
+      onFocusField={onFocusField}
+      onCommit={onValueChange}
+    />
+  ) : (
+    // Unbounded text: nothing to clamp, so it keeps committing as you type.
+    <input
+      className="mono-num"
+      value={value}
+      aria-label={field.label}
+      spellCheck={false}
+      onFocus={onFocusField}
+      onChange={(event) => {
+        onBeginChange();
+        onValueChange(event.currentTarget.value);
+      }}
+    />
+  );
+  if (!range) return control;
+  return (
+    <span className="property-value">
+      {control}
+      <small className="property-range mono-num">{range}</small>
+    </span>
+  );
+}
+
 // Exported for component tests only (same pattern as the plot components).
 export function ComponentInspector({
   selected,
@@ -1699,29 +1842,13 @@ export function ComponentInspector({
   }).map((field) => (
     <label key={field.key} className="property-field">
       <span>{field.label}</span>
-      {field.unit ? (
-        <EngineeringInput
-          label={field.label}
-          value={field.value}
-          unit={field.unit}
-          onBeginChange={() => beginParamChange(field.key)}
-          onValueChange={(value) => updateParam(field.key, value)}
-        />
-      ) : (
-        <input
-          className="mono-num"
-          value={field.value}
-          aria-label={field.label}
-          spellCheck={false}
-          onFocus={() => {
-            editKeyRef.current = null;
-          }}
-          onChange={(event) => {
-            beginParamChange(field.key);
-            updateParam(field.key, event.currentTarget.value);
-          }}
-        />
-      )}
+      <ParamValueControl
+        field={field}
+        value={field.value}
+        onBeginChange={() => beginParamChange(field.key)}
+        onFocusField={() => { editKeyRef.current = null; }}
+        onValueChange={(value) => updateParam(field.key, value)}
+      />
     </label>
   )) : null;
 
@@ -2081,29 +2208,13 @@ export function ComponentInspector({
                 <Fragment key={field.key}>
                   <label className="property-field">
                     <span>{field.label}</span>
-                    {field.unit ? (
-                      <EngineeringInput
-                        label={field.label}
-                        value={field.value}
-                        unit={field.unit}
-                        onBeginChange={() => beginParamChange(field.key)}
-                        onValueChange={(value) => updateParam(field.key, value)}
-                      />
-                    ) : (
-                      <input
-                        className="mono-num"
-                        value={field.value}
-                        aria-label={field.label}
-                        spellCheck={false}
-                        onFocus={() => {
-                          editKeyRef.current = null;
-                        }}
-                        onChange={(event) => {
-                          beginParamChange(field.key);
-                          updateParam(field.key, event.currentTarget.value);
-                        }}
-                      />
-                    )}
+                    <ParamValueControl
+                      field={field}
+                      value={field.value}
+                      onBeginChange={() => beginParamChange(field.key)}
+                      onFocusField={() => { editKeyRef.current = null; }}
+                      onValueChange={(value) => updateParam(field.key, value)}
+                    />
                   </label>
                   {field.description && <p className="property-hint">{field.description}</p>}
                 </Fragment>

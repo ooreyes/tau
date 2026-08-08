@@ -206,6 +206,35 @@ deliberately brighter than the general semantic pair so status is glanceable, an
 constrained to lamps, hairlines and shallow glass tint. Light warning chrome stays **quiet
 ochre** (`-soft` ≈0.05) — empty optional keys must never paint danger-red.
 
+#### Emission — the one thing on the canvas that is a light source
+
+| Token | Dark | Light |
+|---|---|---|
+| `--led-glow-core` | `#ffd9a0` | `#E39A20` |
+| `--led-glow-blend` | `screen` | `multiply` |
+
+A lit LED (`components/LedGlowLayer.tsx`) is the sole exception to "no glow, gradient fill or
+drop shadow" above, because there the glow **is** the measurement: it is drawn only from a
+solved forward current, and never at all without one.
+
+Three rules make it read as light rather than as a decal, and all three are asserted in
+`LedGlowLayer.test.tsx`:
+
+1. **No stroke.** Light has no outline. The disc this replaced had a 1px `--signal` rim and
+   that alone was enough to make it look like a sticker on the symbol.
+2. **Alpha reaches zero at the rim.** The fill is a radial gradient — hot `--led-glow-core`
+   at the die, `--signal` through the bloom, fully transparent at the edge — so there is no
+   boundary to see. A flat fill is the defect, not a simplification of it.
+3. **The halo stays subordinate to the part.** The perceptible disc (down to 5% alpha) stays
+   within ~1.2× the LED's own 30-unit body. The reference plates keep luminous elements from
+   swallowing the mark they belong to; so does this.
+
+`--led-glow-blend` is why this survives both themes. On the black instrument face emission is
+**additive** (`screen`). On paper it cannot be — adding light to white does nothing — so a lamp
+reads as **saturation** instead (`multiply`), and the core token is correspondingly a
+saturated amber rather than a near-white one. A glow tuned only on black is the case most
+likely to be wrong; check the light theme.
+
 ### 1.7 Grid
 
 | Token | Dark | Light |

@@ -96,6 +96,23 @@ function positionOf(actuation: ContactActuation, raw: string): string {
   return state.startsWith("nc") || state === "2" ? second : first;
 }
 
+/**
+ * Which of its two positions this part's contact is sitting in right now,
+ * spelled the way the solver reads it (`open`/`closed`, `no`/`nc`), or null
+ * when the part has no contact to read.
+ *
+ * Shares `positionOf` with `actuatedValue` on purpose: a readout that decoded
+ * the state itself would eventually disagree with the actuator about what
+ * `on`, `1` or `pressed` mean, and then the panel would say OPEN about a
+ * closed switch.
+ */
+export function contactPosition(component: Pick<SchematicComponent, "kind" | "value">): string | null {
+  const actuation = contactActuation(component.kind);
+  if (!actuation) return null;
+  const decoded = decodeParams(component.kind, component.value);
+  return positionOf(actuation, decoded[actuation.stateKey] ?? "");
+}
+
 const other = (actuation: ContactActuation, position: string): string =>
   position === actuation.positions[0] ? actuation.positions[1] : actuation.positions[0];
 

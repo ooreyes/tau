@@ -296,12 +296,21 @@ function CompactMeasurementCard({
   selected: boolean;
   onSelect: (componentId: string | null) => void;
 }) {
+  // The badge has exactly one job: warn that the headline number below it -
+  // which is labelled "final" - is not the whole story. So it fires only for
+  // the two classes where that is true: `transient` (still moving at the stop
+  // time) and `periodic` (the final sample is one arbitrary phase). A `settled`
+  // trace reached a DC operating point and holds it; its final value IS the
+  // answer, so badging it would be a warning about nothing. `steady` never
+  // moved at all.
+  //
   // Only a series that actually exists can say the component varies. The old
   // `row.voltage?.classification.kind !== "steady"` was true for a MISSING
   // series too (undefined !== "steady"), so a component Tau could not measure
   // was badged as time-varying on no evidence at all.
-  const timeVarying = [row.voltage, row.current]
-    .some((series) => series !== undefined && series.classification.kind !== "steady");
+  const timeVarying = [row.voltage, row.current].some(
+    (series) => series?.classification.kind === "transient" || series?.classification.kind === "periodic",
+  );
 
   return (
     <li className="telemetry-card-item">
@@ -335,6 +344,10 @@ function CompactMeasurementCard({
 }
 
 function CompactTransientInspector({ row }: { row: ComponentMeasurement }) {
+  // Deliberately wider than the card badge: this section is detail-on-demand
+  // for a component the user selected, so a `settled` trace still earns a
+  // sparkline (the settling - inrush, a charge curve - is exactly what a final
+  // value cannot show). The badge, which is unsolicited, does not.
   const varyingSeries = [
     row.voltage?.classification.kind !== "steady" ? { quantity: "V(t)", tone: "voltage" as const, series: row.voltage } : null,
     row.current?.classification.kind !== "steady" ? { quantity: "I(t)", tone: "current" as const, series: row.current } : null,

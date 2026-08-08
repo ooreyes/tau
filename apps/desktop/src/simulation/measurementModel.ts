@@ -27,7 +27,17 @@ export interface TraceStatistics {
   final: number;
 }
 
-export type SignalClass = "steady" | "transient" | "periodic";
+/**
+ * - `steady`: never moved. A DC quantity the solver got right on the first
+ *   sample.
+ * - `settled`: moved, then stopped, and held a constant value for the rest of
+ *   the run - a DC operating point reached after a start-up transient. The
+ *   final value is the whole answer.
+ * - `transient`: a one-shot excursion that is *still changing* when the run
+ *   ends. The final value is a snapshot of something in motion.
+ * - `periodic`: repeating. The final value is one arbitrary phase of a cycle.
+ */
+export type SignalClass = "steady" | "settled" | "transient" | "periodic";
 
 export interface SignalClassification {
   kind: SignalClass;
@@ -163,13 +173,37 @@ export function noiseFloorForUnit(unit: TraceUnit | undefined): number {
 }
 
 /**
- * Classify a trace as constant/steady, repeating, or a one-shot transient.
+ * Fraction of the record, measured back from the stop time, that must hold
+ * still for a trace to count as settled.
+ *
+ * A quarter is not a feel-good number: it is what makes the claim safe. Holding
+ * constant to the {@link classifySignal} "no movement" threshold (1e-9 of the
+ * signal's own scale) across a quarter of the run bounds any residual
+ * exponential to τ < 0.25·T / ln(1e9) ≈ T/83 - i.e. whatever was still moving
+ * is at least eighty time constants dead. A shorter tail would let a slow
+ * settle that merely *looks* flat over the last few samples claim it has
+ * finished.
+ */
+const SETTLED_TAIL_FRACTION = 0.25;
+
+/**
+ * Classify a trace as constant, settled, repeating, or a one-shot transient.
  *
  * Periodicity uses interpolated mean crossings in both directions so a single
  * clean cycle (e.g. 10 Hz over 100 ms) still yields a period estimate: rising
  * crossings alone need ≥2 full cycles for one interval, while half-periods from
  * rise+fall crossings resolve one cycle. Amplitude must stay broadly stable so
  * a single overshoot or damped ring is not labelled periodic.
+ *
+ * Whatever is left is a one-shot excursion, and the last question is whether it
+ * is over. A DC circuit is not exempt from having a transient: the first sample
+ * comes from the operating-point solve and the rest from the transient solver,
+ * and the two converge to answers that differ by their tolerances - on a 5 V /
+ * 1 k / LED loop that is ~18 µV of Newton residue at t=0, which is real
+ * movement by any relative measure and used to make every part in the circuit
+ * report that it varied with time. It is not a signal; it is the solver
+ * arriving. A trace that stops moving and stays stopped is at a DC operating
+ * point, and is reported as `settled` rather than as an ongoing transient.
  */
 export function classifySignal(
   times: readonly number[],
@@ -198,7 +232,8 @@ export function classifySignal(
   if (validCount < 2) return { kind: "steady" };
   const range = max - min;
   const scale = Math.max(Math.abs(min), Math.abs(max));
-  if (range <= Math.max(scale * 1e-9, absoluteFloor, 1e-30)) return { kind: "steady" };
+  const stillnessThreshold = Math.max(scale * 1e-9, absoluteFloor, 1e-30);
+  if (range <= stillnessThreshold) return { kind: "steady" };
 
   const mean = sum / validCount;
   const crossings: Array<{ time: number; direction: "rising" | "falling" }> = [];
@@ -281,6 +316,24 @@ export function classifySignal(
       }
     }
   }
+
+  // Not repeating, so it happened once. Did it finish? Judge the tail against
+  // the same "no movement" threshold the whole trace was judged against, so a
+  // settled 5 V rail has to be flat to nanovolts, not merely flat-looking.
+  const tailStart = lastTime - SETTLED_TAIL_FRACTION * (lastTime - firstTime);
+  let tailMin = Infinity;
+  let tailMax = -Infinity;
+  let tailCount = 0;
+  for (let i = 0; i < count; i++) {
+    const t = times[i];
+    const v = values[i];
+    if (!Number.isFinite(t) || !Number.isFinite(v) || t < tailStart) continue;
+    if (v < tailMin) tailMin = v;
+    if (v > tailMax) tailMax = v;
+    tailCount += 1;
+  }
+  if (tailCount >= 2 && tailMax - tailMin <= stillnessThreshold) return { kind: "settled" };
+
   return { kind: "transient" };
 }
 

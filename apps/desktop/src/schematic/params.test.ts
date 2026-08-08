@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { decodeParams, encodeParams, paramFields, paramSummary } from "./params";
+import {
+  clampParamValue,
+  decodeParams,
+  encodeParams,
+  isBoundedParamField,
+  paramFields,
+  paramRangeLabel,
+  paramSummary,
+} from "./params";
 import { CATALOG } from "./catalog";
 import { parseModulator } from "../engine/modulatorSpec";
 
@@ -420,4 +428,85 @@ describe("every catalogued field set survives an edit", () => {
       });
     }
   }
+});
+
+/**
+ * `min`/`max` used to be decoration. The Properties panel rendered every
+ * unitless field as a plain text box that committed on every keystroke, so the
+ * gate's declared `min: 2, max: 5` did nothing: typing 21000 stored 21000 while
+ * the symbol drew its five-lead maximum, and the file and the drawing were
+ * describing different parts.
+ *
+ * The enforcement is generic on purpose. Bounds are a property of the schema,
+ * so a field that declares them gets them checked wherever it appears; there is
+ * no per-kind branch to forget when the next bounded field is added.
+ */
+describe("declared bounds are enforced, not decorative", () => {
+  const fieldFor = (kind: Parameters<typeof paramFields>[0], key: string) => {
+    const field = paramFields(kind).find((candidate) => candidate.key === key);
+    expect(field, `${kind}.${key} is missing`).toBeTruthy();
+    return field!;
+  };
+  const inputs = () => fieldFor("digitalGate", "inputs");
+
+  it("clamps the value the owner actually typed", () => {
+    expect(clampParamValue(inputs(), "21000")).toBe("5");
+  });
+
+  it("clamps up from below the floor rather than refusing", () => {
+    expect(clampParamValue(inputs(), "0")).toBe("2");
+    expect(clampParamValue(inputs(), "-4")).toBe("2");
+  });
+
+  it("leaves a value inside the range exactly as it was typed", () => {
+    expect(clampParamValue(inputs(), "3")).toBe("3");
+    // Spelling survives too: an in-range value is not rewritten.
+    expect(clampParamValue(fieldFor("modulator", "mark"), "1k")).toBe("1k");
+  });
+
+  it("reads SI suffixes, so 21k inputs is still five", () => {
+    expect(clampParamValue(inputs(), "21k")).toBe("5");
+  });
+
+  it("rounds a field that can only be whole", () => {
+    expect(clampParamValue(inputs(), "3.6")).toBe("4");
+  });
+
+  it("leaves an empty box alone - that means the model default", () => {
+    expect(clampParamValue(inputs(), "")).toBe("");
+    expect(clampParamValue(inputs(), "  ")).toBe("  ");
+  });
+
+  it("passes through anything it cannot parse rather than guessing", () => {
+    expect(clampParamValue(inputs(), "{N}")).toBe("{N}");
+    expect(clampParamValue(inputs(), "two")).toBe("two");
+  });
+
+  it("applies to every bounded field, not just the gate", () => {
+    expect(clampParamValue(fieldFor("potentiometer", "wiper"), "9")).toBe("1");
+    expect(clampParamValue(fieldFor("potentiometer", "wiper"), "-1")).toBe("0");
+    expect(clampParamValue(fieldFor("vpulse", "duty"), "40")).toBe("1");
+    // A one-sided bound clamps on the side it declares and nowhere else.
+    expect(clampParamValue(fieldFor("modulator", "space"), "-5")).toBe("0");
+    expect(clampParamValue(fieldFor("modulator", "space"), "1Meg")).toBe("1Meg");
+  });
+
+  it("leaves an unbounded field completely alone", () => {
+    expect(clampParamValue(fieldFor("resistor", "r"), "-9k")).toBe("-9k");
+  });
+
+  it("states the range the way the panel prints it", () => {
+    expect(paramRangeLabel(inputs())).toBe("2–5");
+    expect(paramRangeLabel(fieldFor("modulator", "mark"))).toBe("≥ 0");
+    expect(paramRangeLabel(fieldFor("resistor", "r"))).toBe("");
+  });
+
+  it("every bounded field can say what its range is", () => {
+    for (const entry of CATALOG) {
+      for (const field of paramFields(entry.kind, entry.defaultValue)) {
+        if (!isBoundedParamField(field)) continue;
+        expect(paramRangeLabel(field), `${entry.kind}.${field.key}`).not.toBe("");
+      }
+    }
+  });
 });

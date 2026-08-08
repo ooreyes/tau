@@ -1100,3 +1100,127 @@ describe("BottomPanel - errors tab states", () => {
     expect(container.querySelector(".bottom-panel.has-error")).toBeNull();
   });
 });
+
+/**
+ * The Inputs field accepted 21000. `schematic/params.ts` declared `min: 2,
+ * max: 5` on it and nothing enforced them on commit, so the gate stored a
+ * number it could not draw and then drew its five-lead maximum instead: the
+ * saved value and the picture disagreed about the same part.
+ *
+ * These drive the panel, not the helper, because the helper was never the
+ * missing piece - the wiring to it was.
+ */
+describe("ComponentInspector - a field with declared bounds enforces them", () => {
+  const gate = (value = "and") => ({
+    id: "a-1",
+    kind: "digitalGate" as const,
+    x: 160,
+    y: 160,
+    rotation: 0 as const,
+    value,
+    label: "A1",
+  });
+
+  const showGate = (value?: string) => {
+    const selected = gate(value);
+    useSchematic.setState({
+      components: [selected],
+      selectedId: selected.id,
+      selectedIds: [selected.id],
+    });
+    render(<ComponentInspector selected={selected} />);
+    return screen.getByRole("textbox", { name: "Inputs" });
+  };
+
+  const storedValue = () => useSchematic.getState().components[0].value;
+
+  it("commits the maximum when the typed number is far above it", () => {
+    const inputs = showGate();
+    fireEvent.change(inputs, { target: { value: "21000" } });
+    fireEvent.blur(inputs);
+    expect(storedValue()).toBe("and Inputs=5");
+  });
+
+  it("commits the minimum when the typed number is below it", () => {
+    const inputs = showGate("and Inputs=4");
+    fireEvent.change(inputs, { target: { value: "0" } });
+    fireEvent.blur(inputs);
+    // Two is the fallback, so the token drops back out of the value string.
+    expect(storedValue()).toBe("and");
+  });
+
+  it("commits on Enter as well as on blur", () => {
+    const inputs = showGate() as HTMLInputElement;
+    // A real focus, so Enter's own `blur()` is what ends the edit rather than
+    // a synthetic blur event the test supplied.
+    inputs.focus();
+    fireEvent.change(inputs, { target: { value: "4" } });
+    fireEvent.keyDown(inputs, { key: "Enter" });
+    expect(document.activeElement).not.toBe(inputs);
+    expect(storedValue()).toBe("and Inputs=4");
+  });
+
+  it("lets a half-typed number exist without snapping the box back", () => {
+    // The old control rejected every intermediate state, so selecting the
+    // field and typing a two-digit number was impossible.
+    const inputs = showGate();
+    fireEvent.change(inputs, { target: { value: "" } });
+    expect((inputs as HTMLInputElement).value).toBe("");
+    fireEvent.change(inputs, { target: { value: "1" } });
+    expect((inputs as HTMLInputElement).value).toBe("1");
+    expect(storedValue()).toBe("and");
+    fireEvent.change(inputs, { target: { value: "15" } });
+    fireEvent.blur(inputs);
+    expect(storedValue()).toBe("and Inputs=5");
+  });
+
+  it("abandons the edit on Escape", () => {
+    const inputs = showGate("and Inputs=3");
+    fireEvent.change(inputs, { target: { value: "5" } });
+    fireEvent.keyDown(inputs, { key: "Escape" });
+    fireEvent.blur(inputs);
+    expect(storedValue()).toBe("and Inputs=3");
+  });
+
+  it("prints the allowed range next to the field", () => {
+    showGate();
+    // A bound you only meet by having a value clamped is a surprise; this is
+    // the same treatment the transient panel gives its output-point limit.
+    expect(screen.getByText("2–5")).toBeTruthy();
+  });
+
+  it("prints the range for other bounded kinds too", () => {
+    const pot = {
+      id: "rv-1",
+      kind: "potentiometer" as const,
+      x: 0,
+      y: 0,
+      rotation: 0 as const,
+      value: "10k Wiper=0.25",
+      label: "RV1",
+    };
+    useSchematic.setState({ components: [pot], selectedId: pot.id, selectedIds: [pot.id] });
+    render(<ComponentInspector selected={pot} />);
+    expect(screen.getByText("0–1")).toBeTruthy();
+
+    const wiper = screen.getByRole("textbox", { name: "Wiper position" });
+    fireEvent.change(wiper, { target: { value: "9" } });
+    fireEvent.blur(wiper);
+    expect(useSchematic.getState().components[0].value).toBe("10k Wiper=1");
+  });
+
+  it("leaves an unbounded field committing as you type", () => {
+    const resistor = {
+      id: "r-1",
+      kind: "resistor" as const,
+      x: 0,
+      y: 0,
+      rotation: 0 as const,
+      value: "1k",
+      label: "R1",
+    };
+    useSchematic.setState({ components: [resistor], selectedId: resistor.id, selectedIds: [resistor.id] });
+    render(<ComponentInspector selected={resistor} />);
+    expect(screen.queryByText("2–5")).toBeNull();
+  });
+});

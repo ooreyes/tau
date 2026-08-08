@@ -1,4 +1,4 @@
-import type { Spectrum } from "./fft";
+import { windowMainLobeBins, type Spectrum } from "./fft";
 
 /** A finite, non-negative FFT bin represented in instrument-friendly units. */
 export interface SpectrumTone {
@@ -24,16 +24,41 @@ export interface DistortionMetric {
   db: number;
 }
 
+/**
+ * Why the spectrum was judged to contain no tone. See {@link spectrumInsights}
+ * for the test each one comes from.
+ */
+export type ToneRejection =
+  /** Nothing above DC carries any amplitude at all. */
+  | "no-energy"
+  /** The strongest resolvable bin cannot be told apart from DC and its skirt. */
+  | "dc-skirt"
+  /** No bin stands out from the general level of the band. */
+  | "no-prominent-peak";
+
 export interface SpectrumInsights {
   /** Median spacing between adjacent finite, increasing frequency bins. */
   binWidthHz: number | null;
   /** FFT frequency resolution. Equal to binWidthHz for an un-interpolated FFT. */
   frequencyResolutionHz: number | null;
   dc: SpectrumTone | null;
-  /** Largest non-DC spectral component. */
+  /**
+   * Largest non-DC bin. A raw peak search that always returns something for a
+   * non-empty spectrum - it is the *measurement*, not the *judgement*. Use
+   * {@link SpectrumInsights.fundamental} for anything the user reads as a
+   * frequency.
+   */
   dominant: SpectrumTone | null;
-  /** Explicit requested fundamental, or the dominant component by default. */
+  /**
+   * The component every distortion figure below is referred to: an explicitly
+   * requested fundamental, or the dominant bin once it has passed the tone
+   * test. Null when the spectrum carries no tone, in which case
+   * {@link SpectrumInsights.toneRejection} says why and every distortion
+   * figure is null with it.
+   */
   fundamental: SpectrumTone | null;
+  /** Why no fundamental was identified. Null when one was. */
+  toneRejection: ToneRejection | null;
   /** Median per-bin dB level after excluding DC, fundamental, and harmonics. */
   noiseFloorDb: number | null;
   /** Fundamental-to-largest-spur ratio. Harmonics count as spurs. */
@@ -111,6 +136,90 @@ function strongest(bins: Bin[]): Bin | null {
   return best;
 }
 
+/**
+ * A candidate must clear the surrounding continuum by this much (in amplitude)
+ * to count as a tone: an order of magnitude, i.e. 20 dB.
+ *
+ * The bar is not tuned against a corpus, it is what the number it guards has to
+ * mean. THD, THD+N and SFDR are all *ratios to the fundamental*; if the
+ * fundamental is only a couple of dB above the typical bin, those ratios are
+ * measuring the background against itself and the answer is noise dressed as a
+ * measurement. A factor of ten is the point past which the peak, and not the
+ * band it sits in, dominates the ratio. It is deliberately loose - it exists to
+ * reject "the tallest blade of grass in a flat field", not to grade real tones,
+ * which clear it by 20-90 dB across the fixtures in the "tone detection" tests.
+ */
+const TONE_PROMINENCE_RATIO = 10;
+
+interface ToneAssessment {
+  fundamental: Bin | null;
+  rejection: ToneRejection | null;
+}
+
+/**
+ * Decide whether a spectrum contains a tone at all, and if so which bin it is.
+ *
+ * The transform of a *step* - which is what a settled DC circuit's transient
+ * looks like - has energy in every bin, so a plain "largest bin above DC" peak
+ * search always names a frequency, and for a DC circuit that frequency is a
+ * fiction. What separates a step from a periodic signal in the spectrum is
+ * shape, not level:
+ *
+ *   - A sinusoid is *localised*. All of its energy is inside its own main lobe,
+ *     whose width is a property of the window, not of the signal. Away from
+ *     that lobe the spectrum collapses to the window's leakage floor.
+ *   - A step, a ramp, an RC settle - anything aperiodic - is a *skirt*: a
+ *     smooth continuum that decays away from DC and never comes back up. Its
+ *     largest bin is therefore always the first one next to DC, and it is
+ *     always smaller than DC itself, because a skirt is what is left over from
+ *     the DC term rather than a thing in its own right.
+ *
+ * So a bin is only a tone when it is separable from DC and prominent above the
+ * continuum:
+ *
+ *   Rule 0 - it must carry amplitude at all.
+ *   Rule A - it must be *resolvable from DC*. Bins within the window's main
+ *            lobe of bin 0 hold DC's own energy and can never be an independent
+ *            component (a Hann window puts the full DC amplitude into bin 1 -
+ *            that is where the phantom "200 Hz tone" on a DC circuit came
+ *            from). Beyond that lobe, a candidate is separable only if a gap of
+ *            at least one clear bin exists between DC's lobe and its own;
+ *            otherwise the two overlap and the only remaining evidence is
+ *            level - a real component adjacent to DC has to be *larger* than
+ *            DC, because window leakage is never larger than what it leaks
+ *            from.
+ *   Rule B - it must stand {@link TONE_PROMINENCE_RATIO} above the median bin
+ *            of the resolvable band, so a flat field of numerical noise does
+ *            not get a fundamental picked out of it.
+ *
+ * Limits, stated plainly: under a rectangular window a non-coherent tone's
+ * skirt decays at the same 6 dB/octave a step's does, so Rule A carries that
+ * case alone. A tone with fewer than roughly `2·mainLobe + 2` cycles in the
+ * record is judged by level against DC (Rule A's fallback), which is the right
+ * call - at that point the FFT genuinely cannot separate it from a drift.
+ */
+function assessTone(nonDc: Bin[], dc: Bin | null, mainLobeBins: number): ToneAssessment {
+  // A tone need not land on a bin centre, so its own lobe is one bin wider
+  // than the DC term's, which always does.
+  const toneLobeBins = mainLobeBins + 1;
+  const resolvable = nonDc.filter((bin) => bin.binIndex > mainLobeBins);
+  const candidate = strongest(resolvable);
+  if (!candidate || !(candidate.amplitude > 0)) return { fundamental: null, rejection: "no-energy" };
+
+  const clearOfDcLobe = resolvable.some(
+    (bin) => bin.binIndex <= candidate.binIndex - toneLobeBins,
+  );
+  if (!clearOfDcLobe && candidate.amplitude <= (dc?.amplitude ?? 0)) {
+    return { fundamental: null, rejection: "dc-skirt" };
+  }
+
+  const background = median(resolvable.map((bin) => bin.amplitude)) ?? 0;
+  if (background > 0 && candidate.amplitude < background * TONE_PROMINENCE_RATIO) {
+    return { fundamental: null, rejection: "no-prominent-peak" };
+  }
+  return { fundamental: candidate, rejection: null };
+}
+
 function markGuard(excluded: Set<number>, binIndex: number, radius: number, length: number): void {
   for (let offset = -radius; offset <= radius; offset++) {
     const index = binIndex + offset;
@@ -122,8 +231,13 @@ function markGuard(excluded: Set<number>, binIndex: number, radius: number, leng
  * Derive instrument-grade summary values from an FFT amplitude spectrum.
  *
  * Definitions and limits:
- * - The fundamental defaults to the largest non-DC bin. A supplied hint is
- *   snapped to the closest finite non-DC bin.
+ * - The fundamental is the largest non-DC bin *if that bin passes the tone test
+ *   in {@link assessTone}*; a spectrum with no tone in it (a settled DC
+ *   operating point, a step, an RC settle) reports `fundamental: null`, a
+ *   `toneRejection` reason, and no distortion figures at all, rather than
+ *   naming the loudest bin of its own window leakage. A supplied
+ *   `fundamentalHz` hint is the caller asserting the fundamental and skips the
+ *   test; it is snapped to the closest finite non-DC bin.
  * - Harmonics are the closest available bins to integer multiples of the
  *   snapped fundamental. THD is their root-sum-square amplitude / fundamental.
  * - SFDR includes harmonic distortion as spurious energy, but excludes DC and
@@ -183,7 +297,10 @@ export function spectrumInsights(
   const hintedFundamental = Number.isFinite(options.fundamentalHz) && options.fundamentalHz! > 0
     ? closestBin(frequencyBins, options.fundamentalHz!)
     : null;
-  const fundamental = hintedFundamental ?? dominant;
+  const assessed = hintedFundamental
+    ? { fundamental: hintedFundamental, rejection: null }
+    : assessTone(nonDc, dc, windowMainLobeBins(spectrum.window));
+  const fundamental = assessed.fundamental;
 
   const empty: SpectrumInsights = {
     binWidthHz,
@@ -191,7 +308,11 @@ export function spectrumInsights(
     dc,
     dominant,
     fundamental,
-    noiseFloorDb: null,
+    toneRejection: assessed.rejection,
+    // A band-level noise estimate does not need a fundamental to mean
+    // something, so it survives a toneless spectrum. Every *ratio to the
+    // fundamental* below does not, and stays null.
+    noiseFloorDb: median(nonDc.map((bin) => bin.amplitudeDb)),
     sfdrDb: null,
     thd: null,
     thdPlusNoise: null,

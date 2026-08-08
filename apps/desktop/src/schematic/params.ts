@@ -1,6 +1,7 @@
 import type { ComponentKind } from "./types";
 import { parseComparator } from "../engine/comparatorSpec";
 import { parseIcValue, stripIcSpec } from "../engine/icSpec";
+import { parseQuantity } from "../simulation/quantity";
 
 /**
  * Structured parameter fields per component kind. The canonical storage stays a
@@ -35,8 +36,17 @@ export interface ParamField {
    */
   kind?: ParamFieldKind;
   choices?: readonly ParamChoice[];
+  /**
+   * Inclusive bounds. These are ENFORCED, not advisory: {@link clampParamValue}
+   * folds a committed value into the range and the Properties panel shows the
+   * range beside the box. They were decorative for a while, and a gate happily
+   * stored `Inputs=21000` while drawing its five-lead maximum - the file and
+   * the drawing disagreeing about the same part.
+   */
   min?: number;
   max?: number;
+  /** Whole numbers only - a gate cannot have three and a half inputs. */
+  integer?: boolean;
   advanced?: boolean;
   description?: string;
   /** Name used in the `Name=value` form. Defaults to `key`. */
@@ -234,7 +244,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
           { value: "schmitt", label: "Schmitt trigger" },
         ] },
       { key: "inputs", label: "Inputs", unit: "", kind: "number", token: "Inputs",
-        min: 2, max: 5, fallback: "2", omitWhenFallback: true,
+        min: 2, max: 5, integer: true, fallback: "2", omitWhenFallback: true,
         description: "How many input pins the gate exposes. A buffer, inverter or Schmitt trigger always has one." },
     ],
   },
@@ -468,6 +478,65 @@ export function paramFields(kind: ComponentKind, value = ""): ParamField[] {
 /** What this field set's part does, or "" when the fields speak for themselves. */
 export function paramSummary(kind: ComponentKind, value = ""): string {
   return specForValue(kind, value)?.summary ?? "";
+}
+
+/** Whether this field constrains the number it holds. */
+export function isBoundedParamField(field: ParamField): boolean {
+  return field.min !== undefined || field.max !== undefined;
+}
+
+/**
+ * The allowed range, written for the panel.
+ *
+ * The bound belongs on screen next to the number it governs. Discovering it by
+ * having a keystroke rejected - or, worse, by not having it rejected and
+ * finding out later that the drawing and the file disagree - is not a way to
+ * learn what a field accepts. Mirrors `OutputPointsControl`, which states its
+ * own range the same way.
+ */
+export function paramRangeLabel(field: ParamField): string {
+  const { min, max } = field;
+  if (min !== undefined && max !== undefined) return `${min}–${max}`;
+  if (min !== undefined) return `≥ ${min}`;
+  if (max !== undefined) return `≤ ${max}`;
+  return "";
+}
+
+/**
+ * Fold a committed value into the field's declared range.
+ *
+ * Clamping, not refusing. Every intermediate state of a typed number is out of
+ * range - select `2` in a 2..5 field and type `21` and the field passes through
+ * `21` - so rejecting per keystroke makes the box uneditable, which is the
+ * mistake `OutputPointsControl` was written to undo. Callers hold a draft and
+ * commit once, on Enter or blur; this is what runs at that moment.
+ *
+ * Three things are deliberately left alone:
+ *
+ * - **An empty box.** That means "leave it to the model default", which the
+ *   keyed grammar spells by omitting the token. Clamping it to `min` would
+ *   invent a value the user did not type.
+ * - **Anything that is not a number.** An expression or a parameter reference
+ *   is something this function has no opinion about, and guessing one would be
+ *   worse than passing it through.
+ * - **A value already inside the range.** Its spelling survives: `1k` stays
+ *   `1k` rather than being rewritten to `1000`.
+ */
+export function clampParamValue(field: ParamField, raw: string): string {
+  if (!isBoundedParamField(field) && !field.integer) return raw;
+  const text = raw.trim();
+  if (!text) return raw;
+  let numeric: number;
+  try {
+    numeric = parseQuantity(text, field.unit);
+  } catch {
+    return raw;
+  }
+  if (!Number.isFinite(numeric)) return raw;
+  let bounded = field.integer ? Math.round(numeric) : numeric;
+  if (field.min !== undefined) bounded = Math.max(field.min, bounded);
+  if (field.max !== undefined) bounded = Math.min(field.max, bounded);
+  return bounded === numeric ? raw : String(bounded);
 }
 
 /** Split a value string into its structured fields for the given kind. */

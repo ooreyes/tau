@@ -85,12 +85,30 @@ fi
 # plus documented non-UI sentinels / SVG plan previews / CSS color helper fallback.
 HEX_RAW="$(scan_src '#[0-9a-fA-F]{3,8}\b' ts tsx css)"
 
-HEX_CSS_LATE="$(scan_file '#[0-9a-fA-F]{3,8}\b' "$SRC/App.css" | awk -F: '$1+0 > 567' || true)"
+# Where the token zone ends is DERIVED from the file, not hardcoded. A literal
+# line number drifts the moment a token is added, and it drifts *into* the last
+# `:root` block - at which point the gate either rejects a legitimate new token
+# or gets bumped by hand and quietly stops checking real rules. The zone is the
+# run of `:root` / `prefers-color-scheme` blocks at the head of App.css; its end
+# is the column-0 `}` that closes the last of them.
+TOKEN_ZONE_END="$(awk '
+  /^(:root|@media \(prefers-color-scheme)/ { zone = 1 }
+  /^\}/ { if (zone) { end = NR; zone = 0 } }
+  END { print end + 0 }
+' "$SRC/App.css")"
+# A zone that failed to parse would read as "everything is a token", so an
+# implausible answer is a hard stop rather than a silent pass.
+if [[ "$TOKEN_ZONE_END" -lt 100 ]]; then
+  fail "could not locate the App.css token zone (derived end: $TOKEN_ZONE_END)"
+  TOKEN_ZONE_END=0
+fi
+
+HEX_CSS_LATE="$(scan_file '#[0-9a-fA-F]{3,8}\b' "$SRC/App.css" | awk -F: -v end="$TOKEN_ZONE_END" '$1+0 > end' || true)"
 if [[ -n "$HEX_CSS_LATE" ]]; then
-  fail "App.css hex outside token zone (lines >567):"
+  fail "App.css hex outside token zone (lines >$TOKEN_ZONE_END):"
   note "$HEX_CSS_LATE"
 else
-  pass "App.css hex confined to token zone (≤567)"
+  pass "App.css hex confined to token zone (≤$TOKEN_ZONE_END)"
 fi
 
 HEX_TS="$(printf '%s\n' "$HEX_RAW" \

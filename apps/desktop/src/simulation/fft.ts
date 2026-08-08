@@ -28,6 +28,13 @@ export interface Spectrum {
   magnitudeDb: number[];
   /** Phase of each bin in degrees, in `(-180, 180]`. */
   phase: number[];
+  /**
+   * The window the transform was taken through. Carried with the data because
+   * the window - not the signal - decides how many bins one component spreads
+   * over, and therefore whether two nearby bins are two components or one.
+   * See {@link windowMainLobeBins}.
+   */
+  window: WindowFn;
 }
 
 export interface SpectrumOptions {
@@ -120,6 +127,35 @@ export function windowValue(window: WindowFn, i: number, n: number): number {
   }
 }
 
+/**
+ * How many bins on each side of a component the window's main lobe covers.
+ *
+ * A window multiplies the signal in time, so it convolves the spectrum with the
+ * window's own transform: a single component at bin `m` reappears at `m ± k` for
+ * every `k` the window's kernel is non-zero at. Written as a discrete kernel
+ * over integer bin offsets these are exact:
+ *
+ *   rectangular  [1]                          → 0 bins  (integer offsets are nulls)
+ *   hann         [-¼, ½, -¼]                  → 1 bin
+ *   hamming      [-0.23, 0.54, -0.23]         → 1 bin
+ *   blackman     [0.04, -¼, 0.42, -¼, 0.04]   → 2 bins
+ *
+ * DC is always exactly on bin 0, so these are exactly the bins a DC term
+ * contaminates - the bins in which no independent component can be resolved.
+ */
+export function windowMainLobeBins(window: WindowFn): number {
+  switch (window) {
+    case "rectangular":
+      return 0;
+    case "blackman":
+      return 2;
+    case "hann":
+    case "hamming":
+    default:
+      return 1;
+  }
+}
+
 /** Linear interpolation of `values(times)` at `t` (clamped to the endpoints). */
 function interpolate(times: number[], values: number[], t: number): number {
   if (t <= times[0]) return values[0];
@@ -194,10 +230,18 @@ export function waveformSpectrum(
     phase.push((Math.atan2(im[k], re[k]) * 180) / Math.PI);
   }
 
-  return { frequencies, magnitude, magnitudeDb, phase };
+  return { frequencies, magnitude, magnitudeDb, phase, window };
 }
 
-/** The bin with the largest amplitude above DC - the dominant tone of the signal. */
+/**
+ * The bin with the largest amplitude above DC.
+ *
+ * This is a raw peak search: it always names a frequency, including for a
+ * spectrum that has no periodic content at all (the largest non-DC bin of a
+ * settled DC waveform is its window's leakage). Anything user-facing must go
+ * through `spectrumInsights`, which decides whether a tone exists before
+ * naming one.
+ */
 export function dominantFrequency(spectrum: Spectrum): number {
   let best = 0;
   let bestMag = -Infinity;

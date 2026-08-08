@@ -48,6 +48,11 @@
   --signal-line:  rgba(230, 162, 60, 0.35);
   --signal-glow:  rgba(230, 162, 60, 0.22);
 
+  /* LED emission: a hot core inside a --signal halo, composited additively on
+     the black instrument face and subtractively on paper. See DESIGN_SYSTEM §1.6. */
+  --led-glow-core:  #ffd9a0;
+  --led-glow-blend: screen;
+
   /* Semantic - desaturated off Apple systemRed/systemGreen. These read as
      lamps, hairlines and small text now (never a full-saturation text run or
      a large tinted fill - see the status strip / Toolbar retheme), so the
@@ -277,6 +282,8 @@
     --signal-soft:  rgba(143, 92, 8, 0.07);
     --signal-line:  rgba(143, 92, 8, 0.28);
     --signal-glow:  rgba(143, 92, 8, 0.14);
+    --led-glow-core:  #E39A20;
+    --led-glow-blend: multiply;
 
     --danger:       #c02718;
     --danger-soft:  rgba(192, 39, 24, 0.07);
@@ -389,6 +396,8 @@
   --signal-soft:  rgba(143, 92, 8, 0.07);
   --signal-line:  rgba(143, 92, 8, 0.28);
   --signal-glow:  rgba(143, 92, 8, 0.14);
+  --led-glow-core:  #E39A20;
+  --led-glow-blend: multiply;
 
   --danger:       #c02718;
   --danger-soft:  rgba(192, 39, 24, 0.07);
@@ -495,6 +504,8 @@
   --signal-soft:  rgba(230, 162, 60, 0.12);
   --signal-line:  rgba(230, 162, 60, 0.35);
   --signal-glow:  rgba(230, 162, 60, 0.22);
+  --led-glow-core:  #ffd9a0;
+  --led-glow-blend: screen;
 
   --danger:       #e6564b;
   --danger-soft:  rgba(230, 86, 75, 0.10);
@@ -6635,6 +6646,38 @@ button.bottom-panel-head:focus-visible {
   max-width: 100%;
 }
 
+/* A bounded field carries its range beside the number, the way the transient
+   panel's output-point control does. The bound is only useful if it is on
+   screen: found by having a keystroke clamped, it is a surprise. */
+.property-value {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* Direct child only: an engineering field's mantissa is sized by `.eng-input`
+   rules that must keep winning, and matching it here would be a coin toss on
+   specificity. */
+.property-value > input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.property-value .eng-input {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.property-range {
+  flex: none;
+  color: var(--faint);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-wide);
+  white-space: nowrap;
+}
+
 .property-field .eng-input input,
 .property-field .eng-input select,
 .property-field .eng-input [data-slot="select-trigger"].eng-input-prefix {
@@ -9240,13 +9283,31 @@ button.bottom-panel-head:focus-visible {
 /* An LED lit by its own solved current. Amber because Tau does not model an
    LED's wavelength -- guessing red or green would be a confident statement
    about something the solver has no opinion on. Nothing is drawn at all
-   without a result, so this can never imply a part is on when it is not. */
+   without a result, so this can never imply a part is on when it is not.
+
+   The fill is a radial gradient and there is deliberately NO stroke. Light has
+   no outline: a flat translucent disc with a hairline rim reads as a sticker
+   laid over the symbol, which is what this used to be. Emission falls off, so
+   the alpha does too, all the way to zero at the rim - there is no boundary to
+   see. The reference plates keep luminous elements subordinate to the mark they
+   belong to (the heart-rate pill blooms, it does not swallow the readout), so
+   the perceptible disc stays inside the LED's own 28-unit body even though the
+   gradient's tail runs further out. */
 .led-glow {
-  fill: var(--signal-glow);
-  stroke: var(--signal);
-  stroke-width: 1;
+  fill: url(#tau-led-glow);
+  stroke: none;
+  /* Additive on the black instrument face, subtractive on paper. A glow tuned
+     on black is invisible on white if it is only ever painted over; on paper a
+     lamp reads as saturation, not as added light. */
+  mix-blend-mode: var(--led-glow-blend);
   pointer-events: none;
 }
+
+/* The stops carry the colour so it stays in tokens rather than in markup. The
+   core is one step hotter than the halo: a real emitter clips toward white at
+   the die and keeps its hue in the bloom. */
+.led-glow-core { stop-color: var(--led-glow-core); }
+.led-glow-halo { stop-color: var(--signal); }
 
 /* The halo is measured data, not decoration, so it does not animate: a pulsing
    readout reads as unstable and on a measured value it actively misleads. */

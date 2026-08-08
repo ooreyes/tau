@@ -1,0 +1,125 @@
+/*
+ * Live controls strip - the simulator's answer to "this circuit has something
+ * you can operate".
+ *
+ * Placement is the whole argument. The circuit is the subject, so this cannot
+ * float over the drawing the way the ammeter note does; and the header is
+ * already carrying a title, four tools, Current Mode and the padlock at a
+ * 560px maximum, so a fifth chip there clips. It therefore sits as its own
+ * band between the header and the canvas: full pane width, no box of its own,
+ * separated by the same hairline the header already uses.
+ *
+ * It renders only when the schematic actually has an operable part
+ * (`schematic/liveControls.ts`), so it is never an empty panel occupying prime
+ * space.
+ *
+ * Tokens only - every value here is defined in both themes in App.css.
+ */
+
+.live-controls {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--panel-3);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Lamp + word, read as one unit and never split across a wrap. */
+.live-controls-title {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/*
+ * Quiet at rest, amber while the result is being recomputed. `--signal` is the
+ * running lamp in the design system, so this is the same language the transport
+ * control speaks, not a second vocabulary.
+ *
+ * `--muted` rather than `--faint` at rest: on paper a `--faint` dot this small
+ * disappears, and an indicator nobody can see is not a quiet indicator, it is
+ * an absent one.
+ */
+.live-controls-lamp {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.live-controls-lamp.solving {
+  background: var(--signal);
+}
+
+/* The readouts. A list, because that is what it is; unstyled, because a bullet
+   would be ink that says nothing. */
+.live-controls-list {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.live-control {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  white-space: nowrap;
+}
+
+/* Designator whispers, position speaks: two steps of the scale apart, so the
+   state is what the eye lands on. Both mono so the row does not reflow as a
+   switch goes OPEN to CLOSED. */
+.live-control-name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+
+.live-control-position {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/*
+ * The consequence, stated once. Takes the whole second row so the readouts
+ * above it stay on one line for as long as the pane allows.
+ *
+ * `--fs-caption`, not `--fs-micro`: this is a caption subordinate to the
+ * readouts above it, but it is a sentence rather than a canvas annotation, and
+ * 9px prose on a 560px pane is present without being readable.
+ */
+.live-controls-hint {
+  flex: 1 0 100%;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-controls-lamp {
+    transition: none;
+  }
+}

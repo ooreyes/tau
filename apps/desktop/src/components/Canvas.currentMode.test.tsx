@@ -197,7 +197,11 @@ describe("Canvas - LED glow", () => {
     const glow = document.querySelectorAll(".led-glow");
     expect(glow).toHaveLength(1);
     // Near the 20 mA rating, so the halo should be close to its full radius.
-    expect(Number(glow[0].getAttribute("r"))).toBeGreaterThan(20);
+    // That radius is now the extent of a gradient that has faded to nothing
+    // well before it - the disc a reader actually sees is roughly half this -
+    // so it is smaller than the flat outlined disc this replaced.
+    // `LedGlowLayer.test.tsx` is where the shape of that falloff is asserted.
+    expect(Number(glow[0].getAttribute("r"))).toBeGreaterThan(19);
   });
 
   it("stays dark when the same LED is reverse-biased", () => {

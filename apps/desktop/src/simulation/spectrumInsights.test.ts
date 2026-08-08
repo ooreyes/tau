@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { waveformSpectrum } from "./fft";
-import type { Spectrum } from "./fft";
+import { waveformSpectrum, windowMainLobeBins } from "./fft";
+import type { Spectrum, WindowFn } from "./fft";
 import { spectrumInsights } from "./spectrumInsights";
 
+/** Synthetic bins. Rectangular: these fixtures place components exactly on bin
+ *  centres, which is the coherent, leakage-free case a rectangular window
+ *  describes - so a neighbouring bin really is an independent component. */
 function spectrum(magnitude: number[], binWidthHz = 100): Spectrum {
   return {
     frequencies: magnitude.map((_, index) => index * binWidthHz),
     magnitude,
     magnitudeDb: magnitude.map((value) => value > 0 ? 20 * Math.log10(value) : -300),
     phase: magnitude.map(() => 0),
+    window: "rectangular",
   };
 }
 
@@ -95,7 +99,7 @@ describe("spectrumInsights", () => {
   });
 
   it("returns null unsupported metrics for empty, DC-only, and all-invalid spectra", () => {
-    const empty = spectrumInsights({ frequencies: [], magnitude: [], magnitudeDb: [], phase: [] });
+    const empty = spectrumInsights({ frequencies: [], magnitude: [], magnitudeDb: [], phase: [], window: "rectangular" });
     expect(empty).toMatchObject({
       binWidthHz: null,
       dc: null,
@@ -118,6 +122,7 @@ describe("spectrumInsights", () => {
       magnitude: [Number.NaN, 1, -1, Infinity],
       magnitudeDb: [],
       phase: [],
+      window: "rectangular",
     });
     expect(invalid.fundamental).toBeNull();
     expect(invalid.binWidthHz).toBeNull();
@@ -129,6 +134,7 @@ describe("spectrumInsights", () => {
       magnitude: [0.1, 1, 0.1, 10, 0.01], // deliberately shorter than frequencies
       magnitudeDb: [],
       phase: [],
+      window: "rectangular",
     }, { fundamentalHz: 10, exclusionBins: 0 });
 
     expect(insight.fundamental?.frequencyHz).toBe(10);
@@ -187,5 +193,109 @@ describe("spectrumInsights", () => {
     expect(insight.harmonics[0]).toMatchObject({ order: 2, frequencyHz: 2 });
     expect(insight.harmonics[7]).toMatchObject({ order: 9, frequencyHz: 9 });
     expect(insight.thd).toMatchObject({ ratio: 0, percent: 0, db: -300 });
+  });
+});
+
+/**
+ * Whether a spectrum contains a tone at all.
+ *
+ * These fixtures are real waveforms put through the real transform, not
+ * hand-written bins, because the defect they cover is produced by the window
+ * rather than by the signal: a Hann window puts the *full* DC amplitude into
+ * bin 1, so a bit-exact-constant 5 V rail used to be reported as a 200 Hz tone
+ * with a THD figure and eight harmonics behind it.
+ */
+describe("spectrumInsights tone detection", () => {
+  // A 5 ms transient at 512 steps - the run that produced the defect report.
+  const stopTime = 5e-3;
+  const times = Array.from({ length: 513 }, (_, i) => (i * stopTime) / 512);
+  const analyse = (values: number[], window: WindowFn = "hann") =>
+    spectrumInsights(waveformSpectrum(times, values, { window }));
+
+  it("reports no tone for a DC operating point, and no distortion figures with it", () => {
+    const insight = analyse(times.map(() => 5));
+
+    expect(insight.fundamental).toBeNull();
+    expect(insight.toneRejection).toBe("dc-skirt");
+    expect(insight.thd).toBeNull();
+    expect(insight.thdPlusNoise).toBeNull();
+    expect(insight.sfdrDb).toBeNull();
+    expect(insight.harmonics).toEqual([]);
+    // The DC term itself is still measured, and the raw peak search still has
+    // an answer - it is simply not allowed to be presented as a frequency.
+    expect(insight.dc?.amplitude).toBeCloseTo(5, 9);
+    expect(insight.dominant?.frequencyHz).toBe(200);
+  });
+
+  it.each([
+    ["a settled step", (t: number) => 5 * (1 - Math.exp(-t / (stopTime / 20)))],
+    ["a step that is still settling", (t: number) => 5 * (1 - Math.exp(-t / stopTime))],
+    ["a ramp", (t: number) => (5 * t) / stopTime],
+    ["one sample of solver residue on a DC rail", (t: number) => (t === 0 ? 5.00002 : 5)],
+  ])("reports no tone for %s", (_name, shape) => {
+    const insight = analyse(times.map(shape));
+    expect(insight.fundamental).toBeNull();
+    expect(insight.toneRejection).toBe("dc-skirt");
+    expect(insight.harmonics).toEqual([]);
+  });
+
+  it("reports no tone for a flat field of noise with no peak in it", () => {
+    let seed = 12345;
+    const insight = analyse(times.map(() => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648 - 0.5;
+    }));
+    expect(insight.fundamental).toBeNull();
+    expect(insight.toneRejection).toBe("no-prominent-peak");
+  });
+
+  // The over-correction guard: everything above must not cost us a real tone.
+  it("still reports the fundamental and harmonics of a genuine sine", () => {
+    const insight = analyse(times.map((t) => Math.sin(2 * Math.PI * 2000 * t)));
+
+    expect(insight.toneRejection).toBeNull();
+    expect(insight.fundamental?.frequencyHz).toBe(2000);
+    expect(insight.fundamental?.amplitude).toBeCloseTo(1, 2);
+    expect(insight.harmonics.map((harmonic) => harmonic.frequencyHz)).toEqual([4000, 6000, 8000, 10_000, 12_000, 14_000, 16_000, 18_000]);
+    expect(insight.thd!.percent).toBeLessThan(0.1);
+  });
+
+  it("measures the distortion of a clipped sine instead of dismissing it as broadband", () => {
+    // Symmetric clipping at 0.7 leaves odd harmonics only; H3 must be the
+    // largest of them and THD must be a real, non-trivial number.
+    const insight = analyse(times.map((t) => Math.max(-0.7, Math.min(0.7, Math.sin(2 * Math.PI * 2000 * t)))));
+
+    expect(insight.fundamental?.frequencyHz).toBe(2000);
+    expect(insight.thd!.percent).toBeGreaterThan(5);
+    const h3 = insight.harmonics.find((harmonic) => harmonic.order === 3)!;
+    const h2 = insight.harmonics.find((harmonic) => harmonic.order === 2)!;
+    expect(h3.dBc).toBeGreaterThan(h2.dBc);
+  });
+
+  it.each<[WindowFn, number]>([
+    ["rectangular", 0],
+    ["hann", 1],
+    ["hamming", 1],
+    ["blackman", 2],
+  ])("separates DC from a sine under a %s window (main lobe %i bins)", (window, lobeBins) => {
+    expect(windowMainLobeBins(window)).toBe(lobeBins);
+    expect(analyse(times.map(() => 5), window).fundamental).toBeNull();
+    // Deliberately half a bin off centre (bin width is 200 Hz): the worst case
+    // for window leakage, and the one a criterion tuned on exact-bin fixtures
+    // would get wrong. Either straddling bin may legitimately win, so the tone
+    // only has to land within one bin of the true frequency.
+    const offBin = analyse(times.map((t) => Math.sin(2 * Math.PI * 2100 * t)), window);
+    expect(offBin.fundamental, `${window} lost an off-bin tone`).not.toBeNull();
+    expect(Math.abs(offBin.fundamental!.frequencyHz - 2100)).toBeLessThanOrEqual(200);
+  });
+
+  it("takes an explicit fundamental as an assertion and skips the tone test", () => {
+    // A caller naming a frequency has knowledge the spectrum does not carry
+    // (an authored .four directive, a source's own setting).
+    const insight = spectrumInsights(waveformSpectrum(times, times.map(() => 5), { window: "hann" }), {
+      fundamentalHz: 1000,
+    });
+    expect(insight.toneRejection).toBeNull();
+    expect(insight.fundamental?.frequencyHz).toBe(1000);
   });
 });

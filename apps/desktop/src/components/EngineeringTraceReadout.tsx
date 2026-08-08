@@ -34,7 +34,11 @@ function ReadoutItem({ label, value, title, className = "" }: ReadoutItemProps) 
 function Classification({ model }: { model: EngineeringTraceReadoutModel }) {
   const text = model.frequency
     ? `Periodic · ${formatEngineering(model.frequency, "Hz", 3)}`
-    : model.classification.kind === "steady" ? "Steady" : "Transient";
+    : model.classification.kind === "steady"
+      ? "Steady"
+      : model.classification.kind === "settled"
+        ? "Settled"
+        : "Transient";
   return (
     <span
       className={`engineering-trace-readout__classification engineering-trace-readout__classification--${model.classification.kind}`}
