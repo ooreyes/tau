@@ -342,7 +342,7 @@ advisory path today.
 
 Item 2 is closed.
 
-### 3. Redraw: bulb, potentiometer, opamp, comparator, transformer, ctTransformer
+### 3. Redraw: bulb, potentiometer, opamp, comparator, transformer, ctTransformer — DONE 2026-08-08
 Fix the "+"/"−" collision on every amplifier-derived symbol. Close the
 transformer lead gaps and land the CT tap on the coil junction. Make the
 potentiometer read as adjustable. Fix `SYMBOL_BODY`/`SYMBOL_BOX` drift for each.
@@ -351,7 +351,7 @@ potentiometer read as adjustable. Fix `SYMBOL_BODY`/`SYMBOL_BOX` drift for each.
 width of a body edge at selection weight, and both themes look right at the
 1440×900 floor.
 
-### 4. Controlled sources: drawings + settings
+### 4. Controlled sources: drawings + settings — DRAWINGS DONE 2026-08-08, settings open
 VCVS/VCCS/CCCS/CCVS get distinguishable symbols and properties that name the
 gain with its real unit (V/V, A/V, A/A, V/A) and explain the control port.
 Decide and document whether a named control reference is added.
@@ -413,7 +413,7 @@ No glow without a result. Document the mapping.
 **Done when:** an LED in a working circuit visibly brightens with drive current
 and stays dark when reverse-biased.
 
-### 8. Ideal by default, real behind Advanced
+### 8. Ideal by default, real behind Advanced — MODELS DONE 2026-08-08, disclosure open
 Per the scoping decision above. Every placeable part defaults to textbook
 behaviour; losses and second-order effects live under an Advanced disclosure.
 Both paths must simulate correctly and be tested.
@@ -430,6 +430,57 @@ always-drawn input leads go away.
 3-input gate, and the palette icons for the seven gate types are distinguishable.
 
 ---
+
+## Status at 2026-08-08 11:00
+
+Closed: **0** (Test Point), **1** (parameter codec), **2** (wiper + polarity),
+**3** (redraws). Partly closed: **4** (drawings done, settings open), **6**
+(behaviour and re-run done, drawing/wiper/affordance open), **8** (ideal models
+done, Advanced disclosure open). Untouched: **5**, **7**, **9**.
+
+Gates here: typecheck clean, **3482 tests passed / 8 skipped**, drift 10/10,
+cargo `--lib` 77 passed.
+
+### Item 3 notes
+The `+` collision was fixed in the *triangle*, not the glyph: the body grew to
+half-height 32 (LTspice's opamp proportions) and the glyphs moved to x = -14.
+Closest approach between any glyph centreline and any body edge is now **6.0
+units** against **1.935** before, i.e. two full selected-stroke widths. Both
+amplifiers share one `AmplifierBody`. Transformer windings are generated so each
+coil spans exactly its own pin rows; the CT tap leaves at the junction and
+carries a dot. The potentiometer track is symmetric about the wiper pin so the
+arrow tip lands on it. Looked at in the running app at 1440x900 in both themes:
+nothing clips the +/-42 x +/-40 preview box, stroke 1.55, `--comp` in both.
+
+### Item 4 notes
+All four controlled sources now differ on **both** ports: open pair vs closed
+sense branch on the control side, diamond-with-+/- vs diamond-with-arrow on the
+output. Body corrected to the drawn `+/-24 x +/-22`. Still open is the *settings*
+half: gain with its real unit and an explanation of the control port.
+
+### Item 8 notes
+Provenance is an absence test -- `pinOverride`, `ltSymbolType`, `ltModelName`,
+`ltModelFile`, `ltWindows`, `ltExtraAttrs`, `ltHierarchy` -- because no positive
+"placed in Tau" flag exists and adding one would rewrite every saved document.
+Ideal is expressed in LTspice's own `D(Ron= Roff= Vfwd= epsilon=)` spelling so
+the existing `translateIdealDiodeDeckLines()` turns it into ngspice `sidiode`.
+`epsilon=10m` was chosen by measurement: at 1m a 30 mA LED makes ngspice print
+gmin-stepping noise into Diagnostics on a correct run; at 50m a 1 A diode reads
+0.710 V.
+
+Two consequences worth knowing. A zero-volt series ammeter is emitted with each
+ideal part, because an XSPICE `A` device reports no current of its own -- without
+it every placed diode loses `I(D1)`, and item 7 depends on that current. And a
+placed junction loses its `.op` VD/GD row, which for an ideal part carried no
+information but is a visible difference.
+
+Corpus invariance was proven, not sampled: across all **4012** `.asc` files,
+**2114** junction components import and **0** can reach the ideal path. The
+canonical corpus gate returns byte-identical numbers with and without the change.
+
+**Still open on item 8:** the Advanced disclosure, which needs `params.ts` and
+`ShellPanels.tsx`. The switch family is already ideal (1 mOhm / 1 TOhm) with no
+real model to hide, so nothing to do there unless contact resistance is added.
 
 ## Gates for every item
 
