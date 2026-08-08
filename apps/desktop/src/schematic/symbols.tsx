@@ -1,4 +1,5 @@
 import { parseDigitalGate } from "../engine/digitalGateSpec";
+import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { isSpdtThrowToNo, isStaticContactClosed } from "./kindGroups";
 import type { ComponentKind, Rotation } from "./types";
 
@@ -59,6 +60,37 @@ function AmplifierBody() {
       <path data-amp-glyph="-" d={AMP_MINUS_PATH} />
     </>
   );
+}
+
+/* ── Potentiometer geometry (mission item 6) ─────────────────────────────────
+ *
+ * The wiper arrow is drawn where `Wiper=` says the tap is, not at a fixed x.
+ * It has to be: in simulator mode the wiper is a live control the reader drags,
+ * and an arrow that never moved would make a working control look inert.
+ */
+
+/** Resistance track, symmetric about the wiper pin so its centre peak is x = 0. */
+const POT_TRACK_PATH = "M -25 0 L -20 -10 L -10 10 L 0 -10 L 10 10 L 20 -10 L 25 0";
+/** Height of the track's peaks; the arrow tip rides this line. */
+const POT_TRACK_PEAK_Y = -10;
+/** Length of the wiper arrow, and half its width. */
+const POT_ARROW_LEN = 8;
+const POT_ARROW_HALF_W = 4.5;
+/**
+ * How far either side of centre the wiper arrow travels.
+ *
+ * Stopping on the track's outer peaks (±20) buys two things: the tip lands
+ * exactly ON the zigzag at both end stops and at centre, and the arrow's own
+ * half-width keeps the drawing inside the declared `SYMBOL_BODY` of ±25 at
+ * every wiper position (20 + 4.5 = 24.5), so hit-testing and label clearance
+ * stay honest without a value-dependent body box.
+ */
+export const WIPER_TRAVEL_X = 20;
+
+/** Symbol-local x of the wiper arrow for a tap fraction 0..1 measured from pin A. */
+export function wiperArrowX(wiper: number): number {
+  const clamped = Math.min(1, Math.max(0, wiper));
+  return Math.round((2 * clamped - 1) * WIPER_TRAVEL_X * 1000) / 1000;
 }
 
 /* ── Logic gate geometry (mission item 9) ────────────────────────────────────
@@ -1325,22 +1357,34 @@ function symbolArtwork(kind: ComponentKind, value?: string) {
         </>
       );
 
-    case "potentiometer":
+    case "potentiometer": {
+      /* The track is drawn symmetric about the wiper pin so its centre peak
+         sits at x = 0: the wiper arrow can then land ON the track instead of
+         floating 8 units above it, which is what made the part read as a fixed
+         resistor with a stray chevron.
+
+         The arrow slides with `Wiper=`. Its tail stays on the wiper pin, which
+         cannot move (wires end there), so the arm slants as the tap runs off
+         centre — the same way a real wiper arm pivots about its terminal. A
+         centred wiper draws exactly what it always did. */
+      const wx = wiperArrowX(parsePotentiometerSpec(value ?? "").wiper);
+      const baseY = POT_TRACK_PEAK_Y - POT_ARROW_LEN;
       return (
         <>
-          {/* The track is redrawn symmetric about the wiper pin so its centre
-              peak sits at x = 0: the wiper arrow can then land ON the track
-              instead of floating 8 units above it, which is what made the part
-              read as a fixed resistor with a stray chevron. */}
           <line x1={-32} y1={0} x2={-25} y2={0} />
-          <path data-track="" d="M -25 0 L -20 -10 L -10 10 L 0 -10 L 10 10 L 20 -10 L 25 0" />
+          <path data-track="" d={POT_TRACK_PATH} />
           <line x1={25} y1={0} x2={32} y2={0} />
           {/* Wiper: a solid arrow whose tip touches the track — the standard
               "adjustable" marking (the tap fraction is the Wiper= parameter). */}
-          <line x1={0} y1={-32} x2={0} y2={-18} />
-          <path data-wiper="" className="symbol-arrow" d="M 0 -10 L -4.5 -18 L 4.5 -18 Z" />
+          <line x1={0} y1={-32} x2={wx} y2={baseY} />
+          <path
+            data-wiper=""
+            className="symbol-arrow"
+            d={`M ${wx} ${POT_TRACK_PEAK_Y} L ${wx - POT_ARROW_HALF_W} ${baseY} L ${wx + POT_ARROW_HALF_W} ${baseY} Z`}
+          />
         </>
       );
+    }
 
     case "bulb":
       return (

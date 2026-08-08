@@ -422,6 +422,50 @@ describe("passive redraws (item 3)", () => {
     expect(closest, "wiper arrow to track").toBeLessThanOrEqual(0.775);
   });
 
+  it("slides the potentiometer wiper arrow to where Wiper= says the tap is", () => {
+    // Item 6: the wiper is a live control the reader drags in simulator mode.
+    // A fixed arrow would make a working control look inert.
+    const arrowX = (value?: string) => {
+      const markup = renderWith("potentiometer", value);
+      const wiper = elementTags(markup, "path").find((t) => attr(t, "data-wiper") !== undefined);
+      const box = boxOfSegments(pathSegments(attr(wiper ?? "", "d") ?? ""));
+      return (box.minX + box.maxX) / 2;
+    };
+    // A centred wiper draws exactly where it always did, so every schematic
+    // saved before the control existed looks identical.
+    expect(arrowX(undefined)).toBeCloseTo(0, 6);
+    expect(arrowX("10k")).toBeCloseTo(0, 6);
+    expect(arrowX("10k Wiper=0.5")).toBeCloseTo(0, 6);
+
+    const left = arrowX("10k Wiper=0");
+    const right = arrowX("10k Wiper=1");
+    expect(left).toBeLessThan(-15);
+    expect(right).toBeGreaterThan(15);
+    // Monotone, and pin A (x = -32) is the 0 end - the same end the netlist
+    // measures the fraction from.
+    expect(arrowX("10k Wiper=0.25")).toBeGreaterThan(left);
+    expect(arrowX("10k Wiper=0.25")).toBeLessThan(0);
+    expect(arrowX("10k Wiper=0.75")).toBeGreaterThan(0);
+    expect(arrowX("10k Wiper=0.75")).toBeLessThan(right);
+    // Out-of-range text cannot throw the arrow off the part.
+    expect(arrowX("10k Wiper=9")).toBeCloseTo(0, 6);
+  });
+
+  it("keeps the potentiometer inside its declared body at every wiper position", () => {
+    // SYMBOL_BODY is kind-only, so it has to cover the whole travel or
+    // hit-testing and label clearance quietly stop matching the drawing.
+    const declared = SYMBOL_BODY.potentiometer;
+    const pins = getLocalPins("potentiometer");
+    for (const wiper of [0, 0.13, 0.25, 0.5, 0.62, 0.75, 1]) {
+      const elements = drawnElements(renderWith("potentiometer", `10k Wiper=${wiper}`));
+      const drawn = elements.filter((e) => !isLead(e, pins)).map((e) => e.box).reduce(union);
+      expect(declared.minX, `wiper ${wiper} minX`).toBeLessThanOrEqual(drawn.minX + 0.05);
+      expect(declared.maxX, `wiper ${wiper} maxX`).toBeGreaterThanOrEqual(drawn.maxX - 0.05);
+      expect(declared.minY, `wiper ${wiper} minY`).toBeLessThanOrEqual(drawn.minY + 0.05);
+      expect(declared.maxY, `wiper ${wiper} maxY`).toBeGreaterThanOrEqual(drawn.maxY - 0.05);
+    }
+  });
+
   it("anchors the bulb filament to the glass envelope", () => {
     const markup = render("bulb");
     const glass = elementTags(markup, "circle")[0];

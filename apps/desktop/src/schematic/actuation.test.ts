@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { actuatedValue, actuationLabel, isActuable, NON_ACTUABLE } from "./actuation";
+import {
+  actuatedValue,
+  actuationLabel,
+  draggedWiper,
+  isActuable,
+  isDraggableWiper,
+  wiperFraction,
+  wiperValue,
+  NON_ACTUABLE,
+} from "./actuation";
+import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { isSpdtThrowToNo, isStaticContactClosed } from "./kindGroups";
-import type { ComponentKind } from "./types";
+import type { ComponentKind, Rotation } from "./types";
 
 const part = (kind: ComponentKind, value: string, label = "S1") => ({ kind, value, label });
 
@@ -88,6 +98,84 @@ describe("contact actuation", () => {
   it("names the gesture for a screen reader", () => {
     expect(actuationLabel(part("pushButton", "open", "SW3"))).toBe("Press SW3");
     expect(actuationLabel(part("switch", "open", "S1"))).toBe("Toggle S1");
+    expect(actuationLabel(part("potentiometer", "10k", "RV1"))).toBe("Drag the RV1 wiper");
     expect(actuationLabel(part("resistor", "1k", "R1"))).toBeNull();
+  });
+});
+
+describe("potentiometer wiper drag", () => {
+  const pot = (value: string, rotation: Rotation = 0, mirrored = false) => ({
+    kind: "potentiometer" as const,
+    value,
+    label: "RV1",
+    rotation,
+    mirrored,
+  });
+
+  it("offers a wiper only on the part that has one", () => {
+    expect(isDraggableWiper("potentiometer")).toBe(true);
+    expect(isDraggableWiper("resistor")).toBe(false);
+    expect(isDraggableWiper("switch")).toBe(false);
+    expect(wiperValue(part("resistor", "1k"), 0.25)).toBeNull();
+  });
+
+  it("moves the tap by the distance dragged, not to where the pointer landed", () => {
+    // Absolute mapping would jerk the wiper to wherever the reader clicked, and
+    // on the simulator canvas clicking a part is also how you select it.
+    expect(draggedWiper(pot("10k"), 0.5, 0, 0)).toBeCloseTo(0.5, 12);
+    // Full travel is 40 world units (±20 either side of centre), so +10 is a
+    // quarter turn regardless of where on the body the drag started.
+    expect(draggedWiper(pot("10k"), 0.5, 10, 0)).toBeCloseTo(0.75, 12);
+    expect(draggedWiper(pot("10k"), 0.2, 10, 0)).toBeCloseTo(0.45, 12);
+    expect(draggedWiper(pot("10k"), 0.5, -20, 0)).toBeCloseTo(0, 12);
+  });
+
+  it("follows the arrow, not the screen, on a rotated or mirrored part", () => {
+    // Rotated 90°, the track runs down the screen: dragging DOWN raises the tap.
+    expect(draggedWiper(pot("10k", 90), 0.5, 0, 10)).toBeCloseTo(0.75, 12);
+    expect(draggedWiper(pot("10k", 90), 0.5, 10, 0)).toBeCloseTo(0.5, 12);
+    // Rotated 180° / mirrored, pin A is on the right, so right lowers the tap.
+    expect(draggedWiper(pot("10k", 180), 0.5, 10, 0)).toBeCloseTo(0.25, 12);
+    expect(draggedWiper(pot("10k", 0, true), 0.5, 10, 0)).toBeCloseTo(0.25, 12);
+    expect(draggedWiper(pot("10k", 270), 0.5, 0, 10)).toBeCloseTo(0.25, 12);
+  });
+
+  it("accumulates past an end stop without hysteresis on the way back", () => {
+    // The travel is only 40 units wide, so a reader overshoots constantly. The
+    // fraction stays unclamped here and clamps on the way into the value, so
+    // dragging 200 units past the end and back returns the tap to the pointer.
+    const overshot = draggedWiper(pot("10k"), 0.5, 200, 0);
+    expect(overshot).toBeGreaterThan(1);
+    expect(wiperValue(pot("10k"), overshot)).toBe("10k Wiper=1");
+    expect(wiperValue(pot("10k"), draggedWiper(pot("10k"), 0.5, 200 - 10, 0))).toBe("10k Wiper=1");
+    // …and coming back inside the travel resumes exactly where the pointer is.
+    expect(wiperValue(pot("10k"), draggedWiper(pot("10k"), 0.5, 8, 0))).toBe("10k Wiper=0.7");
+  });
+
+  it("clamps and quantises into a value the netlist parser reads back", () => {
+    expect(wiperValue(pot("10k"), -3)).toBe("10k Wiper=0");
+    expect(wiperValue(pot("10k"), 7)).toBe("10k Wiper=1");
+    // 1 % steps: a value string on the sheet stays short and readable.
+    expect(wiperValue(pot("10k"), 0.123456)).toBe("10k Wiper=0.12");
+    expect(parsePotentiometerSpec(wiperValue(pot("10k"), 0.123456)!).wiper).toBeCloseTo(0.12, 12);
+    expect(parsePotentiometerSpec(wiperValue(pot("10k"), 0.123456)!).resistanceText).toBe("10k");
+  });
+
+  it("leaves a centred wiper spelled the way every saved schematic spells it", () => {
+    // `omitWhenFallback` again: re-encoding 0.5 as "10k Wiper=0.5" would rewrite
+    // the value of every potentiometer already on disk.
+    expect(wiperValue(pot("10k"), 0.5)).toBeNull();
+    expect(wiperValue(pot("10k Wiper=0.8"), 0.5)).toBe("10k");
+    expect(wiperFraction(pot("10k"))).toBe(0.5);
+    expect(wiperFraction(pot("10k Wiper=0.8"))).toBe(0.8);
+  });
+
+  it("reports no change when the tap has not moved a whole step", () => {
+    expect(wiperValue(pot("10k Wiper=0.25"), 0.2501)).toBeNull();
+    expect(wiperValue(pot("10k Wiper=0.25"), 0.26)).toBe("10k Wiper=0.26");
+  });
+
+  it("keeps the rest of the value string through a drag", () => {
+    expect(wiperValue(pot("4k7 Wiper=0.25"), 0.9)).toBe("4k7 Wiper=0.9");
   });
 });

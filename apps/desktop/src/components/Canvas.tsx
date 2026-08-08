@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { moveComponentTo, useSchematic } from "../store/useSchematic";
-import { isActuable, NON_ACTUABLE } from "../schematic/actuation";
+import {
+  actuationLabel,
+  draggedWiper,
+  isActuable,
+  isDraggableWiper,
+  wiperFraction,
+  wiperValue,
+  NON_ACTUABLE,
+} from "../schematic/actuation";
 import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
 import type { NetLabel, Point, SchematicAscShape, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
@@ -192,6 +200,7 @@ export function Canvas({
   const addProbe = useSchematic((s) => s.addProbe);
   const toggleCurrentProbe = useSchematic((s) => s.toggleCurrentProbe);
   const actuateContact = useSchematic((s) => s.actuateContact);
+  const setWiper = useSchematic((s) => s.setWiper);
   const removeProbe = useSchematic((s) => s.removeProbe);
   const netLabels = useSchematic((s) => s.netLabels);
   const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
@@ -370,6 +379,25 @@ export function Canvas({
   });
   /** Contact currently held down by the pointer, released on pointer up. */
   const heldContact = useRef<string | null>(null);
+  /**
+   * Potentiometer wiper currently under the pointer.
+   *
+   * The gesture is previewed, not written: `value` is the string the part would
+   * take, rendered in place of the stored one, and the store only hears about
+   * it on release. See `endWiperDrag` for why.
+   */
+  const wiperDrag = useRef<{ id: string; pressedAt: number; originX: number; originY: number } | null>(null);
+  const [wiperPreview, setWiperPreview] = useState<{ id: string; value: string; fraction: number } | null>(null);
+  /**
+   * Operable part under the pointer on the simulator canvas.
+   *
+   * Nothing used to tell a reader a switch could be thrown before they clicked
+   * it. This is resolved with the same `componentAt` box the click uses, not
+   * CSS `:hover`, so the cursor can never promise something a click in the same
+   * place would not do — the symbol strokes are `fill: none`, so `:hover` fires
+   * only on the ink and would leave the affordance flickering over the gaps.
+   */
+  const [hoverOperable, setHoverOperable] = useState<{ id: string; wiper: boolean } | null>(null);
 
   const moveComponentWithAttachedWires = useCallback(
     (id: string, x: number, y: number, sourcePins: Point[], sourceWires: SchematicWire[], dx: number, dy: number) => {
@@ -668,6 +696,17 @@ export function Canvas({
       setAmmeterNote(`${hit.label || "This part"} ${refusal}`);
       return true;
     }
+    if (isDraggableWiper(hit.kind)) {
+      setAmmeterNote(null);
+      select(hit.id);
+      wiperDrag.current = {
+        id: hit.id,
+        pressedAt: wiperFraction(hit),
+        originX: world.x,
+        originY: world.y,
+      };
+      return true;
+    }
     if (!isActuable(hit.kind)) return false;
     setAmmeterNote(null);
     select(hit.id);
@@ -780,7 +819,12 @@ export function Canvas({
 
     if (!interactive) {
       if (handleSimulatorNodeAction(e.clientX, e.clientY)) return;
-      if (handleActuateAction(e.clientX, e.clientY)) return;
+      if (handleActuateAction(e.clientX, e.clientY)) {
+        // A wiper is dragged, not clicked, so it needs the pointer for the
+        // whole gesture - otherwise a fast drag off the symbol loses it.
+        if (wiperDrag.current) svgRef.current?.setPointerCapture(e.pointerId);
+        return;
+      }
       // Selection is inspection rather than editing: focusing a part drives
       // its telemetry row. Empty-space drags remain pan gestures.
       const hit = componentAt(components, world.x, world.y);
@@ -902,6 +946,24 @@ export function Canvas({
 
   const onPointerMove = (e: ReactPointerEvent<SVGElement>) => {
     if (!interactive) {
+      const wiper = wiperDrag.current;
+      if (wiper) {
+        const held = components.find((c) => c.id === wiper.id);
+        if (!held) {
+          wiperDrag.current = null;
+          setWiperPreview(null);
+          return;
+        }
+        const world = screenToWorld(e.clientX, e.clientY);
+        const fraction = draggedWiper(held, wiper.pressedAt, world.x - wiper.originX, world.y - wiper.originY);
+        const next = wiperValue(held, fraction) ?? held.value;
+        setWiperPreview((prev) =>
+          prev && prev.id === wiper.id && prev.value === next
+            ? prev
+            : { id: wiper.id, value: next, fraction: Math.min(1, Math.max(0, fraction)) },
+        );
+        return;
+      }
       if (tool.mode === "probe" || tool.mode === "label") {
         const cursor = snappedCursor(e.clientX, e.clientY);
         const physicalNets = extractCircuit(components, wires, []).nets;
@@ -910,6 +972,14 @@ export function Canvas({
           y: cursor.y,
           pin: Boolean(netAtPoint(physicalNets, wires, cursor)),
         });
+      } else if (tool.mode === "select") {
+        const world = screenToWorld(e.clientX, e.clientY);
+        const hit = componentAt(components, world.x, world.y);
+        const wiper = Boolean(hit && isDraggableWiper(hit.kind));
+        const next = hit && (wiper || isActuable(hit.kind)) ? { id: hit.id, wiper } : null;
+        setHoverOperable((prev) =>
+          prev?.id === next?.id && prev?.wiper === next?.wiper ? prev : next,
+        );
       }
       const d = drag.current;
       if (d.mode === "pan") {
@@ -1025,7 +1095,32 @@ export function Canvas({
     return () => window.removeEventListener("blur", cancelOnBlur);
   }, [rollbackDrag]);
 
+  /**
+   * Commit a wiper drag, on release.
+   *
+   * Re-solve policy, chosen deliberately: **commit on release, one run**.
+   * Every component mutation runs `invalidateAnalysis` in `App.tsx`, and the
+   * carve-out that re-solves instead of blanking rides a pending flag that the
+   * same mutation's effect consumes. Writing the wiper on every pointermove
+   * would therefore either blank the plot a hundred times over one gesture or
+   * queue a hundred ngspice runs, and a throttle only shortens that list — it
+   * still spends runs on tap positions nobody asked to see. So the store hears
+   * one value change, takes one history entry, and re-solves once, down the
+   * exact path a thrown switch already uses (`onActuate` →
+   * `rerunAfterActuationRef`). The arrow still tracks the pointer live: the
+   * drag renders a local preview, the same way placing a part renders a ghost.
+   */
+  const endWiperDrag = (commit: boolean) => {
+    const wiper = wiperDrag.current;
+    const preview = wiperPreview;
+    wiperDrag.current = null;
+    setWiperPreview(null);
+    if (!commit || !wiper || !preview || preview.id !== wiper.id) return;
+    if (setWiper(wiper.id, preview.fraction)) onActuate?.();
+  };
+
   const endDrag = (e: ReactPointerEvent<SVGElement>) => {
+    endWiperDrag(true);
     // A momentary button is held, not clicked: releasing the pointer lets it go
     // even if the pointer wandered off the symbol in between.
     const held = heldContact.current;
@@ -1071,6 +1166,9 @@ export function Canvas({
   };
 
   const cancelDrag = (e: ReactPointerEvent<SVGElement>) => {
+    // A cancelled gesture never happened: the wiper snaps back to the stored
+    // tap rather than committing wherever the pointer was abandoned.
+    endWiperDrag(false);
     rollbackDrag();
     const el = svgRef.current;
     if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
@@ -1249,6 +1347,21 @@ export function Canvas({
     activateNetLabel(l);
   };
 
+  /**
+   * The cursor is the affordance. `ew-resize` on a potentiometer says the tap
+   * slides along the track and in which direction; `pointer` on a contact says
+   * it responds to a click. Both are set from the same hit test the pointer
+   * handler uses, so the cursor and the click always agree.
+   */
+  const canvasCursor =
+    (interactive && (placing || wiring)) || probing || labeling
+      ? "crosshair"
+      : wiperDrag.current || (!interactive && hoverOperable?.wiper)
+        ? "ew-resize"
+        : !interactive && hoverOperable
+          ? "pointer"
+          : "default";
+
   const previewWire = wireDraft && !pointsEqual(wireDraft.start, wireDraft.cursor)
     ? routeWireSmart(wireDraft.start, wireDraft.cursor, components, wires)
     : null;
@@ -1268,7 +1381,7 @@ export function Canvas({
       <svg
         ref={svgRef}
         className="canvas"
-        style={{ cursor: (interactive && (placing || wiring)) || probing || labeling ? "crosshair" : "default" }}
+        style={{ cursor: canvasCursor }}
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -1278,6 +1391,7 @@ export function Canvas({
         onPointerLeave={() => {
           if (placing) setGhost(null);
           setSnapHover(null);
+          setHoverOperable(null);
         }}
       >
         <defs>
@@ -1350,9 +1464,14 @@ export function Canvas({
           {components.map((c) => (
             <ComponentView
               key={c.id}
-              comp={c}
+              // A wiper drag is previewed, not committed: the arrow tracks the
+              // pointer while the stored circuit — and therefore the result on
+              // screen — stays where it was until release.
+              comp={wiperPreview?.id === c.id ? { ...c, value: wiperPreview.value } : c}
               selected={c.id === selectedId || selectedIds.includes(c.id)}
               showPins={wiring || probing || labeling || placing}
+              operable={simulatorOperability(c, interactive, tool.mode)}
+              hovered={hoverOperable?.id === c.id}
             />
           ))}
 
@@ -1618,14 +1737,39 @@ export function Canvas({
   );
 }
 
+/**
+ * What, if anything, this part offers the reader on the simulator canvas.
+ *
+ * `"refused"` is a part that plainly looks operable and is not — a relay's
+ * contact is driven by its coil. It gets the explanation on hover but neither
+ * the cursor nor the hover weight, because promising an interaction and then
+ * declining it is worse than saying nothing.
+ */
+type Operability = "contact" | "wiper" | "refused" | null;
+
+function simulatorOperability(
+  comp: SchematicComponent,
+  interactive: boolean,
+  toolMode: string,
+): Operability {
+  if (interactive || toolMode !== "select") return null;
+  if (isDraggableWiper(comp.kind)) return "wiper";
+  if (isActuable(comp.kind)) return "contact";
+  return NON_ACTUABLE[comp.kind] ? "refused" : null;
+}
+
 function ComponentView({
   comp,
   selected,
   showPins,
+  operable = null,
+  hovered = false,
 }: {
   comp: SchematicComponent;
   selected: boolean;
   showPins: boolean;
+  operable?: Operability;
+  hovered?: boolean;
 }) {
   // Presentational only - selection/drag/edit are resolved centrally by
   // geometry in the SVG handlers, so render order never decides hit results.
@@ -1641,8 +1785,23 @@ function ComponentView({
   const nativeSubcircuit = isNativeMultiPinSubcircuit(comp);
   const subcircuitPins = nativeSubcircuit ? localSubcircuitPins(comp) : [];
   const subcircuitBody = nativeSubcircuit ? nativeSubcircuitBody(comp) : null;
+  // The cursor is instant but silent, so the operable parts also carry a name
+  // for the gesture. It reaches a screen reader through the group's accessible
+  // name and a mouse reader as the native dwell tooltip.
+  const operableName = operable === "refused"
+    ? `${comp.label || "This part"} ${NON_ACTUABLE[comp.kind]}`
+    : operable
+      ? actuationLabel(comp)
+      : null;
+  const operableClass = operable === "wiper" || operable === "contact"
+    ? ` operable${operable === "wiper" ? " operable-wiper" : ""}${hovered ? " operable-hover" : ""}`
+    : "";
   return (
-    <g className={`component${selected ? " selected" : ""}`} transform={`translate(${comp.x} ${comp.y})`}>
+    <g
+      className={`component${selected ? " selected" : ""}${operableClass}`}
+      transform={`translate(${comp.x} ${comp.y})`}
+    >
+      {operableName && <title>{operableName}</title>}
       {!nativeSubcircuit && overridePins?.map((pin) => {
         const native = nativePins.get(pin.id);
         if (!native) return null;

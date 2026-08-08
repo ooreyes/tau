@@ -738,6 +738,24 @@ body {
   fill: var(--text);
 }
 
+/* Operable parts on the SIMULATOR canvas (mission item 6).
+   The cursor carries the message; the drawing only firms up under the pointer.
+   Deliberately no hue and no halo: the canvas is the subject, a hovered switch
+   is not a measurement, and anything louder would compete with the traces the
+   reader is actually there to look at. Weight is the one channel that reads in
+   both themes -- in light, --comp and --text are the same ink. */
+.component.operable {
+  cursor: pointer;
+}
+
+.component.operable-wiper {
+  cursor: ew-resize;
+}
+
+.component.operable-hover .symbol {
+  stroke-width: 2.1;
+}
+
 .pin-target {
   fill: color-mix(in srgb, var(--text) 16%, transparent);
   stroke: var(--accent-line);

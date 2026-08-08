@@ -147,6 +147,186 @@ describe("Canvas - operating a contact during simulation", () => {
   });
 });
 
+/**
+ * The potentiometer is the other operable part, and the only one whose gesture
+ * is a drag. jsdom's zero-size SVG leaves world == client coordinates, so a
+ * clientX delta is a world delta: full wiper travel is 40 units.
+ */
+describe("Canvas - dragging a potentiometer wiper during simulation", () => {
+  const placePot = (value = "10k") => {
+    useSchematic.setState({
+      components: [{ id: "rv1", kind: "potentiometer", x: 0, y: 0, rotation: 0, value, label: "RV1" }],
+      wires: [],
+      selectedId: null,
+      past: [],
+      future: [],
+    });
+  };
+  const valueOf = () => useSchematic.getState().components[0].value;
+  /** Centre x of the drawn wiper arrow, in symbol-local units. */
+  const arrowX = () => {
+    const d = document.querySelector("[data-wiper]")!.getAttribute("d")!;
+    const xs = [...d.matchAll(/-?[\d.]+/g)].map(Number).filter((_, i) => i % 2 === 0);
+    return (Math.min(...xs) + Math.max(...xs)) / 2;
+  };
+
+  it("commits the tap on release and re-solves exactly once", () => {
+    placePot();
+    const onActuate = vi.fn();
+    render(<Canvas interactive={false} onActuate={onActuate} />);
+    const svg = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0, pointerId: 30 });
+    fireEvent.pointerMove(svg, { clientX: 4, clientY: 0, pointerId: 30 });
+    fireEvent.pointerMove(svg, { clientX: 8, clientY: 0, pointerId: 30 });
+
+    // Mid-drag the arrow has moved but the circuit has not: a re-solve per
+    // pointermove would queue a hundred ngspice runs over one gesture.
+    expect(arrowX()).toBeCloseTo(8, 6);
+    expect(valueOf()).toBe("10k");
+    expect(onActuate).not.toHaveBeenCalled();
+
+    fireEvent.pointerUp(svg, { button: 0, clientX: 8, clientY: 0, pointerId: 30 });
+
+    expect(valueOf()).toBe("10k Wiper=0.7");
+    expect(onActuate).toHaveBeenCalledTimes(1);
+    // One gesture, one undo entry.
+    expect(useSchematic.getState().past).toHaveLength(1);
+    useSchematic.getState().undo();
+    expect(valueOf()).toBe("10k");
+  });
+
+  it("runs the tap to both end stops and back", () => {
+    placePot();
+    render(<Canvas interactive={false} />);
+    const svg = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0, pointerId: 31 });
+    fireEvent.pointerMove(svg, { clientX: 400, clientY: 0, pointerId: 31 });
+    fireEvent.pointerUp(svg, { button: 0, clientX: 400, clientY: 0, pointerId: 31 });
+    expect(valueOf()).toBe("10k Wiper=1");
+
+    fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0, pointerId: 32 });
+    fireEvent.pointerMove(svg, { clientX: -400, clientY: 0, pointerId: 32 });
+    fireEvent.pointerUp(svg, { button: 0, clientX: -400, clientY: 0, pointerId: 32 });
+    expect(valueOf()).toBe("10k Wiper=0");
+  });
+
+  it("leaves the wiper alone for a click that never moved", () => {
+    placePot("10k Wiper=0.25");
+    const onActuate = vi.fn();
+    render(<Canvas interactive={false} onActuate={onActuate} />);
+    const svg = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0, pointerId: 33 });
+    fireEvent.pointerUp(svg, { button: 0, clientX: 0, clientY: 0, pointerId: 33 });
+
+    expect(valueOf()).toBe("10k Wiper=0.25");
+    expect(onActuate).not.toHaveBeenCalled();
+    expect(useSchematic.getState().past).toHaveLength(0);
+    // Clicking a part on the simulator canvas still means "inspect it".
+    expect(useSchematic.getState().selectedId).toBe("rv1");
+  });
+
+  it("snaps the arrow back when the gesture is cancelled", () => {
+    placePot();
+    render(<Canvas interactive={false} />);
+    const svg = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0, pointerId: 34 });
+    fireEvent.pointerMove(svg, { clientX: 16, clientY: 0, pointerId: 34 });
+    expect(arrowX()).toBeCloseTo(16, 6);
+    fireEvent.pointerCancel(svg, { pointerId: 34 });
+
+    expect(valueOf()).toBe("10k");
+    expect(arrowX()).toBeCloseTo(0, 6);
+  });
+
+  it("stays inert on the editing canvas, where a drag moves the part", () => {
+    placePot();
+    render(<Canvas interactive />);
+    const svg = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0, pointerId: 35 });
+    fireEvent.pointerMove(svg, { clientX: 32, clientY: 0, pointerId: 35 });
+    fireEvent.pointerUp(svg, { button: 0, clientX: 32, clientY: 0, pointerId: 35 });
+
+    expect(valueOf()).toBe("10k");
+    expect(useSchematic.getState().components[0]).toMatchObject({ x: 32, y: 0 });
+  });
+});
+
+/**
+ * Nothing used to tell a reader a part was operable before they clicked it.
+ * The affordance is deliberately quiet, so these assert it exists at all and,
+ * just as importantly, that it does not appear on parts that are not operable.
+ */
+describe("Canvas - hover affordance for operable parts", () => {
+  const place = (kind: "switch" | "potentiometer" | "relay" | "resistor", value: string) => {
+    useSchematic.setState({
+      components: [{ id: "x1", kind, x: 0, y: 0, rotation: 0, value, label: "X1" }],
+      wires: [],
+      tool: { mode: "select" },
+    });
+  };
+  const cursor = () => document.querySelector<SVGSVGElement>("svg.canvas")!.style.cursor;
+  const hoverBody = () => {
+    fireEvent.pointerMove(document.querySelector("svg.canvas")!, { clientX: 0, clientY: 0, pointerId: 40 });
+  };
+
+  it("advertises a contact with the pointer cursor and firms the symbol under it", () => {
+    place("switch", "open");
+    render(<Canvas interactive={false} />);
+    expect(cursor()).toBe("default");
+    expect(document.querySelector(".component.operable-hover")).toBeNull();
+
+    hoverBody();
+    expect(cursor()).toBe("pointer");
+    expect(document.querySelector(".component.operable-hover")).not.toBeNull();
+
+    // Off the part, the affordance goes away rather than sticking.
+    fireEvent.pointerMove(document.querySelector("svg.canvas")!, { clientX: 800, clientY: 800, pointerId: 40 });
+    expect(cursor()).toBe("default");
+    expect(document.querySelector(".component.operable-hover")).toBeNull();
+  });
+
+  it("says which way a wiper slides", () => {
+    place("potentiometer", "10k");
+    render(<Canvas interactive={false} />);
+    hoverBody();
+    // A pot is dragged, not clicked, and the cursor is where that is said.
+    expect(cursor()).toBe("ew-resize");
+    expect(document.querySelector(".component.operable-wiper")).not.toBeNull();
+    expect(document.querySelector(".component title")?.textContent).toBe("Drag the X1 wiper");
+  });
+
+  it("explains a relay on hover without offering to operate it", () => {
+    place("relay", "100");
+    render(<Canvas interactive={false} />);
+    hoverBody();
+    expect(cursor()).toBe("default");
+    expect(document.querySelector(".component.operable")).toBeNull();
+    expect(document.querySelector(".component title")?.textContent).toMatch(/coil/i);
+  });
+
+  it("says nothing about a part that does nothing", () => {
+    place("resistor", "1k");
+    render(<Canvas interactive={false} />);
+    hoverBody();
+    expect(cursor()).toBe("default");
+    expect(document.querySelector(".component.operable")).toBeNull();
+    expect(document.querySelector(".component title")).toBeNull();
+  });
+
+  it("keeps the affordance off the editing canvas, where a click means select", () => {
+    place("switch", "open");
+    render(<Canvas interactive />);
+    hoverBody();
+    expect(document.querySelector(".component.operable")).toBeNull();
+    expect(document.querySelector(".component title")).toBeNull();
+  });
+});
+
 describe("Canvas - simulator mutation boundary", () => {
   it("selects a component without changing probes or circuit topology", () => {
     render(<Canvas interactive={false} />);

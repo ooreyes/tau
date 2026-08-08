@@ -1,5 +1,8 @@
+import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { decodeParams, encodeParams } from "./params";
-import type { ComponentKind, SchematicComponent } from "./types";
+import { rotatePoint } from "./pins";
+import { WIPER_TRAVEL_X } from "./symbols";
+import type { ComponentKind, Rotation, SchematicComponent } from "./types";
 
 /**
  * Which parts a reader can operate on the simulator canvas, and what a click
@@ -166,8 +169,85 @@ export function actuatedValue(
 
 /** Accessible name for the actuator, e.g. "Press S1" / "Toggle SW2". */
 export function actuationLabel(component: Pick<SchematicComponent, "kind" | "label">): string | null {
+  if (isDraggableWiper(component.kind)) return `Drag the ${component.label || "potentiometer"} wiper`;
   const actuation = contactActuation(component.kind);
   if (!actuation) return null;
   const verb = actuation.verb.charAt(0).toUpperCase() + actuation.verb.slice(1);
   return `${verb} ${component.label || "contact"}`;
+}
+
+/* ── The other operable part: a wiper you drag rather than a contact you press ──
+ *
+ * A potentiometer already had a real `Wiper=` parameter splitting its track
+ * (`engine/potentiometerSpec.ts`), but the only way to move it was a number box
+ * in a panel the simulator does not show. Everything below is the pure half of
+ * making it a control: pointer displacement in, tap fraction out. It knows
+ * nothing about the canvas, the store, or re-solving.
+ */
+
+/** Steps the wiper is quantised to. 1 % is finer than the drawing can show and
+ *  keeps the value string short enough to read on the sheet. */
+export const WIPER_STEP = 0.01;
+
+/** True when the reader can drag this part's tap on the simulator canvas. */
+export function isDraggableWiper(kind: ComponentKind): boolean {
+  return kind === "potentiometer";
+}
+
+/** The tap fraction this part's value is currently sitting at. */
+export function wiperFraction(component: Pick<SchematicComponent, "kind" | "value">): number {
+  return parsePotentiometerSpec(component.value).wiper;
+}
+
+const INVERSE_ROTATION: Record<Rotation, Rotation> = { 0: 0, 90: 270, 180: 180, 270: 90 };
+
+/**
+ * The tap fraction after dragging `dx`/`dy` world units from where the pointer
+ * was pressed, given the fraction it was pressed at.
+ *
+ * Two decisions worth keeping:
+ *
+ * - **Relative, not absolute.** Mapping the pointer straight onto the track
+ *   would jerk the wiper to wherever the reader happened to click, and on the
+ *   simulator canvas clicking a part is also how you select it to read its
+ *   telemetry. Grabbing anywhere on the body and dragging is unambiguous.
+ * - **Returned unclamped.** The caller keeps accumulating past an end stop and
+ *   the value clamps on the way out, so dragging 200 units past the end and
+ *   back leaves the wiper where the pointer is rather than 200 units of
+ *   hysteresis away from it.
+ *
+ * `dx`/`dy` are world units, so the part's rotation and mirror are undone here
+ * (mirror-then-rotate, inverted) - dragging right on a part rotated 90° has to
+ * move the tap the way the arrow points, not the way the screen does.
+ */
+export function draggedWiper(
+  component: Pick<SchematicComponent, "rotation" | "mirrored">,
+  pressedAt: number,
+  dx: number,
+  dy: number,
+): number {
+  const unrotated = rotatePoint({ x: dx, y: dy }, INVERSE_ROTATION[component.rotation]);
+  const localX = component.mirrored ? -unrotated.x : unrotated.x;
+  return pressedAt + localX / (2 * WIPER_TRAVEL_X);
+}
+
+/**
+ * The value this part should take for a tap fraction, or null when nothing
+ * should change - the part is not a potentiometer, or the drag has not yet
+ * moved the tap by a whole step.
+ *
+ * Encoding goes through the same codec the Properties panel uses, so a centred
+ * wiper still re-encodes to the bare `10k` every saved schematic has on disk
+ * (`omitWhenFallback`), and every other token in the value survives the edit.
+ */
+export function wiperValue(
+  component: Pick<SchematicComponent, "kind" | "value">,
+  fraction: number,
+): string | null {
+  if (!isDraggableWiper(component.kind)) return null;
+  const clamped = Math.min(1, Math.max(0, fraction));
+  const stepped = (Math.round(clamped / WIPER_STEP) * WIPER_STEP).toFixed(2);
+  const decoded = decodeParams(component.kind, component.value);
+  const next = encodeParams(component.kind, { ...decoded, wiper: String(Number(stepped)) });
+  return next === component.value ? null : next;
 }

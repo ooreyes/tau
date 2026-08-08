@@ -17,7 +17,7 @@ import type {
   SchematicSheet,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
-import { actuatedValue, type ActuationPhase } from "../schematic/actuation";
+import { actuatedValue, wiperValue, type ActuationPhase } from "../schematic/actuation";
 import { canCurrentProbe } from "../simulation/analysisSetup";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { getComponentPins, rotatePoint, transformPoint } from "../schematic/pins";
@@ -250,6 +250,10 @@ interface SchematicState extends Doc {
   /** Operate a switch / push button / SPDT from the canvas. Returns true when
    *  the contact actually moved, so the caller knows whether to re-solve. */
   actuateContact: (id: string, phase: ActuationPhase) => boolean;
+  /** Move a potentiometer's tap from the canvas, 0..1 measured from pin A.
+   *  Returns true when the value actually moved, so the caller knows whether
+   *  to re-solve. Called once, on release: see `Canvas.tsx`. */
+  setWiper: (id: string, fraction: number) => boolean;
   /** Select a `.subckt` contract and rebuild its exact p1..pN terminal bank. */
   setSubcircuitModel: (id: string, model: string, ports: readonly string[]) => void;
   /** Select a real op-amp subcircuit while preserving imported Value/Value2 slots. */
@@ -1273,6 +1277,24 @@ export const useSchematic = create<SchematicState>()((set, get) => {
       const component = get().components.find((c) => c.id === id);
       if (!component) return false;
       const next = actuatedValue(component, phase);
+      if (next === null || next === component.value) return false;
+      set((s) => ({
+        ...recordInto(s),
+        components: s.components.map((c: SchematicComponent) => (c.id === id ? { ...c, value: next } : c)),
+      }));
+      return true;
+    },
+
+    /**
+     * A wiper drag is one gesture and therefore one history entry, exactly like
+     * throwing a switch. Nothing is written while the pointer moves - the canvas
+     * previews the arrow locally and commits here on release - so `recordInto`
+     * is safe to take unconditionally and there is no `beginChange()` dance.
+     */
+    setWiper: (id, fraction) => {
+      const component = get().components.find((c) => c.id === id);
+      if (!component) return false;
+      const next = wiperValue(component, fraction);
       if (next === null || next === component.value) return false;
       set((s) => ({
         ...recordInto(s),
