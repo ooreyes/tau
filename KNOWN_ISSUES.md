@@ -242,6 +242,27 @@ file comment predicts for small shunt values.
   512 KiB / 30,000 lines. There is currently no hard memory cap on the
   simulation worker process; ngspice's own output-memory guard is the
   effective bound.
+- One result carries at most 2,000,000 points per trace and 8,000,000 values in
+  total. A run past either is **resampled to fit, not refused**: Tau keeps an
+  evenly spaced subset of ngspice's own timepoints, including the first and the
+  last, so the window still spans the whole run and every plotted value is a
+  real solver sample rather than an average. It is never interpolated. Anything
+  more than a rounding trim says so in Diagnostics, naming the point count
+  before and after; a long run whose reduction matters is not something to
+  discover from the shape of a curve. Lower the circuit duration or the output
+  points to see a run at full rate. The reduction is a display and transfer
+  bound only — the solver still runs at the requested step, so accuracy,
+  `.meas` and `.four` are unaffected.
+- "Output points" is a request, not a count. `.tran` takes it as an output-step
+  hint and ngspice saves its own timepoints, adding a breakpoint at each source
+  discontinuity, so a run asking for 1,999,999 points typically returns a few
+  more. The status line reports what actually came back.
+- Automatic resolution sizes the output step from the *fastest* time constant in
+  the circuit across the *whole* window, so a long run containing one small
+  capacitor asks for far more points than its waveform needs — a 60 s window on
+  a 1 Hz source can request the full 2,000,000. That is a heavier solve than the
+  plot requires; it no longer fails, but setting an exact output count under
+  "Exact output settings" is faster.
 - A document is capped at 5,000 components and 20,000 wires. An `.asc` that
   exceeds this is refused at import with a message naming the actual counts;
   every schematic in the acceptance corpus fits with room to spare.

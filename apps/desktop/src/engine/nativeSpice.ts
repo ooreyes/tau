@@ -56,7 +56,17 @@ interface NativeSpiceResult {
 type Schematic = { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope; directives?: string[]; userModelLibraries?: readonly string[]; userModelLibraryNames?: readonly string[] };
 type NativeExecution = { result: NativeSpiceResult; deck: ReturnType<typeof buildSpiceDeck> };
 
-/** Keeps a single high-resolution result below Rust's transfer guard. */
+/**
+ * Highest output-point count the UI will request of ngspice.
+ *
+ * This is a request, not a promise about the result: `.tran` takes the count as
+ * an output-step hint and ngspice saves its own timepoints, adding a breakpoint
+ * at every source discontinuity, so a run asks for 2,000,000 points and comes
+ * back with 2,000,014. Rust's transfer guard resamples anything past its
+ * ceiling instead of refusing it, which is what keeps a long transient - a 60 s
+ * thermal or soft-start run is ordinary - from being thrown away over a handful
+ * of extra samples.
+ */
 export const MAX_NATIVE_OUTPUT_POINTS = 2_000_000;
 
 /** Rotation order is load-bearing, not cosmetic - see DESIGN_SYSTEM.md §1.5.

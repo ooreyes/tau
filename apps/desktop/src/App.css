@@ -3435,7 +3435,8 @@ body {
 }
 
 .circuit-duration-control__head,
-.waveform-detail-control__head {
+.waveform-detail-control__head,
+.transient-expert-settings__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -3446,9 +3447,16 @@ body {
 .circuit-duration-control__head span,
 .waveform-detail-control__head span,
 .transient-expert-settings > summary,
-.transient-expert-settings label > span {
+.transient-expert-settings__head span {
   color: var(--muted);
   font: 600 var(--fs-caption) var(--font-ui);
+}
+
+/* The allowed range is context for the number, so it stays a whisper: same
+   size as the caption, mono so its digits line up with the field's. */
+.transient-expert-settings__head .mono-num {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
 }
 
 .circuit-duration-control__head strong,
@@ -3567,12 +3575,23 @@ body {
   margin-bottom: var(--sp-3);
 }
 
-.transient-expert-settings label {
-  display: grid;
-  grid-template-columns: auto minmax(120px, 220px);
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
+/* Caption over value, one column, the way the duration control reads. The
+   width is the field's, not the panel's: a seven-digit count in a 400px box
+   looks like a text area. */
+.transient-expert-settings__field {
+  max-width: 260px;
+}
+
+/* A stepper that moves a 200,000-point count by one is an affordance that
+   promises something it cannot do. The keyboard is the input here. */
+.transient-expert-settings__field input::-webkit-outer-spin-button,
+.transient-expert-settings__field input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.transient-expert-settings__field input {
+  appearance: textfield;
 }
 
 @media (max-width: 760px) {

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
@@ -121,6 +123,46 @@ describe("native ngspice adapter", () => {
 
     await expect(runNativeTransient(rcSchematic(), { stopTime: 0.002, steps: 200 })).resolves.toBeNull();
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("carries the transfer-reduction notice through to the run's warnings", async () => {
+    // Rust resamples a result past its transfer ceiling instead of discarding
+    // the run, and says so in `messages`. Quiet subsampling would be worse than
+    // the error it replaces, so the notice has to survive the warning filter -
+    // it reaches the reader through the Diagnostics panel and nowhere else.
+    // Kept verbatim from `read_vectors` in src-tauri/src/spice.rs.
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "time", real: [0, 0.001, 0.002], imaginary: null },
+      { name: "V(N001)", real: [5, 5, 5], imaginary: null },
+    ], [
+      "Warning: this run produced 2100009 points per trace, more than Tau transfers at once. "
+      + "Tau kept 2000000 of them, evenly spaced across the full window; every plotted value is a real "
+      + "solver sample, but detail between them is not shown. Shorten the circuit duration or lower the "
+      + "output points to see the run at full rate.",
+    ]));
+
+    const result = await runNativeTransient(rcSchematic(), { stopTime: 0.002, steps: 200 });
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toMatch(/^this run produced 2100009 points per trace/);
+    expect(result.warnings[0]).toContain("2000000");
+    // The Diagnostics panel clamps a message at 480 characters; the numbers and
+    // the instruction both have to land inside that.
+    expect(result.warnings[0].length).toBeLessThanOrEqual(480);
+    expect(result.warnings[0]).toContain("full rate");
+
+    // The fixture above is a copy of a string that lives in Rust, so it can go
+    // stale without failing: the filter would keep forwarding the old wording
+    // while the engine emitted something new. Read the real one and check the
+    // two still agree on the part the filter depends on.
+    const rust = readFileSync(
+      join(__dirname, "..", "..", "src-tauri", "src", "spice.rs"),
+      "utf8",
+    );
+    expect(rust).toContain("\"Warning: this run produced {reduced_from} points per trace");
+    expect(rust).toContain("output points to see the run at full rate.\"");
   });
 
   it("cancels only through the native worker runtime", async () => {

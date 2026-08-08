@@ -19,8 +19,18 @@ use libloading::Library;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
+/** Points per trace Tau will hold in one result. A run that produces more is
+ * resampled down to this, not thrown away: the solver's accuracy is a separate
+ * question from how much of its output the display can carry, and a 60 s
+ * transient is an ordinary thing for an engineer to ask for. */
 const MAX_VECTOR_LENGTH: usize = 2_000_000;
 const MAX_TRANSFER_VALUES: usize = 8_000_000;
+/** Names read from one `AllVecs` list before Tau stops walking it. */
+const MAX_VECTOR_NAMES: usize = 10_000;
+/** Below this a resample is not worth mentioning - ngspice adds a handful of
+ * breakpoints past the requested output step on almost every run, and a notice
+ * about losing 14 samples out of two million is noise, not information. */
+const RESAMPLE_NOTICE_RATIO: f64 = 0.995;
 /** Secondary plots share a budget well under the primary one: a `.noise` run
  * needs two small plots, while a `.step` deck can leave dozens behind.
  * Keep this ≥ `MAX_FAMILY_MEMBERS - 1` in the TypeScript step family so a
@@ -66,6 +76,7 @@ type NgSpiceAllVecs = unsafe extern "C" fn(*mut c_char) -> *mut *mut c_char;
 type NgGetVecInfo = unsafe extern "C" fn(*mut c_char) -> *mut VectorInfo;
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 struct NgComplex {
     real: f64,
     imag: f64,
@@ -483,7 +494,9 @@ impl SpiceEngine {
             )
         })?;
         let mut transferred = 0_usize;
-        let vectors = self.read_vectors(&plot, &mut transferred, MAX_TRANSFER_VALUES)?;
+        let mut notices: Vec<String> = Vec::new();
+        let vectors =
+            self.read_vectors(&plot, &mut transferred, MAX_TRANSFER_VALUES, &mut notices)?;
 
         // Secondary plots are extra detail on top of an answer the caller
         // already has, so they get their own smaller budget and a run that
@@ -504,7 +517,12 @@ impl SpiceEngine {
                 omitted.push(name);
                 continue;
             }
-            match self.read_vectors(&name, &mut extra_transferred, MAX_EXTRA_PLOT_VALUES) {
+            match self.read_vectors(
+                &name,
+                &mut extra_transferred,
+                MAX_EXTRA_PLOT_VALUES,
+                &mut notices,
+            ) {
                 Ok(vectors) if !vectors.is_empty() => extra_plots.push(SpicePlot { name, vectors }),
                 Ok(_) => {}
                 Err(_) => omitted.push(name),
@@ -512,6 +530,13 @@ impl SpiceEngine {
         }
 
         let mut messages = take_messages(&self.callback_state);
+        for notice in notices {
+            // Secondary plots repeat the primary plot's notice verbatim when
+            // they were reduced by the same amount; say it once.
+            if !messages.contains(&notice) {
+                messages.push(notice);
+            }
+        }
         if !omitted.is_empty() {
             // Prefixed the way ngspice prefixes its own diagnostics, because
             // that is what the frontend screens messages on before showing
@@ -604,80 +629,221 @@ impl SpiceEngine {
         result
     }
 
+    /** Every vector name ngspice currently holds for `plot`, in engine order. */
+    fn vector_names(&self, plot: &str) -> Result<Vec<String>, String> {
+        let plot_name =
+            CString::new(plot).map_err(|_| "ngspice returned an invalid plot name.".to_string())?;
+        let names = unsafe { (self.api.all_vecs)(plot_name.as_ptr() as *mut c_char) };
+        if names.is_null() {
+            return Err(format!("ngspice returned no vectors for plot {plot}."));
+        }
+        let mut result = Vec::new();
+        for index in 0..MAX_VECTOR_NAMES {
+            let entry = unsafe { *names.add(index) };
+            if entry.is_null() {
+                break;
+            }
+            result.push(unsafe { c_string(entry) }.unwrap_or_default());
+        }
+        Ok(result)
+    }
+
+    /**
+     * ngspice's own record for one vector. The qualified `plot.name` form is
+     * tried first so a stale same-named vector from an earlier circuit in this
+     * process cannot answer for the current one.
+     *
+     * SAFETY: the returned reference borrows storage ngspice owns, which stays
+     * valid until the next command runs against the engine. Callers must not
+     * hold it across `run_command`/`circ_lines`.
+     */
+    fn vector_info(&self, plot: &str, name: &str) -> Result<Option<&VectorInfo>, String> {
+        let nul = || "ngspice vector name contains a NUL byte.".to_string();
+        let qualified = CString::new(format!("{plot}.{name}")).map_err(|_| nul())?;
+        let mut info = unsafe { (self.api.get_vec_info)(qualified.as_ptr() as *mut c_char) };
+        if info.is_null() {
+            let plain = CString::new(name).map_err(|_| nul())?;
+            info = unsafe { (self.api.get_vec_info)(plain.as_ptr() as *mut c_char) };
+        }
+        if info.is_null() {
+            return Ok(None);
+        }
+        Ok(Some(unsafe { &*info }))
+    }
+
+    /**
+     * Read one plot, reducing it to what Tau can carry rather than refusing it.
+     *
+     * The reduction is decided for the plot as a whole. Traces in a transient
+     * plot share a single `time` vector, and the frontend drops any trace whose
+     * length disagrees with it, so a per-vector decision would silently delete
+     * currents from a long run instead of shortening them.
+     *
+     * `notices` collects an engine-style warning when anything was dropped. A
+     * quietly subsampled waveform would be worse than the error this replaces.
+     */
     fn read_vectors(
         &self,
         plot: &str,
         transfer_values: &mut usize,
         transfer_limit: usize,
+        notices: &mut Vec<String>,
     ) -> Result<Vec<SpiceVector>, String> {
-        let plot_name =
-            CString::new(plot).map_err(|_| "ngspice returned an invalid plot name.".to_string())?;
-        let vector_names = unsafe { (self.api.all_vecs)(plot_name.as_ptr() as *mut c_char) };
-        if vector_names.is_null() {
-            return Err(format!("ngspice returned no vectors for plot {plot}."));
-        }
-        let mut result = Vec::new();
-        for index in 0..10_000 {
-            let entry = unsafe { *vector_names.add(index) };
-            if entry.is_null() {
-                break;
-            }
-            let name = unsafe { c_string(entry) }.unwrap_or_default();
-            let qualified = CString::new(format!("{plot}.{name}"))
-                .map_err(|_| "ngspice vector name contains a NUL byte.".to_string())?;
-            let info = unsafe { (self.api.get_vec_info)(qualified.as_ptr() as *mut c_char) };
-            let info = if info.is_null() {
-                let plain = CString::new(name.clone())
-                    .map_err(|_| "ngspice vector name contains a NUL byte.".to_string())?;
-                unsafe { (self.api.get_vec_info)(plain.as_ptr() as *mut c_char) }
-            } else {
-                info
-            };
-            if info.is_null() {
+        let names = self.vector_names(plot)?;
+
+        // Measure before reading: the whole plot has to agree on one ratio.
+        let mut widest = 0_usize;
+        let mut scalars = 0_usize;
+        let mut counted = 0_usize;
+        for name in &names {
+            let Some(info) = self.vector_info(plot, name)? else {
                 continue;
-            }
-            let info = unsafe { &*info };
-            let length = usize::try_from(info.length)
-                .map_err(|_| format!("ngspice returned an invalid length for {name}."))?;
-            if length > MAX_VECTOR_LENGTH {
-                return Err(format!("ngspice vector {name} has {length} points, exceeding Tau's {MAX_VECTOR_LENGTH} point transfer limit."));
-            }
-            let scalar_values = length
-                .checked_mul(if info.real_data.is_null() { 2 } else { 1 })
-                .ok_or_else(|| {
-                    "ngspice vector length overflowed Tau's transfer budget.".to_string()
-                })?;
-            *transfer_values = transfer_values
-                .checked_add(scalar_values)
-                .ok_or_else(|| "ngspice result overflowed Tau's transfer budget.".to_string())?;
-            if *transfer_values > transfer_limit {
-                return Err(format!(
-                    "ngspice result has more than Tau's {} scalar-value transfer limit. Reduce stop time, output resolution, or circuit size.",
-                    transfer_limit
-                ));
-            }
+            };
+            let length = vector_length(info, name)?;
+            counted += 1;
+            widest = widest.max(length);
+            scalars = scalars.saturating_add(length.saturating_mul(value_width(info)));
+        }
+        let budget = transfer_limit.saturating_sub(*transfer_values);
+        let keep = transfer_keep_ratio(widest, scalars, counted, budget)?;
+
+        let mut result = Vec::new();
+        let mut reduced_from = 0_usize;
+        let mut reduced_to = 0_usize;
+        for name in names {
+            let Some(info) = self.vector_info(plot, &name)? else {
+                continue;
+            };
+            let length = vector_length(info, &name)?;
+            let target = resampled_length(length, keep);
             let (real, imaginary) = if !info.real_data.is_null() {
-                (
-                    unsafe { slice::from_raw_parts(info.real_data, length) }.to_vec(),
-                    None,
-                )
+                let values = unsafe { slice::from_raw_parts(info.real_data, length) };
+                (resample(values, target), None)
             } else if !info.complex_data.is_null() {
                 let values = unsafe { slice::from_raw_parts(info.complex_data, length) };
+                let kept = resample(values, target);
                 (
-                    values.iter().map(|value| value.real).collect(),
-                    Some(values.iter().map(|value| value.imag).collect()),
+                    kept.iter().map(|value| value.real).collect(),
+                    Some(kept.iter().map(|value| value.imag).collect()),
                 )
             } else {
                 (Vec::new(), None)
             };
+            if !real.is_empty() && target < length {
+                reduced_from = reduced_from.max(length);
+                reduced_to = reduced_to.max(real.len());
+            }
+            *transfer_values = transfer_values
+                .checked_add(real.len() * if imaginary.is_some() { 2 } else { 1 })
+                .ok_or_else(|| "ngspice result overflowed Tau's transfer budget.".to_string())?;
+            if *transfer_values > transfer_limit {
+                // The ratio above sized the plot to fit, so reaching this means
+                // the measure pass and the read pass disagreed - keep the guard
+                // rather than let a mismatch grow the transfer unbounded.
+                return Err(format!(
+                    "ngspice result has more than Tau's {transfer_limit} scalar-value transfer limit. Reduce stop time, output resolution, or circuit size."
+                ));
+            }
             result.push(SpiceVector {
                 name,
                 real,
                 imaginary,
             });
         }
+        if worth_reporting(reduced_from, reduced_to) {
+            notices.push(format!(
+                "Warning: this run produced {reduced_from} points per trace, more than Tau transfers at once. \
+                 Tau kept {reduced_to} of them, evenly spaced across the full window; every plotted value is a real \
+                 solver sample, but detail between them is not shown. Shorten the circuit duration or lower the \
+                 output points to see the run at full rate."
+            ));
+        }
         Ok(result)
     }
+}
+
+/** Scalars one sample of this vector costs: complex data carries re and im. */
+fn value_width(info: &VectorInfo) -> usize {
+    if info.real_data.is_null() {
+        2
+    } else {
+        1
+    }
+}
+
+fn vector_length(info: &VectorInfo, name: &str) -> Result<usize, String> {
+    usize::try_from(info.length)
+        .map_err(|_| format!("ngspice returned an invalid length for {name}."))
+}
+
+/**
+ * The fraction of each vector's samples that fits, decided for a whole plot.
+ * 1.0 - the common case - means transfer everything untouched.
+ */
+fn transfer_keep_ratio(
+    widest: usize,
+    scalars: usize,
+    vectors: usize,
+    budget: usize,
+) -> Result<f64, String> {
+    let mut ratio = 1.0_f64;
+    if widest > MAX_VECTOR_LENGTH {
+        ratio = ratio.min(MAX_VECTOR_LENGTH as f64 / widest as f64);
+    }
+    if scalars > budget {
+        // Two samples per vector - the endpoints - is the floor a resample can
+        // reach. Under that there is no honest reduction left to make.
+        if budget < vectors.saturating_mul(4) {
+            return Err(format!(
+                "ngspice returned {scalars} values, past what Tau can transfer even after reducing the sample rate. Reduce stop time, output resolution, or circuit size."
+            ));
+        }
+        ratio = ratio.min(budget as f64 / scalars as f64);
+    }
+    Ok(ratio)
+}
+
+/**
+ * Whether a reduction is large enough to tell the reader about.
+ *
+ * ngspice adds a handful of breakpoints past the requested output step on
+ * almost every run, so trimming 15 samples from two million is a rounding
+ * artifact, not news. Warning about it would train the reader to ignore the
+ * warning that matters.
+ */
+fn worth_reporting(from: usize, to: usize) -> bool {
+    to > 0 && (to as f64) < from as f64 * RESAMPLE_NOTICE_RATIO
+}
+
+/** How many samples of a `length`-point vector survive at `keep`. */
+fn resampled_length(length: usize, keep: f64) -> usize {
+    if keep >= 1.0 || length <= 2 {
+        return length;
+    }
+    // Floor, so the sum over a plot cannot climb back over the budget.
+    ((length as f64 * keep).floor() as usize).clamp(2, length)
+}
+
+/**
+ * Pick `target` of `values`, evenly spaced, keeping the first and the last.
+ *
+ * Nearest-sample: every transferred number is one the solver actually
+ * produced. Averaging neighbours would read as a smoother, better-behaved
+ * circuit than the one that was simulated, and the endpoints are load-bearing
+ * because the frontend takes the run's stop time from the last sample.
+ */
+fn resample<T: Copy>(values: &[T], target: usize) -> Vec<T> {
+    if target >= values.len() || values.len() < 2 || target < 2 {
+        return values.to_vec();
+    }
+    let last = values.len() - 1;
+    let span = (target - 1) as f64;
+    (0..target)
+        .map(|index| {
+            let source = ((index as f64) * (last as f64) / span).round() as usize;
+            values[source.min(last)]
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -1321,8 +1487,10 @@ mod tests {
 
     use super::{
         deck_lines, fatal_engine_messages, library_file_name, missing_codemodel_message,
-        read_bounded, record_engine_message, take_messages, CallbackState, SpiceEngine,
-        SpiceRequest, WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
+        read_bounded, record_engine_message, resample, resampled_length, take_messages,
+        transfer_keep_ratio, worth_reporting, CallbackState, SpiceEngine, SpiceRequest,
+        WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES, MAX_TRANSFER_VALUES,
+        MAX_VECTOR_LENGTH,
     };
 
     // libngspice owns process-global callback and circuit state. Cargo runs
@@ -1336,6 +1504,169 @@ mod tests {
         REAL_ENGINE_TEST
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /** What `read_vectors` does to one plot, without a live engine: measure,
+     * pick one ratio, apply it to every vector. */
+    fn plan(lengths: &[usize], budget: usize) -> Result<Vec<usize>, String> {
+        let widest = lengths.iter().copied().max().unwrap_or(0);
+        let scalars: usize = lengths.iter().sum();
+        let keep = transfer_keep_ratio(widest, scalars, lengths.len(), budget)?;
+        Ok(lengths
+            .iter()
+            .map(|length| resampled_length(*length, keep))
+            .collect())
+    }
+
+    #[test]
+    fn a_plot_that_fits_is_transferred_untouched() {
+        let lengths = vec![240_usize; 12];
+        assert_eq!(plan(&lengths, MAX_TRANSFER_VALUES).unwrap(), lengths);
+        let values: Vec<f64> = (0..240).map(|i| i as f64).collect();
+        assert_eq!(resample(&values, 240), values);
+    }
+
+    #[test]
+    fn a_marginal_overrun_costs_a_marginal_number_of_samples() {
+        // The exact shape of the failure this replaces: a 60 s transient asked
+        // for 1,999,999 output points and ngspice returned 2,000,014, so the
+        // whole run was discarded. Halving it (a plain stride of 2) would be
+        // nearly as bad an answer as refusing it.
+        let length = 2_000_014;
+        let target = plan(&[length], MAX_TRANSFER_VALUES).unwrap()[0];
+        // Count what the resampler actually returns, not what was planned for
+        // it: a stride-based reduction hits the plan and still halves the data.
+        let values: Vec<f64> = (0..length).map(|index| index as f64).collect();
+        let kept = resample(&values, target).len();
+        assert!(kept <= MAX_VECTOR_LENGTH, "kept {kept} past the ceiling");
+        assert!(
+            kept as f64 > length as f64 * 0.9999,
+            "kept only {kept} of {length}"
+        );
+    }
+
+    #[test]
+    fn resampling_keeps_both_endpoints_and_never_repeats_a_sample() {
+        let values: Vec<f64> = (0..10_000).map(|i| i as f64 * 0.5).collect();
+        for target in [2_usize, 3, 7, 999, 5_000, 9_999] {
+            let kept = resample(&values, target);
+            assert_eq!(kept.len(), target);
+            assert_eq!(kept[0], values[0], "first sample lost at {target}");
+            assert_eq!(
+                kept[target - 1],
+                values[values.len() - 1],
+                "last sample lost at {target}"
+            );
+            // Strictly increasing sources: a repeat would show as a waveform
+            // that stalls, and the time axis would stop being monotonic.
+            assert!(
+                kept.windows(2).all(|pair| pair[1] > pair[0]),
+                "repeated sample at {target}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_trace_in_a_plot_keeps_the_same_length_as_its_time_axis() {
+        // The frontend drops any trace whose length disagrees with `time`, so a
+        // per-vector reduction would delete currents rather than shorten them.
+        let lengths = vec![3_000_000_usize; 6];
+        let kept = plan(&lengths, MAX_TRANSFER_VALUES).unwrap();
+        assert!(kept.windows(2).all(|pair| pair[0] == pair[1]), "{kept:?}");
+        assert!(kept[0] <= MAX_VECTOR_LENGTH);
+    }
+
+    #[test]
+    fn a_wide_plot_is_reduced_to_the_scalar_budget() {
+        // No single vector is over the per-trace ceiling; the plot as a whole
+        // is over the transfer budget, which used to be its own hard error.
+        let lengths = vec![1_000_000_usize; 40];
+        let kept = plan(&lengths, MAX_TRANSFER_VALUES).unwrap();
+        let total: usize = kept.iter().sum();
+        assert!(
+            total <= MAX_TRANSFER_VALUES,
+            "{total} values past the {MAX_TRANSFER_VALUES} budget"
+        );
+        assert!(kept.iter().all(|length| *length >= 2));
+    }
+
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn a_long_transient_past_the_transfer_ceiling_returns_a_result() {
+        // The reported failure, end to end: a long run whose output overshoots
+        // the per-trace ceiling used to be discarded after solving. ngspice
+        // adds breakpoints past the requested output step, so a request sized
+        // at the ceiling cannot stay under it - the boundary has to bend.
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let step = 60.0 / 2_100_000.0;
+        let result = engine
+            .run(SpiceRequest {
+                netlist: format!(
+                    "Tau long transient\nV1 in 0 SIN(0 1 1)\nR1 in mid 1k\nC1 mid 0 100n\n.tran {step} 60\n.end"
+                ),
+            })
+            .expect("a long transient must return data, not an error");
+
+        let time = result
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("time"))
+            .expect("transient plot must carry a time vector");
+        // Landing on the ceiling is the reduction's own signature; ngspice does
+        // not stop there by itself. If this ever reads well under the ceiling,
+        // the fixture stopped overshooting and the test stopped proving
+        // anything - fail loudly rather than pass by accident.
+        assert!(
+            (MAX_VECTOR_LENGTH - 1..=MAX_VECTOR_LENGTH).contains(&time.real.len()),
+            "expected the reduction to land on the {MAX_VECTOR_LENGTH} ceiling, got {} points",
+            time.real.len()
+        );
+        // The window is still the whole 60 s, and it still reads as time.
+        assert!(
+            (time.real.last().copied().unwrap_or_default() - 60.0).abs() < 1e-6,
+            "run stops at {:?}",
+            time.real.last()
+        );
+        assert!(time.real.windows(2).all(|pair| pair[1] > pair[0]));
+        // This fixture loses ~5% of its samples, which the reader is told about
+        // rather than left to discover. `engineWarnings` on the TypeScript side
+        // only forwards messages that read as warnings.
+        assert!(
+            result
+                .messages
+                .iter()
+                .any(|message| message.starts_with("Warning:") && message.contains("full rate")),
+            "no reduction notice in {:?}",
+            result.messages
+        );
+        for vector in &result.vectors {
+            assert_eq!(
+                vector.real.len(),
+                time.real.len(),
+                "{} desynchronised from the time axis",
+                vector.name
+            );
+        }
+    }
+
+    #[test]
+    fn only_a_reduction_the_reader_would_notice_is_reported() {
+        assert!(!worth_reporting(0, 0), "an untouched plot says nothing");
+        // The reported case: 15 breakpoints past a 2,000,000 request.
+        assert!(!worth_reporting(2_000_015, 2_000_000));
+        // Losing a fifth of the samples changes what the plot can show.
+        assert!(worth_reporting(2_500_000, 2_000_000));
+    }
+
+    #[test]
+    fn a_budget_too_small_for_endpoints_is_still_an_error() {
+        // There is no honest reduction below two samples per trace.
+        assert!(transfer_keep_ratio(1_000, 10_000, 5_000, 8).is_err());
+        assert!(transfer_keep_ratio(1_000, 10_000, 4, 8_000).is_ok());
     }
 
     #[test]

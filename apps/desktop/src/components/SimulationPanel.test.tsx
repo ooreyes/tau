@@ -12,6 +12,7 @@ import {
 } from "../simulation/analysisSetup";
 import { useSchematic } from "../store/useSchematic";
 import { formatEngineering } from "../simulation/quantity";
+import { MAX_TRANSIENT_STEPS } from "../simulation/linearTransient";
 import { defaultLayout } from "./plotPanes";
 
 /**
@@ -596,8 +597,71 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     fireEvent.click(screen.getByText("Exact output settings"));
     const points = screen.getByLabelText("Exact output points") as HTMLInputElement;
     expect(points.min).toBe("320");
+
+    // The bound is on screen, not discovered by having a keystroke refused.
+    expect(screen.getByText(`320–${MAX_TRANSIENT_STEPS.toLocaleString("en-US")}`)).toBeTruthy();
+
+    // Typing is never fought: an in-progress value below the floor stands in
+    // the box, and nothing is committed until the edit ends.
+    fireEvent.focus(points);
     fireEvent.change(points, { target: { value: "32" } });
+    expect(points.value).toBe("32");
     expect(handlers.onOptionsChange).not.toHaveBeenCalled();
+
+    // Committing clamps to the floor rather than silently discarding the edit.
+    fireEvent.blur(points);
+    expect(handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 10e-6, steps: 320 });
+    expect(points.value).toBe("320");
+  });
+
+  it("keeps the exact output count editable at the ceiling, where the old field froze", () => {
+    // The reported trap: auto resolution pins the count at the maximum, the run
+    // fails, and this is the control you would reach for to bring it down. A
+    // controlled input that rejects out-of-range keystrokes cannot be retyped
+    // at all, because every partial number is out of range.
+    useSchematic.setState({
+      components: [
+        { id: "v1", kind: "vac", label: "V1", value: "1 1Meg", x: 0, y: 0, rotation: 0 },
+      ],
+    });
+    const ceiling = MAX_TRANSIENT_STEPS;
+    // The panel is rendered with inert props here, so each edit starts fresh
+    // rather than reading back a value the parent never applied.
+    const openField = (steps: number) => {
+      cleanup();
+      const handlers = renderPanel({ options: { stopTime: 10e-6, steps } });
+      fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+      fireEvent.click(screen.getByText("Exact output settings"));
+      const field = screen.getByLabelText("Exact output points") as HTMLInputElement;
+      fireEvent.focus(field);
+      return { handlers, field };
+    };
+
+    // Select-all and retype, the way anyone edits a number. The old field threw
+    // away every keystroke of this and snapped back to the ceiling.
+    const retype = openField(ceiling);
+    expect(retype.field.value).toBe(String(ceiling));
+    fireEvent.change(retype.field, { target: { value: "" } });
+    expect(retype.field.value).toBe("");
+    fireEvent.change(retype.field, { target: { value: "5000" } });
+    fireEvent.keyDown(retype.field, { key: "Enter" });
+    fireEvent.blur(retype.field);
+    expect(retype.handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 10e-6, steps: 5000 });
+
+    // Past the ceiling clamps to it, visibly.
+    const tooHigh = openField(5_000);
+    fireEvent.change(tooHigh.field, { target: { value: "99999999" } });
+    fireEvent.blur(tooHigh.field);
+    expect(tooHigh.handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 10e-6, steps: ceiling });
+    expect(tooHigh.field.value).toBe(String(ceiling));
+
+    // Escape abandons an edit in progress.
+    const abandoned = openField(5_000);
+    fireEvent.change(abandoned.field, { target: { value: "777" } });
+    fireEvent.keyDown(abandoned.field, { key: "Escape" });
+    fireEvent.blur(abandoned.field);
+    expect(abandoned.handlers.onOptionsChange).not.toHaveBeenCalled();
+    expect(abandoned.field.value).toBe("5000");
   });
 
   it("accepts long circuit durations in human units and separates them from elapsed solver time", async () => {

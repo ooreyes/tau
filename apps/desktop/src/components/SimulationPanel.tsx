@@ -888,7 +888,9 @@ export function SimulationPanel({
     : mode === "tf" ? "Transfer function"
     : mode === "noise" ? "Noise analysis"
     : "Step sweep";
-  // ngspice may include the final endpoint in addition to requested steps.
+  // The native engine returns its own solver timepoints, so this bounds what
+  // Tau asks for rather than what comes back; the transfer guard resamples an
+  // overshoot rather than discarding the run.
   const maxTransientSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS;
   const resolution = useMemo(() => {
     try {
@@ -1601,23 +1603,12 @@ export function SimulationPanel({
                     />
                     <details className="transient-expert-settings">
                       <summary>Exact output settings</summary>
-                      <label>
-                        <span>Output points</span>
-                        <Input
-                          type="number"
-                          variant="mono"
-                          aria-label="Exact output points"
-                          min={minimumTransientSteps}
-                          max={maxTransientSteps}
-                          step={1}
-                          value={options.steps}
-                          onChange={(event) => {
-                            const steps = Number(event.currentTarget.value);
-                            if (!Number.isInteger(steps) || steps < minimumTransientSteps || steps > maxTransientSteps) return;
-                            onOptionsChange({ ...options, steps });
-                          }}
-                        />
-                      </label>
+                      <OutputPointsControl
+                        value={options.steps}
+                        min={minimumTransientSteps}
+                        max={maxTransientSteps}
+                        onChange={(steps) => onOptionsChange({ ...options, steps })}
+                      />
                       <small>Use an exact count for imported-result reproduction or a controlled convergence study.</small>
                     </details>
                   </div>
@@ -7027,6 +7018,87 @@ function CircuitDurationControl({ seconds, onChange }: { seconds: number; onChan
         </Select>
       </div>
       <small>This is simulated circuit time. A 3 min run models 180 s of circuit behavior; it does not promise three minutes of solver time.</small>
+    </div>
+  );
+}
+
+/**
+ * Exact output-point entry.
+ *
+ * This was a controlled number input whose `onChange` dropped any value outside
+ * the allowed range. Every intermediate state of a typed number is outside it -
+ * select `1999999` and type `5` and the field reads five - so the keystroke was
+ * rejected and the input snapped back. The field could not be edited at all,
+ * which is a bad way to discover a limit and a worse one when the run just
+ * failed and this is the control you would reach for.
+ *
+ * Draft state with a commit on Enter or blur is the shape the duration field
+ * and the Y-limit fields already use: type freely, and the bounds apply once,
+ * at the end. They clamp rather than refuse, and the range is on screen, so the
+ * limit is something you can see instead of something you hit.
+ */
+function OutputPointsControl({
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (steps: number) => void;
+}) {
+  const [draft, setDraft] = useState(() => String(value));
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setDraft(String(value));
+  }, [value]);
+
+  const commit = () => {
+    const raw = draft.trim();
+    // An empty box is a half-finished edit, not a request for zero points.
+    if (!raw || !Number.isFinite(Number(raw))) {
+      setDraft(String(value));
+      return;
+    }
+    const next = Math.round(Math.min(max, Math.max(min, Number(raw))));
+    setDraft(String(next));
+    if (next !== value) onChange(next);
+  };
+
+  return (
+    <div className="transient-expert-settings__field">
+      <div className="transient-expert-settings__head">
+        <span>Output points</span>
+        {/* The bound belongs on screen next to the number it governs, not
+            behind a rejected keystroke. */}
+        <span className="mono-num">{formatCount(min)}–{formatCount(max)}</span>
+      </div>
+      <Input
+        type="number"
+        variant="mono"
+        aria-label="Exact output points"
+        min={min}
+        max={max}
+        step={1}
+        value={draft}
+        onFocus={() => { focused.current = true; }}
+        onBlur={() => {
+          focused.current = false;
+          commit();
+        }}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setDraft(String(value));
+          }
+        }}
+      />
     </div>
   );
 }
