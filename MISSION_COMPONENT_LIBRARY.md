@@ -400,6 +400,38 @@ quantity; `parseQuantity`'s pattern is anchored and rejects it, and
 `parsedNumberFrom` (`spiceNetlist.ts:2456`) turns that into "F1 needs a valid
 A/A value." by name rather than guessing a number.
 
+### 4b. Behavioral source, VCO and Subcircuit — comprehensible configuration
+
+**Added 2026-08-08 after an audit found it missing.** The owner raised this
+twice in the original request and it never made it into this file, so nine
+items were worked and this one was not. That is a process failure, not a
+scoping decision: nothing about it was ever declined.
+
+`bsource` (B), `modulator` (VCO) and `subckt` (X) are the three parts a reader
+cannot configure or even understand from the panel.
+
+- **`bsource`** stores a raw LTspice expression (`V=1` by default) and gets the
+  fallback single "Value" textbox. `simulation/behavioral.ts` already parses it
+  and throws `"Behavioral source needs a V=/I= expression."` when the prefix is
+  missing -- the panel should never let a reader reach that. Needs: a
+  voltage/current mode, an expression field validated against the real parser,
+  and worked examples, because "write an equation of other node quantities" is
+  useless without knowing the vocabulary.
+- **`modulator`** stores `mark=1K space=1K`, parsed by `engine/modulatorSpec.ts`
+  into an XSPICE `sine` code model. Nothing in the UI says it is a VCO, what
+  mark and space mean, or what drives its FM and AM pins.
+- **`subckt`** already has a real picker (`ShellPanels.tsx`, `subcircuitOptions`
+  + `describeSubcircuit`), so it is the least broken of the three. What is
+  missing is the port list and per-port mapping being legible before you place
+  one, and a route from "I have a .lib" to "it is on my sheet".
+
+The item 1 codec means the field sets are data edits. `IndependentSourceEditor`
+is the precedent for a mode-plus-conditional-fields editor.
+
+**Done when:** a reader who drops a B, a VCO or an X can tell what it does and
+configure it without leaving the app for a SPICE manual, and a malformed
+behavioral expression is refused in the panel with the reason, not at run time.
+
 ### 5. Digital parts: pinouts and settings — DONE 2026-08-08
 SR/D/T/JK, counter, 555, ADC, DAC, 7-segment, sample & hold. Labelled pins on
 the drawing (555 must show TRIG/OUT/RESET/CTRL/THRES/DISCH/VCC/GND), and real
@@ -474,7 +506,7 @@ always-drawn input leads go away.
 
 ## Status at 2026-08-08 12:40
 
-**Every item 0-9 is closed** except the three tails listed under "Left open"
+**Items 0-9 are closed, but item 4b was found missing in an audit and is open.** except the three tails listed under "Left open"
 below. Gates: typecheck clean, **3581 tests passed / 8 skipped**, drift 10/10,
 cargo `--lib` 77 passed.
 
