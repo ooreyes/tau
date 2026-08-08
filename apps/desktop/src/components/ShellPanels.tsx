@@ -1,6 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import { userFacingErrorMessage } from "../lib/errorMessage";
-import { clearAllUnsavedLocalState } from "../lib/unsavedRecovery";
 import {
   ChevronRight,
   Copy,
@@ -61,7 +60,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -80,8 +78,6 @@ import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "@/components/ui/resizable";
-import { ThemeControl } from "./SettingsPanel";
-import { SettingsAiSection } from "./SettingsAiSection";
 
 /** Drag-to-resize bounds for the two side panels. Minimums keep
  *  every control usable (tree rows, property fields); maximums keep the canvas
@@ -2278,131 +2274,6 @@ export function ComponentsRail({
         )}
       </div>
     </aside>
-  );
-}
-
-export function SettingsPanel({
-  title,
-  onClose,
-  onNewCircuit,
-  onOpenCommandPalette,
-  onNotice,
-}: {
-  title: string;
-  onClose: () => void;
-  onNewCircuit: () => void;
-  onOpenCommandPalette: () => void;
-  onNotice: (message: string) => void;
-}) {
-  const probes = useSchematic((s) => s.probes);
-  const clearProbes = useSchematic((s) => s.clearProbes);
-  const setProbeColor = useSchematic((s) => s.setProbeColor);
-
-  const PROBE_SWATCHES = [
-    "var(--trace-red)",
-    "var(--trace-purple)",
-    "var(--trace-cyan)",
-    "var(--trace-green)",
-    "var(--trace-amber)",
-    "var(--trace-cream)",
-  ];
-
-  const clearAutosave = () => {
-    try {
-      clearAllUnsavedLocalState();
-      onNotice("Local autosave cleared.");
-    } catch {
-      onNotice("Local autosave could not be cleared in this webview.");
-    }
-  };
-
-  return (
-    <Sheet open onOpenChange={(next) => { if (!next) onClose(); }}>
-      <SheetContent className="settings-panel" closeLabel="Close settings">
-        <SheetHeader>
-          <span className="settings-sheet-kicker">Settings</span>
-          <SheetTitle>{title}</SheetTitle>
-          <SheetDescription className="sr-only">Workspace and document settings for the active schematic.</SheetDescription>
-        </SheetHeader>
-        <div className="settings-list">
-          <div className="settings-section">
-            <span className="settings-sheet-kicker">Appearance</span>
-            <ThemeControl />
-          </div>
-          <SettingsAiSection onNotice={onNotice} />
-
-          <SettingsRow label="Find parts" hint="⌘K · search symbols and commands">
-            <Button size="sm" variant="outline" onClick={onOpenCommandPalette}>Open</Button>
-          </SettingsRow>
-          <details className="settings-more">
-            <summary>Workspace</summary>
-            <SettingsRow label="Probes" hint={`${probes.length} on this schematic`}>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  clearProbes();
-                  onNotice(probes.length > 0 ? "Cleared all probes." : "No probes to clear.");
-                }}
-              >
-                Clear
-              </Button>
-            </SettingsRow>
-            {probes.length > 0 && (
-              <div className="probe-swatch-list" aria-label="Probe colors">
-                {probes.map((probe, index) => (
-                  <div key={probe.id} className="probe-swatch-row">
-                    <span className="probe-swatch-label">
-                      {probe.componentId ? `I(${probe.componentId})` : `V${index + 1}`}
-                    </span>
-                    <div className="probe-swatches" role="group" aria-label={`Color for probe ${index + 1}`}>
-                      {PROBE_SWATCHES.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          className={`probe-swatch${probe.color === color ? " active" : ""}`}
-                          style={{ background: color }}
-                          aria-label={color.replace("var(--", "").replace(")", "")}
-                          aria-pressed={probe.color === color}
-                          onClick={() => setProbeColor(probe.id, color)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <SettingsRow label="Autosave" hint="Recovery snapshot for untitled edits">
-              <Button size="sm" variant="outline" onClick={clearAutosave}>Clear</Button>
-            </SettingsRow>
-            <SettingsRow label="Document" hint="Start a blank schematic">
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => {
-                  onNewCircuit();
-                  onClose();
-                }}
-              >
-                New blank
-              </Button>
-            </SettingsRow>
-          </details>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function SettingsRow({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
-  return (
-    <div className="settings-row">
-      <div className="settings-row-copy">
-        <span className="settings-row-label">{label}</span>
-        <span className="settings-row-hint">{hint}</span>
-      </div>
-      {children}
-    </div>
   );
 }
 

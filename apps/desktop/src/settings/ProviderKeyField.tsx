@@ -23,7 +23,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { keychainAvailable } from "./settingsWindow";
+import { keychainAvailable } from "./settingsSurface";
 
 export interface ProviderKeyFieldProps {
   /** Used for the input id and label; must be unique on the page. */
@@ -109,9 +109,10 @@ export function ProviderKeyField({
             {label}
           </label>
           <div className="tau-key-input-row">
+            {/* Named by the visible <label htmlFor> above. No aria-label: two
+                accessible names for one field is one name too many. */}
             <Input
               id={id}
-              aria-label={label}
               type="password"
               variant="mono"
               autoComplete="off"

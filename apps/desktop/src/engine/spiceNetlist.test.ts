@@ -1931,29 +1931,56 @@ describe("buildSpiceDeck", () => {
   it("emits a digital AND gate as one B-source per connected output", () => {
     // A1 at origin. A gate's input bank follows its value (default 2 inputs -
     // see engine/digitalGateSpec.ts), so `and` exposes in1(-32,-16) and
-    // in2(-32,16) with q(32,-16); qbar and com float.
+    // in2(-32,16). A placed gate has ONE output, on the centreline: q(32,0).
     const components = [
       component("digitalGate", "A1", "and", 0, 0),
       component("vsource", "VA", "1", -128, -96), // p(-128,-128) n(-128,-64)
       component("vsource", "VB", "1", -224, -32), // p(-224,-64) n(-224,0)
-      component("resistor", "RL", "1k", 96, -16), // a(64,-16) b(128,-16)
+      component("resistor", "RL", "1k", 96, 0),   // a(64,0) b(128,0)
       component("ground", "", "", -128, -64),
       component("ground", "", "", -224, 0),
-      component("ground", "", "", 128, -16),
+      component("ground", "", "", 128, 0),
     ];
     const wires = [
       wire("w1", [{ x: -32, y: -16 }, { x: -96, y: -16 }, { x: -96, y: -128 }, { x: -128, y: -128 }]),
       wire("w2", [{ x: -32, y: 16 }, { x: -160, y: 16 }, { x: -160, y: -64 }, { x: -224, y: -64 }]),
-      wire("w3", [{ x: 32, y: -16 }, { x: 64, y: -16 }]),
+      wire("w3", [{ x: 32, y: 0 }, { x: 64, y: 0 }]),
     ];
     const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
-    // Both driven inputs appear as threshold terms multiplied (AND); only the
-    // connected true output emits a line (floating qbar/in3-5 are ignored).
+    // Both driven inputs appear as threshold terms multiplied (AND); the one
+    // output emits one line (floating in3-5 are ignored).
     // Product form (not C-style &&) — LTspice rejects && on B-lines.
     expect(deck.netlist).toMatch(
       /B_A1_Q \S+ 0 V=\(\(V\(\S+\)>0\.5\)\*\(V\(\S+\)>0\.5\)\) \? 1 : 0/,
     );
+    // No complementary source at all: a placed gate has no `qbar` terminal,
+    // and no `com` either, so the levels are referred straight to ground.
     expect(deck.netlist).not.toContain("B_A1_QB");
+    expect(deck.netlist).not.toMatch(/B_A1_Q \S+ 0 V=.*\+V\(/);
+  });
+
+  it("inverts a placed NAND's single output, and a placed `inv`'s too", () => {
+    // A gate Tau places has one output, so the inverting functions must drive
+    // it inverted - including `inv`, whose LTspice symbol inverts by exposing
+    // only the complementary pin that a placed gate does not have.
+    const deckFor = (value: string): string => {
+      const components = [
+        component("digitalGate", "A1", value, 0, 0),
+        component("vsource", "VA", "1", -128, -96), // p(-128,-128) n(-128,-64)
+        component("resistor", "RL", "1k", 96, 0),   // a(64,0) b(128,0)
+        component("ground", "", "", -128, -64),
+        component("ground", "", "", 128, 0),
+      ];
+      const wires = [
+        wire("w1", [{ x: -32, y: 0 }, { x: -96, y: 0 }, { x: -96, y: -128 }, { x: -128, y: -128 }]),
+        wire("w3", [{ x: 32, y: 0 }, { x: 64, y: 0 }]),
+      ];
+      return buildSpiceDeck({ components, wires }, { kind: "op" }).netlist;
+    };
+    // buf: input high → output high. inv/not: input high → output low.
+    expect(deckFor("buf")).toMatch(/B_A1_Q \S+ 0 V=\(\(V\(\S+\)>0\.5\)\) \? 1 : 0/);
+    expect(deckFor("not")).toMatch(/B_A1_Q \S+ 0 V=\(\(V\(\S+\)>0\.5\)\) \? 0 : 1/);
+    expect(deckFor("inv")).toMatch(/B_A1_Q \S+ 0 V=\(\(V\(\S+\)>0\.5\)\) \? 0 : 1/);
   });
 
   it("emits a dflop as adc bridge → XSPICE d_dff → dac bridge at its levels", () => {

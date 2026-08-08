@@ -8,6 +8,7 @@
  * and the browser preview can still exercise providers with injected fetch.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { recordAiRequest, tokensFromResponseBody } from "./aiUsage";
 
 export type CloudAiProvider = "anthropic" | "gemini";
 
@@ -59,6 +60,10 @@ export function createCloudAiFetch(provider: CloudAiProvider): FetchLike {
         headers: requestHeaders(init),
       },
     });
+    // One chokepoint for every cloud assistant call, so the Usage page counts
+    // requests without each provider module having to remember to report them.
+    // Token counts are the provider's own, taken from its reply when present.
+    recordAiRequest(provider, tokensFromResponseBody(result.body));
     return new Response(result.body, {
       status: result.status,
       headers: result.headers,

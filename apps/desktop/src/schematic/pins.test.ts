@@ -102,11 +102,38 @@ describe("value-driven terminal banks (mission item 9)", () => {
 
   it("gives a placed gate the inputs its value asks for, not a fixed five", () => {
     expect(getComponentPins(gate("and")).map((p) => p.id))
-      .toEqual(["in1", "in2", "q", "qbar", "com"]);
+      .toEqual(["in1", "in2", "q"]);
     expect(getComponentPins(gate("or Inputs=4")).map((p) => p.id))
-      .toEqual(["in1", "in2", "in3", "in4", "q", "qbar", "com"]);
+      .toEqual(["in1", "in2", "in3", "in4", "q"]);
     expect(getComponentPins(gate("not")).map((p) => p.id))
-      .toEqual(["in1", "q", "qbar", "com"]);
+      .toEqual(["in1", "q"]);
+  });
+
+  it("gives a placed gate ONE output, on the centreline, and no com reference", () => {
+    // The reported defect. A logic gate has one output; the second lead was
+    // LTspice's complementary pin and the stub off the bottom was the
+    // behavioural model's voltage reference, neither of which the function has.
+    for (const value of ["and", "nand", "or Inputs=5", "xnor", "not", "schmitt"]) {
+      const outputs = getComponentPins(gate(value)).filter((pin) => !pin.id.startsWith("in"));
+      expect(outputs.map((pin) => pin.id), value).toEqual(["q"]);
+      expect({ x: outputs[0].x, y: outputs[0].y }, value).toEqual({ x: 32, y: 0 });
+    }
+  });
+
+  it("keeps an imported gate's whole LTspice bank, which is the .asy's own", () => {
+    // Only the natively placed gate lost the pair and the reference: an
+    // imported symbol carries its source file's real terminals, and wires in
+    // that file end on them.
+    const imported: SchematicComponent = {
+      ...gate("and Inputs=5"),
+      pinOverride: [
+        { id: "in1", label: "1", x: -32, y: 32 },
+        { id: "qbar", label: "Q̅", x: 32, y: 80 },
+        { id: "q", label: "Q", x: 32, y: 48 },
+        { id: "com", label: "COM", x: -16, y: 96 },
+      ],
+    };
+    expect(getComponentPins(imported).map((p) => p.id)).toEqual(["in1", "qbar", "q", "com"]);
   });
 
   it("keeps every input terminal on the 16 grid and centred on the body", () => {
@@ -128,9 +155,17 @@ describe("value-driven terminal banks (mission item 9)", () => {
   it("keeps the kind-only lookup as the full dictionary the importer needs", () => {
     // `buildPinOverride` maps an .asy's pin NAMES onto Tau roles through this
     // table, so narrowing it by kind alone would drop in2..in5 from every
-    // imported AND and leave a five-input gate wired to one terminal.
+    // imported AND and leave a five-input gate wired to one terminal. It also
+    // has to keep `qbar` and `com`, which a placed gate no longer exposes:
+    // without them an imported inv.asy would lose its only output.
     expect(getLocalPins("digitalGate").map((pin) => pin.id))
       .toEqual(["in1", "in2", "in3", "in4", "in5", "q", "qbar", "com"]);
+    // …at LTspice's geometry, which `componentVisualPlacement` least-squares
+    // fits an imported body onto. Moving these moves every imported gate.
+    const by = Object.fromEntries(getLocalPins("digitalGate").map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(by.q).toEqual({ x: 32, y: -16 });
+    expect(by.qbar).toEqual({ x: 32, y: 16 });
+    expect(by.com).toEqual({ x: 32, y: 32 });
   });
 
   it("leaves every other kind's bank independent of its value", () => {

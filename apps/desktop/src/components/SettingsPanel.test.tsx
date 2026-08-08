@@ -160,7 +160,13 @@ describe("SettingsAiSection local assistant lifecycle", () => {
     render(<SettingsAiSection onNotice={vi.fn()} />);
     await screen.findByText("Download: 914 MB");
     fireEvent.click(screen.getByRole("radio", { name: "Cloud" }));
-    expect(await screen.findByLabelText(/API key/)).toBeTruthy();
+    // Was `findByLabelText(/API key/)`. Key ENTRY moved out of this component
+    // into the one shared `settings/ProviderKeyField`, rendered once by the
+    // Model configuration page, so that a secret is written in exactly one
+    // place. What this section still owns is key PRESENCE for the selected
+    // cloud provider, which is what gates chat.
+    expect(await screen.findByText("No Google Gemini key saved")).toBeTruthy();
+    expect(screen.queryByLabelText(/API key/)).toBeNull();
     expect(screen.getByText(/Consent is required/i)).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: "On-device model" })).toBeNull();
     const cloudProvider = screen.getByRole("combobox", { name: "Cloud provider" });
@@ -178,7 +184,10 @@ describe("SettingsAiSection local assistant lifecycle", () => {
     await screen.findByText("Download: 914 MB");
     fireEvent.click(screen.getByRole("radio", { name: "Cloud" }));
     await chooseSelectOption("Cloud provider", /Anthropic/);
-    expect(await screen.findByLabelText(/Anthropic API key/)).toBeTruthy();
+    // Same reason as above: presence, not entry. Selecting Anthropic must swap
+    // which provider's key the section reports on.
+    expect(await screen.findByText("No Anthropic key saved")).toBeTruthy();
+    expect(screen.queryByText(/Google Gemini key/)).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Gemini model" })).toBeNull();
   });
 });

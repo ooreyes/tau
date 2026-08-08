@@ -5,6 +5,7 @@ import {
   GATE_INPUTS_MIN,
   gateInputCount,
   isSingleInputGateFn,
+  nativelyPlacedGateSpec,
   parseDigitalGate,
   digitalGateDeckLines,
   dflopDeckLines,
@@ -16,7 +17,8 @@ import {
 describe("parseDigitalGate", () => {
   it("defaults to a 0/1 V buffer with midpoint threshold", () => {
     expect(parseDigitalGate("")).toEqual({
-      fn: "buf", invertOut: false, inputs: 1, vhigh: 1, vlow: 0, vt: 0.5, vhys: 0, td: 0,
+      fn: "buf", invertOut: false, qbarOnly: false, inputs: 1,
+      vhigh: 1, vlow: 0, vt: 0.5, vhys: 0, td: 0,
     });
   });
 
@@ -38,7 +40,8 @@ describe("parseDigitalGate", () => {
 
   it("honors key=value params with SI suffixes", () => {
     expect(parseDigitalGate("and Vhigh=5 Vlow=-5 Vt=1.2 Vhys=0.5 Td=10n")).toEqual({
-      fn: "and", invertOut: false, inputs: 2, vhigh: 5, vlow: -5, vt: 1.2, vhys: 0.5, td: 10e-9,
+      fn: "and", invertOut: false, qbarOnly: false, inputs: 2,
+      vhigh: 5, vlow: -5, vt: 1.2, vhys: 0.5, td: 10e-9,
     });
   });
 
@@ -52,6 +55,42 @@ describe("parseDigitalGate", () => {
   it("ignores unknown tokens and unparsable values", () => {
     expect(parseDigitalGate("and Trise=10n bogus Vhigh=oops").fn).toBe("and");
     expect(parseDigitalGate("and Trise=10n bogus Vhigh=oops").vhigh).toBe(1);
+  });
+});
+
+describe("nativelyPlacedGateSpec", () => {
+  it("moves the qbar-only aliases' inversion onto the one output a placed gate has", () => {
+    // `inv.asy` / `schmtinv.asy` are BUF/SCHMITT symbols that expose only the
+    // complementary pin, so on an IMPORT the inversion is the pin choice and
+    // `invertOut` must stay false. A gate Tau places has no such pin, so the
+    // same value has to invert `q` or it would draw and solve as a plain
+    // buffer - a silently non-inverting inverter.
+    for (const fn of ["inv", "schmtinv"]) {
+      const parsed = parseDigitalGate(fn);
+      expect(parsed.invertOut, `${fn} imported`).toBe(false);
+      expect(parsed.qbarOnly, `${fn} qbarOnly`).toBe(true);
+      expect(nativelyPlacedGateSpec(parsed).invertOut, `${fn} placed`).toBe(true);
+      expect(nativelyPlacedGateSpec(parsed).qbarOnly, `${fn} placed pin fact`).toBe(false);
+    }
+  });
+
+  it("leaves every other function exactly as parsed, object identity included", () => {
+    for (const fn of ["and", "or", "xor", "nand", "nor", "xnor", "buf", "buf1", "not", "schmitt", "schmtbuf"]) {
+      const parsed = parseDigitalGate(fn);
+      expect(nativelyPlacedGateSpec(parsed), fn).toBe(parsed);
+    }
+  });
+
+  it("drives the placed output with the level the drawing's bubble promises", () => {
+    // The bubble and the B-source have to agree: a `not` and a placed `inv`
+    // are the same part, so they must emit the same line.
+    const lineFor = (value: string): string =>
+      digitalGateDeckLines("A1", { ins: ["a"] , q: "y" }, nativelyPlacedGateSpec(parseDigitalGate(value)))[0];
+    expect(lineFor("inv")).toBe(lineFor("not"));
+    expect(lineFor("buf")).not.toBe(lineFor("not"));
+    // vhigh=1/vlow=0: an inverter drives 0 when its input is above threshold.
+    expect(lineFor("inv")).toContain("? 0 : 1");
+    expect(lineFor("buf")).toContain("? 1 : 0");
   });
 });
 

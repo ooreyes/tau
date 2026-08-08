@@ -1,4 +1,4 @@
-import { parseDigitalGate } from "../engine/digitalGateSpec";
+import { nativelyPlacedGateSpec, parseDigitalGate } from "../engine/digitalGateSpec";
 import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { isSpdtThrowToNo, isStaticContactClosed } from "./kindGroups";
 import type { ComponentKind, Rotation } from "./types";
@@ -108,10 +108,30 @@ export function wiperArrowX(wiper: number): number {
 
 /** Back edge of every gate body. Input leads run from the pin (x = -32) to here. */
 const GATE_BACK_X = -24;
-/** Nose tip. Fixed, so a gate keeps its width as the input bank grows taller. */
-const GATE_NOSE_TIP_X = 28;
-/** Rows the true/complementary outputs sit on. */
-const GATE_OUT_Y = 16;
+/**
+ * Nose tip. Fixed, so a gate keeps its width as the input bank grows taller.
+ *
+ * 24 rather than 28 because the inversion bubble now sits on the CENTRELINE
+ * output, between the nose and the pin at x = 32: at 28 a 3-unit bubble would
+ * have ended at x = 34, past its own terminal. 24 puts the bubble at 24..30 and
+ * leaves a 2-unit lead to the pin — the same figure the flip-flops already draw
+ * (`InvertedOutputLead`, body edge 24, pin 32), so every bubble in the digital
+ * section is now the same size in the same place.
+ */
+const GATE_NOSE_TIP_X = 24;
+/**
+ * The natively placed gate's single output row: the body centreline, which is
+ * where the nose points and where a one-input buffer's own input already sits.
+ */
+export const GATE_OUT_Y = 0;
+/**
+ * Rows LTspice's complementary output PAIR sits on (`Q` above, `_Q` below).
+ *
+ * Only an imported `.asy` has both, and only it is drawn with them. This is
+ * also the body's minimum vertical reach, so a one-input gate keeps the same
+ * nose as a two-input one instead of collapsing to a 16-unit blob.
+ */
+export const GATE_PAIR_Y = 16;
 /** How far an OR/XOR back bulges into the body, and where the XOR's second arc sits. */
 const GATE_BACK_BULGE = 8;
 const GATE_XOR_ARC_X = -32;
@@ -138,9 +158,9 @@ export function gateInputRows(inputs: number): number[] {
   });
 }
 
-/** Body half-height: enough to clear the input bank and both output rows. */
+/** Body half-height: enough to clear the input bank and LTspice's output pair. */
 export function gateBodyHalfHeight(inputs: number): number {
-  const reach = Math.max(GATE_OUT_Y, ...gateInputRows(inputs).map(Math.abs));
+  const reach = Math.max(GATE_PAIR_Y, ...gateInputRows(inputs).map(Math.abs));
   return reach + 8;
 }
 
@@ -188,6 +208,23 @@ function gateCurvedBackX(halfHeight: number, y: number): number {
   return centre + Math.sqrt(Math.max(0, radius * radius - y * y));
 }
 
+/** One output lead leaving the nose on row `y`, bubbled when it inverts. */
+function GateOutputLead({ id, y, half, bubble }: {
+  id: string;
+  y: number;
+  half: number;
+  bubble: boolean;
+}) {
+  const crossX = gateNoseCrossX(half, y);
+  if (!bubble) return <line x1={crossX} y1={y} x2={32} y2={y} />;
+  return (
+    <g data-gate-invert={id}>
+      <circle cx={crossX + GATE_BUBBLE_R} cy={y} r={GATE_BUBBLE_R} />
+      <line x1={crossX + GATE_BUBBLE_R * 2} y1={y} x2={32} y2={y} />
+    </g>
+  );
+}
+
 /**
  * The seven palette gates used to render byte-identical markup: one hard-coded
  * AND silhouette with five leads, whatever function the value named. The
@@ -199,14 +236,30 @@ function gateCurvedBackX(halfHeight: number, y: number): number {
  *  - BUF / NOT       one input and a buffer triangle inside the body
  *  - Schmitt         one input and the hysteresis glyph
  *
- * The inversion bubble sits on whichever output actually carries the inverted
- * sense. `invertOut` (NAND/NOR/XNOR/NOT) swaps the levels driven onto q and
- * qbar — see `engine/digitalGateSpec.ts` — so on those parts the bubble belongs
- * on q, not on qbar. The old symbol always bubbled qbar and so mislabelled
- * every inverting gate on the sheet.
+ * ── What a placed gate shows, and why it is not the `.asy` ─────────────────
+ *
+ * A natively placed gate draws N inputs, ONE output on the centreline, and a
+ * bubble on that output if and only if the function inverts. It drew LTspice's
+ * pin contract verbatim before — both outputs plus the `com` reference — and
+ * every one of those three facts read as a defect on a schematic:
+ *
+ *  1. two output leads on a part that has one output;
+ *  2. the bubble meaning "this is the complementary pin" rather than "this
+ *     function inverts", so a plain AND rendered with a bubble on its lower
+ *     output and read as a NAND;
+ *  3. a `com` stub off the bottom edge that read as a stray input.
+ *
+ * `imported` is the exception, and it is not a style switch: a gate that came
+ * from an `.asy` carries a `pinOverride` with that file's real terminals, so
+ * the drawing has to keep the pair and the reference or those terminals would
+ * have no lead to sit on. `spec.invertOut` is the LTspice reading there — the
+ * complementary pin is `qbar` unless the value inverted `q` — while a native
+ * gate asks {@link nativelyPlacedGateSpec} instead, which is what makes a
+ * hand-typed `inv` an inverter rather than a silently non-inverting buffer.
  */
-function DigitalGateArtwork({ value }: { value?: string }) {
-  const spec = parseDigitalGate(value ?? "");
+function DigitalGateArtwork({ value, imported = false }: { value?: string; imported?: boolean }) {
+  const parsed = parseDigitalGate(value ?? "");
+  const spec = imported ? parsed : nativelyPlacedGateSpec(parsed);
   const half = gateBodyHalfHeight(spec.inputs);
   const noseStart = GATE_NOSE_TIP_X - half;
   const curvedBack = spec.fn === "or" || spec.fn === "xor";
@@ -216,13 +269,14 @@ function DigitalGateArtwork({ value }: { value?: string }) {
     ? `M ${GATE_BACK_X} ${-half} ${nose} A ${backRadius} ${backRadius} 0 0 0 ${GATE_BACK_X} ${-half}`
     : `M ${GATE_BACK_X} ${-half} ${nose} Z`;
   const xorRadius = arcRadius(half, GATE_XOR_ARC_BULGE);
-  const crossX = gateNoseCrossX(half, GATE_OUT_Y);
   const com = gateComPoint(spec.inputs);
   // q first: it is the output whose sense `invertOut` flips.
-  const outputs = [
-    { id: "q", y: -GATE_OUT_Y, bubble: spec.invertOut },
-    { id: "qbar", y: GATE_OUT_Y, bubble: !spec.invertOut },
-  ];
+  const outputs = imported
+    ? [
+      { id: "q", y: -GATE_PAIR_Y, bubble: spec.invertOut },
+      { id: "qbar", y: GATE_PAIR_Y, bubble: !spec.invertOut },
+    ]
+    : [{ id: "q", y: GATE_OUT_Y, bubble: spec.invertOut }];
   return (
     <>
       <path data-gate-body={spec.fn} d={body} />
@@ -241,23 +295,16 @@ function DigitalGateArtwork({ value }: { value?: string }) {
           y2={y}
         />
       ))}
-      {outputs.map((output) =>
-        output.bubble ? (
-          <g key={output.id} data-gate-invert={output.id}>
-            <circle cx={crossX + GATE_BUBBLE_R} cy={output.y} r={GATE_BUBBLE_R} />
-            <line x1={crossX + GATE_BUBBLE_R * 2} y1={output.y} x2={32} y2={output.y} />
-          </g>
-        ) : (
-          <line key={output.id} x1={crossX} y1={output.y} x2={32} y2={output.y} />
-        ),
-      )}
+      {outputs.map((output) => (
+        <GateOutputLead key={output.id} id={output.id} y={output.y} half={half} bubble={output.bubble} />
+      ))}
       {spec.fn === "buf" && <path data-gate-glyph="buf" d="M -10 -7 L 4 0 L -10 7 Z" />}
       {spec.fn === "schmitt" && <path data-gate-glyph="schmitt" d="M -9 5 H -1 V -5 H 7" />}
-      {com.x > 0 ? (
+      {imported && (com.x > 0 ? (
         <line x1={gateNoseCrossX(half, com.y)} y1={com.y} x2={com.x} y2={com.y} />
       ) : (
         <line x1={com.x} y1={half} x2={com.x} y2={com.y} />
-      )}
+      ))}
     </>
   );
 }
@@ -764,8 +811,9 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   comparator: { minX: -24, minY: -32, maxX: 30, maxY: 32 },
   // The gate's body grows with its input count; this is the largest it gets
   // (five inputs), so hit-testing and label clearance never under-cover it.
-  // `minX` is the XOR's outer arc, `maxX` the nose tip plus an inversion bubble.
-  digitalGate: { minX: -32, minY: -40, maxX: 31, maxY: 40 },
+  // `minX` is the XOR's outer arc; `maxX` is the nose tip (24) plus the
+  // inversion bubble that sits on the centreline output of an inverting gate.
+  digitalGate: { minX: -32, minY: -40, maxX: 30, maxY: 40 },
   // Flip-flops: shared ±24 body plus the Q̅ inversion bubble reaching x = 30.
   dflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
   srflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
@@ -878,27 +926,36 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
  * `<g>` rotates the whole symbol, so a caption has to be told how far to turn
  * back. Everything else ignores them, and a preview that passes neither gets
  * the upright drawing it wants.
+ *
+ * `imported` says this instance carries a `pinOverride` taken from a source
+ * file's own symbol, so its terminal set is that file's and not Tau's. Only the
+ * logic gate reads it today: a placed gate has one output, while an imported
+ * `Digital\*.asy` really does expose the complementary pin and the `com`
+ * reference, and dropping their leads would leave those terminals unattached to
+ * the body. A preview, which is always Tau's own part, leaves it false.
  */
 export function ComponentSymbol({
   kind,
   value,
   rotation = 0,
   mirrored = false,
+  imported = false,
 }: {
   kind: ComponentKind;
   value?: string;
   rotation?: Rotation;
   mirrored?: boolean;
+  imported?: boolean;
 }) {
   return (
     <>
-      {symbolArtwork(kind, value)}
+      {symbolArtwork(kind, value, imported)}
       <SymbolPinLabels kind={kind} rotation={rotation} mirrored={mirrored} />
     </>
   );
 }
 
-function symbolArtwork(kind: ComponentKind, value?: string) {
+function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
   const r = SOURCE_CIRCLE_R;
   const pin = SOURCE_PIN_Y;
   switch (kind) {
@@ -1091,7 +1148,7 @@ function symbolArtwork(kind: ComponentKind, value?: string) {
       );
 
     case "digitalGate":
-      return <DigitalGateArtwork value={value} />;
+      return <DigitalGateArtwork value={value} imported={imported} />;
 
     case "dflop":
       return (

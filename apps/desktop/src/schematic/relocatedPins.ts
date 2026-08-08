@@ -29,9 +29,34 @@ interface FormerPin {
   label: string;
   x: number;
   y: number;
+  /**
+   * How to get this terminal back, when the part no longer has it at all.
+   *
+   * Absent means "it can be restored from Properties" — the gate's inputs 3..5
+   * are a count away. Present means the part genuinely does not have that
+   * terminal any more and the sentence says what to do instead, because
+   * "reattach the wire" would be advice the reader cannot follow.
+   */
+  retiredFix?: string;
 }
 
 const former = (id: string, label: string, x: number, y: number): FormerPin => ({ id, label, x, y });
+
+/** A terminal the part no longer has, with the sentence that replaces it. */
+const retired = (id: string, label: string, x: number, y: number, retiredFix: string): FormerPin =>
+  ({ id, label, x, y, retiredFix });
+
+/**
+ * What to tell someone whose wire ended on a gate's second output or its
+ * reference. Both were LTspice's A-device pin contract showing through the
+ * symbol rather than anything the function has.
+ */
+const GATE_OUTPUT_FIX =
+  "A logic gate now draws its single output on the centreline: use the complementary "
+  + "function (AND↔NAND, OR↔NOR, XOR↔XNOR, buffer↔NOT) where you need the inverted sense.";
+const GATE_COM_FIX =
+  "A placed gate no longer exposes the COM reference — its levels are referred to ground, "
+  + "which is what a grounded COM already meant.";
 
 /**
  * Positions as of before the 2026-08-08 digital redraw (mission items 5 and 9).
@@ -75,13 +100,25 @@ export const FORMER_PIN_POSITIONS: ReadonlyMap<ComponentKind, readonly FormerPin
   // and the notice says so, because the fix is a different one: raise the
   // count. (A gate already set to five inputs sits on these exact rows, so it
   // reports nothing.)
+  //
+  // The single-output redraw then moved Q onto the centreline and retired both
+  // the complementary output and the COM reference, which LTspice's `.asy` has
+  // and a logic gate does not. Q is the row that matters most here: it is the
+  // terminal most gates actually have a wire on.
   ["digitalGate", [
     former("in1", "1", -32, -32),
     former("in2", "2", -32, -16),
     former("in3", "3", -32, 0),
     former("in4", "4", -32, 16),
     former("in5", "5", -32, 32),
-    former("com", "COM", 0, 48),
+    former("q", "Q", 32, -16),
+    retired("qbar", "Q̅", 32, 16, GATE_OUTPUT_FIX),
+    // Three COM rows, because the reference moved twice before it was retired:
+    // (0,48) is pre-item-5, then it followed the body — (-16,32) on a short
+    // gate, (32,32) on a tall one. A row that no wire reaches costs nothing.
+    retired("com", "COM", 0, 48, GATE_COM_FIX),
+    retired("com", "COM", -16, 32, GATE_COM_FIX),
+    retired("com", "COM", 32, 32, GATE_COM_FIX),
   ]],
 ]);
 
@@ -111,8 +148,11 @@ export interface StrandedTerminal {
   name: string;
   /** Terminals a wire still reaches that the part has since moved away from. */
   moved: string[];
-  /** Terminals a wire still reaches that the part no longer exposes at all. */
+  /** Terminals a wire still reaches that this instance can expose again. */
   missing: string[];
+  /** Terminals the part does not have any more, with the sentence that says
+   *  what to do instead (one entry per distinct sentence). */
+  retired: Array<{ labels: string[]; fix: string }>;
 }
 
 /**
@@ -141,6 +181,7 @@ export function strandedTerminals(
     const current = new Map(getComponentPins(component).map((pin) => [pin.id, pin]));
     const moved: string[] = [];
     const missing: string[] = [];
+    const retiredByFix = new Map<string, string[]>();
     for (const pin of formerPins) {
       const offset = transformPoint(pin, component.rotation, component.mirrored ?? false);
       const was = { x: component.x + offset.x, y: component.y + offset.y };
@@ -148,14 +189,26 @@ export function strandedTerminals(
       if (now && samePoint(now, was)) continue;
       if (!wireTouches(wires, was)) continue;
       if (now && wireTouches(wires, now)) continue;
-      (now ? moved : missing).push(now?.label || pin.label);
+      if (now) {
+        moved.push(now.label || pin.label);
+      } else if (pin.retiredFix) {
+        const labels = retiredByFix.get(pin.retiredFix) ?? [];
+        // A terminal that moved twice before it was retired has a row per
+        // position; naming it twice in one sentence would just read as a bug.
+        if (!labels.includes(pin.label)) labels.push(pin.label);
+        retiredByFix.set(pin.retiredFix, labels);
+      } else {
+        missing.push(pin.label);
+      }
     }
-    if (moved.length > 0 || missing.length > 0) {
+    const retired = [...retiredByFix].map(([fix, labels]) => ({ labels, fix }));
+    if (moved.length > 0 || missing.length > 0 || retired.length > 0) {
       stranded.push({
         componentId: component.id,
         name: component.label.trim() || component.kind,
         moved,
         missing,
+        retired,
       });
     }
   }
@@ -188,6 +241,13 @@ export function strandedTerminalNotices(
       parts.push(
         `${entry.name}: wires still reach ${terminals} ${listOf(entry.missing)}, which this part no longer has. `
         + "Raise its input count in Properties to get them back.",
+      );
+    }
+    for (const group of entry.retired) {
+      const terminals = group.labels.length === 1 ? "terminal" : "terminals";
+      parts.push(
+        `${entry.name}: wires still reach the ${listOf(group.labels)} ${terminals}, which this part no longer `
+        + `has. ${group.fix}`,
       );
     }
     return parts.join(" ");

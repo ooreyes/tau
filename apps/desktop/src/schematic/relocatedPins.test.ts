@@ -123,6 +123,43 @@ describe("terminals stranded by a redraw", () => {
     expect(strandedTerminals([wide], rows.map((p, i) => wireTo(p.x, p.y, `w${i}`)))).toEqual([]);
   });
 
+  it("catches the gate output moving onto the centreline, which is the wire most gates have", () => {
+    // The single-output redraw put Q at (32, 0). Every saved gate has a wire on
+    // its output at (32, -16), and without this row that wire would quietly
+    // stop being connected and the circuit would solve differently.
+    const gate = part("digitalGate", { value: "and", label: "A1" });
+    const was = formerWorld(gate, "q");
+    expect(was).toEqual({ x: 32, y: -16 });
+    expect(pinAt(gate, "q")).toMatchObject({ x: 32, y: 0 });
+    const notice = strandedTerminalNotices([gate], [wireTo(was.x + 64, was.y)])[0];
+    expect(notice).toContain("A1");
+    expect(notice).toContain("Q");
+    expect(notice).toMatch(/reattach them in schematic/i);
+    // …and a gate already wired on the new row is silent.
+    expect(strandedTerminals([gate], [wireTo(96, 0)])).toEqual([]);
+  });
+
+  it("tells a wire on the retired Q̅ / COM what to do instead of raising a count", () => {
+    // Those two are gone from a placed gate for good - they were LTspice's
+    // A-device pin contract, not the function's terminals - so the input-count
+    // sentence would be advice the reader cannot follow.
+    const gate = part("digitalGate", { value: "and", label: "A1" });
+    const qbar = strandedTerminals([gate], [wireTo(96, 16)]);
+    expect(qbar[0].retired).toEqual([{ labels: ["Q̅"], fix: expect.stringContaining("AND↔NAND") }]);
+    expect(qbar[0].missing).toEqual([]);
+    expect(strandedTerminalNotices([gate], [wireTo(96, 16)])[0]).not.toMatch(/input count/i);
+
+    // COM sat in three places before it was retired; each is caught, and the
+    // part is named once however many of them a wire happens to reach.
+    for (const [x, y] of [[0, 48], [-16, 32], [32, 32]] as const) {
+      const found = strandedTerminals([gate], [wireTo(x + 64, y)]);
+      expect(found, `com (${x}, ${y})`).toHaveLength(1);
+      expect(found[0].retired.flatMap((group) => group.labels), `com (${x}, ${y})`).toEqual(["COM"]);
+    }
+    const both = strandedTerminals([gate], [wireTo(64, 48, "a"), wireTo(48, 32, "b")]);
+    expect(both[0].retired.flatMap((group) => group.labels)).toEqual(["COM"]);
+  });
+
   it("leaves an imported part alone, whose pins never moved with Tau's artwork", () => {
     const imported = part("dflop", {
       pinOverride: [

@@ -72,7 +72,20 @@ export function mergeOptionsLine(userOptions: Record<string, string>): string {
   return `.options ${parts.join(" ")}`;
 }
 
-/** Convenience: parse a document's directives and produce the merged `.options` line. */
-export function optionsLineFromDirectives(directives: ReadonlyArray<string>): string {
-  return mergeOptionsLine(parseOptionsDirectives(directives));
+/**
+ * Convenience: parse a document's directives and produce the merged `.options`
+ * line.
+ *
+ * `userDefaults` is the app-wide preference layer set in Settings. Precedence
+ * is deliberate and is the whole point of the three-way merge:
+ * `DEFAULT_OPTIONS` < the user's Settings < the document's own `.options`.
+ * A schematic that pins `reltol` was authored to simulate that way, so it still
+ * wins; opening someone else's circuit must not silently re-simulate it with
+ * your tolerances.
+ */
+export function optionsLineFromDirectives(
+  directives: ReadonlyArray<string>,
+  userDefaults: Record<string, string> = {},
+): string {
+  return mergeOptionsLine({ ...userDefaults, ...parseOptionsDirectives(directives) });
 }

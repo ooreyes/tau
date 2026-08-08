@@ -83,6 +83,15 @@ export interface DigitalGateSpec {
    */
   invertOut: boolean;
   /**
+   * The value named an LTspice symbol that exposes ONLY the complementary pin
+   * (`inv.asy`, `schmtinv.asy`). On an imported part that is a pin fact, not a
+   * function fact — the `.asy` really has no `q`, and inverting `q` as well
+   * would make its one wired output non-inverting. On a natively placed gate,
+   * which exposes a single output, it IS the function: see
+   * {@link nativelyPlacedGateSpec}.
+   */
+  qbarOnly: boolean;
+  /**
    * Input terminals this gate exposes, already clamped and already reduced to
    * 1 for the single-input functions. Drives `LOCAL_PINS.digitalGate` and the
    * drawn leads; the deck still counts only the pins that are wired, so an
@@ -102,12 +111,12 @@ export interface DigitalGateSpec {
 }
 
 /** LTspice symbol leaf / EveryCircuit preset → gate function (+ optional invert). */
-const FN_ALIASES: Record<string, { fn: DigitalGateFn; invertOut?: boolean }> = {
+const FN_ALIASES: Record<string, { fn: DigitalGateFn; invertOut?: boolean; qbarOnly?: boolean }> = {
   buf: { fn: "buf" },
   buf1: { fn: "buf" },
   // LTspice `inv.asy` is a BUF that exposes the complementary pin — do NOT
   // invert primary `q` or imported INV symbols that wire only qbar flip sense.
-  inv: { fn: "buf" },
+  inv: { fn: "buf", qbarOnly: true },
   // EveryCircuit palette "NOT" places an inverter on the primary Q pin.
   not: { fn: "buf", invertOut: true },
   and: { fn: "and" },
@@ -118,10 +127,10 @@ const FN_ALIASES: Record<string, { fn: DigitalGateFn; invertOut?: boolean }> = {
   xnor: { fn: "xor", invertOut: true },
   schmitt: { fn: "schmitt" },
   schmtbuf: { fn: "schmitt" },
-  schmtinv: { fn: "schmitt" },
+  schmtinv: { fn: "schmitt", qbarOnly: true },
 };
 
-const KEY_ALIASES: Record<string, keyof Omit<DigitalGateSpec, "fn" | "invertOut">> = {
+const KEY_ALIASES: Record<string, keyof Omit<DigitalGateSpec, "fn" | "invertOut" | "qbarOnly">> = {
   vhigh: "vhigh",
   vlow: "vlow",
   vt: "vt",
@@ -142,6 +151,7 @@ export function parseDigitalGate(value: string): DigitalGateSpec {
   const tokens = (value ?? "").trim().split(/[\s,]+/).filter(Boolean);
   let fn: DigitalGateFn = "buf";
   let invertOut = false;
+  let qbarOnly = false;
   let vhigh = 1;
   let vlow = 0;
   let vt: number | null = null;
@@ -168,12 +178,14 @@ export function parseDigitalGate(value: string): DigitalGateSpec {
     if (alias) {
       fn = alias.fn;
       invertOut = alias.invertOut === true;
+      qbarOnly = alias.qbarOnly === true;
     }
   }
 
   return {
     fn,
     invertOut,
+    qbarOnly,
     inputs: gateInputCount(fn, inputs),
     vhigh,
     vlow,
@@ -181,6 +193,31 @@ export function parseDigitalGate(value: string): DigitalGateSpec {
     vhys: Math.abs(vhys),
     td: Math.abs(td),
   };
+}
+
+/**
+ * The spec a **natively placed** gate is drawn and solved with.
+ *
+ * A gate Tau places itself has one output (`q`), because that is what a logic
+ * gate has; the LTspice 8-slot bank with its complementary pin belongs to the
+ * imported `.asy`, which carries its own `pinOverride`. That makes the
+ * qbar-only aliases mean something different on the two paths, and this is the
+ * one place that difference is written down:
+ *
+ *  - imported `inv.asy` / `schmtinv.asy`: the part has no `q` at all, its one
+ *    output is `qbar`, and `qbar` already carries the complement of `buf`. So
+ *    `invertOut` must stay false or that output would stop inverting.
+ *  - a natively placed gate valued `inv` / `schmtinv`: there is no `qbar` to
+ *    take the complement from, so "inverter" has to live on `q` — exactly as
+ *    it does for `not` / `nand` / `nor` / `xnor`.
+ *
+ * Without this a hand-typed (or dev-tool placed) `inv` would draw an unbubbled
+ * buffer and emit a non-inverting B-source: a silent wrong answer, which is the
+ * failure mode this repo treats as the worst kind.
+ */
+export function nativelyPlacedGateSpec(spec: DigitalGateSpec): DigitalGateSpec {
+  if (!spec.qbarOnly) return spec;
+  return { ...spec, invertOut: !spec.invertOut, qbarOnly: false };
 }
 
 /** Node assignments for a gate instance. Only *connected* pins are present -

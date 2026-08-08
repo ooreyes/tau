@@ -64,9 +64,10 @@ import {
   EditorToolbar,
   ExplorerPanel,
   MinimizedPanelDock,
-  SettingsPanel,
   UnsavedChangesDialog,
 } from "./components/ShellPanels";
+import { SettingsWindow } from "./settings/SettingsWindow";
+import { openSettings } from "./settings/settingsSurface";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { useRuntimeModelLibraries } from "./store/useRuntimeModelLibraries";
 import { CATALOG } from "./schematic/catalog";
@@ -565,6 +566,23 @@ function App() {
     toast(message, { duration: 2600 });
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
   }, []);
+
+  /**
+   * Show Settings. In the packaged app this asks Rust for a real second OS
+   * window and this component renders nothing; in the browser build, where
+   * there is no window to create, it falls back to an in-app route. The
+   * fallback is a genuine downgrade and the pages say so, rather than claiming
+   * storage the browser does not have.
+   */
+  const openSettingsSurface = useCallback(() => {
+    void openSettings()
+      .then((surface) => {
+        if (surface === "route") setSettingsOpen(true);
+      })
+      .catch((error: unknown) => {
+        showNotice(userFacingErrorMessage(error, "Settings could not be opened."));
+      });
+  }, [showNotice]);
 
   const invalidateAnalysis = useCallback((state: "idle" | "stopped" = "idle") => {
     analysisRequestRef.current += 1;
@@ -2246,7 +2264,7 @@ function App() {
           }
           toggleAssistant();
         }}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={openSettingsSurface}
       />
       <div
         ref={shellBodyRef}
@@ -2275,7 +2293,7 @@ function App() {
               return next;
             });
           }}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={openSettingsSurface}
         />
         {explorerColumnOpen && (
           <ExplorerPanel
@@ -2543,7 +2561,7 @@ function App() {
             resize={effectiveAssistantResize}
             onCreateAsc={createAssistantCircuit}
             onApplyCurrent={applyAssistantCircuit}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenSettings={openSettingsSurface}
             onClose={closeAssistant}
           />
         )}
@@ -2590,17 +2608,12 @@ function App() {
           onDiscard={discardExternalEdit}
         />
       )}
+      {/* Browser fallback only. In the desktop app `openSettingsSurface` asks
+          Rust for a real second window and this never mounts. */}
       {settingsOpen && (
-        <SettingsPanel
-          title={documentTitle}
-          onClose={() => setSettingsOpen(false)}
-          onNewCircuit={startNewCircuit}
-          onOpenCommandPalette={() => {
-            setSettingsOpen(false);
-            setPaletteOpen(true);
-          }}
-          onNotice={showNotice}
-        />
+        <div className="tau-settings-route" role="dialog" aria-modal="true" aria-label="Settings">
+          <SettingsWindow onClose={() => setSettingsOpen(false)} />
+        </div>
       )}
       {confirmClearOpen && (
         <ConfirmDialog

@@ -1,6 +1,6 @@
 import { GATE_INPUTS_MAX, parseDigitalGate } from "../engine/digitalGateSpec";
 import type { ComponentKind, Point, Rotation, SchematicComponent } from "./types";
-import { SOURCE_PIN_Y, gateComPoint, gateInputRows } from "./symbols";
+import { GATE_OUT_Y, GATE_PAIR_Y, SOURCE_PIN_Y, gateComPoint, gateInputRows } from "./symbols";
 
 export interface LocalPin {
   id: string;
@@ -27,13 +27,29 @@ const SOURCE_PINS: LocalPin[] = [
 ];
 
 /**
- * Terminal bank for a logic gate with `inputs` inputs.
+ * Terminal bank for a **natively placed** logic gate: the inputs its value asks
+ * for on the left, and ONE output on the right.
  *
- * The gate is the one kind whose pin count is set by its value rather than by
- * its kind: the deck has always read only the inputs that are wired, so a
- * 2-input AND used to arrive with three terminals nobody could explain. The
- * rows and the reference row come from the same helpers the artwork uses
- * (`symbols.tsx`), so the drawing cannot disagree with the bank.
+ * A logic gate has one output. The kind's dictionary below still carries
+ * LTspice's whole 8-slot bank because an imported `.asy` really does expose a
+ * complementary pin and a `com` reference, but a gate Tau places is a gate, not
+ * a transcription of `Digital\and.asy`, and it used to arrive with two output
+ * leads (the lower one bubbled, so a plain AND read as a NAND) plus a `com`
+ * stub hanging off the bottom that looked like a stray input.
+ *
+ * Both are gone, deliberately:
+ *
+ *  - `qbar` — the complement is a different gate. AND↔NAND, OR↔NOR, XOR↔XNOR,
+ *    buffer↔NOT are one click apart in Properties, they cost the same two deck
+ *    lines a second output would have, and the drawing then says which sense
+ *    each wire carries. Nothing that could be simulated before cannot be now.
+ *  - `com` — it is the behavioural model's voltage reference, and
+ *    `digitalGateDeckLines` already refers every input comparison and every
+ *    output to ground when it is absent, so the gate solves identically with
+ *    no pin at all. An invisible terminal nobody can wire would be worse.
+ *
+ * The rows come from the same helper the artwork uses (`symbols.tsx`), so the
+ * drawing cannot disagree with the bank.
  */
 function digitalGatePins(inputs: number): LocalPin[] {
   return [
@@ -43,11 +59,34 @@ function digitalGatePins(inputs: number): LocalPin[] {
       x: -32,
       y,
     })),
-    { id: "q", label: "Q", x: 32, y: -16 },
-    { id: "qbar", label: "Q̅", x: 32, y: 16 },
-    { id: "com", label: "COM", ...gateComPoint(inputs) },
+    // On the body centreline, where the nose points: the output leaves the
+    // gate, and on a one-input buffer/inverter it lines up with the input.
+    { id: "q", label: "Q", x: 32, y: GATE_OUT_Y },
   ];
 }
+
+/**
+ * Every terminal the kind can ever expose — LTspice's 8-slot A-device bank
+ * (1..5 in, 6 `_Q`, 7 `Q`, 8 `com`), at the geometry an imported gate is drawn
+ * and fitted against.
+ *
+ * This is NOT the bank a placed gate gets; `getLocalPins(kind, value)` narrows
+ * to that. It exists for the importer — `io/ascImport.ts buildPinOverride` maps
+ * an `.asy`'s pin NAMES through this table, and `componentVisualPlacement`
+ * least-squares-fits the body onto the imported coordinates using it — so every
+ * id and every position here has to stay exactly as an imported gate expects.
+ */
+const DIGITAL_GATE_DICTIONARY: LocalPin[] = [
+  ...gateInputRows(GATE_INPUTS_MAX).map((y, index) => ({
+    id: `in${index + 1}`,
+    label: String(index + 1),
+    x: -32,
+    y,
+  })),
+  { id: "q", label: "Q", x: 32, y: -GATE_PAIR_Y },
+  { id: "qbar", label: "Q̅", x: 32, y: GATE_PAIR_Y },
+  { id: "com", label: "COM", ...gateComPoint(GATE_INPUTS_MAX) },
+];
 
 const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
   resistor: TWO_TERMINAL_PINS,
@@ -95,12 +134,10 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "in-", label: "-", x: -32, y: -16 },
     { id: "out", label: "OUT", x: 32, y: 0 },
   ],
-  // LTspice-style idealized digital gate (Digital\*.asy): the inputs the gate's
-  // own value asks for on the left, true (q) and complementary (qbar) outputs
-  // on the right, and a com reference. This entry is the kind's full DICTIONARY
-  // (every terminal the kind can expose); `getLocalPins(kind, value)` narrows it
-  // to the instance. Imported gates override it with the .asy's exact subset.
-  digitalGate: digitalGatePins(GATE_INPUTS_MAX),
+  // The kind's full DICTIONARY, which is LTspice's bank and not what a placed
+  // gate exposes — `getLocalPins(kind, value)` narrows to the instance (N
+  // inputs, one output) and imported gates override it with the .asy's subset.
+  digitalGate: DIGITAL_GATE_DICTIONARY,
   // ── Digital parts. No terminal passes |y| = 32 any more, so the whole part
   //    clears the ±42 × ±40 palette/inspector preview - the flip-flops' PRE and
   //    CLR used to reach 48 and the 7-segment common 56, and the previews

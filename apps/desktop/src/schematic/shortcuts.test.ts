@@ -3,6 +3,8 @@ import {
   dispatchShortcutAction,
   isEditingAction,
   resolveShortcut,
+  SHORTCUT_ACTION_LABELS,
+  SHORTCUT_BINDINGS,
   type ShortcutAction,
   type ShortcutHandlers,
 } from "./shortcuts";
@@ -153,5 +155,70 @@ describe("dispatchShortcutAction - mode gate ", () => {
     dispatchShortcutAction("palette", "simulator", handlers);
     expect(handlers.cancel).toHaveBeenCalledTimes(1);
     expect(handlers.openPalette).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * `SHORTCUT_BINDINGS` is a second statement of what `resolveShortcut`'s switch
+ * already implements, so the Settings shortcuts page can render bindings as
+ * data. Two statements of the same facts drift. These tests are what stop that:
+ * every row is fed back through the resolver, and the key space is swept for
+ * bindings no row mentions.
+ */
+describe("SHORTCUT_BINDINGS agrees with the resolver", () => {
+  it("resolves every listed binding to the action it claims", () => {
+    for (const binding of SHORTCUT_BINDINGS) {
+      expect(
+        resolveShortcut({
+          key: binding.key,
+          ctrlOrMeta: binding.ctrlOrMeta,
+          shift: binding.shift,
+        }),
+        `${binding.display} should resolve to ${binding.action}`,
+      ).toBe(binding.action);
+    }
+  });
+
+  it("lists every binding the resolver actually has", () => {
+    // The full space the resolver looks at: single printable keys plus the
+    // named keys it switches on, across both modifier states and both shifts.
+    const keys = [
+      ..."abcdefghijklmnopqrstuvwxyz0123456789/ ".split(""),
+      "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9",
+      "Escape", "Backspace", "Delete", "Enter", "Tab",
+      "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+    ];
+    const listed = new Set(
+      SHORTCUT_BINDINGS.map((b) => `${b.key}|${b.ctrlOrMeta}|${b.shift}`),
+    );
+    const missing: string[] = [];
+    for (const key of keys) {
+      for (const ctrlOrMeta of [false, true]) {
+        for (const shift of [false, true]) {
+          const action = resolveShortcut({ key, ctrlOrMeta, shift });
+          if (!action) continue;
+          if (listed.has(`${key}|${ctrlOrMeta}|${shift}`)) continue;
+          // A shift-insensitive binding is listed once, unshifted, and that is
+          // fine as long as the unshifted row resolves to the same action.
+          if (
+            !shift &&
+            listed.has(`${key}|${ctrlOrMeta}|false`)
+          ) continue;
+          if (
+            shift &&
+            listed.has(`${key}|${ctrlOrMeta}|false`) &&
+            resolveShortcut({ key, ctrlOrMeta, shift: false }) === action
+          ) continue;
+          missing.push(`${ctrlOrMeta ? "mod+" : ""}${shift ? "shift+" : ""}${key} -> ${action}`);
+        }
+      }
+    }
+    expect(missing, "bindings the resolver has but the table omits").toEqual([]);
+  });
+
+  it("names every action it can display", () => {
+    for (const binding of SHORTCUT_BINDINGS) {
+      expect(SHORTCUT_ACTION_LABELS[binding.action]).toBeTruthy();
+    }
   });
 });

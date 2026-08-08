@@ -1842,6 +1842,11 @@ function ComponentView({
             // rotated 180 degrees draws every caption upside-down.
             rotation={placement.rotation}
             mirrored={placement.mirrored}
+            // An imported part's terminals are the source file's, not Tau's:
+            // a logic gate placed here has one output, but the `.asy` it came
+            // from may expose the complementary pin and `com` too, and those
+            // need a lead off the body to meet their repair lead above.
+            imported={Boolean(overridePins)}
           />
         )}
       </g>

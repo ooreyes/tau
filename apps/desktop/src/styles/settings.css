@@ -1,0 +1,851 @@
+/**
+ * Settings window styling.
+ *
+ * New stylesheet on purpose: App.css is the token authority and the schematic
+ * shell's rules, and Settings is a different surface. Every value below is a
+ * `var(--…)` from App.css's `:root` blocks, so both themes are covered by
+ * construction rather than by a second set of colours - see DESIGN_SYSTEM.md
+ * section 7. No raw colour appears in this file.
+ *
+ * The layout follows the instrument language: modules separated by space
+ * rather than by boxes, a violent type hierarchy between a value and its
+ * label, and no container chrome around things that are already grouped.
+ */
+
+/* ── Shell ────────────────────────────────────────────────────────────────── */
+
+.tau-settings {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  height: 100vh;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+}
+
+/* In-app route: the schematic window is behind it, so it needs an edge. */
+.tau-settings[data-standalone="no"] {
+  height: 100%;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+/* Browser fallback: Settings as an in-app route over the schematic window.
+   Only ever mounted where there is no window manager to ask for a real one. */
+.tau-settings-route {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: stretch;
+  padding: var(--sp-6);
+  background: var(--scrim-strong);
+  backdrop-filter: blur(3px);
+}
+
+.tau-settings-route > .tau-settings {
+  max-width: 1100px;
+  max-height: 100%;
+  margin: 0 auto;
+  width: 100%;
+  box-shadow: var(--elev-pop);
+}
+
+/* ── Left nav ─────────────────────────────────────────────────────────────── */
+
+.tau-settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-2) var(--sp-4) var(--sp-3);
+  background: var(--panel-3);
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+}
+
+.tau-settings-nav-head {
+  padding: var(--sp-1) var(--sp-2) 0;
+}
+
+.tau-settings-nav-title {
+  font-family: var(--font-display, var(--font-ui));
+  font-size: var(--fs-heading);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tau-settings-nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tau-settings-nav-kicker {
+  padding: 0 var(--sp-2) var(--sp-1);
+  font-size: var(--fs-caption);
+  font-weight: 550;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.tau-settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--row-h);
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: var(--fs-label);
+  font-weight: 510;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-fast, 120ms) var(--spring),
+    color var(--motion-fast, 120ms) var(--spring);
+}
+
+.tau-settings-nav-item:hover {
+  background: var(--overlay-hover-faint);
+  color: var(--text);
+}
+
+.tau-settings-nav-item.active {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+
+.tau-settings-nav-item svg {
+  flex: none;
+  opacity: 0.85;
+}
+
+/* ── Main column ──────────────────────────────────────────────────────────── */
+
+.tau-settings-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tau-settings-route-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--sp-2) var(--sp-4) 0;
+}
+
+.tau-settings-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-6) var(--sp-8) var(--sp-8);
+}
+
+/* Confirmation strip. Sits over the content rather than reflowing it. */
+.tau-settings-notice-bar {
+  position: absolute;
+  left: var(--sp-8);
+  right: var(--sp-8);
+  bottom: var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-4);
+  box-shadow: var(--elev-2);
+  font-size: var(--fs-body);
+  color: var(--text);
+}
+
+/* ── Page / group / row ───────────────────────────────────────────────────── */
+
+.tau-settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  max-width: 660px;
+}
+
+.tau-settings-page-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.tau-settings-page-title {
+  margin: 0;
+  font-family: var(--font-display, var(--font-ui));
+  font-size: var(--fs-display);
+  font-weight: 600;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.tau-settings-page-summary {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--muted);
+  text-wrap: balance;
+}
+
+.tau-settings-page-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.tau-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.tau-settings-group-title {
+  margin: 0;
+  font-size: var(--fs-caption);
+  font-weight: 550;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tau-settings-group-note {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.tau-settings-group-body {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.tau-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tau-settings-row:last-child {
+  border-bottom: 0;
+}
+
+.tau-settings-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tau-settings-row-label {
+  font-size: var(--fs-label);
+  font-weight: 510;
+  color: var(--text);
+}
+
+.tau-settings-row-hint {
+  font-size: var(--fs-body);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.tau-settings-row-control {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: none;
+}
+
+.tau-settings-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tau-empty {
+  margin: 0;
+  padding: var(--sp-3);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* A note placed inside a group's panel needs the panel's own gutter; without
+   it the text runs to the hairline and reads as a broken table row. */
+.tau-settings-group-body > .tau-settings-group-note {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tau-settings-group-body > .tau-settings-group-note:last-child {
+  border-bottom: 0;
+}
+
+/* Reused controls from the old Settings sheet keep working inside a page:
+   ThemeControl still renders .settings-row, and it should read as one of our
+   rows rather than as an import from another surface. */
+.tau-settings-group-body .settings-row {
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 0;
+}
+
+/* ── Checkbox ─────────────────────────────────────────────────────────────── */
+
+.tau-settings-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.tau-settings-checkbox:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Segmented control ────────────────────────────────────────────────────── */
+
+.tau-segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+}
+
+.tau-segmented-btn {
+  padding: 0 var(--sp-2);
+  min-height: 22px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 510;
+  cursor: pointer;
+  transition: background var(--motion-fast, 120ms) var(--spring),
+    color var(--motion-fast, 120ms) var(--spring);
+}
+
+.tau-segmented-btn:hover {
+  color: var(--text);
+}
+
+.tau-segmented-btn.active {
+  background: var(--panel-4);
+  color: var(--text);
+  box-shadow: var(--elev-1);
+}
+
+.tau-segmented-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Notice ───────────────────────────────────────────────────────────────── */
+/* A hairline, a lamp and text. Never a saturated fill behind a paragraph
+   (DESIGN_SYSTEM.md section 4). */
+
+.tau-settings-notice {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+
+.tau-settings-notice.tone-warning {
+  border-color: var(--diagnostic-warning-line);
+  background: var(--diagnostic-warning-soft);
+}
+
+.tau-settings-notice-lamp {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+
+.tau-settings-notice.tone-warning .tau-settings-notice-lamp {
+  background: var(--diagnostic-warning);
+  box-shadow: 0 0 0 3px var(--diagnostic-warning-glow);
+}
+
+.tau-settings-notice-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.tau-settings-notice-title {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.tau-settings-notice-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.tau-settings-notice-body p {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* The one sentence on the Usage page that must not be skimmed past. */
+.tau-settings-notice-body p.tau-billing-lead {
+  font-size: var(--fs-label);
+  font-weight: 510;
+  color: var(--text);
+}
+
+/* ── Readouts ─────────────────────────────────────────────────────────────── */
+
+.tau-readout-strip {
+  display: flex;
+  gap: var(--sp-8);
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tau-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tau-readout-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-display);
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1.15;
+}
+
+/* The unit belongs to the number: attached, one step down, dimmer. */
+.tau-readout-unit {
+  margin-left: 2px;
+  font-size: var(--fs-caption);
+  font-weight: 510;
+  color: var(--muted);
+}
+
+.tau-readout-label {
+  font-size: var(--fs-caption);
+  font-weight: 510;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+
+.tau-usage-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.tau-usage-head,
+.tau-usage-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.7fr 0.9fr 0.9fr 1.3fr;
+  gap: var(--sp-2);
+  align-items: center;
+  padding: var(--sp-2) var(--sp-3);
+}
+
+/* Header is muted uppercase on the panel fill, separated by a hairline - never
+   a filled block, which reads as a selected row. */
+.tau-usage-head {
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--fs-caption);
+  font-weight: 550;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tau-usage-row {
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--fs-body);
+  color: var(--text);
+}
+
+.tau-usage-row:last-of-type {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tau-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--muted);
+}
+
+.tau-usage-when {
+  font-size: var(--fs-body);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tau-run-head,
+.tau-run-row {
+  grid-template-columns: 1.6fr 0.7fr 0.9fr 0.8fr 1.3fr;
+}
+
+.tau-run-row [data-status="error"],
+.tau-run-row [data-status="refused"] {
+  color: var(--danger);
+}
+
+.tau-run-row [data-status="ok"] {
+  color: var(--success);
+}
+
+.tau-library-head,
+.tau-library-row {
+  grid-template-columns: minmax(0, 1fr) 80px;
+}
+
+/* ── Key field ────────────────────────────────────────────────────────────── */
+
+.tau-key-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tau-key-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.tau-key-lamp {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--faint);
+}
+
+.tau-key-lamp.on {
+  background: var(--diagnostic-ok);
+  box-shadow: 0 0 0 3px var(--diagnostic-ok-glow);
+}
+
+.tau-key-status-text {
+  font-size: var(--fs-label);
+  font-weight: 510;
+  color: var(--text);
+}
+
+.tau-key-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+
+.tau-key-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.tau-key-label {
+  font-size: var(--fs-caption);
+  font-weight: 550;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tau-key-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.tau-key-input-row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.tau-key-storage {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Key-presence lamp reused inside the assistant section's own rows. */
+.settings-key-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-body);
+  color: var(--text);
+}
+
+.settings-key-lamp {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--faint);
+}
+
+.settings-key-lamp.on {
+  background: var(--diagnostic-ok);
+  box-shadow: 0 0 0 3px var(--diagnostic-ok-glow);
+}
+
+/* ── Provider how-to ──────────────────────────────────────────────────────── */
+
+.tau-provider-picker {
+  padding: var(--sp-3) var(--sp-3) 0;
+}
+
+.tau-provider-cost {
+  margin: 0;
+  padding: var(--sp-3);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.tau-howto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0 var(--sp-3) var(--sp-3);
+  list-style: none;
+  counter-reset: none;
+}
+
+.tau-howto li {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+}
+
+.tau-howto-index {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  border-radius: var(--r-pill);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.tau-howto-step {
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.tau-howto-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-3) var(--sp-3);
+}
+
+.tau-howto-url {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Tolerances ───────────────────────────────────────────────────────────── */
+
+.tau-tolerance-control {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.tau-tolerance-control > :first-child {
+  width: 108px;
+}
+
+.tau-tolerance-state {
+  width: 108px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+/* Tolerance keys are identifiers the user will type into a deck, so they read
+   as code rather than as prose. */
+.tau-settings-row-label:has(+ .tau-settings-row-hint) {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Shortcuts ────────────────────────────────────────────────────────────── */
+
+.tau-shortcut-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.tau-shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  min-height: 32px;
+  padding: var(--sp-1) var(--sp-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tau-shortcut-row:last-child {
+  border-bottom: 0;
+}
+
+.tau-shortcut-name {
+  font-size: var(--fs-body);
+  color: var(--text);
+}
+
+.tau-shortcut-keys {
+  display: flex;
+  gap: var(--sp-1);
+  flex: none;
+}
+
+.tau-keycap {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 19px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--panel-2);
+  box-shadow: var(--elev-1);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.tau-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-3);
+}
+
+.tau-shortcut-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.tau-shortcut-part {
+  font-size: var(--fs-body);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Responsive floor ─────────────────────────────────────────────────────── */
+/* The window's declared minimum is 720x480. Below the nav's comfortable width
+   the labels go, not the pages. */
+
+@media (max-width: 820px) {
+  .tau-settings {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .tau-settings-nav-title,
+  .tau-settings-nav-kicker,
+  .tau-settings-nav-item span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .tau-settings-nav-item {
+    justify-content: center;
+  }
+
+  .tau-settings-scroll {
+    padding: var(--sp-4);
+  }
+
+  .tau-readout-strip {
+    gap: var(--sp-4);
+  }
+
+  .tau-usage-head,
+  .tau-usage-row {
+    grid-template-columns: 1.2fr 0.7fr 0.8fr 0.8fr;
+  }
+
+  .tau-usage-when {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tau-settings-nav-item,
+  .tau-segmented-btn {
+    transition: none;
+  }
+}

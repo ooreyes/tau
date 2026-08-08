@@ -14,8 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { userFacingErrorMessage } from "../lib/errorMessage";
-import { saveAssistantApiKey, useHasAssistantApiKey } from "../lib/assistant";
-import { saveGeminiApiKey, useHasGeminiApiKey } from "../lib/providerApiKey";
+import { useHasAssistantApiKey } from "../lib/assistant";
+import { useHasGeminiApiKey } from "../lib/providerApiKey";
 import { GEMINI_MODEL_PRESETS } from "../lib/geminiAssistant";
 import {
   saveAssistantPreferences,
@@ -88,8 +88,6 @@ export function SettingsAiSection({
   onNotice: (message: string) => void;
 }) {
   const hasAnthropicKey = useHasAssistantApiKey();
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [geminiKeyInput, setGeminiKeyInput] = useState("");
   const hasGeminiKey = useHasGeminiApiKey();
   const assistantPreferences = useAssistantPreferences();
   const cloudConsent = useCloudAiConsent();
@@ -163,6 +161,11 @@ export function SettingsAiSection({
   };
 
   const pathChoice: "on-device" | "cloud" = assistantPreferences.provider === "local-mlx" ? "on-device" : "cloud";
+  // Which cloud provider the assistant would actually call, and whether its key
+  // is present. Presence only - the value is never read back into the page.
+  const cloudProvider = assistantPreferences.provider === "anthropic" ? "anthropic" : "gemini";
+  const selectedCloudProviderLabel = cloudProvider === "anthropic" ? "Anthropic" : "Google Gemini";
+  const hasSelectedCloudKey = cloudProvider === "anthropic" ? hasAnthropicKey : hasGeminiKey;
   const localStateLabel = localAiStatus
     ? localAiStatus.state === "ready" ? "Ready"
       : localAiStatus.state === "starting" ? "Loading"
@@ -375,55 +378,34 @@ export function SettingsAiSection({
                 {assistantPreferences.provider === "gemini" ? "Google" : "Anthropic"} for AI replies.
               </span>
             </label>
-            {assistantPreferences.provider === "gemini" ? (
-              <label className="settings-field" htmlFor="assistant-gemini-key">
-                <span>Gemini API key</span>
-                <Input
-                  id="assistant-gemini-key"
-                  aria-label="Gemini API key"
-                  type="password"
-                  variant="mono"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder={hasGeminiKey
-                    ? "Key saved in Mac keychain — paste a new key to replace"
-                    : "Optional until you chat — AIza…"}
-                  value={geminiKeyInput}
-                  onChange={(event) => {
-                    const next = event.currentTarget.value;
-                    setGeminiKeyInput(next);
-                    saveGeminiApiKey(next);
-                  }}
+            {/* Presence, not entry. Key entry lives in exactly one component
+                (settings/ProviderKeyField.tsx), rendered once by the Model
+                configuration page's Provider group. A second input here would
+                be a second place that has to get the "where does this secret
+                actually go" story right, and the two would drift. */}
+            <div className="settings-field" role="group" aria-label="Assistant key status">
+              {/* Deliberately not "<provider> API key": that is the accessible
+                  name of the real entry field on the Model configuration page,
+                  and two elements answering to it makes the page ambiguous to
+                  a screen reader as well as to a test. */}
+              <span>{selectedCloudProviderLabel} key</span>
+              <div className="settings-key-status" data-has-key={hasSelectedCloudKey ? "yes" : "no"}>
+                <span
+                  className={`settings-key-lamp${hasSelectedCloudKey ? " on" : ""}`}
+                  aria-hidden="true"
                 />
-                <span className="settings-field-hint">
-                  Free key at aistudio.google.com/apikey. Stored in your Mac keychain — never held in the renderer for API calls, never in the schematic file.
+                <span role="status">
+                  {hasSelectedCloudKey
+                    ? `A ${selectedCloudProviderLabel} key is saved`
+                    : `No ${selectedCloudProviderLabel} key saved`}
                 </span>
-              </label>
-            ) : (
-              <label className="settings-field" htmlFor="assistant-api-key">
-                <span>Anthropic API key</span>
-                <Input
-                  id="assistant-api-key"
-                  aria-label="Anthropic API key"
-                  type="password"
-                  variant="mono"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder={hasAnthropicKey
-                    ? "Key saved in Mac keychain — paste a new key to replace"
-                    : "Optional until you chat — sk-ant-…"}
-                  value={apiKeyInput}
-                  onChange={(event) => {
-                    const next = event.currentTarget.value;
-                    setApiKeyInput(next);
-                    saveAssistantApiKey(next);
-                  }}
-                />
-                <span className="settings-field-hint">
-                  Stored in your Mac keychain and attached by Tau's native process — never held in the renderer for API calls. A ChatGPT subscription does not cover this key.
-                </span>
-              </label>
-            )}
+              </div>
+              <span className="settings-field-hint">
+                {hasSelectedCloudKey
+                  ? "Add, replace, or remove it under Provider at the top of this page."
+                  : "The assistant needs one before it can answer. Create one under Provider at the top of this page."}
+              </span>
+            </div>
             {!cloudConsent.consented && (
               <span className="settings-local-notice" role="status">
                 Consent is required before cloud chat can send circuit context.

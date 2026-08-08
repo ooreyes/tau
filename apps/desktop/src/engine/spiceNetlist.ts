@@ -24,7 +24,7 @@ import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec, ifToTernary, ltFuncsToNgspice, moduloToFloor, statFuncsToNgspice } from "../simulation/behavioral";
 import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
 import { parseCrystal, crystalDeckLines } from "./crystalSpec";
-import { parseDigitalGate, digitalGateDeckLines, dflopDeckLines, srflopDeckLines, tflopDeckLines, jkflopDeckLines } from "./digitalGateSpec";
+import { nativelyPlacedGateSpec, parseDigitalGate, digitalGateDeckLines, dflopDeckLines, srflopDeckLines, tflopDeckLines, jkflopDeckLines } from "./digitalGateSpec";
 import { sampleHoldDeckLines } from "./sampleHoldSpec";
 import {
   adcDeckLines,
@@ -37,6 +37,7 @@ import {
 import { parseModulator, modulatorDeckLines } from "./modulatorSpec";
 import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
+import { solverOptionOverrides } from "../lib/simulationPreferences";
 import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes, definedSubcktNames } from "./modelDirectives";
 import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { laplaceTransfer, laplaceSourceLines } from "./laplace";
@@ -363,7 +364,9 @@ export function buildSpiceDeck(
   const rawDirectives = schematic.directives ?? [];
   const flatDirectives = expandDirectiveLines(rawDirectives);
 
-  const lines = ["Tau generated circuit", optionsLineFromDirectives(flatDirectives)];
+  // Settings' solver tolerances sit under the document's own `.options`,
+  // so a schematic that pins a tolerance still simulates its own way.
+  const lines = ["Tau generated circuit", optionsLineFromDirectives(flatDirectives, solverOptionOverrides())];
   const usedKinds = new Set(components.map((component) => component.kind));
   const needsModels = ["diode", "led", "zener", "photodiode", "nmos", "pmos", "njf", "pjf", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind))
     || components.some((component) =>
@@ -1657,7 +1660,12 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // (engine/digitalGateSpec.ts). Floating inputs are ignored (LTspice
       // semantics): a pin only counts when its net is ground or shared.
       const base = safeName(component.label || `A${index + 1}`);
-      const spec = parseDigitalGate(component.value);
+      const parsed = parseDigitalGate(component.value);
+      // A gate Tau placed has one output, so `inv`/`schmtinv` — which name the
+      // LTspice symbols that expose only the complementary pin — have to invert
+      // `q` there. An imported gate keeps the `.asy` reading, where that pin
+      // exists and already carries the complement (engine/digitalGateSpec.ts).
+      const spec = component.pinOverride?.length ? parsed : nativelyPlacedGateSpec(parsed);
       const connected = (pin: string): string | null => {
         const netId = entry.pins[pin];
         if (!netId) return null;

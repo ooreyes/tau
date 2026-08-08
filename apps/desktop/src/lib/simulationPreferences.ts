@@ -25,13 +25,15 @@ export interface SimulationPreferences {
   /** Per-key override, or `null` to use Tau's default for that key. */
   tolerances: Record<ToleranceKey, string | null>;
   /**
-   * Whether an analysis may fall back to the linear preview solver when the
-   * native path declines. Off means Tau refuses instead of quietly answering
-   * with a different, weaker engine - the honest choice for coursework being
-   * graded against LTspice.
+   * Default waveform resolution for new transient runs.
+   *
+   * There is deliberately no "engine choice" preference here. Tau always
+   * prefers native ngspice and only reaches the linear preview solver where
+   * ngspice is absent or has declined the analysis shape, so there is no choice
+   * for a user to make - and a switch that refused the fallback would need a
+   * refusal path through every analysis call site rather than a stored flag.
+   * The Simulation page states the rule instead of offering an inert control.
    */
-  allowPreviewFallback: boolean;
-  /** Default waveform resolution for new transient runs. */
   transientDetail: TransientDetailPreference;
   /** Expand the simulator's "Technical details" disclosure without a click. */
   alwaysShowTechnicalDetails: boolean;
@@ -47,7 +49,6 @@ export const TRANSIENT_DETAIL_LABELS: Record<TransientDetailPreference, string> 
 
 export const DEFAULT_SIMULATION_PREFERENCES: SimulationPreferences = {
   tolerances: { reltol: null, abstol: null, vntol: null, gmin: null },
-  allowPreviewFallback: true,
   transientDetail: "balanced",
   alwaysShowTechnicalDetails: false,
 };
@@ -80,10 +81,6 @@ function validPreferences(raw: unknown): SimulationPreferences | null {
   const detail = source.transientDetail;
   return {
     tolerances: validTolerances(source.tolerances),
-    allowPreviewFallback:
-      typeof source.allowPreviewFallback === "boolean"
-        ? source.allowPreviewFallback
-        : DEFAULT_SIMULATION_PREFERENCES.allowPreviewFallback,
     transientDetail:
       detail === "quick" || detail === "balanced" || detail === "precision"
         ? detail

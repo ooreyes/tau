@@ -14,6 +14,7 @@ import {
   type RunRecordEngine,
   type RunRecordStatus,
 } from "../lib/runRecord";
+import { useSimulationPreferences } from "../lib/simulationPreferences";
 import { useSchematic } from "../store/useSchematic";
 import { useRuntimeModelLibraries } from "../store/useRuntimeModelLibraries";
 import {
@@ -327,6 +328,7 @@ export function SimulationPanel({
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const probes = useSchematic((s) => s.probes);
+  const clearProbes = useSchematic((s) => s.clearProbes);
   const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
@@ -1421,6 +1423,27 @@ export function SimulationPanel({
                         <TooltipContent>Clear applied plot settings (keeps current probes)</TooltipContent>
                       </Tooltip>
                     )}
+                    {/* Probe clearing lives beside the probes it clears. It used
+                        to sit in the old Settings sheet, which was retired when
+                        Settings became its own window: a separate window has its
+                        own store and cannot reach this schematic's probes. */}
+                    {probes.length > 0 && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => clearProbes()}
+                          >
+                            Clear probes
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Remove all {probes.length} probes from this schematic
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -1924,6 +1947,9 @@ export function WaveformPlot({
   // a separate local override is what let the two disagree, so when a trace
   // belongs to a probe the picker updates the PROBE. Traces with no probe
   // behind them (expressions, extra overlays) keep the local override.
+  // Settings → General can pin the failed-run transcript open. Read here, in
+  // the component that renders it, rather than threaded down as a prop.
+  const { alwaysShowTechnicalDetails } = useSimulationPreferences();
   const probesForColor = useSchematic((s) => s.probes);
   const wiresForColor = useSchematic((s) => s.wires);
   const setProbeColor = useSchematic((s) => s.setProbeColor);
@@ -2121,7 +2147,9 @@ export function WaveformPlot({
         <div className="analysis-empty" role="alert">
           <span>{result.message}</span>
           {result.details && (
-            <details className="analysis-error-details">
+            // Settings → General can pin this open for users who would rather
+            // read the engine transcript than click for it every time.
+            <details className="analysis-error-details" open={alwaysShowTechnicalDetails}>
               <summary>Technical details</summary>
               <pre>{result.details}</pre>
             </details>

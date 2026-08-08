@@ -1327,10 +1327,14 @@ SYMATTR InstName A1`;
         .filter((p) => /^in\d+$/.test(p.id)).length;
       expect(overrideInputs, leaf).toBe(expected);
       expect(drawnInputs, leaf).toBe(overrideInputs);
-      // Every imported terminal now sits on a row the body draws.
+      // Every imported terminal is one the kind knows how to draw. This is the
+      // kind DICTIONARY, not the instance bank: a gate Tau places has a single
+      // output and no `com`, while an imported `.asy` really does expose the
+      // complementary pin and the reference, and `ComponentSymbol`'s `imported`
+      // branch draws a lead to each of them (see schematic/symbols.test.tsx).
       for (const pin of gate!.pinOverride ?? []) {
         expect(
-          getLocalPins("digitalGate", gate!.value).some((local) => local.id === pin.id),
+          getLocalPins("digitalGate").some((local) => local.id === pin.id),
           `${leaf}.${pin.id}`,
         ).toBe(true);
       }

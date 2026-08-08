@@ -1,0 +1,157 @@
+/**
+ * The Settings window: a left nav of pages and one page at a time.
+ *
+ * The same component serves both surfaces. In the desktop app it fills a real
+ * second OS window (`settings.html`). In the browser build, where there is no
+ * window to create, it fills an in-app route. `standalone` is the only
+ * difference: the window version has no close control of its own, because the
+ * OS titlebar already has one, and adding a second would be a second answer to
+ * the same question.
+ *
+ * Pages are chosen, not accumulated. Each one is justified in its own file
+ * header; a page that cannot say who needs it and what real state backs it does
+ * not belong here.
+ */
+import { useEffect, useState } from "react";
+import {
+  BookMarked,
+  Keyboard,
+  Gauge,
+  Settings2,
+  Sparkles,
+  UserRound,
+  Wallet,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { GeneralPage } from "./pages/GeneralPage";
+import { LibrariesPage } from "./pages/LibrariesPage";
+import { ModelConfigurationPage } from "./pages/ModelConfigurationPage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { ShortcutsPage } from "./pages/ShortcutsPage";
+import { SimulationPage } from "./pages/SimulationPage";
+import { UsagePage } from "./pages/UsagePage";
+
+export type SettingsPageId =
+  | "general"
+  | "profile"
+  | "models"
+  | "usage"
+  | "simulation"
+  | "libraries"
+  | "shortcuts";
+
+interface NavEntry {
+  id: SettingsPageId;
+  label: string;
+  icon: typeof Settings2;
+  /** Nav grouping: the everyday pages, then the ones an engineer goes looking for. */
+  section: "You" | "Engine";
+}
+
+const NAV: readonly NavEntry[] = [
+  { id: "general", label: "General", icon: Settings2, section: "You" },
+  { id: "profile", label: "Profile", icon: UserRound, section: "You" },
+  { id: "models", label: "Model configuration", icon: Sparkles, section: "You" },
+  { id: "usage", label: "Usage", icon: Wallet, section: "You" },
+  { id: "simulation", label: "Simulation", icon: Gauge, section: "Engine" },
+  { id: "libraries", label: "Model libraries", icon: BookMarked, section: "Engine" },
+  { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard, section: "Engine" },
+];
+
+const SECTIONS: readonly NavEntry["section"][] = ["You", "Engine"];
+
+export function SettingsWindow({
+  standalone = false,
+  initialPage = "general",
+  onClose,
+}: {
+  /** True when this fills its own OS window rather than an in-app route. */
+  standalone?: boolean;
+  initialPage?: SettingsPageId;
+  onClose?: () => void;
+}) {
+  const [page, setPage] = useState<SettingsPageId>(initialPage);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // A notice is a confirmation, not a log: it says what just happened and gets
+  // out of the way. Toasts belong to the schematic window, which this one
+  // cannot reach.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = globalThis.setTimeout(() => setNotice(null), 4200);
+    return () => globalThis.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!onClose) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const onNotice = (message: string) => setNotice(message);
+
+  return (
+    <div className="tau-settings" data-standalone={standalone ? "yes" : "no"}>
+      <nav className="tau-settings-nav" aria-label="Settings pages">
+        <div className="tau-settings-nav-head">
+          <span className="tau-settings-nav-title">Settings</span>
+        </div>
+        {SECTIONS.map((section) => (
+          <div className="tau-settings-nav-section" key={section}>
+            <span className="tau-settings-nav-kicker">{section}</span>
+            {NAV.filter((entry) => entry.section === section).map((entry) => {
+              const Icon = entry.icon;
+              const active = entry.id === page;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className={`tau-settings-nav-item${active ? " active" : ""}`}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setPage(entry.id)}
+                >
+                  <Icon size={14} strokeWidth={1.7} aria-hidden="true" />
+                  <span>{entry.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+
+      <main className="tau-settings-main">
+        {!standalone && onClose && (
+          <div className="tau-settings-route-bar">
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label="Close settings"
+              onClick={onClose}
+            >
+              <X size={14} strokeWidth={1.8} aria-hidden="true" />
+              Close
+            </Button>
+          </div>
+        )}
+        <div className="tau-settings-scroll">
+          {page === "general" && <GeneralPage onNotice={onNotice} />}
+          {page === "profile" && <ProfilePage />}
+          {page === "models" && <ModelConfigurationPage onNotice={onNotice} />}
+          {page === "usage" && <UsagePage onNotice={onNotice} />}
+          {page === "simulation" && <SimulationPage onNotice={onNotice} />}
+          {page === "libraries" && <LibrariesPage />}
+          {page === "shortcuts" && <ShortcutsPage />}
+        </div>
+        {notice && (
+          <div className="tau-settings-notice-bar" role="status">
+            {notice}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

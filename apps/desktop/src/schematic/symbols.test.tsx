@@ -7,9 +7,11 @@ import {
   PIN_LABEL_LAYOUT,
   SYMBOL_BODY,
   SYMBOL_BOX,
+  gateBodyHalfHeight,
+  gateComPoint,
   gateInputRows,
 } from "./symbols";
-import { GATE_INPUTS_MAX, GATE_INPUTS_MIN } from "../engine/digitalGateSpec";
+import { GATE_INPUTS_MAX, GATE_INPUTS_MIN, parseDigitalGate } from "../engine/digitalGateSpec";
 import type { ComponentKind, Rotation } from "./types";
 
 const ROTATIONS: Rotation[] = [0, 90, 180, 270];
@@ -87,6 +89,14 @@ const renderWith = (
   renderToStaticMarkup(
     <svg>
       <ComponentSymbol kind={kind} value={value} rotation={rotation} mirrored={mirrored} />
+    </svg>,
+  );
+
+/** Same, for a part carrying a source file's own pin bank (`pinOverride`). */
+const renderWithImported = (kind: ComponentKind, value?: string): string =>
+  renderToStaticMarkup(
+    <svg>
+      <ComponentSymbol kind={kind} value={value} imported />
     </svg>,
   );
 
@@ -665,8 +675,10 @@ describe("logic gate input count (item 9)", () => {
       expect(ids.filter((id) => id.startsWith("in")), `${n} inputs`).toEqual(
         Array.from({ length: n }, (_, index) => `in${index + 1}`),
       );
-      // The outputs and the reference are not part of the bank that resizes.
-      expect(ids.slice(n), `${n} tail`).toEqual(["q", "qbar", "com"]);
+      // One output, whatever the input count. The complementary pin and the
+      // com reference are LTspice's, not the function's, and only an imported
+      // gate keeps them (see "one output" below).
+      expect(ids.slice(n), `${n} tail`).toEqual(["q"]);
     }
   });
 
@@ -711,16 +723,114 @@ describe("logic gate input count (item 9)", () => {
     expect(markup.get("not"), "not buffer glyph").toContain('data-gate-glyph="buf"');
   });
 
-  it("bubbles the output that really carries the inverted sense", () => {
-    // digitalGateSpec swaps the levels driven onto q and qbar for the N-
-    // variants, so on a NAND it is q that is inverted. The old symbol always
-    // bubbled qbar and therefore mislabelled every inverting gate.
-    for (const fn of ["and", "or", "xor"]) {
-      expect(renderWith("digitalGate", fn), fn).toContain('data-gate-invert="qbar"');
+  it("draws exactly one output lead on a placed gate, at every function", () => {
+    // The reported defect: every gate drew TWO output leads, because the
+    // symbol transcribed LTspice's A-device pin contract (q + the
+    // complementary _Q) instead of the function's own terminals.
+    for (const fn of [...GATE_PRESETS, "buf", "schmitt"]) {
+      const value = fn as string;
+      const output = getLocalPins("digitalGate", value).find((pin) => pin.id === "q");
+      expect(output, `${value} has one output`).toEqual(
+        expect.objectContaining({ id: "q", x: 32, y: 0 }),
+      );
+      const leads = drawnElements(renderWith("digitalGate", value)).filter((element) =>
+        element.segments.some((s) => samePoint(s.a, output!) || samePoint(s.b, output!)),
+      );
+      expect(leads, `${value} output leads`).toHaveLength(1);
+      // …and nothing is drawn on the row the complementary output used to
+      // occupy, which is what made an AND read as a NAND.
+      const oldRow = { x: 32, y: 16 };
+      for (const element of drawnElements(renderWith("digitalGate", value))) {
+        for (const segment of element.segments) {
+          for (const end of [segment.a, segment.b]) {
+            expect(samePoint(end, oldRow), `${value} still draws the qbar row`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it("bubbles the output if and only if the function inverts", () => {
+    // Inversion is a property of the FUNCTION, not of which pin a line drives.
+    // The bubble used to mean "this is the complementary terminal", so a plain
+    // AND rendered with a bubble on its lower output and read as a NAND.
+    for (const fn of ["and", "or", "xor", "buf", "schmitt"]) {
+      expect(renderWith("digitalGate", fn), `${fn} must not be bubbled`)
+        .not.toContain("data-gate-invert");
     }
     for (const fn of ["nand", "nor", "xnor", "not"]) {
-      expect(renderWith("digitalGate", fn), fn).toContain('data-gate-invert="q"');
+      expect(renderWith("digitalGate", fn), `${fn} must be bubbled`)
+        .toContain('data-gate-invert="q"');
     }
+  });
+
+  it("puts the bubble on the output lead, tangent to the nose and clear of the pin", () => {
+    // A bubble is only an inversion mark if it sits between the body and the
+    // terminal. Drawn inside the body (as it was) it reads as decoration; drawn
+    // past x = 32 it would overhang its own pin.
+    for (const fn of ["nand", "nor", "xnor", "not"]) {
+      const elements = drawnElements(renderWith("digitalGate", fn));
+      const bubble = elements.find((element) => element.tag.startsWith("<circle"));
+      expect(bubble, `${fn} bubble`).toBeTruthy();
+      expect(bubble!.box.minX, `${fn} bubble left`).toBeCloseTo(24, 6);
+      expect(bubble!.box.maxX, `${fn} bubble right`).toBeCloseTo(30, 6);
+      expect((bubble!.box.minY + bubble!.box.maxY) / 2, `${fn} bubble row`).toBe(0);
+      expect(bubble!.box.maxX, `${fn} bubble clears its pin`).toBeLessThan(32);
+    }
+  });
+
+  it("draws no com stub on a placed gate", () => {
+    // `com` is the behavioural model's voltage reference leaking through the
+    // symbol; it read as a stray input hanging off the bottom edge. The deck
+    // refers every comparison and every output to ground when it is absent, so
+    // there is nothing left to wire.
+    for (const fn of [...GATE_PRESETS, "buf", "schmitt", "and Inputs=5"]) {
+      const value = fn as string;
+      expect(getLocalPins("digitalGate", value).some((pin) => pin.id === "com"), value).toBe(false);
+      // Nothing is drawn on the reference row at all - not the old (0,48), not
+      // the body-following (-16,32) / (32,32) it passed through.
+      for (const element of drawnElements(renderWith("digitalGate", value))) {
+        for (const segment of element.segments) {
+          for (const end of [segment.a, segment.b]) {
+            expect(Math.abs(end.y), `${value} draws below the body`).toBeLessThanOrEqual(
+              gateBodyHalfHeight(parseDigitalGate(value).inputs),
+            );
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps an imported gate's LTspice bank drawn: both outputs and com", () => {
+    // Only the natively placed gate changed. A gate from an `.asy` carries that
+    // file's real terminals in `pinOverride`, and Canvas draws a repair lead
+    // from each NATIVE position out to them - so if the body stopped drawing
+    // the pair and the reference, those leads would start in mid-air.
+    for (const value of ["and Inputs=5", "inv", "schmitt", "xor Inputs=5"]) {
+      const inputs = parseDigitalGate(value).inputs;
+      const elements = drawnElements(renderWithImported("digitalGate", value));
+      // The complementary PAIR at ±16, and the reference on the row the body
+      // puts it. (`gateComPoint` follows the body, while the kind dictionary is
+      // pinned at the five-input geometry; that older disagreement is the
+      // importer's to settle and is deliberately untouched here.)
+      const terminals = [
+        { id: "q", x: 32, y: -16 },
+        { id: "qbar", x: 32, y: 16 },
+        { id: "com", ...gateComPoint(inputs) },
+      ];
+      for (const pin of terminals) {
+        const touched = elements.some((element) =>
+          element.segments.some((s) => samePoint(s.a, pin) || samePoint(s.b, pin)),
+        );
+        expect(touched, `imported "${value}" ${pin.id} has no lead`).toBe(true);
+      }
+      // LTspice's reading of the bubble survives on the import: the inverted
+      // sense is on the complementary pin unless the value inverted q.
+      expect(renderWithImported("digitalGate", value), `imported ${value}`)
+        .toContain('data-gate-invert="qbar"');
+    }
+    // And a placed gate of the same value draws none of that.
+    expect(renderWith("digitalGate", "and Inputs=5")).not.toContain("data-gate-invert");
   });
 
   it("terminates every lead on its pin and every lead end on the body", () => {
