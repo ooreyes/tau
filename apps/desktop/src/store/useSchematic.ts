@@ -17,6 +17,7 @@ import type {
   SchematicSheet,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
+import { actuatedValue, type ActuationPhase } from "../schematic/actuation";
 import { canCurrentProbe } from "../simulation/analysisSetup";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { getComponentPins, rotatePoint, transformPoint } from "../schematic/pins";
@@ -246,6 +247,9 @@ interface SchematicState extends Doc {
   /** Clear any active selection (single, multi, or wire). */
   clearSelection: () => void;
   setValue: (id: string, value: string) => void;
+  /** Operate a switch / push button / SPDT from the canvas. Returns true when
+   *  the contact actually moved, so the caller knows whether to re-solve. */
+  actuateContact: (id: string, phase: ActuationPhase) => boolean;
   /** Select a `.subckt` contract and rebuild its exact p1..pN terminal bank. */
   setSubcircuitModel: (id: string, model: string, ports: readonly string[]) => void;
   /** Select a real op-amp subcircuit while preserving imported Value/Value2 slots. */
@@ -770,7 +774,7 @@ function wiresWithInsertedComponent(wires: SchematicWire[], component: Schematic
 
 const initialDoc = loadPersisted();
 
-export const useSchematic = create<SchematicState>()((set) => {
+export const useSchematic = create<SchematicState>()((set, get) => {
   /** Push the current document onto the undo stack and clear redo. */
   const recordInto = (s: SchematicState) => ({
     past: [...s.past, docOf(s)].slice(-HISTORY_LIMIT),
@@ -1261,6 +1265,21 @@ export const useSchematic = create<SchematicState>()((set) => {
       }),
 
     clearSelection: () => set({ selectedId: null, selectedWireId: null, selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [], selectedIds: [] }),
+
+    // Operating a contact is an edit to the circuit, so it goes through history
+    // the same as any other: a reader who flips a switch and presses undo means
+    // to flip it back. `recordInto` is the same snapshot the editing paths take.
+    actuateContact: (id, phase) => {
+      const component = get().components.find((c) => c.id === id);
+      if (!component) return false;
+      const next = actuatedValue(component, phase);
+      if (next === null || next === component.value) return false;
+      set((s) => ({
+        ...recordInto(s),
+        components: s.components.map((c: SchematicComponent) => (c.id === id ? { ...c, value: next } : c)),
+      }));
+      return true;
+    },
 
     // History for a value edit is captured once by the caller via beginChange() on first keystroke.
     setValue: (id, value) =>

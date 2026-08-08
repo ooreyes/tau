@@ -287,6 +287,84 @@ describe("componentMeasurements", () => {
     expect(row.power?.statistics.min).toBe(-8);
   });
 
+  /**
+   * A charged two-terminal part across one node and ground. `hot` carries the
+   * voltage at the part's `a` pin unless the wiring is flipped by the caller.
+   */
+  function capacitorFixture(
+    kind: "capacitor" | "polarizedCapacitor",
+    pins: { a: string; b: string },
+    hotVolts: readonly number[],
+  ): Extract<AnalysisResult, { ok: true }> {
+    const result = resultFixture();
+    result.traces = [{ ...result.traces[0], id: "hot", label: "V(hot)", values: [...hotVolts] }];
+    result.currents = [];
+    result.circuit.nets = [
+      { id: "hot", points: [], pins: [], isGround: false, labelCount: 0 },
+      { id: "gnd", points: [], pins: [], isGround: true, labelCount: 0 },
+    ];
+    result.circuit.components = [
+      {
+        component: { id: "c1", kind, x: 0, y: 0, rotation: 0, value: "10µ", label: "C1" },
+        pins,
+      },
+      {
+        component: { id: "g1", kind: "ground", x: 0, y: 0, rotation: 0, value: "", label: "" },
+        pins: { g: "gnd" },
+      },
+    ];
+    return result;
+  }
+
+  it("stays silent on a correctly oriented polarized capacitor", () => {
+    // `a` is the marked "+" terminal, so `a` on the 5 V node is right way round.
+    const rows = componentMeasurements(capacitorFixture("polarizedCapacitor", { a: "hot", b: "gnd" }, [0, 2.5, 5]));
+    const cap = rows.find((row) => row.ref === "C1");
+    expect(cap?.voltage?.statistics.final).toBe(5);
+    expect(cap?.advisories).toBeUndefined();
+  });
+
+  it("warns by name and voltage when a polarized capacitor is wired backwards", () => {
+    const rows = componentMeasurements(capacitorFixture("polarizedCapacitor", { a: "gnd", b: "hot" }, [0, 2.1, 4.2]));
+    const cap = rows.find((row) => row.ref === "C1");
+    expect(cap?.voltage?.statistics.final).toBe(-4.2);
+    expect(cap?.advisories).toEqual([
+      expect.objectContaining({
+        kind: "reverse-biased-electrolytic",
+        severity: "warning",
+        title: "Reverse-biased electrolytic · sustained",
+        message: expect.stringMatching(/^C1: reverse-biased to -4\.2 V and still reverse-biased when the run ends\./),
+      }),
+    ]);
+    expect(cap?.advisories?.[0].message).toContain("positive terminal is the lower one");
+  });
+
+  it("separates a polarized capacitor that only reverses while the circuit settles", () => {
+    const result = capacitorFixture("polarizedCapacitor", { a: "hot", b: "gnd" }, [-4.2, 1, 3]);
+    const cap = componentMeasurements(result).find((row) => row.ref === "C1");
+    expect(cap?.advisories).toHaveLength(1);
+    expect(cap?.advisories?.[0].title).toBe("Reverse-biased electrolytic · during settling");
+    expect(cap?.advisories?.[0].message).toContain("then recovers");
+  });
+
+  it("never reports polarity on a plain capacitor, wired either way", () => {
+    for (const pins of [{ a: "hot", b: "gnd" }, { a: "gnd", b: "hot" }]) {
+      const cap = componentMeasurements(capacitorFixture("capacitor", pins, [0, 2.1, 4.2]))
+        .find((row) => row.ref === "C1");
+      expect(cap?.voltage).toBeDefined();
+      expect(cap?.advisories).toBeUndefined();
+    }
+  });
+
+  it("does not raise polarity noise from millivolt solver residue around 0 V", () => {
+    // Reversed wiring, but the node never leaves the numerical floor: 0.9 mV
+    // of residue against a 1 mV threshold is not a reversal.
+    const cap = componentMeasurements(capacitorFixture("polarizedCapacitor", { a: "gnd", b: "hot" }, [0, 4e-4, 9e-4]))
+      .find((row) => row.ref === "C1");
+    expect(cap?.voltage?.statistics.final).toBeCloseTo(-9e-4, 12);
+    expect(cap?.advisories).toBeUndefined();
+  });
+
   it("bounds retained sparkline samples for large native results", () => {
     const result = resultFixture();
     result.times = Array.from({ length: 10_000 }, (_, index) => index / 10_000);

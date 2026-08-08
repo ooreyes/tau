@@ -11,6 +11,11 @@ import type { ComponentKind } from "../schematic/types";
 import type { AnalysisResult, TraceUnit } from "./linearTransient";
 import { formatEngineering } from "./quantity";
 import { findCurrentTrace } from "./currents";
+import {
+  POLARIZED_CAPACITOR_NEGATIVE_PIN,
+  POLARIZED_CAPACITOR_POSITIVE_PIN,
+  reverseBiasAdvisory,
+} from "./polarizedCapacitor";
 
 type SuccessResult = Extract<AnalysisResult, { ok: true }>;
 
@@ -52,7 +57,7 @@ export interface ComponentMeasurement {
 }
 
 export interface ComponentAdvisory {
-  kind: "direct-led-drive";
+  kind: "direct-led-drive" | "reverse-biased-electrolytic";
   severity: "warning";
   title: string;
   message: string;
@@ -415,6 +420,32 @@ function ledAdvisories(
   }];
 }
 
+/**
+ * Reverse-bias advisory for a polarized capacitor, from the terminal-voltage
+ * waveform the row already carries. `voltageValues` is `V(positive pin) -
+ * V(negative pin)` for the part, so a negative sample is a reversal; see the
+ * sign-convention note in `polarizedCapacitor.ts`.
+ *
+ * The pin pair is re-checked against the part's own `+`/`−` pins rather than
+ * trusted from {@link TERMINAL_PAIRS} ordering, because a future reordering
+ * there would silently invert this test: it would go quiet on every backwards
+ * electrolytic and warn about every correct one.
+ */
+function polarizedCapacitorAdvisories(
+  entry: SuccessResult["circuit"]["components"][number],
+  pair: readonly [string, string] | null,
+  times: readonly number[],
+  voltageValues: readonly number[] | null,
+): ComponentAdvisory[] | undefined {
+  if (entry.component.kind !== "polarizedCapacitor" || !pair || !voltageValues) return undefined;
+  if (
+    pair[0] !== entry.pins[POLARIZED_CAPACITOR_POSITIVE_PIN]
+    || pair[1] !== entry.pins[POLARIZED_CAPACITOR_NEGATIVE_PIN]
+  ) return undefined;
+  const advisory = reverseBiasAdvisory(entry.component.label, times, voltageValues);
+  return advisory ? [advisory] : undefined;
+}
+
 function makeSeries(
   times: readonly number[],
   id: string,
@@ -501,7 +532,14 @@ export function componentMeasurements(result: SuccessResult): ComponentMeasureme
       );
       row.power = makeSeries(result.times, `P(${ref})`, `P(${ref})`, "W", power);
     }
-    row.advisories = ledAdvisories(entry, row.current, circuitComponents);
+    // Stays `undefined` when empty: an advisory list is rendered as a warning
+    // badge, and an always-present empty array would put a zero-count badge on
+    // every row.
+    const advisories = [
+      ...(ledAdvisories(entry, row.current, circuitComponents) ?? []),
+      ...(polarizedCapacitorAdvisories(entry, pair, result.times, voltageValues) ?? []),
+    ];
+    row.advisories = advisories.length > 0 ? advisories : undefined;
     rows.push(row);
   }
   return rows;

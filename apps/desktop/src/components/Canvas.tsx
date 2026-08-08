@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { moveComponentTo, useSchematic } from "../store/useSchematic";
+import { isActuable, NON_ACTUABLE } from "../schematic/actuation";
 import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
 import type { NetLabel, Point, SchematicAscShape, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
@@ -110,6 +111,7 @@ export function Canvas({
   tran = null,
   readoutTime = null,
   interactive = true,
+  onActuate,
   fitSignal = 0,
   currentVisualizer = false,
 }: {
@@ -124,6 +126,8 @@ export function Canvas({
   /** When false (simulator view) topology is read-only: pan/zoom, inspection,
    *  probe dots, and topology-neutral node aliases remain available. */
   interactive?: boolean;
+  /** A contact was operated, so the shown result no longer describes the circuit. */
+  onActuate?: () => void;
   /** Bumped by App on open/new/tab switch so the schematic auto-fits once. */
   fitSignal?: number;
   /** Current Mode: animated flow dots along the wires, from real branch
@@ -186,6 +190,7 @@ export function Canvas({
   const probes = useSchematic((s) => s.probes);
   const addProbe = useSchematic((s) => s.addProbe);
   const toggleCurrentProbe = useSchematic((s) => s.toggleCurrentProbe);
+  const actuateContact = useSchematic((s) => s.actuateContact);
   const removeProbe = useSchematic((s) => s.removeProbe);
   const netLabels = useSchematic((s) => s.netLabels);
   const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
@@ -343,6 +348,8 @@ export function Canvas({
     lastY: 0,
     moved: false,
   });
+  /** Contact currently held down by the pointer, released on pointer up. */
+  const heldContact = useRef<string | null>(null);
 
   const moveComponentWithAttachedWires = useCallback(
     (id: string, x: number, y: number, sourcePins: Point[], sourceWires: SchematicWire[], dx: number, dy: number) => {
@@ -617,6 +624,40 @@ export function Canvas({
     return true;
   };
 
+  /**
+   * Operate a contact the reader clicked on the simulator canvas.
+   *
+   * This is the one gesture that changes the circuit from a surface that is
+   * otherwise strictly read-only, and that is deliberate: a switch exists to be
+   * thrown. Everything else on this canvas still refuses to edit.
+   *
+   * A part that looks operable but is not - a relay, whose contact is driven by
+   * its coil - says so rather than swallowing the click.
+   */
+  const handleActuateAction = (clientX: number, clientY: number): boolean => {
+    // The `interactive` half is belt-and-braces: the only call site is already
+    // inside the simulator branch, so no test can reach it. It stays because
+    // this is a mutation on a surface whose whole contract is that it does not
+    // mutate, and that guarantee should not rest on one call site staying put.
+    if (interactive || tool.mode !== "select") return false;
+    const world = screenToWorld(clientX, clientY);
+    const hit = componentAt(components, world.x, world.y);
+    if (!hit) return false;
+    const refusal = NON_ACTUABLE[hit.kind];
+    if (refusal) {
+      setAmmeterNote(`${hit.label || "This part"} ${refusal}`);
+      return true;
+    }
+    if (!isActuable(hit.kind)) return false;
+    setAmmeterNote(null);
+    select(hit.id);
+    if (actuateContact(hit.id, "press")) onActuate?.();
+    // Remember it so the release lands on the same part even if the pointer
+    // slid off it while held.
+    heldContact.current = hit.id;
+    return true;
+  };
+
   const handleSimulatorNodeAction = (clientX: number, clientY: number): boolean => {
     if (interactive || (tool.mode !== "probe" && tool.mode !== "ammeter" && tool.mode !== "label")) return false;
     if (tool.mode === "probe") return handleProbeAction(clientX, clientY);
@@ -719,6 +760,7 @@ export function Canvas({
 
     if (!interactive) {
       if (handleSimulatorNodeAction(e.clientX, e.clientY)) return;
+      if (handleActuateAction(e.clientX, e.clientY)) return;
       // Selection is inspection rather than editing: focusing a part drives
       // its telemetry row. Empty-space drags remain pan gestures.
       const hit = componentAt(components, world.x, world.y);
@@ -964,6 +1006,13 @@ export function Canvas({
   }, [rollbackDrag]);
 
   const endDrag = (e: ReactPointerEvent<SVGElement>) => {
+    // A momentary button is held, not clicked: releasing the pointer lets it go
+    // even if the pointer wandered off the symbol in between.
+    const held = heldContact.current;
+    if (held) {
+      heldContact.current = null;
+      if (actuateContact(held, "release")) onActuate?.();
+    }
     const d = drag.current;
     if (d.mode === "box") {
       // On release, commit the box selection.

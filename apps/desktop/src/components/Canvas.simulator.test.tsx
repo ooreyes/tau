@@ -61,6 +61,92 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * The simulator canvas refuses every edit except one: operating a contact.
+ * That carve-out is deliberate -- a switch is drawn in order to be thrown --
+ * so it needs its own boundary tests, both that it works and that it did not
+ * quietly reopen the surface to editing.
+ */
+describe("Canvas - operating a contact during simulation", () => {
+  const placeContact = (kind: "switch" | "pushButton" | "spdt" | "relay", value: string) => {
+    useSchematic.setState({
+      components: [{ id: "s1", kind, x: 0, y: 0, rotation: 0, value, label: "S1" }],
+      selectedId: null,
+      past: [],
+      future: [],
+    });
+  };
+  const clickBody = (onActuate?: () => void) => {
+    const svg = document.querySelector("svg.canvas")!;
+    fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.pointerUp(svg, { button: 0, clientX: 0, clientY: 0 });
+    return onActuate;
+  };
+  const valueOf = () => useSchematic.getState().components[0].value;
+
+  it("toggles a switch and tells the app to re-solve", () => {
+    placeContact("switch", "open");
+    const onActuate = vi.fn();
+    render(<Canvas interactive={false} onActuate={onActuate} />);
+
+    clickBody();
+    expect(valueOf()).toBe("closed");
+    // Blanking the plot would be the wrong answer here: the reader threw the
+    // switch precisely to see the new result.
+    expect(onActuate).toHaveBeenCalled();
+
+    clickBody();
+    expect(valueOf()).toBe("open");
+  });
+
+  it("holds a push button closed and releases it on pointer up", () => {
+    placeContact("pushButton", "open");
+    render(<Canvas interactive={false} />);
+    const svg = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0 });
+    expect(valueOf()).toMatch(/^closed/);
+    fireEvent.pointerUp(svg, { button: 0, clientX: 0, clientY: 0 });
+    expect(valueOf()).toMatch(/^open/);
+  });
+
+  it("explains that a relay is thrown by its coil instead of swallowing the click", () => {
+    placeContact("relay", "100");
+    render(<Canvas interactive={false} />);
+    clickBody();
+    expect(valueOf()).toBe("100");
+    expect(screen.getByRole("status").textContent).toMatch(/coil/i);
+  });
+
+  it("leaves a part with no contact entirely alone", () => {
+    render(<Canvas interactive={false} />);
+    const before = structuredClone(useSchematic.getState().components);
+    clickBody();
+    expect(useSchematic.getState().components).toEqual(before);
+  });
+
+  it("does not reopen the canvas to editing", () => {
+    placeContact("switch", "open");
+    render(<Canvas interactive={false} />);
+    const before = useSchematic.getState();
+    clickBody();
+    const after = useSchematic.getState();
+    // One contact moved; nothing else about the circuit did.
+    expect(after.components).toHaveLength(before.components.length);
+    expect(after.wires).toEqual(before.wires);
+    expect(after.directives).toEqual(before.directives);
+    // And it is undoable, like any other change to the circuit.
+    expect(after.past.length).toBeGreaterThan(before.past.length);
+  });
+
+  it("stays inert on the editing canvas, where a click means select or drag", () => {
+    placeContact("switch", "open");
+    render(<Canvas interactive />);
+    clickBody();
+    expect(valueOf()).toBe("open");
+  });
+});
+
 describe("Canvas - simulator mutation boundary", () => {
   it("selects a component without changing probes or circuit topology", () => {
     render(<Canvas interactive={false} />);

@@ -1847,7 +1847,33 @@ function App() {
     showNotice("Schematic cleared.");
   }, [activeId, newCircuit, invalidateAnalysis, showNotice]);
 
+  /**
+   * Re-solve after a contact was operated, instead of blanking the plot.
+   *
+   * Every other edit invalidates: the result on screen no longer describes the
+   * circuit, and showing it would be a lie. Throwing a switch is the one edit
+   * whose entire purpose is to see the new result, so it re-runs the analysis
+   * the reader is already looking at. Held in a ref so the effect below keeps
+   * its original dependencies and does not re-fire on every render.
+   */
+  const rerunAfterActuationRef = useRef<() => void>(() => {});
+  rerunAfterActuationRef.current = () => {
+    if (preferredAnalysis === "op") void runOperatingAnalysis();
+    else if (preferredAnalysis === "ac") void runAcAnalysis();
+    else if (preferredAnalysis === "dc") void runDcAnalysis();
+    else if (preferredAnalysis === "tf") void runTfAnalysis();
+    else if (preferredAnalysis === "noise") void runNoiseAnalysis_();
+    else void executeTransient(effectiveAnalysisOptions);
+  };
+  const actuationPendingRef = useRef(false);
+  const handleActuate = useCallback(() => { actuationPendingRef.current = true; }, []);
+
   useEffect(() => {
+    if (actuationPendingRef.current) {
+      actuationPendingRef.current = false;
+      rerunAfterActuationRef.current();
+      return;
+    }
     invalidateAnalysis();
   }, [components, wires, directives, invalidateAnalysis]);
 
@@ -2404,6 +2430,7 @@ function App() {
                   tran={analysis}
                   readoutTime={schematicReadoutTime}
                   interactive={false}
+                  onActuate={handleActuate}
                   fitSignal={fitSignal}
                   currentVisualizer={currentVisualizer}
                 />
