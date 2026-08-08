@@ -148,3 +148,65 @@ export function resolveShortcut({ key, ctrlOrMeta, shift }: ShortcutKey): Shortc
       return null;
   }
 }
+
+/** What each action is called where a user can read it. */
+export const SHORTCUT_ACTION_LABELS: Record<ShortcutAction, string> = {
+  undo: "Undo",
+  redo: "Redo",
+  palette: "Find parts and commands",
+  rotate: "Rotate selection",
+  mirror: "Mirror selection",
+  copy: "Copy",
+  paste: "Paste",
+  duplicate: "Duplicate",
+  cancel: "Cancel current tool",
+  delete: "Delete selection",
+  wire: "Wire tool",
+  label: "Net label tool",
+};
+
+/**
+ * Every binding `resolveShortcut` implements, as data.
+ *
+ * The resolver stays a `switch` - it is the hot path on every keystroke - so
+ * this table is a parallel statement of the same facts and could drift from it.
+ * It does not, because `shortcuts.test.ts` feeds every row back through
+ * `resolveShortcut` and also sweeps the key space for bindings the table has
+ * missed. A row added here without the resolver, or a case added there without
+ * a row, fails that test.
+ *
+ * `display` is written the way macOS prints it, so the Settings table reads
+ * like the menu bar rather than like a keycode dump.
+ */
+export interface ShortcutBinding {
+  action: ShortcutAction;
+  key: string;
+  ctrlOrMeta: boolean;
+  shift: boolean;
+  display: string;
+}
+
+export const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
+  { action: "undo", key: "z", ctrlOrMeta: true, shift: false, display: "⌘Z" },
+  { action: "redo", key: "z", ctrlOrMeta: true, shift: true, display: "⇧⌘Z" },
+  { action: "redo", key: "y", ctrlOrMeta: true, shift: false, display: "⌘Y" },
+  { action: "palette", key: "k", ctrlOrMeta: true, shift: false, display: "⌘K" },
+  { action: "rotate", key: "r", ctrlOrMeta: true, shift: false, display: "⌘R" },
+  { action: "mirror", key: "e", ctrlOrMeta: true, shift: false, display: "⌘E" },
+  { action: "copy", key: "c", ctrlOrMeta: true, shift: false, display: "⌘C" },
+  { action: "paste", key: "v", ctrlOrMeta: true, shift: false, display: "⌘V" },
+  { action: "duplicate", key: "d", ctrlOrMeta: true, shift: false, display: "⌘D" },
+  { action: "palette", key: "/", ctrlOrMeta: false, shift: false, display: "/" },
+  { action: "palette", key: "F2", ctrlOrMeta: false, shift: false, display: "F2" },
+  { action: "wire", key: "F3", ctrlOrMeta: false, shift: false, display: "F3" },
+  { action: "wire", key: "w", ctrlOrMeta: false, shift: false, display: "W" },
+  { action: "label", key: "F4", ctrlOrMeta: false, shift: false, display: "F4" },
+  { action: "delete", key: "F5", ctrlOrMeta: false, shift: false, display: "F5" },
+  { action: "delete", key: "Backspace", ctrlOrMeta: false, shift: false, display: "Delete" },
+  { action: "delete", key: "Delete", ctrlOrMeta: false, shift: false, display: "Fn Delete" },
+  { action: "copy", key: "F6", ctrlOrMeta: false, shift: false, display: "F6" },
+  { action: "undo", key: "F9", ctrlOrMeta: false, shift: false, display: "F9" },
+  { action: "redo", key: "F9", ctrlOrMeta: false, shift: true, display: "⇧F9" },
+  { action: "cancel", key: "Escape", ctrlOrMeta: false, shift: false, display: "Esc" },
+  { action: "rotate", key: " ", ctrlOrMeta: false, shift: false, display: "Space" },
+];
