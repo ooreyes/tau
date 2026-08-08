@@ -522,12 +522,22 @@ const F = FLOP_LABEL_X;
 const NL = 10; // nose-body label column
 
 export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPlacement[]>> = {
-  // CLK / R ride 4 units above their own row and COM sits below them: the
-  // reference terminal leaves the bottom-left CORNER, so its caption has to
-  // share the left column with the last input rather than sit beside a lead.
+  // CLK / R ride above their own row and COM sits below them: the reference
+  // terminal leaves the bottom-left CORNER, so its caption has to share the
+  // left column with the last input rather than sit beside a lead.
+  //
+  // The gap between those two is 11 units, not the 8 it started as. A caption
+  // is taller than 8, so at 8 the two boxes touched -- measured at 0.9 px on
+  // the real canvas. DESIGN_SYSTEM.md section 5 is absolute about this: labels
+  // never overlap, and a near-miss is a bug.
+  //
+  // The room comes from raising the input, not from lowering COM: COM at 22
+  // cleared the overlap but pushed the caption outside the body, which the
+  // symbol suite catches. On the JK the left column carries four captions in
+  // 40 units, so K gives up 3 units as well.
   dflop: [
     { pin: "d", text: "D", x: -F, y: -16 },
-    { pin: "clk", text: "CLK", x: -F, y: 12 },
+    { pin: "clk", text: "CLK", x: -F, y: 9 },
     { pin: "com", text: "COM", x: -F, y: 20 },
     { pin: "pre", text: "PRE", x: 2, y: -19 },
     { pin: "clr", text: "CLR", x: 2, y: 19 },
@@ -536,14 +546,14 @@ export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPl
   ],
   srflop: [
     { pin: "s", text: "S", x: -F, y: -16 },
-    { pin: "r", text: "R", x: -F, y: 12 },
+    { pin: "r", text: "R", x: -F, y: 9 },
     { pin: "com", text: "COM", x: -F, y: 20 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q̅", x: F, y: 16 },
   ],
   tflop: [
     { pin: "t", text: "T", x: -F, y: -16 },
-    { pin: "clk", text: "CLK", x: -F, y: 12 },
+    { pin: "clk", text: "CLK", x: -F, y: 9 },
     { pin: "com", text: "COM", x: -F, y: 20 },
     { pin: "pre", text: "PRE", x: 2, y: -19 },
     { pin: "clr", text: "CLR", x: 2, y: 19 },
@@ -552,8 +562,8 @@ export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPl
   ],
   jkflop: [
     { pin: "j", text: "J", x: -F, y: -16 },
-    { pin: "k", text: "K", x: -F, y: 0 },
-    { pin: "clk", text: "CLK", x: -F, y: 12 },
+    { pin: "k", text: "K", x: -F, y: -3 },
+    { pin: "clk", text: "CLK", x: -F, y: 9 },
     { pin: "com", text: "COM", x: -F, y: 20 },
     { pin: "pre", text: "PRE", x: 2, y: -19 },
     { pin: "clr", text: "CLR", x: 2, y: 19 },
