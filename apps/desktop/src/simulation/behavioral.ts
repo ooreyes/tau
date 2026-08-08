@@ -17,7 +17,7 @@
  * Pure functions over numeric scopes - trivially unit-testable.
  */
 
-import { evaluateExpression, type Scope, type FuncDef } from "./expr";
+import { evaluateExpression, parse as parseExpression, type Scope, type FuncDef } from "./expr";
 
 export type BehavioralType = "V" | "I";
 
@@ -304,6 +304,55 @@ export function behavioralSpecText(value: string): string {
   const { type, expr } = parseBehavioral(value);
   if (!expr) throw new Error("Behavioral source needs a V=/I= expression.");
   return `${type}=${moduloToFloor(ltFuncsToNgspice(statFuncsToNgspice(ifToTernary(expr))))}`;
+}
+
+/** Compose a behavioral value from its two halves, in the deck's spelling. */
+export function formatBehavioral(type: BehavioralType, expr: string): string {
+  return `${type}=${expr.trim()}`;
+}
+
+/** A behavioral value judged before the run, for the Properties panel. */
+export interface BehavioralCheck {
+  /** False only when Tau can prove the deck cannot be built from this value. */
+  ok: boolean;
+  /** The canonical `V=`/`I=` line the deck would emit, when there is one. */
+  spec: string | null;
+  /** Why it was refused, in the engine's own words. Null when `ok`. */
+  reason: string | null;
+}
+
+/**
+ * Judge a behavioral value the way the run would, so the panel can refuse a
+ * malformed expression at the keystroke instead of at the transient.
+ *
+ * Both checks are the engine's own code, not a second parser: the value goes
+ * through {@link behavioralSpecText} (which is what the deck emits, and which
+ * throws on a missing expression), and the expression it produces goes through
+ * `expr.ts`'s `parse` - the same parser `linearizeBehavioral` evaluates with.
+ *
+ * One error is deliberately NOT a refusal. `expr.ts`'s tokenizer accepts only
+ * `[A-Za-z0-9_µ]` in an identifier, while ngspice node names and LTspice
+ * `{param}` braces are wider than that, so `Unexpected character` means "Tau's
+ * checker cannot read this", not "the engine will reject it". Refusing there
+ * would block a legal imported expression, which is worse than passing a bad
+ * one through to the run: a false refusal edits nothing and blames the user.
+ */
+export function checkBehavioral(value: string): BehavioralCheck {
+  let spec: string;
+  try {
+    spec = behavioralSpecText(value);
+  } catch (error) {
+    return { ok: false, spec: null, reason: (error as Error).message };
+  }
+  try {
+    // Past the `V=`/`I=` head that behavioralSpecText just normalized.
+    parseExpression(spec.slice(2));
+  } catch (error) {
+    const message = (error as Error).message;
+    if (/^Unexpected character/.test(message)) return { ok: true, spec, reason: null };
+    return { ok: false, spec: null, reason: /[.!?]$/.test(message) ? message : `${message}.` };
+  }
+  return { ok: true, spec, reason: null };
 }
 
 /**

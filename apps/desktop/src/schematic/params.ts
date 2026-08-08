@@ -78,6 +78,13 @@ interface ParamSpec {
   codec?: ParamCodec;
   /** Variant selector: this field set applies only to a matching value. */
   when?: RegExp;
+  /**
+   * What the part does and what its pins are for, shown above the fields. A
+   * per-field `description` can only explain the number it sits under; a part
+   * whose meaning lives in pins the panel has no field for (the modulator's FM,
+   * AM and COM) has nowhere else to say so.
+   */
+  summary?: string;
 }
 
 /** Unparsed `Name=value` tokens, carried through an edit so none are dropped. */
@@ -308,6 +315,39 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
       },
     ],
   },
+  // The VCO. Its value is already `mark=<f> space=<f>`, which is the default
+  // keyed grammar, so the two frequencies are a data edit; what the panel adds
+  // is that they ARE frequencies, which pin selects between them, and what the
+  // other three pins do. The fallbacks are `parseModulator`'s own defaults, so
+  // a value that omits one shows the number the deck will run.
+  modulator: {
+    summary: "Voltage-controlled oscillator. Q outputs a sine of ±1 V whose frequency follows the FM pin:"
+      + " the space frequency at 0 V, the mark frequency at 1 V, and straight-line in between and beyond."
+      + " AM scales the amplitude and counts as 1 V while it is unwired. COM is the reference the sine rides on;"
+      + " leave it unwired for a ground-referenced output.",
+    fields: [
+      {
+        key: "mark",
+        label: "Mark frequency",
+        unit: "Hz",
+        kind: "number",
+        token: "mark",
+        fallback: "1k",
+        min: 0,
+        description: "Output frequency while the FM pin sits at 1 V.",
+      },
+      {
+        key: "space",
+        label: "Space frequency",
+        unit: "Hz",
+        kind: "number",
+        token: "space",
+        fallback: "0",
+        min: 0,
+        description: "Output frequency while the FM pin sits at 0 V, which is also what an unwired FM pin gives.",
+      },
+    ],
+  },
   comparator: {
     fields: [
       { key: "vhigh", label: "Output high", unit: "V", kind: "number" },
@@ -423,6 +463,11 @@ const blankOf = (field: ParamField): string => field.blank ?? fallbackOf(field);
 
 export function paramFields(kind: ComponentKind, value = ""): ParamField[] {
   return specForValue(kind, value)?.fields ?? [];
+}
+
+/** What this field set's part does, or "" when the fields speak for themselves. */
+export function paramSummary(kind: ComponentKind, value = ""): string {
+  return specForValue(kind, value)?.summary ?? "";
 }
 
 /** Split a value string into its structured fields for the given kind. */

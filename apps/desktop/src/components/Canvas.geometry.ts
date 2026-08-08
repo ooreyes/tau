@@ -5,6 +5,7 @@ import { getComponentPins, getLocalPins, transformPoint } from "../schematic/pin
 import { decodeParams } from "../schematic/params";
 import { decodeIndependentSourceValue } from "../schematic/sourceValue";
 import { DEFAULT_WIPER, parsePotentiometerSpec } from "../engine/potentiometerSpec";
+import { withoutGateInputCount } from "../engine/digitalGateSpec";
 import { isNativeMultiPinSubcircuit, nativeSubcircuitBody } from "../schematic/subcircuitGeometry";
 
 export const snap = (v: number) => {
@@ -299,6 +300,12 @@ export const sourceValueLabel = (kind: ComponentKind, value: string): string => 
     const low = explicitUnit(params.low ?? "0", "V");
     const high = explicitUnit(params.high ?? "5", "V");
     return `${low}→${high} @ ${explicitUnit(params.frequency ?? "100k", "Hz")}`;
+  }
+  if (kind === "digitalGate") {
+    // The drawing already states the input count by drawing that many leads, so
+    // repeating it as raw `Inputs=5` syntax beside the symbol is noise - and
+    // every imported LTspice gate now carries the token (see `ascImport`).
+    return withoutGateInputCount(value);
   }
   if (kind === "potentiometer") {
     // The tap is now a canvas control (mission item 6), so it reaches this

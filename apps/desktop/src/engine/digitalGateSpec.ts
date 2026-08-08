@@ -39,6 +39,19 @@ export const GATE_INPUTS_MIN = 2;
 export const GATE_INPUTS_MAX = 5;
 export const GATE_INPUTS_DEFAULT = 2;
 
+/**
+ * Drop Tau's `Inputs=` token from a gate value.
+ *
+ * The count is Tau's own, not LTspice's: over there a gate's input count is the
+ * symbol (`Digital\and` is a five-input part) and the A-device `Value` holds
+ * only `Vhigh=/Vlow=/Vt=/Vhys=/Td=`. So the token must not go out in an
+ * exported `Value`, and it must not be shown on the canvas either — the drawing
+ * already states the count by drawing that many leads.
+ */
+export function withoutGateInputCount(value: string): string {
+  return value.replace(/(^|[\s,])inputs\s*=\s*[^\s,]+/gi, "$1").replace(/\s+/g, " ").trim();
+}
+
 /** Functions that take exactly one input whatever `Inputs=` says. */
 export function isSingleInputGateFn(fn: DigitalGateFn): boolean {
   return fn === "buf" || fn === "schmitt";

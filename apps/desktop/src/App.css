@@ -6368,6 +6368,213 @@ button.bottom-panel-head:focus-visible {
   margin: 2px 2px var(--sp-1);
 }
 
+/* Subcircuit terminal order. The netlist writes the nodes in this order, so the
+   list is numbered and monospaced like every other engineering column, and the
+   side is a whisper beside it - the reader needs the order first and the
+   left/right mapping only once, when they wire the block. */
+.port-list {
+  list-style: none;
+  margin: var(--sp-1) 0 var(--sp-2);
+  padding: 0;
+  min-width: 0;
+}
+
+.port-list li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--sp-2);
+  min-height: var(--row-h-dense);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.port-list li:last-child {
+  border-bottom: 0;
+}
+
+.port-list .port-index {
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  text-align: right;
+}
+
+.port-list .port-name {
+  color: var(--text);
+  font-size: var(--fs-label);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.port-list .port-side {
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* Behavioral source (B). The expression is the subject of the panel, not one
+   value among several, so it leaves the label/value grid for a full-width
+   stacked row; everything else keeps the property grid's rhythm. */
+.behavioral-editor {
+  display: contents;
+}
+
+.behavioral-expression {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--sp-1) 0 var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.behavioral-expression > span {
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.behavioral-expression input {
+  width: 100%;
+  min-width: 0;
+  height: var(--row-h-dense);
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  background: transparent;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  transition: background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.behavioral-expression input:hover:not(:focus) {
+  background: var(--overlay-hover-faint);
+}
+
+.behavioral-expression input:focus {
+  border-color: var(--accent);
+  background: var(--panel-3);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.behavioral-expression input[aria-invalid="true"] {
+  border-color: var(--danger-line);
+}
+
+/* A hairline, a lamp and the reason - never a filled banner behind a
+   paragraph (DESIGN_SYSTEM §4). */
+.property-hint.behavioral-invalid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: var(--sp-2);
+  color: var(--danger);
+}
+
+.behavioral-lamp {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--danger);
+  transform: translateY(-1px);
+}
+
+.behavioral-reference .behavioral-terms {
+  display: grid;
+  margin: 0 0 var(--sp-2);
+}
+
+.behavioral-term {
+  display: grid;
+  grid-template-columns: minmax(0, 88px) minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: var(--sp-2);
+  min-height: 18px;
+}
+
+.behavioral-term dt {
+  color: var(--text);
+  font-size: var(--fs-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.behavioral-term dd {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+}
+
+.behavioral-functions-label {
+  margin: var(--sp-2) 0 2px;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.behavioral-functions {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-caption);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.behavioral-examples {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.behavioral-example {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: var(--sp-2);
+  width: 100%;
+  padding: 3px var(--sp-1);
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.behavioral-example code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.behavioral-example span {
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+}
+
+.behavioral-example:hover {
+  background: var(--overlay-hover-faint);
+}
+
+.behavioral-example:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .property-field {
   min-width: 0;
   display: grid;

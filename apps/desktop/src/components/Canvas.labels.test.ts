@@ -32,6 +32,15 @@ describe("sourceValueLabel", () => {
     expect(sourceValueLabel("vsource", "PWL(0 0 1m 5 2m 0)")).toBe("Piecewise · 3 points");
   });
 
+  it("keeps a gate's input count off the label, where the drawing already says it", () => {
+    // Every imported LTspice gate now carries `Inputs=` (the symbol's own
+    // count), and the body draws that many leads. Printing the token beside the
+    // symbol as well is raw syntax the reader did not write.
+    expect(sourceValueLabel("digitalGate", "and Inputs=5")).toBe("and");
+    expect(sourceValueLabel("digitalGate", "and Inputs=3 Vhigh=5")).toBe("and Vhigh=5");
+    expect(sourceValueLabel("digitalGate", "nand")).toBe("nand");
+  });
+
   it("names a potentiometer's track and tap as two quantities, not one string", () => {
     // The tap became a canvas control under mission item 6, so `Wiper=` reaches
     // this label constantly. The catalog unit belongs to the track only.

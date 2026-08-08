@@ -142,6 +142,7 @@ import {
   serializeSchematicFile,
 } from "./project/types";
 import { retiredKindNotices, validateSchematicDocument } from "./schematic/documentValidation";
+import { strandedTerminalNotices } from "./schematic/relocatedPins";
 import { importProjectAsc } from "./io/projectAscImport";
 import { importDroppedFile } from "./io/fileImport";
 import { pathExists, readTextFile } from "./project/fsBridge";
@@ -1294,18 +1295,30 @@ function App() {
       // Retired parts are dropped rather than refused, so the open has to say
       // which ones went - the drawing changing on its own is not acceptable.
       const retired = retiredKindNotices(parsed);
+      // Same rule for a part whose terminals moved after this file was saved:
+      // the geometry is left exactly as drawn and the affected parts are named,
+      // because a schematic that quietly comes back subtly disconnected would
+      // solve differently with nothing on screen to say why.
+      const stranded = strandedTerminalNotices(doc.components, doc.wires);
+      const reported = [...retired, ...stranded];
       const alsoDropped = retired.length - 1;
       const dropped = alsoDropped > 0
         ? `${retired[0]} ${alsoDropped} more ${alsoDropped === 1 ? "was" : "were"} dropped as well.`
         : retired[0];
+      const attention = stranded.length > 1
+        ? `${stranded[0]} ${stranded.length - 1} other part${stranded.length === 2 ? "" : "s"} needs the same.`
+        : stranded[0];
+      const summary = [dropped, attention].filter(Boolean).join(" ");
+      // Diagnostics keeps the full per-part list; the toast carries the first.
+      setImportWarningsByPath((previous) => ({ ...previous, [path]: reported }));
       openDocument(doc, title, path, [], {
         diskFingerprint: diskContentFingerprint(json),
-        ...(dropped ? { notice: `Opened ${title}. ${dropped}` } : {}),
+        ...(summary ? { notice: `Opened ${title}. ${summary}` } : {}),
       });
     } catch (error) {
       showNotice(userFacingErrorMessage(error, "Could not open .sim file."));
     }
-  }, [openDocument, showNotice]);
+  }, [openDocument, showNotice, setImportWarningsByPath]);
 
   const openAscFromProject = useCallback(async (
     path: string,
@@ -1334,9 +1347,13 @@ function App() {
       const duplicateWarnings = [...labelCounts.entries()]
         .filter(([, count]) => count > 1)
         .map(([label, count]) => `Component name "${label.toUpperCase()}" is used ${count} times; simulation requires unique names.`);
+      // A Tau-native digital part written under a carrier symbol comes back on
+      // Tau's own pin geometry, so an `.asc` saved before those terminals moved
+      // is stranded exactly the way a `.sim` is. Same rule, same report.
+      const strandedWarnings = strandedTerminalNotices(result.components, result.wires);
       // Surface import warnings in the Diagnostics panel for THIS document.
       // The toast only carries a count, which is a dead end on its own.
-      const allWarnings = [...extraWarnings, ...result.warnings, ...duplicateWarnings];
+      const allWarnings = [...extraWarnings, ...result.warnings, ...duplicateWarnings, ...strandedWarnings];
       setImportWarningsByPath((previous) => ({ ...previous, [path]: allWarnings }));
       // Belt-and-braces: the importer's own count gate stops a hostile file
       // before it does quadratic pin-geometry work, but every document that

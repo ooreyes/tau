@@ -36,8 +36,10 @@ import {
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
-import { decodeParams, encodeParams, paramFields } from "../schematic/params";
+import { decodeParams, encodeParams, paramFields, paramSummary } from "../schematic/params";
+import { buildSubcircuitPinOverride, localSubcircuitPins } from "../schematic/subcircuitGeometry";
 import { EngineeringInput } from "./EngineeringInput";
+import { BehavioralSourceEditor } from "./BehavioralSourceEditor";
 import { IndependentSourceEditor } from "./IndependentSourceEditor";
 import { Palette } from "./Palette";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
@@ -1513,6 +1515,24 @@ function junctionModelSummary(
   return "Defined by this schematic · a .model of this name is declared here, so Tau runs that card rather than its ideal part.";
 }
 
+/**
+ * Which side of the body each `.subckt` terminal sits on, in declaration order
+ * (the order the netlist writes the nodes in). Read off the instance's own pin
+ * bank when it has one, so an imported symbol reports where its pins really
+ * are; otherwise off the bank a native placement is about to be given. Either
+ * way the answer comes from `subcircuitGeometry`, never from a second rule.
+ */
+function subcircuitPortSides(
+  component: SchematicComponent,
+  ports: readonly string[],
+): readonly (string | null)[] {
+  const pins = component.pinOverride?.length
+    ? localSubcircuitPins(component)
+    : buildSubcircuitPinOverride({ x: 0, y: 0, rotation: 0, mirrored: false }, ports);
+  if (pins.length !== ports.length) return ports.map(() => null);
+  return pins.map((pin) => (pin.x < 0 ? "left" : pin.x > 0 ? "right" : null));
+}
+
 // Exported for component tests only (same pattern as the plot components).
 export function ComponentInspector({
   selected,
@@ -1535,6 +1555,7 @@ export function ComponentInspector({
     ? (selected.value.trim() || entry?.defaultValue || "")
     : "";
   const fields = selected && entry ? paramFields(selected.kind, valueSource) : [];
+  const partSummary = selected && entry ? paramSummary(selected.kind, valueSource) : "";
   const decoded = selected ? decodeParams(selected.kind, valueSource) : {};
   const visibleFields = fields.map((field) => ({
     ...field,
@@ -1772,6 +1793,12 @@ export function ComponentInspector({
               onBeginChange={beginParamChange}
               onValueChange={(value) => setValue(selected.id, value)}
             />
+          ) : selected.kind === "bsource" ? (
+            <BehavioralSourceEditor
+              value={valueSource}
+              onBeginChange={beginParamChange}
+              onValueChange={(value) => setValue(selected.id, value)}
+            />
           ) : selected.kind === "subckt" ? (
             <>
               <label className="property-field">
@@ -1817,6 +1844,24 @@ export function ComponentInspector({
                   ? `Ready · ${selectedSubcircuit.ports.length} named terminals (${selectedSubcircuit.ports.join(", ")}) from ${selectedSubcircuit.sourceLabel}`
                   : `Needs a definition · ${subcircuitInstance?.name || "No subcircuit"} isn't in an attached library or this sheet. Run won't invent pins.`}
               </p>
+              {/* The status line names the terminals; it cannot say which pin on
+                  the drawing is which. This does, in the declaration order the
+                  netlist writes the nodes in, so a reader can wire the block
+                  without opening the .lib that defines it. */}
+              {selectedSubcircuit && (
+                <ol className="port-list" aria-label="Terminal order">
+                  {selectedSubcircuit.ports.map((port, index) => {
+                    const side = subcircuitPortSides(selected, selectedSubcircuit.ports)[index];
+                    return (
+                      <li key={`${index}-${port}`}>
+                        <span className="port-index mono-num">{index + 1}</span>
+                        <span className="port-name mono-num">{port}</span>
+                        {side && <span className="port-side">{side}</span>}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
               {selectedSubcircuit?.parameters.map((parameter) => {
                 const parameterLabel = parameter.label ?? parameter.name;
                 const parameterValue = subcircuitInstance
@@ -1864,10 +1909,20 @@ export function ComponentInspector({
               {selectedSubcircuit && selectedSubcircuit.parameters.length === 0 && (
                 <p className="property-hint">This model defines terminals only; it has no instance parameters.</p>
               )}
-              {!selectedSubcircuit && onOpenModelLibraries && (
-                <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
-                  Attach Model Library
-                </Button>
+              {/* The route from "I have a .lib" to "it is on my sheet" was only
+                  offered once the value was already broken. It is the same two
+                  steps whether or not a model is resolved, so it is stated
+                  whenever this panel is open. */}
+              {onOpenModelLibraries && (
+                <>
+                  <p className="property-hint">
+                    Attach a .lib or .sub file in Model Libraries and every subcircuit it defines
+                    joins the list above, terminals and parameters included.
+                  </p>
+                  <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
+                    Attach Model Library
+                  </Button>
+                </>
               )}
             </>
           ) : modelKind ? (
@@ -2023,6 +2078,9 @@ export function ComponentInspector({
             </>
           ) : (
             <>
+              {/* A part whose meaning lives in pins the panel has no field for
+                  (the modulator's FM, AM and COM) says so above its numbers. */}
+              {partSummary && <p className="property-hint">{partSummary}</p>}
               {visibleFields.map((field) => (
                 <Fragment key={field.key}>
                   <label className="property-field">
