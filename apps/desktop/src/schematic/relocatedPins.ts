@@ -147,6 +147,7 @@ export function strandedTerminals(
       const now = current.get(pin.id);
       if (now && samePoint(now, was)) continue;
       if (!wireTouches(wires, was)) continue;
+      if (now && wireTouches(wires, now)) continue;
       (now ? moved : missing).push(now?.label || pin.label);
     }
     if (moved.length > 0 || missing.length > 0) {
