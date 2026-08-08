@@ -165,7 +165,7 @@ describe("idealJunctionModel", () => {
 describe("deck emission", () => {
   it("gives a placed diode an ideal model, as ngspice's sidiode", () => {
     const deck = buildSpiceDeck(rig(diodeAt("D"), "5"), { kind: "op" });
-    expect(deck.netlist).toContain(".model TAU_DIODE_IDEAL_0V7 sidiode(Ron=1m Roff=1G Vfwd=0.7 epsilon=1m)");
+    expect(deck.netlist).toContain(".model TAU_DIODE_IDEAL_0V7 sidiode(Ron=1m Roff=1G Vfwd=0.7 epsilon=10m)");
     expect(deck.netlist).toMatch(/^A__tau_D1 \S+ tau_d1_id TAU_DIODE_IDEAL_0V7$/m);
     // The generic Shockley starter is NOT what this part solves against.
     expect(deck.netlist).not.toMatch(/^D1 \S+ \S+ TAU_DIODE$/m);
@@ -176,7 +176,7 @@ describe("deck emission", () => {
     // `D(Ron= Vfwd=)` as its OWN ideal diode, so the same card is correct in
     // both engines and the parity harness compares like with like.
     const deck = buildSpiceDeck(rig(diodeAt("D"), "5"), { kind: "op" }, { idealDiodeAsSidiode: false });
-    expect(deck.netlist).toContain(".model TAU_DIODE_IDEAL_0V7 D(Ron=1m Roff=1G Vfwd=0.7 epsilon=1m)");
+    expect(deck.netlist).toContain(".model TAU_DIODE_IDEAL_0V7 D(Ron=1m Roff=1G Vfwd=0.7 epsilon=10m)");
     expect(deck.netlist).toMatch(/^D1 \S+ tau_d1_id TAU_DIODE_IDEAL_0V7$/m);
   });
 
@@ -308,7 +308,9 @@ describe.skipIf(!haveNgspice)("real ngspice", () => {
     const led = part("led", "D1", "LED", 400, 0);
     const forward = opVolts(buildSpiceDeck(rig(led, "5", "100"), { kind: "op" }).netlist, "mid");
     expect(forward).not.toBeNull();
-    expect(forward!).toBeCloseTo(2, 3);
+    // Within a millivolt of the textbook 2.0 V at 30 mA. The real starter reads
+    // 2.02 V here and 1.77 V at 10 mA - the drift this replaces.
+    expect(Math.abs(forward! - 2)).toBeLessThan(1e-3);
     // Reverse-biased: no conduction, so the series resistor drops nothing and
     // the whole supply stands across the part.
     const reverse = opVolts(buildSpiceDeck(rig(led, "-5", "100"), { kind: "op" }).netlist, "mid");

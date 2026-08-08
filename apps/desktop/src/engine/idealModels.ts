@@ -8,8 +8,10 @@
  * 100 µA. A student who places a diode, measures it, and reads 0.655 V has been
  * given a correct answer to a question they did not ask. The textbook part they
  * dropped on the sheet drops **0.7 V**, full stop. Same story for the LED: the
- * deck's `TAU_LED` settles near 1.77 V at 10 mA while Tau's own preview solver
- * uses a spec tuned to 2.0 V, so the two engines disagreed about the same part.
+ * deck's `TAU_LED` reads 1.77 V at 10 mA and 2.02 V at 30 mA, while Tau's own
+ * preview solver (`simulation/diodeCompanion.ts`) uses a spec tuned to 2.0 V -
+ * so the two engines disagreed about the same part depending on the resistor
+ * next to it.
  *
  * ## Ideal vs real is decided by PROVENANCE, not by a global switch
  *
@@ -50,21 +52,25 @@
  * ## Where the ideal stops being ideal, stated rather than hidden
  *
  * A perfect switch is not solvable, so `Ron`/`Roff`/`epsilon` are finite. The
- * residual was measured on the real engine, not estimated:
+ * residual was measured on the real engine, driven by a resistor, with Tau's
+ * own `.options` line - not estimated:
  *
- * | current | modelled drop | ideal |
+ * | current | modelled drop | error |
  * |---|---|---|
- * | 1 µA  | 0.7000014 V | 0.7 V |
- * | 1 mA  | 0.7000447 V | 0.7 V |
- * | 1 A   | 0.7010000 V | 0.7 V |
+ * | 1 nA   | 0.7000361 V | 0.04 mV |
+ * | 1 µA   | 0.7000387 V | 0.04 mV |
+ * | 1 mA   | 0.7001488 V | 0.15 mV |
+ * | 4.3 mA | 0.7002936 V | 0.29 mV |
+ * | 1 A    | 0.7044905 V | 4.5 mV  |
  *
- * i.e. ≤ 0.05 mV below 1 mA and ≤ 1 mV at 1 A (that last one is `Ron` × 1 A).
- * That is below the precision anything in Tau displays, so it is documented
- * here rather than reported as a substitution - unlike a model swap, nothing
- * about the answer is qualitatively different from the ideal one. Reverse
- * leakage is V/`Roff` (1 nA at 1 V) instead of zero, for the same reason
- * `TAU_SW` uses 1 GΩ rather than 1 TΩ: a wider on/off ratio is a documented
- * ngspice convergence hazard and 1 GΩ is already an open circuit.
+ * i.e. sub-millivolt over six decades, and single-millivolt where a real
+ * diode's own package resistance would dominate anyway. That is below the
+ * precision anything in Tau displays, so it is documented here rather than
+ * reported as a substitution - unlike a model swap, nothing about the answer is
+ * qualitatively different from the ideal one. Reverse leakage is V/`Roff` (1 nA
+ * at 1 V) instead of zero, for the same reason `TAU_SW` uses 1 GΩ rather than
+ * 1 TΩ: a wider on/off ratio is a documented ngspice convergence hazard and
+ * 1 GΩ is already an open circuit.
  */
 
 import type { SchematicComponent } from "../schematic/types";
@@ -81,9 +87,24 @@ export const IDEAL_ZENER_BREAKDOWN_VOLTS = 5.1;
 const IDEAL_ON_OHMS = "1m";
 /** Blocking resistance. Matches `TAU_SW`'s `Roff` for the reason given there. */
 const IDEAL_OFF_OHMS = "1G";
-/** Width of `sidiode`'s quadratic corner. Nonzero so the conductance is
- *  continuous through the knee; small enough to cost ≤ 0.1 mV (measured). */
-const IDEAL_EPSILON = "1m";
+/**
+ * Width of `sidiode`'s quadratic corner, in volts. Not a free knob - it was
+ * chosen by running the real engine against Tau's own `.options` line:
+ *
+ * - at `1m` a 30 mA LED makes ngspice print "Dynamic gmin stepping failed /
+ *   True gmin stepping failed" before falling back to source stepping. The
+ *   answer is right, but those two lines reach the user's Diagnostics through
+ *   `nativeSpice.engineWarnings`, and a scary warning on a correct run for the
+ *   most commonly placed part in the library is its own kind of wrong.
+ * - at `50m` every rig is quiet, but a 1 A diode reads 0.710 V.
+ * - at `10m` every ordinary rig is quiet AND within 0.3 mV. Only a deliberately
+ *   brutal one (1 A through a 1 Ω series resistor) still falls back to source
+ *   stepping, and it says so rather than hiding it.
+ *
+ * A 10 mV knee is also physically defensible: a real silicon junction's knee is
+ * some 60 mV wide, so this is still six times sharper than the part it idealises.
+ */
+const IDEAL_EPSILON = "10m";
 
 /**
  * `SchematicComponent` fields that exist only to carry something an LTspice

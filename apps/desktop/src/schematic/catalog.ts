@@ -57,6 +57,15 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "bulb",          section: "Passives",          name: "Light Bulb",      hotkey: "",  prefix: "R",   defaultValue: "10",    unit: "Ω" },
 
   // ── Semiconductors ───────────────────────────────────────────────────────
+  // The three junction defaults below are LOAD-BEARING, not decoration: a part
+  // placed with one of them and no LTspice provenance simulates as the ideal
+  // textbook device (`engine/idealModels.ts`) - the diode drops a fixed 0.7 V,
+  // the LED 2.0 V, and the zener breaks down at the voltage its value spells.
+  // So `5V1` is the zener's RATING, and changing it here changes the part a
+  // student places; changing it to something that is not a voltage marking
+  // (`zener`, a part number) drops the part back onto the real Shockley
+  // starter. Naming a manufacturer part instead - here or from the Simulation
+  // model dropdown - is the intended way to get real device behaviour.
   { kind: "diode",         section: "Semiconductors",    name: "Diode",           hotkey: "d", prefix: "D",   defaultValue: "D",     unit: "" },
   { kind: "led",           section: "Semiconductors",    name: "LED",             hotkey: "e", prefix: "D",   defaultValue: "LED",   unit: "" },
   { kind: "zener",         section: "Semiconductors",    name: "Zener",           hotkey: "z", prefix: "D",   defaultValue: "5V1",   unit: "" },
