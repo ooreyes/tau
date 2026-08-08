@@ -155,6 +155,56 @@ TEXT 0 0 Left 2 !.tran 1m
     expect(await screen.findByText(/X1: subcircuit instance not imported/)).toBeTruthy();
   });
 
+  /**
+   * A saved document outlives the drawing it was made against. Item 5 moved
+   * digital pin coordinates, so a file saved beforehand comes back with wires
+   * ending where the terminal used to be. Tau leaves the drawing exactly as it
+   * was drawn - see `schematic/relocatedPins.ts` for why - so the open has to
+   * say which part needs reconnecting. Silence here is the one outcome that is
+   * not allowed: the circuit would solve differently with nothing to say why.
+   */
+  const openSavedSim = async (name: string, document: unknown) => {
+    render(<App />);
+    await screen.findByRole("region", { name: "Project start" });
+    useProject.getState().ensureDefaultWorkspace();
+    const root = await waitFor(() => {
+      const path = useProject.getState().rootPath;
+      if (!path) throw new Error("no workspace yet");
+      return path;
+    });
+    const path = await useProject.getState().createSchematicFile(root, name);
+    await useProject.getState().writeSim(path!, JSON.stringify(document));
+    fireEvent.click(await screen.findByRole("button", { name }));
+  };
+
+  const flipFlopDocument = (clrEndY: number) => ({
+    components: [{ id: "u1", kind: "dflop", x: 256, y: 256, rotation: 0, value: "", label: "U3" }],
+    wires: [{ id: "w1", points: [{ x: 256, y: 384 }, { x: 256, y: clrEndY }] }],
+    netLabels: [],
+    probes: [],
+    directives: [".tran 1m"],
+  });
+
+  it("names the part whose terminals moved after the document was saved", async () => {
+    // CLR used to sit at local (0, 48); this file's wire still ends there.
+    await openSavedSim("legacy-dff.sim", flipFlopDocument(256 + 48));
+
+    // Said twice on purpose: once in the toast, and durably in Diagnostics.
+    expect((await screen.findAllByText(/U3: wires still end where the CLR terminal sat/)).length)
+      .toBeGreaterThan(0);
+    // The drawing is untouched: the wire is exactly where the file put it.
+    await waitFor(() => expect(useSchematic.getState().wires[0].points[1]).toEqual({ x: 256, y: 304 }));
+  });
+
+  it("says nothing about a document that was already correct", async () => {
+    // The same flip-flop wired to where CLR sits today, local (0, 32).
+    await openSavedSim("current-dff.sim", flipFlopDocument(256 + 32));
+
+    await waitFor(() => expect(useSchematic.getState().components).toHaveLength(1));
+    expect(useSchematic.getState().wires[0].points[1]).toEqual({ x: 256, y: 288 });
+    expect(screen.queryByText(/wires still end where/)).toBeNull();
+  });
+
   it("refuses a file it does not recognize instead of silently doing nothing", async () => {
     render(<App />);
     const dropZone = await screen.findByRole("region", { name: "Project start" });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { decodeParams, encodeParams, paramFields } from "./params";
+import { decodeParams, encodeParams, paramFields, paramSummary } from "./params";
 import { CATALOG } from "./catalog";
+import { parseModulator } from "../engine/modulatorSpec";
 
 describe("MOSFET param encode/decode", () => {
   it("round-trips model + W/L/KP/VTO", () => {
@@ -330,6 +331,53 @@ describe("Laplace transfer on the voltage-controlled sources", () => {
     expect(hint("vcvs")).toContain("runs exactly");
     expect(hint("vccs")).not.toContain("exactly");
     expect(hint("vccs")).toContain("DC gain");
+  });
+});
+
+/**
+ * The VCO. `mark=<f> space=<f>` was already the default keyed grammar, so the
+ * fields are data; what has to hold is that the panel says the same thing about
+ * a value as `engine/modulatorSpec.ts` does, including for a value that leaves
+ * one of the two out.
+ */
+describe("modulator (VCO) frequencies", () => {
+  it("names both tokens as frequencies in hertz", () => {
+    expect(paramFields("modulator", "mark=1K space=1K").map((f) => [f.key, f.label, f.unit]))
+      .toEqual([["mark", "Mark frequency", "Hz"], ["space", "Space frequency", "Hz"]]);
+  });
+
+  it("round-trips the catalog default and reads the keys in either order", () => {
+    expect(decodeParams("modulator", "mark=1K space=1K")).toEqual({ mark: "1K", space: "1K" });
+    expect(decodeParams("modulator", "space=200 mark=2K")).toEqual({ mark: "2K", space: "200" });
+    expect(encodeParams("modulator", { mark: "2K", space: "200" })).toBe("mark=2K space=200");
+  });
+
+  // A panel that invented its own default would show a frequency the deck does
+  // not run. Both fallbacks are `parseModulator`'s.
+  it("fills a missing key with the frequency the deck would use", () => {
+    expect(decodeParams("modulator", "mark=2K")).toEqual({ mark: "2K", space: "0" });
+    expect(decodeParams("modulator", "")).toEqual({ mark: "1k", space: "0" });
+    const deck = parseModulator("mark=2K");
+    expect(deck.space).toBe(0);
+    expect(deck.mark).toBe(2000);
+  });
+
+  // The FM pin selects between the two frequencies and the AM and COM pins have
+  // no field at all, so the part is unreadable without a summary above them.
+  it("says what the part outputs and what drives each pin", () => {
+    const summary = paramSummary("modulator", "mark=1K space=1K");
+    expect(summary).toMatch(/oscillator/i);
+    expect(summary).toMatch(/FM/);
+    expect(summary).toMatch(/AM/);
+    expect(summary).toMatch(/COM/);
+    expect(summary).toMatch(/Q/);
+    expect(paramFields("modulator", "mark=1K")[0].description).toMatch(/1 V/);
+    expect(paramFields("modulator", "mark=1K")[1].description).toMatch(/0 V/);
+  });
+
+  it("carries no summary for a kind whose fields speak for themselves", () => {
+    expect(paramSummary("resistor", "1k")).toBe("");
+    expect(paramSummary("diode", "1N4148")).toBe("");
   });
 });
 

@@ -2,11 +2,18 @@ import { describe, it, expect } from "vitest";
 import {
   parseBehavioral,
   behavioralSpecText,
+  checkBehavioral,
+  formatBehavioral,
   linearizeBehavioral,
   ifToTernary,
   statFuncsToNgspice,
   ltFuncsToNgspice,
 } from "./behavioral";
+import { evaluateExpression } from "./expr";
+import {
+  BEHAVIORAL_EXAMPLES,
+  BEHAVIORAL_FUNCTIONS,
+} from "../components/BehavioralSourceEditor";
 
 describe("LTspice soft-limit translation", () => {
   it("rewrites nested uplim/dnlim calls to ngspice ternaries without a hard clamp", () => {
@@ -139,6 +146,94 @@ describe("behavioralSpecText", () => {
     expect(() => behavioralSpecText("V=")).toThrow(/expression/i);
     expect(() => behavioralSpecText("   ")).toThrow(/expression/i);
   });
+});
+
+/**
+ * The panel's judgement of a behavioral value. It must agree with the run,
+ * which is why it is the deck's own `behavioralSpecText` plus `expr.ts`'s
+ * parser rather than a pattern that looks close enough.
+ */
+describe("checkBehavioral", () => {
+  it("accepts the vocabulary a B source is actually written in", () => {
+    for (const value of [
+      "V=1",
+      "I=1m",
+      "V=V(a)-V(b)",
+      "V=V(a,b)*2",
+      "I=I(R1)*100",
+      "V=sin(2*pi*1k*time)",
+      "V=if(V(in)>2.5, 5, 0)",
+      "V=table(V(in), 0,0, 1,5)",
+      "V=V(a)%2",
+      "V=limit(V(in), 0, 5)",
+    ]) {
+      expect(checkBehavioral(value)).toMatchObject({ ok: true, reason: null });
+    }
+  });
+
+  it("gives the deck's own spec back so the panel and the run cannot disagree", () => {
+    expect(checkBehavioral("v = V(a)+1").spec).toBe(behavioralSpecText("v = V(a)+1"));
+    expect(checkBehavioral("2*V(x)").spec).toBe("V=2*V(x)");
+  });
+
+  it("refuses an empty expression with the reason the run would have raised", () => {
+    expect(checkBehavioral("V=")).toEqual({
+      ok: false,
+      spec: null,
+      reason: "Behavioral source needs a V=/I= expression.",
+    });
+    expect(checkBehavioral("  ").reason).toBe("Behavioral source needs a V=/I= expression.");
+  });
+
+  it("refuses a malformed expression and names what is wrong with it", () => {
+    expect(checkBehavioral("V=V(a)+").reason).toMatch(/Unexpected end of expression/);
+    expect(checkBehavioral("V=(V(a)").reason).toMatch(/Expected '\)'/);
+    expect(checkBehavioral("V=V(a) V(b)").reason).toMatch(/Trailing tokens/);
+    expect(checkBehavioral("V=*2").reason).toMatch(/Unexpected token/);
+    for (const bad of ["V=V(a)+", "V=(V(a)", "V=V(a) V(b)", "V=*2"]) {
+      expect(checkBehavioral(bad).ok).toBe(false);
+      expect(checkBehavioral(bad).reason?.endsWith(".")).toBe(true);
+    }
+  });
+
+  /**
+   * `expr.ts` tokenizes identifiers as [A-Za-z0-9_µ] only, while ngspice node
+   * names and LTspice `{param}` braces are wider. Refusing those would block a
+   * legal imported expression, so an unreadable character means "no verdict".
+   */
+  it("passes a character its own tokenizer cannot read rather than blaming the user", () => {
+    expect(checkBehavioral("V=V(θ_pll)%(2*pi)")).toMatchObject({ ok: true, reason: null });
+    expect(checkBehavioral("V={gain}*V(in)")).toMatchObject({ ok: true, reason: null });
+  });
+});
+
+describe("formatBehavioral", () => {
+  it("round-trips through the parser the deck uses", () => {
+    expect(formatBehavioral("I", " V(a)*2 ")).toBe("I=V(a)*2");
+    expect(parseBehavioral(formatBehavioral("V", "V(a)-V(b)")))
+      .toEqual({ type: "V", expr: "V(a)-V(b)" });
+  });
+});
+
+/**
+ * The panel writes down a vocabulary. Teaching a function the engine does not
+ * have is the same class of lie as substituting a model silently, so every
+ * documented signature is called here with its own arity, and every worked
+ * example is put through the same check the panel applies to typed input.
+ */
+describe("the documented expression vocabulary is real", () => {
+  for (const fn of BEHAVIORAL_FUNCTIONS) {
+    it(`${fn.signature} exists in the engine`, () => {
+      expect(Number.isFinite(evaluateExpression(fn.probe))).toBe(true);
+      expect(checkBehavioral(`V=${fn.probe}`).ok).toBe(true);
+    });
+  }
+
+  for (const example of BEHAVIORAL_EXAMPLES) {
+    it(`the "${example.what}" example is a value the panel accepts`, () => {
+      expect(checkBehavioral(`V=${example.expr}`)).toMatchObject({ ok: true, reason: null });
+    });
+  }
 });
 
 describe("linearizeBehavioral", () => {

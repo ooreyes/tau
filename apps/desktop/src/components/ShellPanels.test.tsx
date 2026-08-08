@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { BottomPanel, ComponentInspector, ComponentsRail, EditorToolbar } from "./ShellPanels";
+import { behavioralSpecText, checkBehavioral } from "../simulation/behavioral";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { useSchematic } from "../store/useSchematic";
 import { usePanelWidth } from "@/components/ui/resizable";
@@ -435,6 +436,50 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     });
   });
 
+  /**
+   * Item 4b. The status line names the terminals in one comma-separated run; it
+   * cannot say which pin on the drawing each one is. The list does, in the
+   * declaration order the netlist writes the nodes in.
+   */
+  it("lists the terminals in declaration order with the side each sits on", async () => {
+    const selected = {
+      id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    useSchematic.setState({ components: [selected] });
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+
+    const chooser = screen.getByRole("combobox", { name: "Subcircuit model" });
+    fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });
+    const driver = await screen.findByRole("option", { name: /TauDeadtimeDriver · 5 terminals/ });
+    fireEvent.pointerUp(driver, { button: 0, pointerId: 1, pointerType: "mouse" });
+    fireEvent.click(driver);
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+
+    const ports = screen.getByRole("list", { name: "Terminal order" });
+    const rows = [...ports.querySelectorAll("li")].map((row) => row.textContent);
+    expect(rows).toEqual(["1vccleft", "2veeleft", "3pwmleft", "4gpright", "5gnright"]);
+    // The sides are read off the instance's own pin bank, so they describe this
+    // placement rather than a generic guess.
+    expect(useSchematic.getState().components[0].pinOverride?.map((pin) => pin.x))
+      .toEqual([-48, -48, -48, 48, 48]);
+  });
+
+  it("offers the route from a .lib file to the sheet even once a model resolves", () => {
+    const selected = {
+      id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    const openLibraries = vi.fn();
+    useSchematic.setState({ components: [selected] });
+    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+
+    expect(screen.getByRole("status").textContent).toContain("Ready · 2 named terminals");
+    expect(screen.getByText(/Attach a .lib or .sub file in Model Libraries/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
+    expect(openLibraries).toHaveBeenCalledOnce();
+  });
+
   it("blocks an unresolved model and routes the user to Model Libraries", () => {
     const selected = {
       id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
@@ -744,6 +789,145 @@ describe("ComponentInspector - independent source waveform controls", () => {
     expect(screen.getByRole("textbox", { name: "Amplitude" })).toBeTruthy();
     expect(screen.queryByDisplayValue(/SINE\(/)).toBeNull();
     expect(document.querySelector(".source-value-editor select[aria-label='Waveform type']")).toBeNull();
+  });
+});
+
+/**
+ * Item 4b. The behavioral source reached the reader as one box labelled "Value"
+ * holding `V=1`: nothing said it was an expression, what could appear in it, or
+ * that deleting the `V=` head is what makes the run fail. The panel now judges
+ * the value with the same code the deck builds it with.
+ */
+describe("ComponentInspector - behavioral source", () => {
+  const bsource = (value: string) => ({
+    id: "b-1",
+    kind: "bsource" as const,
+    x: 160,
+    y: 160,
+    rotation: 0 as const,
+    value,
+    label: "B1",
+  });
+
+  const place = (value: string) => {
+    const selected = bsource(value);
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    return selected;
+  };
+
+  it("splits the value into an output mode and an expression, with no raw Value box", () => {
+    render(<ComponentInspector selected={place("V=1")} />);
+
+    const mode = screen.getByRole("combobox", { name: "Behavioral output" });
+    expect(mode.tagName).toBe("BUTTON");
+    expect(mode.getAttribute("data-slot")).toBe("select-trigger");
+    expect(mode.textContent).toContain("Voltage (V=)");
+    expect(document.querySelector("select[aria-label='Behavioral output']")).toBeNull();
+    expect((screen.getByRole("textbox", { name: "Expression" }) as HTMLInputElement).value).toBe("1");
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+  });
+
+  it("writes an edited expression as exactly the spec the deck builder reads", () => {
+    render(<ComponentInspector selected={place("V=1")} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Expression" }), {
+      target: { value: "V(a)-V(b)" },
+    });
+    expect(useSchematic.getState().components[0].value).toBe("V=V(a)-V(b)");
+    expect(behavioralSpecText(useSchematic.getState().components[0].value)).toBe("V=V(a)-V(b)");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("switches to a current output without the reader retyping the I= head", async () => {
+    const selected = place("V=V(a)*2");
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+
+    const mode = screen.getByRole("combobox", { name: "Behavioral output" });
+    fireEvent.pointerDown(mode, { button: 0, pointerId: 1, pointerType: "mouse" });
+    const current = await screen.findByRole("option", { name: "Current (I=)" });
+    fireEvent.pointerUp(current, { button: 0, pointerId: 1, pointerType: "mouse" });
+    fireEvent.click(current);
+
+    expect(useSchematic.getState().components[0].value).toBe("I=V(a)*2");
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    expect(screen.getByRole("combobox", { name: "Behavioral output" }).textContent).toContain("Current (I=)");
+    expect((screen.getByRole("textbox", { name: "Expression" }) as HTMLInputElement).value).toBe("V(a)*2");
+    expect(screen.getByText(/from the \+ pin through the source to the - pin/)).toBeTruthy();
+  });
+
+  it("refuses a malformed expression in the panel, with the reason, before any run", () => {
+    const selected = place("V=1");
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Expression" }), {
+      target: { value: "V(a)+" },
+    });
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    expect(screen.getByRole("alert").textContent).toContain("Unexpected end of expression");
+    expect(screen.getByRole("textbox", { name: "Expression" }).getAttribute("aria-invalid")).toBe("true");
+    // The reason is the engine's, so the panel cannot disagree with the run.
+    expect(() => behavioralSpecText("V=V(a) V(b)")).not.toThrow();
+    expect(checkBehavioral("V=V(a)+").reason).toBe(screen.getByRole("alert").textContent);
+  });
+
+  it("names the missing expression rather than letting the run raise it", () => {
+    const selected = place("V=1");
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Expression" }), { target: { value: "" } });
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    expect(screen.getByRole("alert").textContent).toBe("Behavioral source needs a V=/I= expression.");
+    expect(() => behavioralSpecText(useSchematic.getState().components[0].value)).toThrow();
+  });
+
+  it("hands the reader the vocabulary and a worked expression to start from", () => {
+    const selected = place("V=1");
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+
+    expect(screen.queryByText("current through the part labelled R1")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle expression reference" }));
+    expect(screen.getByText("current through the part labelled R1")).toBeTruthy();
+    expect(screen.getByText("seconds since the run started")).toBeTruthy();
+    expect(screen.getByLabelText("Available functions").textContent).toContain("limit(x, lo, hi)");
+
+    fireEvent.click(screen.getByRole("button", { name: /if\(V\(in\)>2\.5, 5, 0\)/ }));
+    expect(useSchematic.getState().components[0].value).toBe("V=if(V(in)>2.5, 5, 0)");
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+/**
+ * Item 4b. The VCO's value is `mark=1K space=1K`, and nothing in the panel said
+ * it was an oscillator, that those are frequencies, or what its FM, AM and COM
+ * pins do - and two of those pins have no field to hang a description on.
+ */
+describe("ComponentInspector - modulator (VCO)", () => {
+  it("names both frequencies and says what each pin drives", () => {
+    const selected = {
+      id: "a-vco",
+      kind: "modulator" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "mark=1K space=1K",
+      label: "A1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    const mark = screen.getByRole("textbox", { name: "Mark frequency" }) as HTMLInputElement;
+    expect(mark.value).toBe("1");
+    expect(screen.getByRole("combobox", { name: "Mark frequency SI prefix" }).textContent).toContain("kHz");
+    expect((screen.getByRole("textbox", { name: "Space frequency" }) as HTMLInputElement).value).toBe("1");
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+
+    expect(screen.getByText(/Voltage-controlled oscillator/)).toBeTruthy();
+    expect(screen.getByText(/AM scales the amplitude/)).toBeTruthy();
+    expect(screen.getByText("Output frequency while the FM pin sits at 1 V.")).toBeTruthy();
+
+    fireEvent.change(mark, { target: { value: "2" } });
+    expect(useSchematic.getState().components[0].value).toBe("mark=2k space=1K");
   });
 });
 
