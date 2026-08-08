@@ -11,6 +11,11 @@ import { parseQuantity } from "../simulation/quantity";
  * {buf, and, or, xor, schmitt}, and inversion falls out of *which output pin*
  * a line drives. Floating inputs are ignored (LTspice semantics).
  *
+ * That pin contract is the IMPORT's, not the symbol Tau places. A gate placed
+ * in Tau exposes N inputs and one output, because that is what a logic gate
+ * has; see `schematic/pins.ts` and {@link nativelyPlacedGateSpec}, which is
+ * where the two readings of `inv`/`schmtinv` are reconciled.
+ *
  * Emission is a B-source per connected output using the ternary `cond ? a : b`
  * idiom (live-verified in ngspice-46; LTspice 17.2.4 accepts the same form).
  * Multi-input AND/OR must NOT use C-style `&&`/`||` — LTspice rejects those
