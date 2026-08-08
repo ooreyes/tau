@@ -560,20 +560,22 @@ schematic to match a new symbol is worse than telling them which two wires to
 move. Named, not repaired — the same contract as `retiredKinds`. Redrawing a
 part in future means adding a row to `relocatedPins.ts`.
 
-## Left open (small, named)
+## Left open
 
-- **Item 6:** the potentiometer wiper is not draggable, and there is no hover
-  affordance telling a reader a contact is operable. Behaviour and drawing both
-  work.
-- **Item 8:** nothing outstanding in the models; the Advanced disclosure landed.
-- **`io/ascImport.ts`:** an imported `Digital\and` keeps five `pinOverride`
-  inputs while its value names no count, so the body draws two leads and three
-  import leads start 8 units off it. Appending `Inputs=<n>` at import fixes it,
-  but that changes the exported `Value` attribute which `ascExport.test.ts`
-  round-trips -- do both together.
-- **Saved documents wired to the old digital pin positions** need those wires
-  re-attached. Pin ids and order did not change, only coordinates, and there is
-  no endpoint-relocation path today.
+Nothing in items 0-9 or 4b. The three tails that were listed here are done:
+the wiper drags, the hover affordance landed (`simulatorOperability` plus
+`.operable` / `.operable-wiper` / `.operable-hover`), the imported gate carries
+its input count, and `relocatedPins.ts` names the parts a saved document has to
+re-attach.
+
+One thing outside this mission is in flight: a **standalone Settings window**
+(General / Profile / Model configuration / Usage, provider keys in the OS
+keychain, and an unmissable statement that the user pays their own provider
+bills). Not tracked here because it is a different surface.
+
+**Redrawing any part in future means adding a row to `relocatedPins.ts`**, the
+same way retiring a kind means adding one to `retiredKinds.ts`. That is the
+only standing obligation this mission leaves behind.
 
 ## Status at 2026-08-08 11:00
 

@@ -1124,8 +1124,11 @@ function symbolArtwork(kind: ComponentKind, value?: string) {
       return (
         <>
           <FlopBody left={[-16, 0, 16]} clockRow={16} asyncControls />
-          {/* JK glyph */}
-          <path d="M -4 -5 V 5 M -4 0 L -1 5 M 1 -5 V 5 M 1 0 L 4.5 -5 M 1 0 L 4.5 5" />
+          {/* No centre glyph. The D and T flops keep theirs because a single
+              letter still reads when the captions are too small to; "JK" drawn
+              as five strokes in nine units does not, and an illegible mark is
+              worse than none. Every pin here is named, so the part identifies
+              itself without it. */}
         </>
       );
 
