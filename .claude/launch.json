@@ -6,12 +6,6 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["-C", "apps/desktop", "dev"],
       "port": 1420
-    },
-    {
-      "name": "tau-web-gates",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["-C", "apps/desktop", "exec", "vite", "--port", "1451", "--strictPort"],
-      "port": 1451
     }
   ]
 }

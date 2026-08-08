@@ -178,7 +178,14 @@ export const GATE_COM_Y = 32;
 const GATE_COM_FLOOR_X = -16;
 
 /**
- * Where the `com` reference terminal sits.
+ * Where the `com` reference terminal sits — on an IMPORTED gate only.
+ *
+ * A natively placed gate has no `com`: the deck refers every comparison and
+ * every output to ground when the pin is absent, so the reference was a stub
+ * off the bottom edge that read as a stray input and could not change any
+ * result. What remains is the imported `.asy`, whose own symbol really does
+ * carry the terminal, plus the kind's dictionary entry the importer maps
+ * through (`schematic/pins.ts`).
  *
  * It follows the body, because the body grows with the input count and the
  * terminal has to stay on it AND inside the ±42 × ±40 preview. A short gate
@@ -186,10 +193,6 @@ const GATE_COM_FLOOR_X = -16;
  * floor left under y = 32, so the reference leaves the nose on that row
  * instead. Both are on the 16 grid and both fit the preview - pinning the
  * reference at y = 48, as it was, put every gate 8 units outside it.
- *
- * The bank re-lays anyway at that transition (the input rows go from ±16 to
- * ±32), so the reference moving with it is the consistent rule rather than an
- * extra surprise.
  */
 export function gateComPoint(inputs: number): { x: number; y: number } {
   const half = gateBodyHalfHeight(inputs);
