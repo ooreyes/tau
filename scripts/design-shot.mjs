@@ -72,6 +72,38 @@ const SERVER_READY_TIMEOUT_MS = 45_000;
 const STATE_TIMEOUT_MS = 15_000;
 const SYSTEM_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
+// Mirrors apps/desktop/src/components/shellContract.ts. That file is the
+// single source of truth for shell accessible names/roles; this script is
+// plain Node ESM and shellContract.ts is TypeScript, so the pairs are
+// hand-copied here rather than imported (no build step for this script).
+// UPDATE THIS MAP WHENEVER shellContract.ts CHANGES - a drift here means this
+// script silently stops proving the surface it claims to.
+const SHELL = {
+  canvas: { role: "main", name: "Schematic canvas" },
+  navRail: { role: "navigation", name: "Workspace sections" },
+  explorer: { role: "complementary", name: "Project explorer" },
+  componentsRail: { role: "complementary", name: "Components" },
+  settings: { role: "dialog", name: "Settings" },
+  circuitOverview: { role: "region", name: "Circuit overview" },
+};
+// shellContract.ts's PLANNED.partsPalette - filed there as a future surface,
+// but CommandPalette.tsx already implements it today (title="Add component"
+// passed through ui/command's CommandDialog to a ui/Dialog, so the live
+// role="dialog" element already carries this exact accessible name).
+const PARTS_PALETTE = { role: "dialog", name: "Add component" };
+const SHELL_CONTROLS = {
+  railSearch: "Search",
+  railComponents: "Components",
+  transportRun: "Run simulation",
+  transportSettings: "Settings",
+  closeSettings: "Close settings",
+};
+// Mirrors shellContract.ts's inspectorName(designator) => `${designator}
+// properties`. Which designator renders first depends on document order of
+// the imported .asc's components, so match the shape of the name rather than
+// a literal string.
+const INSPECTOR_NAME_PATTERN = /\sproperties$/;
+
 const label = process.argv[2] ?? new Date().toISOString().replace(/[:.]/g, "-");
 if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(label)) {
   throw new Error("screenshot label must contain only letters, numbers, dots, underscores, and hyphens");
@@ -216,8 +248,27 @@ async function shootViewport(page, viewport, theme) {
 
   // --- empty: fresh load, blank scratchpad -------------------------------
   await page.goto(DEV_URL, { waitUntil: "networkidle", timeout: NAV_TIMEOUT_MS });
+  // `.toolbar` stays a classname wait: it's the app's header chrome, not one
+  // of the named landmarks in shellContract.ts, so there is no contract
+  // string to point this at. Revisit if the redesign gives it an accessible
+  // name of its own.
   await page.waitForSelector(".toolbar", { timeout: STATE_TIMEOUT_MS });
-  await page.waitForSelector(".explorer-panel", { timeout: STATE_TIMEOUT_MS });
+  // Tolerant and incidental to all 8 named states: `pendingRecovery`
+  // (App.tsx) reads its autosave snapshot synchronously on mount, so an
+  // earlier viewport iteration's dev-bridge import (which autosaves like any
+  // real edit) can make this alertdialog appear on the NEXT viewport's fresh
+  // reload. It's a real modal - it removes sibling landmarks, including the
+  // explorer, from the accessibility tree exactly like Settings does (see
+  // App.shellContract.test.tsx) - so it must be dismissed before any
+  // role-based wait below, or every one of them fails for a reason that has
+  // nothing to do with the state being captured.
+  const recoveryDialog = page.getByRole("alertdialog", { name: "Restore unsaved work?" });
+  if (await recoveryDialog.waitFor({ state: "visible", timeout: 2_000 }).then(() => true, () => false)) {
+    await recoveryDialog.getByRole("button", { name: "Discard" }).click();
+    await recoveryDialog.waitFor({ state: "detached", timeout: STATE_TIMEOUT_MS });
+  }
+  const explorer = page.getByRole(SHELL.explorer.role, { name: SHELL.explorer.name });
+  await explorer.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150); // settle animations/spring transitions
   await page.screenshot({ path: path.join(outDir, `empty-${theme}-${viewport.name}.png`), fullPage: true });
 
@@ -237,10 +288,27 @@ async function shootViewport(page, viewport, theme) {
     [path.basename(SAMPLE_ASC), sampleAscText],
   );
 
-  const exampleButton = page.locator(".explorer-panel .tree-file").first();
+  // `.tree-file` stays a classname: it's one row inside the explorer, not a
+  // shell surface in its own right, and rows carry no role/name pair in
+  // shellContract.ts. Scoping the locator inside the role-based explorer
+  // still proves the explorer itself is the real one, not a stray match.
+  const exampleButton = explorer.locator(".tree-file").first();
   await exampleButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await exampleButton.click();
-  await page.waitForSelector(".stage .component", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
+  // Opening a tree file is async (readSim -> onOpenAscText), so a bare
+  // "did a .component show up yet" check right after the click is a race:
+  // pre-existing content from a still-active previous tab can satisfy it
+  // before the new file finishes loading. Waiting for the tab bar to report
+  // the intended file as active closes that race - found while re-pointing
+  // this exact click, and confirmed present on HEAD before this change too
+  // (both scripts, run repeatedly, occasionally opened the wrong file).
+  await page.locator(".editor-tab.active", { hasText: path.basename(SAMPLE_ASC) })
+    .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  const canvas = page.getByRole(SHELL.canvas.role, { name: SHELL.canvas.name });
+  // Hard wait: "schematic" is named for an imported circuit actually showing
+  // on the canvas, so a component that never renders must fail the run
+  // instead of silently screenshotting an empty canvas.
+  await canvas.locator(".component").first().waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(outDir, `schematic-${theme}-${viewport.name}.png`), fullPage: true });
 
@@ -251,9 +319,16 @@ async function shootViewport(page, viewport, theme) {
   // (skip Playwright's topmost-element check, which the background grid
   // rect can otherwise fail depending on where a symbol's stroke falls
   // inside its bounding box) is correct here, not a workaround.
-  const firstComponent = page.locator(".stage .component").first();
+  const firstComponent = canvas.locator(".component").first();
   await firstComponent.click({ force: true });
-  await page.waitForSelector(".component-inspector .property-group", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
+  // Hard wait: "inspector" means a selected component's properties are
+  // visible, not merely that something got selected, so the actual property
+  // group (aria-label `${designator} properties` - see shellContract.ts's
+  // inspectorName()) inside the componentsRail dock must appear or the run
+  // fails rather than screenshotting the "No Selection" placeholder.
+  const componentsRail = page.getByRole(SHELL.componentsRail.role, { name: SHELL.componentsRail.name });
+  await componentsRail.getByRole("region", { name: INSPECTOR_NAME_PATTERN }).first()
+    .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `inspector-${theme}-${viewport.name}.png`), fullPage: true });
 
@@ -262,11 +337,18 @@ async function shootViewport(page, viewport, theme) {
     ([name, text]) => window.__TAU_DEV__.importAscText(name, text),
     [path.basename(MODEL_ASC), modelAscText],
   );
-  const modelFileButton = page.locator(".explorer-panel .tree-file", { hasText: path.basename(MODEL_ASC) });
+  const modelFileButton = explorer.locator(".tree-file", { hasText: path.basename(MODEL_ASC) });
   await modelFileButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await modelFileButton.click();
-  await page.locator('.activity-rail button[aria-label="Components"]').click();
-  await page.waitForSelector(".stage .component", { timeout: STATE_TIMEOUT_MS });
+  // See the schematic-state comment above: wait for the tab switch to land
+  // before touching canvas content.
+  await page.locator(".editor-tab.active", { hasText: path.basename(MODEL_ASC) })
+    .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  await page
+    .getByRole(SHELL.navRail.role, { name: SHELL.navRail.name })
+    .getByRole("button", { name: SHELL_CONTROLS.railComponents })
+    .click();
+  await canvas.locator(".component").first().waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   const selectedPowerMosfet = await page.evaluate(() => window.__TAU_DEV__.selectComponent("M1"));
   if (!selectedPowerMosfet) throw new Error("buck-converter PMOS M1 was not imported");
   // Simulation model is shadcn ui/Select (Radix), not a native <select>.
@@ -312,10 +394,14 @@ async function shootViewport(page, viewport, theme) {
     ([name, text]) => window.__TAU_DEV__.importAscText(name, text),
     ["tau-native-deadtime.asc", subcircuitAscText],
   );
-  const subcircuitFileButton = page.locator(".explorer-panel .tree-file", { hasText: "tau-native-deadtime.asc" });
+  const subcircuitFileButton = explorer.locator(".tree-file", { hasText: "tau-native-deadtime.asc" });
   await subcircuitFileButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await subcircuitFileButton.click();
-  await page.waitForSelector(".stage .component", { timeout: STATE_TIMEOUT_MS });
+  // See the schematic-state comment above: wait for the tab switch to land
+  // before touching canvas content.
+  await page.locator(".editor-tab.active", { hasText: "tau-native-deadtime.asc" })
+    .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  await canvas.locator(".component").first().waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   const selectedSubcircuit = await page.evaluate(() => window.__TAU_DEV__.selectComponent("X1"));
   if (!selectedSubcircuit) throw new Error("native five-terminal subcircuit X1 was not imported");
   // Subcircuit model is shadcn ui/Select (Radix), not a native <select>.
@@ -358,17 +444,31 @@ async function shootViewport(page, viewport, theme) {
   await page.screenshot({ path: path.join(outDir, `subcircuit-${theme}-${viewport.name}.png`), fullPage: true });
 
   // Return to the linear RC fixture for the browser-fallback solver proof.
-  await page.locator(".explorer-panel .tree-file", { hasText: path.basename(SAMPLE_ASC) }).click();
+  await explorer.locator(".tree-file", { hasText: path.basename(SAMPLE_ASC) }).click();
+  await page.locator(".editor-tab.active", { hasText: path.basename(SAMPLE_ASC) })
+    .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
 
   // --- simulator: click Run, switch to scope view -------------------------
-  const runButton = page.locator('button[aria-label="Run simulation"]').first();
+  // Two buttons share this accessible name at once: the always-visible
+  // Toolbar transport button and EditorToolbar's transport-play button.
+  // `.first()` picks the Toolbar one (today's DOM order), which is the one
+  // this pipeline has always driven.
+  const runButton = page.getByRole("button", { name: SHELL_CONTROLS.transportRun }).first();
   await runButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await runButton.click();
-  await page.waitForSelector(".app-simulator", { timeout: STATE_TIMEOUT_MS });
-  // Web mode has no native ngspice bridge but the TS-fallback transient
-  // solver still runs in-browser (see isNativeSpiceRuntime in
-  // apps/desktop/src/engine/nativeSpice.ts) - wait for either a real trace or
-  // a settled error/empty scope state, whichever the run produces.
+  // Hard wait: `circuitOverview` is the one surface the "simulator" state is
+  // actually named after, so a run that never reaches it must fail loudly.
+  // (Previously this waited on `.app-simulator`, which matches - it is a
+  // literal class token on the root `<div className="app app-${mode}">` -
+  // but that only proves `mode` flipped, not that the simulator surface
+  // itself rendered.)
+  await page.getByRole(SHELL.circuitOverview.role, { name: SHELL.circuitOverview.name })
+    .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  // Tolerant: web mode has no native ngspice bridge but the TS-fallback
+  // transient solver still runs in-browser (see isNativeSpiceRuntime in
+  // apps/desktop/src/engine/nativeSpice.ts) - a real trace and a settled
+  // error/empty scope state are both legitimate outcomes for this fixture
+  // (module doc comment above), so neither is required.
   await page
     .waitForSelector(".scope-svg .scope-trace, .scope-shell", { timeout: STATE_TIMEOUT_MS })
     .catch(() => {});
@@ -376,20 +476,37 @@ async function shootViewport(page, viewport, theme) {
   await page.screenshot({ path: path.join(outDir, `simulator-${theme}-${viewport.name}.png`), fullPage: true });
 
   // --- dialog: settings panel ----------------------------------------------
-  const settingsButton = page.locator('button[aria-label="Settings"]').first();
+  // Same "Settings" name collision as the Run button above (Toolbar + the
+  // ActivityRail rail button both use it) - `.first()` picks the Toolbar
+  // gear icon, matching today's DOM order and this state's own description.
+  const settingsButton = page.getByRole("button", { name: SHELL_CONTROLS.transportSettings }).first();
   await settingsButton.click();
-  await page.waitForSelector('.settings-panel[role="dialog"]', { timeout: STATE_TIMEOUT_MS });
+  // Hard wait: this state is named for the settings surface itself, which is
+  // now a real ui/Dialog (Radix) rather than the old hand-rolled
+  // `.settings-panel` - that class no longer exists in the DOM at all, so
+  // this wait would previously have hung for its own state's screenshot.
+  const settingsDialog = page.getByRole(SHELL.settings.role, { name: SHELL.settings.name });
+  await settingsDialog.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `dialog-${theme}-${viewport.name}.png`), fullPage: true });
-  await page.locator('button[aria-label="Close settings"]').click();
-  await page.waitForSelector('.settings-panel[role="dialog"]', { state: "detached", timeout: STATE_TIMEOUT_MS });
+  await page.getByRole("button", { name: SHELL_CONTROLS.closeSettings }).click();
+  await settingsDialog.waitFor({ state: "detached", timeout: STATE_TIMEOUT_MS });
 
   // --- command: command palette --------------------------------------------
   // Drive it via the always-visible rail search button rather than the
   // Cmd/Ctrl+K shortcut: Chromium can swallow that combo as a browser-level
   // binding before it reaches the page's keydown listener.
-  await page.locator('.activity-rail button[aria-label="Search"]').click();
-  await page.waitForSelector('.cmdk[role="dialog"]', { timeout: STATE_TIMEOUT_MS });
+  await page
+    .getByRole(SHELL.navRail.role, { name: SHELL.navRail.name })
+    .getByRole("button", { name: SHELL_CONTROLS.railSearch })
+    .click();
+  // Hard wait: this state is named for the palette itself being open. Same
+  // situation as Settings above - the old `.cmdk[role="dialog"]` selector
+  // never matched (the live role="dialog" element carries class
+  // "cmdk-dialog", not "cmdk"), so this would already have hung on its own
+  // state.
+  await page.getByRole(PARTS_PALETTE.role, { name: PARTS_PALETTE.name })
+    .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `command-${theme}-${viewport.name}.png`), fullPage: true });
   await page.keyboard.press("Escape");
