@@ -1784,9 +1784,43 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select V(out) for cursor measurement" }));
   }
 
+  /**
+   * The color chip beside the trace name is the only way to reach the picker
+   * now. Radix's DropdownMenuTrigger opens on `pointerdown`, not `click` (see
+   * DropdownMenuTrigger in @radix-ui/react-dropdown-menu), so a plain
+   * `fireEvent.click` never opens it under jsdom.
+   */
+  function openColorPicker(label: string) {
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: `Change ${label} colour` }),
+      { button: 0, ctrlKey: false },
+    );
+  }
+
+  it("does not put the swatch row in the document for a merely-selected trace", () => {
+    renderTwoTracePanel();
+    selectOutTrace();
+
+    expect(screen.queryByRole("group", { name: "Color for V(out)" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Set V(out) trace color to green" })).toBeNull();
+  });
+
+  it("opens the picker from the trace's color chip and reaches all six presets", () => {
+    renderTwoTracePanel();
+    selectOutTrace();
+
+    const chip = screen.getByRole("button", { name: "Change V(out) colour" });
+    expect(chip.getAttribute("aria-haspopup")).toBe("true");
+
+    openColorPicker("V(out)");
+    const swatches = screen.getByRole("group", { name: "Color for V(out)" });
+    expect(swatches.querySelectorAll("button")).toHaveLength(6);
+  });
+
   it("marks a preset another trace already uses, without disabling it", () => {
     renderTwoTracePanel();
     selectOutTrace();
+    openColorPicker("V(out)");
 
     // V(in) is green, so green is a confusing choice for V(out) - say so.
     const green = screen.getByRole("button", {
@@ -1801,19 +1835,37 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     expect(sky.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("choosing a preset changes the trace color and closes the popover", () => {
+    renderTwoTracePanel();
+    selectOutTrace();
+    openColorPicker("V(out)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Set V(out) trace color to orange" }));
+
+    // Closed - the swatch row is gone again, not just visually hidden.
+    expect(screen.queryByRole("group", { name: "Color for V(out)" })).toBeNull();
+
+    // The chip is the rendered proof the color actually changed.
+    const chip = screen.getByRole("button", { name: "Change V(out) colour" });
+    expect(chip.querySelector("i")?.getAttribute("style")).toContain("var(--trace-amber)");
+  });
+
   it("offers an arbitrary color beyond the six presets and applies it to the trace", () => {
     renderTwoTracePanel();
     selectOutTrace();
+    openColorPicker("V(out)");
 
     const picker = screen.getByLabelText("Pick a custom color for V(out)") as HTMLInputElement;
     expect(picker.type).toBe("color");
     fireEvent.change(picker, { target: { value: "#ff00aa" } });
 
-    // The legend swatch is the rendered proof the override reached the trace.
-    const legendSwatch = screen
-      .getByRole("button", { name: "Select V(out) for cursor measurement" })
-      .querySelector("i");
-    expect(legendSwatch?.getAttribute("style")).toContain("rgb(255, 0, 170)");
+    // The chip beside the trace name is the rendered proof the override reached
+    // the trace. The popover is still open at this point (the custom color well
+    // deliberately does not auto-close - see the comment by the input), and the
+    // open Radix menu marks the rest of the app aria-hidden, so the accessible
+    // role query would not find the trigger; a plain DOM query still can.
+    const chip = document.querySelector('button[aria-label="Change V(out) colour"]');
+    expect(chip?.querySelector("i")?.getAttribute("style")).toContain("rgb(255, 0, 170)");
   });
 
   it("moves a cursor to an exact typed time from beside the trace", async () => {

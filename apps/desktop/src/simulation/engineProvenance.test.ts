@@ -81,9 +81,11 @@ describe("engine copy", () => {
   });
 
   it("says out loud that the preview solver is a subset, so its badge is a caveat", () => {
-    // Keep the badge honest: not ngspice, and vendor/nonlinear work is refused
+    // Keep the badge honest: it must disown ngspice and say that vendor and
+    // nonlinear work is refused rather than approximated. Matched loosely on
+    // purpose - this pins the claim, not one phrasing of it.
     // (exact phrasing may shift; the claims must stay).
-    expect(ENGINE_DESCRIPTIONS.preview).toMatch(/not ngspice/i);
+    expect(ENGINE_DESCRIPTIONS.preview).toMatch(/not (by )?ngspice/i);
     expect(ENGINE_DESCRIPTIONS.preview).toMatch(/refuses vendor models/i);
     expect(ENGINE_DESCRIPTIONS.preview).toMatch(/nonlinear/i);
     expect(ENGINE_LABELS.preview).not.toBe(ENGINE_LABELS.ngspice);

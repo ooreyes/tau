@@ -50,13 +50,26 @@ export function resolveEngineResult<T extends object>(
   return native ? withEngine(native, "ngspice") : withEngine(fallback(), "preview");
 }
 
+/**
+ * Every result is labelled with the engine that produced it. That is a promise
+ * rather than a detail: Tau never substitutes a model silently, so a number on
+ * screen always says what solved it.
+ *
+ * The preview engine used to be labelled "Linear preview" and described as a
+ * "linear MNA preview". Both were written from the inside. "MNA" is an
+ * implementation detail, which DESIGN_SYSTEM.md section 6 forbids naming to a
+ * user, and "linear" is a property of the solver, not an answer to the question
+ * the reader is actually asking, which is "can I trust this number". The label
+ * now names the engine plainly and the description leads with the honest
+ * comparison and with what it will refuse to do rather than guess.
+ */
 export const ENGINE_LABELS: Record<SimulationEngine, string> = {
   ngspice: "ngspice",
-  preview: "Linear preview",
+  preview: "Preview engine",
 };
 
 export const ENGINE_DESCRIPTIONS: Record<SimulationEngine, string> = {
   ngspice: "Solved by bundled ngspice with each part's authored device model.",
   preview:
-    "Not ngspice. Tau's linear MNA preview handles R/C/L, sources, diodes and ideal op-amps. It refuses vendor models and nonlinear devices. Use the desktop app for ngspice results.",
+    "Solved by Tau's built-in preview engine, not by ngspice. It is accurate for resistors, capacitors, inductors, sources, diodes and ideal op-amps. It refuses vendor models and nonlinear parts rather than guessing at them. Run this in the desktop app for an ngspice result.",
 };

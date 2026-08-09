@@ -1797,7 +1797,7 @@ function App() {
     }
     openDocument(doc, basename(path), path, [], {
       diskFingerprint: diskContentFingerprint(exported.text),
-      notice: `Loaded ${meta.name} — press Run to simulate.`,
+      notice: `Loaded ${meta.name}. Press Run to simulate.`,
     });
     setLearningPath(startLearningPath());
     setLearningPathCoachHidden(false);

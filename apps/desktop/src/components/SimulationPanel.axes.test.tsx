@@ -84,6 +84,8 @@ describe("WaveformPlot (TRAN) - real tick axes", () => {
       />,
     );
 
+    // Radix's DropdownMenuTrigger opens on pointerdown, not click.
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Change V(out) colour" }), { button: 0 });
     fireEvent.click(screen.getByRole("button", { name: "Set V(out) trace color to green" }));
     expect(container.querySelector(".scope-trace")?.getAttribute("stroke")).toBe("var(--trace-green)");
 

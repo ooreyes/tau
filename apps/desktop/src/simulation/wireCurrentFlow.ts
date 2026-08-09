@@ -486,6 +486,54 @@ export function segmentFlowCurrents(
   return out;
 }
 
+/** Smallest, largest and mean branch current over a whole run. */
+export interface CurrentRange {
+  /** Amps, unsigned. */
+  min: number;
+  max: number;
+  mean: number;
+}
+
+/**
+ * The range of branch current across every part and every instant of a run.
+ *
+ * Current Mode's legend used to quote one instantaneous number. During a
+ * transient that number changes every frame, which for the student this is
+ * built for is close to useless: a digit-storm carries no meaning, and it is
+ * the same "animating a value the reader cannot read" failure the design
+ * system warns about. A range is stable, and it is what someone learning RC
+ * charging actually wants to know: the current starts near 5 mA and decays to
+ * nothing, averaging about 1 mA.
+ *
+ * Unsigned on purpose. Direction is already carried by the arrow in the
+ * legend's mark and by the dots' travel, so folding sign into the range would
+ * make the minimum of a bidirectional circuit read as a large negative number
+ * rather than as "briefly close to zero".
+ */
+export function currentRangeOverRun(
+  result: Extract<AnalysisResult, { ok: true }>,
+): CurrentRange | null {
+  let min = Number.POSITIVE_INFINITY;
+  let max = 0;
+  let total = 0;
+  let count = 0;
+  for (const { component } of result.circuit.components) {
+    if (!component.label) continue;
+    const trace = findCurrentTrace(result.currents, component.label);
+    if (!trace) continue;
+    for (const value of trace.values) {
+      if (!Number.isFinite(value)) continue;
+      const amps = Math.abs(value);
+      if (amps < min) min = amps;
+      if (amps > max) max = amps;
+      total += amps;
+      count += 1;
+    }
+  }
+  if (count === 0) return null;
+  return { min: min === Number.POSITIVE_INFINITY ? 0 : min, max, mean: total / count };
+}
+
 export function peakAbsCurrent(currents: ReadonlyMap<string, number>): number {
   let peak = 0;
   for (const v of currents.values()) {

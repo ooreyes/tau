@@ -1822,8 +1822,10 @@ body {
 }
 
 /* A trace is an interactive instrument channel, not a passive legend row.
-   Selecting it reveals the validated color-safe palette and makes C1/C2 glide
-   over that exact series. All colors remain token-backed. */
+   Selecting it makes C1/C2 glide over that exact series. The color chip
+   beside the name opens the validated color-safe palette in a popover
+   (see .trace-color-popover) rather than showing it always. All colors
+   remain token-backed. */
 .trace-interaction {
   min-width: 0;
   padding: var(--sp-1);
@@ -1866,7 +1868,33 @@ body {
   text-align: left;
 }
 
-.trace-interaction__select i {
+/* The chip beside the trace name IS the recolor affordance - clicking it
+   opens the popover below, so it has to be a real, focusable button rather
+   than the decorative dot it used to be inside `.trace-interaction__select`. */
+.trace-interaction__swatch {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.trace-interaction__swatch:hover {
+  border-color: var(--border-strong);
+}
+
+.trace-interaction__swatch:focus-visible {
+  outline: 2px solid var(--focus, var(--text));
+  outline-offset: 2px;
+}
+
+.trace-interaction__swatch i {
   width: 10px;
   height: 10px;
   flex: none;
@@ -1930,15 +1958,23 @@ body {
   font-family: var(--font-mono);
 }
 
-.trace-interaction__palette {
+/* Popover surface anchored to the trace's color chip (ui/dropdown-menu). Sized
+   to the swatch row's own content rather than the menu-list default width -
+   this holds six dots and a color well, not a column of labelled items. */
+.trace-color-popover {
+  min-width: 0;
+  width: max-content;
+}
+
+.trace-color-popover__swatches {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 30px;
-  padding: 0 var(--sp-1) var(--sp-2);
+  min-height: 22px;
+  padding: var(--sp-1);
 }
 
-.trace-interaction__palette button {
+.trace-color-popover__swatches button {
   width: 18px;
   height: 18px;
   padding: 0;
@@ -1947,19 +1983,19 @@ body {
   cursor: pointer;
 }
 
-.trace-interaction__palette button.active {
+.trace-color-popover__swatches button.active {
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
 
 /* A preset another trace already wears. Still selectable - the notch just warns
    that picking it makes two traces look alike. */
-.trace-interaction__palette button.taken {
+.trace-color-popover__swatches button.taken {
   position: relative;
   opacity: 0.5;
 }
 
-.trace-interaction__palette button.taken::after {
+.trace-color-popover__swatches button.taken::after {
   content: "";
   position: absolute;
   inset: 50% 1px auto 1px;
@@ -2743,6 +2779,10 @@ body {
   opacity: 0.85;
 }
 
+/* The label names what the green means, so it carries the accent, and it is
+   the whisper of the pair. The measured value is the thing being read. Two
+   steps of the scale apart (9px caption against 11px mono value), which is the
+   reference plates' large-value / tiny-label move at legend scale. */
 .flow-legend-label {
   font-family: var(--font-ui);
   font-size: var(--fs-micro);
@@ -2751,10 +2791,40 @@ body {
   color: var(--trace-green);
 }
 
-.flow-legend-scale {
+/* Three readings sit in one row on a canvas that can be 280px wide, so the
+   gaps between them are tighter than the gap that separates them from the
+   CURRENT label. */
+.flow-legend-reading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+}
+
+.flow-legend-value {
+  display: inline-flex;
+  align-items: baseline;
+  /* The unit is part of the number, so it sits hard against it rather than a
+     full space away (DESIGN_SYSTEM.md section 2.2). */
+  gap: 2px;
   font-family: var(--font-mono);
+  /* Tabular figures matter more here than anywhere: these three sit in a row
+     and a proportional font would shuffle them sideways on every re-render. */
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-caption);
+  color: var(--text);
+}
+
+/* One step down and dimmer, baseline-aligned, never on its own line. */
+.flow-legend-unit {
   font-size: var(--fs-micro);
   color: var(--muted);
+}
+
+.flow-legend-qualifier {
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-wide);
+  color: var(--faint);
 }
 
 /* Current-mode flow overlay: real branch currents only, never invented. */
@@ -7051,6 +7121,10 @@ button.bottom-panel-head:focus-visible {
   flex-direction: column;
   background: var(--canvas-bg);
   border-right: 1px solid var(--border);
+  /* The header below adapts to THIS width, not the viewport's. The pane is a
+     resizable split, so a viewport media query would be measuring the wrong
+     thing: the same 1440px window can leave this pane at 560px or at 280px. */
+  container: sim-circuit / inline-size;
 }
 
 .sim-schematic-header {
@@ -7066,6 +7140,13 @@ button.bottom-panel-head:focus-visible {
   border-bottom: 1px solid var(--border);
   backdrop-filter: saturate(160%) blur(18px);
   -webkit-backdrop-filter: saturate(160%) blur(18px);
+  /* Structural guarantee, independent of the queries below: every child here
+     is `flex: none`, so their combined intrinsic width (379px) used to spill
+     straight out of a 306px pane and paint the Current Mode toggle and the
+     padlock on top of the analysis panel next door. The container queries
+     decide what to drop; this makes it impossible for anything to escape the
+     pane even if a future child forgets to. */
+  overflow: hidden;
 }
 
 .sim-schematic-title,
@@ -7127,6 +7208,64 @@ button.bottom-panel-head:focus-visible {
   color: var(--trace-green);
   border-color: color-mix(in srgb, var(--trace-green) 35%, var(--border));
   background: color-mix(in srgb, var(--trace-green) 12%, var(--panel-3));
+}
+
+/* Header priority ladder, widest first.
+ *
+ * Same principle as `@container palette-list` further down: when the row will
+ * not fit, DROP the lowest-value element outright rather than ellipsizing
+ * everything into mush.
+ *
+ * Measured widths, which is what the thresholds are built from rather than
+ * guesswork: title 60 (14 as an icon alone), tools 278 with labels and 117
+ * without, Current Mode 116 (23 as an icon), padlock 26, plus three 12px gaps
+ * and 24px of padding. Everything shown is 540px against a pane whose
+ * min-width is 280.
+ *
+ * Order of sacrifice, least useful first:
+ *   1. The word "Circuit". The pane is visibly a schematic and already carries
+ *      `aria-label="Circuit overview"`, so the word is orientation on a first
+ *      run, not information. The eye icon stays.
+ *   2. The tool labels. A four-icon segmented cluster is a conventional
+ *      toolbar shape and each button keeps its tooltip and accessible name.
+ *   3. The words "Current Mode". This goes after the tool labels, not before,
+ *      because a mode toggle is less guessable from its icon than Inspect or
+ *      Probe are. It keeps its icon, its green active colour, its aria-label
+ *      and its tooltip.
+ *   4. The padlock. It is a passive indicator rather than a control, and the
+ *      app already explains view-only the moment an edit is attempted.
+ *
+ * Each step leaves headroom over the width it needs: 494 at 560, 333 at 500,
+ * 240 at 340, 202 at 300.
+ */
+@container sim-circuit (max-width: 560px) {
+  .sim-schematic-title span {
+    display: none;
+  }
+}
+
+@container sim-circuit (max-width: 500px) {
+  .sim-circuit-tools button span {
+    display: none;
+  }
+}
+
+@container sim-circuit (max-width: 340px) {
+  .sim-current-mode-badge span {
+    display: none;
+  }
+  /* Icon-only: drop the label's gap and even out the padding so it reads as a
+     square button next to the tool cluster rather than a squashed pill. */
+  .sim-current-mode-badge {
+    gap: 0;
+    padding: 0 var(--sp-1);
+  }
+}
+
+@container sim-circuit (max-width: 300px) {
+  .sim-view-only {
+    display: none;
+  }
 }
 
 .sim-current-mode-badge:hover {
@@ -7210,11 +7349,12 @@ button.bottom-panel-head:focus-visible {
   box-shadow: 0 0 0 2px var(--accent-line);
 }
 
-@media (max-width: 1180px) {
-  .sim-circuit-tools button span {
-    display: none;
-  }
-}
+/* The tool labels are part of the header's priority ladder, which lives with
+   the other steps next to `.sim-current-mode-badge`. This used to be a
+   viewport media query at 1180px, which was measuring the wrong box: the pane
+   is a resizable split, so a wide window with a dragged-in pane kept the
+   labels and overflowed, while a narrow window with a wide pane dropped them
+   for no reason. */
 
 .sim-schematic-canvas {
   position: relative;

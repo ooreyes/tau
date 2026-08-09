@@ -29,9 +29,12 @@ import {
   opComponentCurrents,
   opTerminalCurrents,
   tranComponentCurrents,
+  currentRangeOverRun,
+  peakAbsCurrent,
   tranTerminalCurrents,
   type PinIndex,
 } from "../simulation/wireCurrentFlow";
+import { formatEngineering } from "../simulation/quantity";
 import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import {
@@ -113,6 +116,35 @@ interface DragState {
   /** Selected topology-neutral anchors translated with the group. */
   groupLabelOrigins?: Map<string, Point>;
   groupProbeOrigins?: Map<string, Point>;
+}
+
+/** Three dots and an arrow: what the animation means, drawn once. */
+function FlowLegendMark() {
+  return (
+    <svg className="flow-legend-mark" viewBox="0 0 44 8" aria-hidden="true">
+      <circle cx="4" cy="4" r="2" />
+      <circle cx="14" cy="4" r="2" />
+      <circle cx="24" cy="4" r="2" />
+      <path d="M 34 1 L 40 4 L 34 7 Z" />
+    </svg>
+  );
+}
+
+/**
+ * One reading: value, its unit attached one step down and dimmer, and the
+ * whisper that says which reading it is (DESIGN_SYSTEM.md section 2.2).
+ */
+function FlowLegendValue({ amps, qualifier }: { amps: number; qualifier: string }) {
+  const [mantissa, unit = "A"] = formatEngineering(amps, "A").split(" ");
+  return (
+    <span className="flow-legend-reading">
+      <span className="flow-legend-value">
+        {mantissa}
+        <span className="flow-legend-unit">{unit}</span>
+      </span>
+      <span className="flow-legend-qualifier">{qualifier}</span>
+    </span>
+  );
 }
 
 export function Canvas({
@@ -260,6 +292,15 @@ export function Canvas({
     return null;
   }, [biasCircuit, useTranReadout, tran, readoutTime, op]);
   const flowCurrents = flow?.currents ?? null;
+
+  // Keyed on the analysis alone, deliberately NOT on the readout time: the
+  // whole point of showing a range is that it holds still while the animation
+  // plays. Recomputing it per frame would reintroduce the churn it replaces,
+  // and it walks every sample of every branch, so it is not free.
+  const runCurrentRange = useMemo(
+    () => (useTranReadout && tran?.ok ? currentRangeOverRun(tran) : null),
+    [useTranReadout, tran],
+  );
 
   const editDirty = useRef(false);
 
@@ -1617,21 +1658,53 @@ export function Canvas({
         })()}
       </svg>
 
-      {/* A moving dot means nothing without a scale. This states the direction
-          convention and the full-scale current, so a reader can name a number
-          rather than only compare two wires. */}
-      {currentVisualizer && flowCurrents && flowCurrents.size > 0 && (
-        <div className="flow-legend" aria-label="Current flow key">
-          <svg className="flow-legend-mark" viewBox="0 0 44 8" aria-hidden="true">
-            <circle cx="4" cy="4" r="2" />
-            <circle cx="14" cy="4" r="2" />
-            <circle cx="24" cy="4" r="2" />
-            <path d="M 34 1 L 40 4 L 34 7 Z" />
-          </svg>
-          <span className="flow-legend-label">CURRENT</span>
-          <span className="flow-legend-scale">1 µA — 1 A</span>
-        </div>
-      )}
+      {/*
+        * A moving dot means nothing without a number attached to it.
+        *
+        * This used to read "1 µA - 1 A", hardcoded. That is the range of the
+        * animation's absolute log mapping, which is true and useless: it is the
+        * same six decades for every circuit ever opened, so a reader looking at
+        * a 1.6 mA loop learned nothing about their own circuit from it. What
+        * they can actually use is the largest current on screen, because that
+        * is the fastest dot and every other dot is read against it.
+        */}
+      {currentVisualizer && flowCurrents && flowCurrents.size > 0 && (() => {
+        // A single instantaneous number was the first attempt here and it was
+        // wrong for the reader this is built for: during a transient it churns
+        // every frame, so a student sees a digit-storm rather than a fact. The
+        // range over the whole run holds still and says something teachable,
+        // which is the reference plates' range-bar module (their heart rate
+        // reads "54 ... 135 ... 186", never a bare live number).
+        const range = runCurrentRange;
+        if (!range) {
+          // Operating point: one steady value, so a range would be three
+          // copies of the same number. Say the one number instead.
+          const [mantissa, unit = "A"] = formatEngineering(peakAbsCurrent(flowCurrents), "A").split(" ");
+          return (
+            <div className="flow-legend" aria-label={`Current flow key. Steady current ${mantissa} ${unit}`}>
+              <FlowLegendMark />
+              <span className="flow-legend-label">CURRENT</span>
+              <FlowLegendValue amps={peakAbsCurrent(flowCurrents)} qualifier="steady" />
+            </div>
+          );
+        }
+        return (
+          <div
+            className="flow-legend"
+            aria-label={
+              `Current flow key. Over this run, branch current ranges from ` +
+              `${formatEngineering(range.min, "A")} to ${formatEngineering(range.max, "A")}, ` +
+              `averaging ${formatEngineering(range.mean, "A")}.`
+            }
+          >
+            <FlowLegendMark />
+            <span className="flow-legend-label">CURRENT</span>
+            <FlowLegendValue amps={range.min} qualifier="min" />
+            <FlowLegendValue amps={range.mean} qualifier="avg" />
+            <FlowLegendValue amps={range.max} qualifier="max" />
+          </div>
+        );
+      })()}
 
       {ammeterNote && (
         <p className="ammeter-note" role="status">{ammeterNote}</p>

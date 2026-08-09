@@ -5,6 +5,7 @@ import type { SchematicComponent, SchematicWire } from "../schematic/types";
 import { runOperatingPoint } from "./operatingPoint";
 import { runTransientAnalysis } from "./linearTransient";
 import {
+  currentRangeOverRun,
   flowDotsForWires,
   flowMagnitude,
   nearestSampleIndex,
@@ -481,5 +482,48 @@ describe("net labels as boundaries", () => {
     const segs = flowSegments(wires, pins);
     const solved = segmentFlowCurrents(segs, pins, currents, new Map(), [{ x: 0, y: 0 }]);
     expect(solved.get(segs[0]!.id)).toBe(0);
+  });
+});
+
+describe("currentRangeOverRun", () => {
+  it("reports the range across every branch and every instant, unsigned", async () => {
+    const result = await runTransientAnalysis(
+      { components, wires },
+      { stopTime: 1e-3, steps: 50 },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const range = currentRangeOverRun(result);
+    expect(range).not.toBeNull();
+    if (!range) return;
+
+    // Two 1k resistors across 10 V is 5 mA, steady, so this purely resistive
+    // circuit collapses to one value. That is the useful degenerate case: the
+    // legend should say 5 mA three times rather than invent a spread.
+    expect(range.min).toBeCloseTo(5e-3, 6);
+    expect(range.max).toBeCloseTo(5e-3, 6);
+    expect(range.mean).toBeCloseTo(5e-3, 6);
+    // Unsigned: direction is carried by the arrow in the legend's mark, so a
+    // branch measured backwards must not drag the minimum negative.
+    expect(range.min).toBeGreaterThanOrEqual(0);
+  });
+
+  it("brackets the instantaneous peak at any sample of the same run", async () => {
+    const result = await runTransientAnalysis(
+      { components, wires },
+      { stopTime: 1e-3, steps: 50 },
+    );
+    if (!result.ok) return;
+    const range = currentRangeOverRun(result);
+    if (!range) return;
+
+    // Whatever a single frame shows, the run-wide range must contain it. This
+    // is the property that makes the legend honest while the animation plays.
+    for (const sample of [0, 10, 25, 49]) {
+      const peak = peakAbsCurrent(tranComponentCurrents(result, sample));
+      expect(peak).toBeGreaterThanOrEqual(range.min - 1e-12);
+      expect(peak).toBeLessThanOrEqual(range.max + 1e-12);
+    }
   });
 });

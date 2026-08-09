@@ -53,6 +53,11 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult, AcTrace } from "../simulation/acSweep";
 import type { DcSweepResult, DcSweepNet, DcSweepSpec } from "../simulation/dcSweep";
@@ -1941,6 +1946,12 @@ export function WaveformPlot({
   const success = result?.ok ? result : null;
   const [activeTraceId, setActiveTraceId] = useState<string | null>(null);
   const [traceColorOverrides, setTraceColorOverrides] = useState<Record<string, string>>({});
+  // Which trace's color popover is open, if any. Controlled (rather than
+  // Radix's own uncontrolled open state) so picking a preset can close the
+  // popover itself - a plain button inside the menu content is not a
+  // DropdownMenuItem, so Radix has no built-in "selecting this closes the
+  // menu" behavior to hook into.
+  const [colorPickerTraceId, setColorPickerTraceId] = useState<string | null>(null);
 
   // A probe's colour is the one authority for how its signal is drawn - the
   // schematic dot and the curve both read it. Writing the picker's choice into
@@ -1984,6 +1995,7 @@ export function WaveformPlot({
   useEffect(() => {
     setActiveTraceId(null);
     setTraceColorOverrides({});
+    setColorPickerTraceId(null);
     setWindowStats(null);
     setManualY(null);
   }, [layoutKey]);
@@ -2261,6 +2273,75 @@ export function WaveformPlot({
                           className={`trace-interaction${selected ? " selected" : ""}`}
                         >
                           <div className="trace-interaction__toolbar">
+                            <DropdownMenu
+                              open={colorPickerTraceId === trace.id}
+                              onOpenChange={(open) => setColorPickerTraceId(open ? trace.id : null)}
+                            >
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="trace-interaction__swatch"
+                                  aria-label={`Change ${displayLabel} colour`}
+                                  aria-haspopup="true"
+                                  title={`Change ${displayLabel} colour`}
+                                >
+                                  <i style={{ background: trace.color }} aria-hidden="true" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start" className="trace-color-popover">
+                                <div
+                                  className="trace-color-popover__swatches"
+                                  role="group"
+                                  aria-label={`Color for ${displayLabel}`}
+                                >
+                                  {TRACE_SWATCHES.map((swatch) => {
+                                    const isCurrent = sameCssColor(trace.color, swatch.color);
+                                    // A palette entry another trace already wears is
+                                    // still selectable, but saying so stops the user
+                                    // creating two traces they cannot tell apart.
+                                    const takenBy = isCurrent
+                                      ? undefined
+                                      : allTraces.find((other) => other.id !== trace.id && sameCssColor(other.color, swatch.color));
+                                    return (
+                                      <button
+                                        key={swatch.color}
+                                        type="button"
+                                        className={`${isCurrent ? "active" : ""}${takenBy ? " taken" : ""}`}
+                                        style={{ background: swatch.color }}
+                                        aria-label={takenBy
+                                          ? `Set ${displayLabel} trace color to ${swatch.name} - already used by ${labelFor(takenBy)}`
+                                          : `Set ${displayLabel} trace color to ${swatch.name}`}
+                                        aria-pressed={isCurrent}
+                                        title={takenBy ? `${swatch.name} - already used by ${labelFor(takenBy)}` : swatch.name}
+                                        onClick={() => {
+                                          applyTraceColor(trace.id, swatch.color);
+                                          setColorPickerTraceId(null);
+                                        }}
+                                      />
+                                    );
+                                  })}
+                                  {/* The six presets are the same colors the engine
+                                      auto-assigns, so a pane with several traces runs
+                                      out. Any color is allowed. Left open on pick - the
+                                      native color well itself keeps firing onChange while
+                                      the user drags in the OS panel, so closing the popover
+                                      here would tear that panel down mid-adjustment. */}
+                                  <label
+                                    className="trace-interaction__custom-color"
+                                    title={`Pick any color for ${displayLabel}`}
+                                  >
+                                    <input
+                                      type="color"
+                                      value={resolveCssColorHex(trace.color)}
+                                      aria-label={`Pick a custom color for ${displayLabel}`}
+                                      onChange={(event) => {
+                                        applyTraceColor(trace.id, event.currentTarget.value);
+                                      }}
+                                    />
+                                  </label>
+                                </div>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <button
                               type="button"
                               className="trace-interaction__select"
@@ -2291,7 +2372,6 @@ export function WaveformPlot({
                                 setActiveTraceId(trace.id);
                               }}
                             >
-                              <i style={{ background: trace.color }} aria-hidden="true" />
                               <span>{displayLabel}</span>
                             </button>
                             {cursorTool && (
@@ -2351,49 +2431,6 @@ export function WaveformPlot({
                               </div>
                             )}
                           </div>
-                          {selected && (
-                            <div className="trace-interaction__palette" role="group" aria-label={`Color for ${displayLabel}`}>
-                              {TRACE_SWATCHES.map((swatch) => {
-                                const isCurrent = sameCssColor(trace.color, swatch.color);
-                                // A palette entry another trace already wears is
-                                // still selectable, but saying so stops the user
-                                // creating two traces they cannot tell apart.
-                                const takenBy = isCurrent
-                                  ? undefined
-                                  : allTraces.find((other) => other.id !== trace.id && sameCssColor(other.color, swatch.color));
-                                return (
-                                  <button
-                                    key={swatch.color}
-                                    type="button"
-                                    className={`${isCurrent ? "active" : ""}${takenBy ? " taken" : ""}`}
-                                    style={{ background: swatch.color }}
-                                    aria-label={takenBy
-                                      ? `Set ${displayLabel} trace color to ${swatch.name} - already used by ${labelFor(takenBy)}`
-                                      : `Set ${displayLabel} trace color to ${swatch.name}`}
-                                    aria-pressed={isCurrent}
-                                    title={takenBy ? `${swatch.name} - already used by ${labelFor(takenBy)}` : swatch.name}
-                                    onClick={() => applyTraceColor(trace.id, swatch.color)}
-                                  />
-                                );
-                              })}
-                              {/* The six presets are the same colors the engine
-                                  auto-assigns, so a pane with several traces runs
-                                  out. Any color is allowed. */}
-                              <label
-                                className="trace-interaction__custom-color"
-                                title={`Pick any color for ${displayLabel}`}
-                              >
-                                <input
-                                  type="color"
-                                  value={resolveCssColorHex(trace.color)}
-                                  aria-label={`Pick a custom color for ${displayLabel}`}
-                                  onChange={(event) => {
-                                    applyTraceColor(trace.id, event.currentTarget.value);
-                                  }}
-                                />
-                              </label>
-                            </div>
-                          )}
                           {selected && cursorTool && success && success.times.length > 1 && (
                             <TraceSeekFields
                               trace={trace}
