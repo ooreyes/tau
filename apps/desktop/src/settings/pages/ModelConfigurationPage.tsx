@@ -24,7 +24,12 @@ import {
 } from "@/components/ui/select";
 import { SettingsAiSection } from "../../components/SettingsAiSection";
 import { saveAssistantApiKey, useHasAssistantApiKey } from "../../lib/assistant";
-import { saveGeminiApiKey, useHasGeminiApiKey } from "../../lib/providerApiKey";
+import {
+  saveGeminiApiKey,
+  saveLegacyOpenAiApiKey,
+  useHasGeminiApiKey,
+  useHasLegacyOpenAiApiKey,
+} from "../../lib/providerApiKey";
 import { userFacingErrorMessage } from "../../lib/errorMessage";
 import { PROVIDERS, providerInfo, type ProviderId } from "../providerCatalog";
 import { ProviderKeyField } from "../ProviderKeyField";
@@ -42,6 +47,10 @@ export function ModelConfigurationPage({
   // Both hooks run every render: presence booleans only, never a value.
   const hasAnthropic = useHasAssistantApiKey();
   const hasGemini = useHasGeminiApiKey();
+  // OpenAI itself is gone from `PROVIDERS` below - this is only checking for a
+  // secret a user saved before it was removed, so it can be deleted from the
+  // keychain rather than sitting there unreachable.
+  const hasLegacyOpenAiKey = useHasLegacyOpenAiApiKey();
   const saved: Record<ProviderId, boolean> = {
     anthropic: hasAnthropic,
     gemini: hasGemini,
@@ -62,6 +71,31 @@ export function ModelConfigurationPage({
       title="Model configuration"
       summary="Choose an AI provider, save its key on this Mac, and decide where the assistant runs."
     >
+      {/* Only rendered for someone who saved an OpenAI key before it was
+          removed from `PROVIDERS`: invisible to everyone else, invisible in a
+          browser preview (no keychain there to hold the leftover key), and
+          gone for good once the button below is pressed. */}
+      {hasLegacyOpenAiKey ? (
+        <SettingsNotice tone="warning" title="A leftover OpenAI key is still in your keychain">
+          <p>
+            Tau no longer offers OpenAI as an assistant provider, so this key is never used and
+            never sent anywhere. Removing it deletes it from the macOS keychain. Tau cannot show
+            you the value, so copy it from your OpenAI account first if you still need it.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="self-start"
+            onClick={() => {
+              saveLegacyOpenAiApiKey("");
+              onNotice("OpenAI key removed from the keychain.");
+            }}
+          >
+            Remove OpenAI key
+          </Button>
+        </SettingsNotice>
+      ) : null}
+
       <SettingsGroup
         title="Provider"
         note="Tau can hold a key for each of these at once. Switching provider here changes which key you are managing, not which one the assistant uses."

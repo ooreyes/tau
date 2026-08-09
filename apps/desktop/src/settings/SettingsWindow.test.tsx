@@ -253,6 +253,70 @@ describe("Model configuration key handling", () => {
   });
 });
 
+describe("legacy OpenAI key removal", () => {
+  // `createProviderKeyStore`'s `hydrate()` fetches presence at most once per
+  // module lifetime (`if (!hydration) { ... }` in providerApiKey.ts) and the
+  // legacy openai store is created once at module load. Every other "Model
+  // configuration" test in this file also mounts `ModelConfigurationPage`,
+  // which now calls `useHasLegacyOpenAiApiKey()` too, so sharing the
+  // top-level `SettingsWindow` import here would let whichever test rendered
+  // that page *first* permanently answer this store's hydration for the rest
+  // of the file - these two tests would then pass or fail for leftover-state
+  // reasons instead of because of what they actually mock. `vi.resetModules()`
+  // plus a fresh dynamic `import("./SettingsWindow")` rebuilds the whole
+  // module graph (including a brand-new, never-hydrated legacy openai store),
+  // so each test's own `has_provider_api_key` mock is what genuinely drives
+  // the result.
+  it("offers to remove a key left over from when Tau supported OpenAI", async () => {
+    vi.resetModules();
+    tauri.invoke.mockReset();
+    tauri.isTauri.mockReset().mockReturnValue(true);
+    tauri.invoke.mockImplementation((command: string, args?: Record<string, unknown>) => {
+      if (command === "has_provider_api_key" && args?.provider === "openai") {
+        return Promise.resolve(true);
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const { SettingsWindow: FreshSettingsWindow } = await import("./SettingsWindow");
+    render(<FreshSettingsWindow />);
+    go("Model configuration");
+
+    expect(
+      await screen.findByText("A leftover OpenAI key is still in your keychain"),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove OpenAI key" }));
+
+    expect(tauri.invoke).toHaveBeenCalledWith("save_provider_api_key", {
+      provider: "openai",
+      apiKey: "",
+    });
+    await waitFor(() =>
+      expect(screen.queryByText("A leftover OpenAI key is still in your keychain")).toBeNull(),
+    );
+  });
+
+  it("says nothing about OpenAI when there is no leftover key", async () => {
+    vi.resetModules();
+    tauri.invoke.mockReset().mockResolvedValue(false);
+    tauri.isTauri.mockReset().mockReturnValue(true);
+
+    const { SettingsWindow: FreshSettingsWindow } = await import("./SettingsWindow");
+    render(<FreshSettingsWindow />);
+    go("Model configuration");
+
+    // Let the (false-resolving) hydration settle before asserting silence,
+    // so a slow promise cannot make this pass merely because nothing painted
+    // yet.
+    await waitFor(() =>
+      expect(tauri.invoke).toHaveBeenCalledWith("has_provider_api_key", { provider: "openai" }),
+    );
+
+    expect(screen.queryByText(/OpenAI/i)).toBeNull();
+  });
+});
+
 describe("browser fallback honesty", () => {
   it("does not claim keychain storage when there is no keychain", async () => {
     tauri.isTauri.mockReturnValue(false);
