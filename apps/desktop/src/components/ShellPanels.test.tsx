@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { BottomPanel, ComponentInspector, ComponentsRail, EditorToolbar } from "./ShellPanels";
+import { ComponentInspector, ComponentsRail, EditorToolbar } from "./ShellPanels";
+// Moved to drawer/ in redesign stage 2; it becomes the results drawer's Errors
+// tab in stage 4. Imported from its new home rather than re-exported, so this
+// file keeps pointing at where the component actually lives.
+import { BottomPanel } from "./drawer/DiagnosticsTab";
 import { behavioralSpecText, checkBehavioral } from "../simulation/behavioral";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { SchematicComponent } from "../schematic/types";

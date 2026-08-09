@@ -53,17 +53,16 @@ import {
 } from "./lib/learningPath";
 import { schematicToAsc } from "./io/ascExport";
 import {
-  ActivityRail,
-  BottomPanel,
   COMPONENTS_RAIL_WIDTH,
   ComponentsRail,
-  ConfirmDialog,
   EditorTabs,
   EditorToolbar,
   ExplorerPanel,
   MinimizedPanelDock,
-  UnsavedChangesDialog,
 } from "./components/ShellPanels";
+import { ActivityRail } from "./components/shell/NavRail";
+import { BottomPanel } from "./components/drawer/DiagnosticsTab";
+import { ConfirmDialog, UnsavedChangesDialog } from "./components/ui/confirm";
 import { SettingsWindow } from "./settings/SettingsWindow";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { useRuntimeModelLibraries } from "./store/useRuntimeModelLibraries";
