@@ -195,6 +195,17 @@ unit is not accepted until it is tagged.
 
 ## Evidence protocol
 
+> **Every dark screenshot taken before 2026-08-09 is actually light.**
+> `design-shot.mjs` set the theme by writing `localStorage` on `about:blank`,
+> an opaque origin, so the write threw and the `catch` swallowed it. Only
+> `emulateMedia` remained, and the FOUC boot script overrides that by stamping
+> `data-theme` whenever nothing is stored. Dark and light captures of the same
+> state were visually identical; only toast timing made the bytes differ, so a
+> byte comparison did not catch it either. Fixed by writing on the app's own
+> origin and reloading, plus `assertTheme`, which refuses to capture unless the
+> attribute took AND the background actually looks dark or light. Treat
+> `redesign-baseline`'s dark frames as unusable; its light frames are fine.
+
 **Never rename a captured state.** The filename is the join key for before and
 after, and renaming destroys comparability with every existing label,
 permanently. All eight current `design-shot` states survive as *concepts*
