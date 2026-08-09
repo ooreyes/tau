@@ -257,6 +257,7 @@
   /* Referenced by the learning-path coach's `bottom` offset and defined
      nowhere until now, so it silently relied on its own 28px fallback and
      would have mispositioned the moment the status readout changed height. */
+  --toolbar-height: 44px;
   --status-bar-height: 28px;
 }
 
@@ -4618,16 +4619,18 @@ body {
    (Palette tokens consolidated into the single :root at the top of this file.)
 ══════════════════════════════════════════════════════════════════════════════ */
 
+/* The canvas is the substrate, so the shell is one full-window layer with
+   chrome floating on top of it, not three stacked grid rows that each carve a
+   slice out of the window (DESIGN_SYSTEM.md section 1.8).
+
+   The grid was also the ONLY height source for `.shell-body`, which declares
+   neither a height nor a flex, so removing it without giving the body its own
+   `inset: 0` collapses it to content height and takes every `min-height: 0`
+   scroll container inside it down too. */
 .app {
+  position: relative;
   height: 100vh;
   width: 100vw;
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: 44px 1fr 28px;
-  grid-template-areas:
-    "toolbar"
-    "body"
-    "status";
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
@@ -4635,11 +4638,20 @@ body {
 }
 
 .shell-body {
-  grid-area: body;
+  /* Fills the window. The veiled transport and status readout float over its
+     top and bottom edges, so the panels reserve that space themselves rather
+     than the window being pre-divided for them. */
+  position: absolute;
+  inset: 0;
+  padding-top: var(--toolbar-height);
+  padding-bottom: var(--status-bar-height);
   min-height: 0;
   min-width: 0;
   display: flex;
-  position: relative;
+  /* `position: relative` used to be declared here, below the absolute above,
+     and silently won. Keeping both is how the body ended up 282px tall in a
+     900px window. Absolute is also its own containing block, so the overlays
+     that relied on `relative` still anchor to it. */
   overflow: hidden;
   background: var(--canvas-bg);
 }
@@ -4653,8 +4665,12 @@ body {
    crisp hairline-bordered track, matching the flat Braun/OP-1 reference.
 ══════════════════════════════════════════════════════════════════════════════ */
 .toolbar {
-  grid-area: toolbar;
-  height: 44px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-chrome);
+  height: var(--toolbar-height);
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto minmax(260px, 1fr);
   align-items: center;
@@ -9011,8 +9027,12 @@ button.bottom-panel-head:focus-visible {
 /* App-chrome bar (fixed shell region, not a repeating row) - kept outside
    --row-h/--row-h-dense on purpose. */
 .statusbar {
-  grid-area: status;
-  height: 28px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-chrome);
+  height: var(--status-bar-height);
   display: flex;
   align-items: center;
   gap: var(--sp-3);
