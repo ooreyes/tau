@@ -141,6 +141,17 @@ export function saveLearningPathState(
   storage.setItem(LEARNING_PATH_KEY, JSON.stringify(envelope));
 }
 
+/** Resets the learning path to its pending default, e.g. from Settings'
+ *  "Reset to defaults". Takes the same optional storage override as
+ *  loadLearningPathState/saveLearningPathState above for testability. */
+export function resetLearningPathState(
+  storage: Pick<Storage, "getItem" | "setItem"> | null = typeof localStorage !== "undefined" ? localStorage : null,
+): LearningPathState {
+  const next = defaultLearningPathState();
+  saveLearningPathState(next, storage);
+  return next;
+}
+
 /** Offer the empty-state CTA while the path is still open. */
 export function shouldOfferLearningPath(state: LearningPathState): boolean {
   return state.status === "pending" || state.status === "in_progress";

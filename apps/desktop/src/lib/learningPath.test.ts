@@ -15,6 +15,7 @@ import {
   markLearningPathComplete,
   parseLearningPathState,
   recordLearningPathSimulationOutcome,
+  resetLearningPathState,
   shouldOfferLearningPath,
   shouldShowLearningPathCoach,
   startLearningPath,
@@ -117,6 +118,36 @@ describe("start / dismiss / complete", () => {
     dismissLearningPath(1);
     expect(markLearningPathComplete(2).status).toBe("dismissed");
     expect(startLearningPath(3).status).toBe("dismissed");
+  });
+});
+
+describe("resetLearningPathState", () => {
+  it("clears progress back to the pending default", () => {
+    startLearningPath(10);
+    recordLearningPathSimulationOutcome({ ok: true });
+    expect(loadLearningPathState().status).toBe("completed");
+
+    const reset = resetLearningPathState();
+
+    expect(reset).toEqual(defaultLearningPathState());
+    expect(loadLearningPathState()).toEqual(defaultLearningPathState());
+    expect(JSON.parse(memory.get(LEARNING_PATH_KEY)!).status).toBe("pending");
+  });
+
+  it("accepts the same optional storage override as its siblings", () => {
+    const backing = new Map<string, string>();
+    const storage: Pick<Storage, "getItem" | "setItem"> = {
+      getItem: (key: string) => backing.get(key) ?? null,
+      setItem: (key: string, value: string) => backing.set(key, value),
+    };
+    startLearningPath(10, storage);
+    expect(loadLearningPathState(storage).status).toBe("in_progress");
+
+    resetLearningPathState(storage);
+
+    expect(loadLearningPathState(storage)).toEqual(defaultLearningPathState());
+    // The globally-stubbed localStorage used by other tests is untouched.
+    expect(memory.has(LEARNING_PATH_KEY)).toBe(false);
   });
 });
 

@@ -82,3 +82,20 @@ export function setThemeMode(mode: ThemeMode): void {
   saveThemeMode(mode);
   applyThemeMode(mode);
 }
+
+/** Clears the persisted preference and re-applies the shipped default
+ *  (Light, per DEFAULT_THEME_MODE) so `data-theme` on <html> does not
+ *  linger on whatever was set before the reset - see the "Reset to
+ *  defaults" contract in Settings. */
+export function resetThemeMode(): void {
+  if (typeof localStorage === "undefined") {
+    applyThemeMode(DEFAULT_THEME_MODE);
+    return;
+  }
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* quota exceeded or storage disabled - still apply the default below */
+  }
+  applyThemeMode(DEFAULT_THEME_MODE);
+}

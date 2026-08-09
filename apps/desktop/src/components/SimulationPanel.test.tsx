@@ -186,6 +186,29 @@ describe("SimulationPanel - no redundant Run button", { timeout: 20_000 }, () =>
     fireEvent.click(screen.getByRole("button", { name: "Use precision waveform detail" }));
     expect(handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 0.006, steps: 480 });
   });
+
+  it("names the preset Tau itself chose, not only one the user clicked", () => {
+    // 480 is the precision-preset step count for renderPanel's default circuit
+    // at stopTime 0.006 (pinned by the "explicit waveform-detail choices" test
+    // above). An automatic run that lands on that count is genuinely at
+    // Precision, so the preset should light up and the readout should say so
+    // without requiring the user to have clicked anything.
+    renderPanel({ options: { stopTime: 0.006, steps: 480 } });
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    expect(screen.getByRole("button", { name: "Use precision waveform detail" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(screen.getByText("Circuit-aware · Precision")).toBeTruthy();
+  });
+
+  it("uses one vocabulary for waveform detail", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    expect(screen.getByRole("button", { name: "Use quick waveform detail" }).textContent).toContain("Quick");
+    expect(screen.getByRole("button", { name: "Use balanced waveform detail" }).textContent).toContain("Balanced");
+    expect(screen.getByRole("button", { name: "Use precision waveform detail" }).textContent).toContain("Precision");
+    expect(screen.queryByText("Coarse")).toBeNull();
+  });
 });
 
 describe("SimulationPanel - dashboard status strip", { timeout: 20_000 }, () => {

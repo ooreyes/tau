@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { applyThemeMode, initThemeMode, loadThemeMode, saveThemeMode, setThemeMode } from "./theme";
+import {
+  applyThemeMode,
+  initThemeMode,
+  loadThemeMode,
+  resetThemeMode,
+  saveThemeMode,
+  setThemeMode,
+} from "./theme";
 
 // This jsdom build has localStorage disabled (typeof localStorage ===
 // "undefined" - the same guard the module itself relies on). Install an
@@ -80,6 +87,19 @@ describe("initThemeMode", () => {
 
   it("applies light (data-theme=light) when nothing was ever saved", () => {
     expect(initThemeMode()).toBe("light");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+  });
+});
+
+describe("resetThemeMode", () => {
+  it("clears the stored preference and re-applies the shipped default (light)", () => {
+    setThemeMode("dark");
+    expect(loadThemeMode()).toBe("dark");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+
+    resetThemeMode();
+
+    expect(loadThemeMode()).toBe("light");
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
   });
 });

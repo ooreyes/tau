@@ -14,7 +14,7 @@ import {
   type RunRecordEngine,
   type RunRecordStatus,
 } from "../lib/runRecord";
-import { useSimulationPreferences } from "../lib/simulationPreferences";
+import { TRANSIENT_DETAIL_LABELS, useSimulationPreferences } from "../lib/simulationPreferences";
 import { useSchematic } from "../store/useSchematic";
 import { useRuntimeModelLibraries } from "../store/useRuntimeModelLibraries";
 import {
@@ -1597,10 +1597,10 @@ export function SimulationPanel({
                       <div className="waveform-detail-control__head">
                         <span>Waveform detail</span>
                         <strong>{resolvedOptionsSource === "automatic"
-                          ? "Circuit-aware"
+                          ? (selectedDetail ? `Circuit-aware · ${TRANSIENT_DETAIL_LABELS[selectedDetail]}` : "Circuit-aware")
                           : resolvedOptionsSource === "document"
                             ? "From document"
-                            : selectedDetail ? detailLabel(selectedDetail) : "Custom"}</strong>
+                            : selectedDetail ? TRANSIENT_DETAIL_LABELS[selectedDetail] : "Custom"}</strong>
                       </div>
                       <div className="waveform-detail-presets" role="group" aria-label="Waveform detail">
                         {(["quick", "balanced", "precision"] as const).map((detail) => (
@@ -1608,10 +1608,10 @@ export function SimulationPanel({
                             key={detail}
                             type="button"
                             aria-label={`Use ${detail} waveform detail`}
-                            aria-pressed={resolvedOptionsSource === "custom" && selectedDetail === detail}
+                            aria-pressed={selectedDetail === detail}
                             onClick={() => onOptionsChange({ ...options, steps: detailSteps[detail] })}
                           >
-                            <strong>{detailLabel(detail)}</strong>
+                            <strong>{TRANSIENT_DETAIL_LABELS[detail]}</strong>
                             <small>{detailDescription(detail)}</small>
                           </button>
                         ))}
@@ -7184,7 +7184,6 @@ function ResolutionControl({
 
 const formatCount = (value: number) => value.toLocaleString("en-US");
 const formatSamples = (value: number) => Number(value.toPrecision(3)).toString();
-const detailLabel = (detail: TransientDetailLevel) => detail === "quick" ? "Coarse" : detail === "balanced" ? "Default" : "Fine";
 const detailDescription = (detail: TransientDetailLevel) =>
   detail === "quick" ? "Fewer samples" : detail === "balanced" ? "Usual sampling" : "More samples";
 const formatElapsed = (milliseconds: number) => milliseconds < 1_000

@@ -39,6 +39,20 @@ export function saveCloudAiConsent(consent: CloudAiConsent): void {
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
+/** Clears any recorded consent and lands on not-consented - fail-closed, so
+ *  a reset can never leave the student silently opted in to sending circuit
+ *  data to a cloud provider. Dispatches the change event so open Settings UI
+ *  updates live. */
+export function resetCloudAiConsent(): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT));
+  } catch {
+    /* quota exceeded or storage disabled - nothing more to do here */
+  }
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
 export function hasCloudAiConsent(): boolean {
   return loadCloudAiConsent().consented;
 }

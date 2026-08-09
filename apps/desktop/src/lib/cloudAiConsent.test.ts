@@ -4,6 +4,7 @@ import {
   cloudAiConsentRefusal,
   hasCloudAiConsent,
   loadCloudAiConsent,
+  resetCloudAiConsent,
   saveCloudAiConsent,
 } from "./cloudAiConsent";
 
@@ -30,5 +31,21 @@ describe("cloud AI consent", () => {
     expect(cloudAiConsentRefusal()).toBeNull();
     saveCloudAiConsent({ consented: false });
     expect(hasCloudAiConsent()).toBe(false);
+  });
+
+  it("resetCloudAiConsent fails closed to not-consented and notifies listeners", () => {
+    // Start from TRUE deliberately: asserting from a default-false starting
+    // point would pass even if reset did nothing.
+    saveCloudAiConsent({ consented: true });
+    expect(hasCloudAiConsent()).toBe(true);
+
+    const dispatch = window.dispatchEvent as ReturnType<typeof vi.fn>;
+    dispatch.mockClear();
+    resetCloudAiConsent();
+
+    expect(hasCloudAiConsent()).toBe(false);
+    expect(loadCloudAiConsent()).toEqual({ consented: false });
+    expect(cloudAiConsentRefusal()).toBe(CLOUD_AI_CONSENT_REQUIRED);
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "tau:cloud-ai-consent-changed" }));
   });
 });

@@ -36,6 +36,18 @@ export function dismissLocalAiSetup(): void {
   saveLocalAiSetupPreferences({ dismissed: true });
 }
 
+/** Clears the persisted preference and notifies listeners so a reset
+ *  re-offers first-run onboarding (dismissed: false, the shipped default). */
+export function resetLocalAiSetup(): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT));
+  } catch {
+    /* quota exceeded or storage disabled - nothing more to do here */
+  }
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
 export function shouldOfferLocalAiSetup(options: {
   isNative: boolean;
   dismissed: boolean;

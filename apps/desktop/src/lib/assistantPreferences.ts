@@ -63,6 +63,18 @@ export function saveAssistantPreferences(preferences: AssistantPreferencesInput)
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
+/** Clears the persisted preference and notifies listeners so any open
+ *  Settings UI falls back to the shipped default (local Qwen3 4B) live. */
+export function resetAssistantPreferences(): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* quota exceeded or storage disabled - nothing more to do here */
+  }
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
 export function useAssistantPreferences(): AssistantPreferences {
   const [preferences, setPreferences] = useState(loadAssistantPreferences);
   useEffect(() => {

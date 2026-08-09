@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadAssistantPreferences, saveAssistantPreferences } from "./assistantPreferences";
+import {
+  loadAssistantPreferences,
+  resetAssistantPreferences,
+  saveAssistantPreferences,
+} from "./assistantPreferences";
 import { GEMINI_DEFAULT_MODEL } from "./geminiAssistant";
 
 describe("assistant provider preferences", () => {
@@ -8,6 +12,7 @@ describe("assistant provider preferences", () => {
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
     });
     vi.stubGlobal("window", { dispatchEvent: vi.fn() });
   });
@@ -48,6 +53,26 @@ describe("assistant provider preferences", () => {
       JSON.stringify({ provider: "openai", localModel: "qwen3-4b-4bit", geminiModel: "gemini-2.5-flash" }),
     );
     expect(loadAssistantPreferences().provider).toBe("local-mlx");
+  });
+
+  it("resetAssistantPreferences clears the stored choice and notifies listeners", () => {
+    saveAssistantPreferences({
+      provider: "gemini",
+      localModel: "qwen3-1.7b-4bit",
+      geminiModel: "gemini-2.5-pro",
+    });
+    expect(loadAssistantPreferences().provider).toBe("gemini");
+
+    const dispatch = window.dispatchEvent as ReturnType<typeof vi.fn>;
+    dispatch.mockClear();
+    resetAssistantPreferences();
+
+    expect(loadAssistantPreferences()).toEqual({
+      provider: "local-mlx",
+      localModel: "qwen3-4b-4bit",
+      geminiModel: GEMINI_DEFAULT_MODEL,
+    });
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "tau:assistant-preferences-changed" }));
   });
 
   it("upgrades a stored blob written before geminiModel existed", () => {
