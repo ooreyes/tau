@@ -57,5 +57,6 @@ export const ENGINE_LABELS: Record<SimulationEngine, string> = {
 
 export const ENGINE_DESCRIPTIONS: Record<SimulationEngine, string> = {
   ngspice: "Solved by bundled ngspice with each part's authored device model.",
-  preview: "Not ngspice. Tau's linear MNA preview (R/C/L, sources, diodes, ideal op-amps only) — refuses vendor models and nonlinear devices. Use the desktop app for ngspice results.",
+  preview:
+    "Not ngspice. Tau's linear MNA preview handles R/C/L, sources, diodes and ideal op-amps. It refuses vendor models and nonlinear devices. Use the desktop app for ngspice results.",
 };

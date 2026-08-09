@@ -207,7 +207,7 @@ export function SettingsAiSection({
           </div>
           <span className="settings-field-hint">
             {pathChoice === "on-device"
-              ? "Stays on this Mac. Tau downloads and loads a small model for you — no account."
+              ? "Stays on this Mac. Tau downloads and loads a small model for you, with no account."
               : "Uses a free Gemini key or Anthropic key you provide. Circuit questions leave this Mac only after you consent."}
           </span>
         </div>
@@ -323,7 +323,7 @@ export function SettingsAiSection({
                   )}
                 </div>
                 <span className="settings-field-hint">
-                  Optional. Paste an MLX model name if you already know one — Tau handles the rest.
+                  Optional. Paste an MLX model name if you already know one, and Tau handles the rest.
                 </span>
               </div>
             </details>
