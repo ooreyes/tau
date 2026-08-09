@@ -259,7 +259,7 @@ async function shootViewport(page, viewport, theme) {
   // inside its bounding box) is correct here, not a workaround.
   const firstComponent = page.locator(".stage .component").first();
   await firstComponent.click({ force: true });
-  await page.waitForSelector(".inspector-summary:not(.empty)", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
+  await page.waitForSelector(".component-inspector .property-group", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `inspector-${theme}-${viewport.name}.png`), fullPage: true });
 

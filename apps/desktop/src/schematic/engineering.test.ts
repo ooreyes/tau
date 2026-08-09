@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   compactEngineeringMantissa,
   composeEngineeringValue,
+  engineeringSpelling,
   isEngineeringMantissa,
   isEngineeringMantissaDraft,
   splitEngineeringValue,
 } from "./engineering";
+import { parseQuantity } from "../simulation/quantity";
 
 describe("engineering value controls", () => {
   it("treats m and M both as milli (LTspice suffix rules)", () => {
@@ -56,5 +58,57 @@ describe("engineering value controls", () => {
   it("compacts overlong numbers to exponential notation for display", () => {
     expect(compactEngineeringMantissa("123456789012")).toBe("1.23456789e11");
     expect(compactEngineeringMantissa("4.7")).toBe("4.7");
+  });
+});
+
+/**
+ * Display spelling. The panel shows a value the way it is stored, which is
+ * right almost always and wrong at the extremes - `1000` where a datasheet
+ * writes `1 kΩ`, `0.000003` where it writes `3 µm`.
+ */
+describe("engineeringSpelling", () => {
+  it("gives a bare number past the plain-decimal band its prefix", () => {
+    expect(engineeringSpelling("1000", "Ω")).toBe("1k");
+    expect(engineeringSpelling("0.000003", "m")).toBe("3µ");
+    expect(engineeringSpelling("4700", "Ω")).toBe("4.7k");
+    expect(engineeringSpelling("2e-7", "F")).toBe("200n");
+  });
+
+  it("never overrules a prefix the author already chose", () => {
+    // `50n` and `0.05µ` are the same number; they picked the decade they
+    // think in, and re-spelling it would fight the person typing.
+    expect(engineeringSpelling("50n", "s")).toBe("50n");
+    expect(engineeringSpelling("10u", "m")).toBe("10u");
+    expect(engineeringSpelling("4k7", "Ω")).toBe("4k7");
+  });
+
+  it("leaves a plain decimal that already reads fine alone", () => {
+    expect(engineeringSpelling("0.25", "V")).toBe("0.25");
+    expect(engineeringSpelling("75", "Ω")).toBe("75");
+    expect(engineeringSpelling("-0.4", "V")).toBe("-0.4");
+    expect(engineeringSpelling("0", "V")).toBe("0");
+  });
+
+  it("passes through anything that is not a quantity", () => {
+    expect(engineeringSpelling("{Rload}", "Ω")).toBe("{Rload}");
+    expect(engineeringSpelling("", "Ω")).toBe("");
+    expect(engineeringSpelling("V(a)*2", "")).toBe("V(a)*2");
+  });
+
+  it("only ever returns a spelling that parses back to the same number", () => {
+    // The guarantee that makes this a formatter and not a value rewriter. A
+    // component value quietly rounded on screen is a lie about the deck.
+    // "Same" is within a few ulps - `200 * 1e-9` and `2e-7` differ by one -
+    // while a rounded value would be off by ~1e-3 relative.
+    for (const raw of ["1000", "0.000003", "4700", "123456", "1e-11", "0.0001234567", "8.25e7", "2e-7"]) {
+      const target = parseQuantity(raw, "");
+      const spelled = parseQuantity(engineeringSpelling(raw), "");
+      expect(Math.abs(spelled - target)).toBeLessThanOrEqual(Math.abs(target) * 8 * Number.EPSILON);
+    }
+  });
+
+  it("spells mega as Meg so the value does not read back as milli", () => {
+    expect(engineeringSpelling("1000000", "Hz")).toBe("1Meg");
+    expect(parseQuantity(engineeringSpelling("1000000", "Hz"), "Hz")).toBe(1e6);
   });
 });

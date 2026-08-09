@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { BottomPanel, ComponentInspector, ComponentsRail, EditorToolbar } from "./ShellPanels";
 import { behavioralSpecText, checkBehavioral } from "../simulation/behavioral";
 import type { AnalysisResult } from "../simulation/linearTransient";
+import type { SchematicComponent } from "../schematic/types";
 import { useSchematic } from "../store/useSchematic";
 import { usePanelWidth } from "@/components/ui/resizable";
 
@@ -922,7 +925,10 @@ describe("ComponentInspector - modulator (VCO)", () => {
     expect((screen.getByRole("textbox", { name: "Space frequency" }) as HTMLInputElement).value).toBe("1");
     expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
 
-    expect(screen.getByText(/Voltage-controlled oscillator/)).toBeTruthy();
+    // The group header names the part now, so the summary starts where the
+    // header stops - at what the pins do.
+    expect(screen.getByRole("button", { name: /Voltage-controlled oscillator/ })).toBeTruthy();
+    expect(screen.getByText(/Q outputs a sine of ±1 V/)).toBeTruthy();
     expect(screen.getByText(/AM scales the amplitude/)).toBeTruthy();
     expect(screen.getByText("Output frequency while the FM pin sits at 1 V.")).toBeTruthy();
 
@@ -1201,10 +1207,12 @@ describe("ComponentInspector - a field with declared bounds enforces them", () =
     };
     useSchematic.setState({ components: [pot], selectedId: pot.id, selectedIds: [pot.id] });
     render(<ComponentInspector selected={pot} />);
-    expect(screen.getByText("0–1")).toBeTruthy();
+    // The wiper is stored as a 0..1 fraction and READ as a percentage, so the
+    // bound the panel prints is the bound in the unit beside it.
+    expect(screen.getByText("0–100")).toBeTruthy();
 
     const wiper = screen.getByRole("textbox", { name: "Wiper position" });
-    fireEvent.change(wiper, { target: { value: "9" } });
+    fireEvent.change(wiper, { target: { value: "900" } });
     fireEvent.blur(wiper);
     expect(useSchematic.getState().components[0].value).toBe("10k Wiper=1");
   });
@@ -1222,5 +1230,199 @@ describe("ComponentInspector - a field with declared bounds enforces them", () =
     useSchematic.setState({ components: [resistor], selectedId: resistor.id, selectedIds: [resistor.id] });
     render(<ComponentInspector selected={resistor} />);
     expect(screen.queryByText("2–5")).toBeNull();
+  });
+});
+
+/**
+ * The Properties panel against the reference standard it is measured by: a
+ * collapsible, titled group per selected component; the part's FULL name as the
+ * title; one row per parameter with the name left and the value right; the unit
+ * inline with the value and engineering-prefixed; an unset label reading
+ * "none"; and the row being edited carrying an accent bar.
+ *
+ * The two things this fixes that the reference does not do at all are that the
+ * groups stay directly editable (no click-to-reveal) and that a multi-part
+ * selection was previously an EMPTY panel - the store nulls `selectedId` unless
+ * exactly one thing is selected, so two selected parts produced "No Selection"
+ * while two parts sat highlighted on the canvas.
+ */
+describe("ComponentInspector - titled property groups", () => {
+  const part = (
+    kind: SchematicComponent["kind"],
+    id: string,
+    value: string,
+    label: string,
+  ): SchematicComponent => ({ id, kind, x: 0, y: 0, rotation: 0, value, label });
+
+  const show = (...components: SchematicComponent[]) => {
+    useSchematic.setState({
+      components,
+      selectedId: components.length === 1 ? components[0].id : null,
+      selectedIds: components.map((component) => component.id),
+    });
+    return render(
+      <ComponentInspector selected={components.length === 1 ? components[0] : components} />,
+    );
+  };
+
+  const headers = () => screen.getAllByRole("button", { expanded: true });
+
+  it("titles the group with the part's full name, never the internal kind", () => {
+    show(part("pmos", "m-1", "PMOS W=3u L=200n", "M1"));
+
+    expect(screen.getByRole("button", { name: /P-channel MOSFET/ })).toBeTruthy();
+    // "pmos" and the palette's short "PMOS" are both implementation-facing.
+    expect(document.body.textContent).not.toMatch(/\bpmos\b/);
+  });
+
+  it("collapses to a header that still says which part it is and what it is set to", () => {
+    show(part("resistor", "r-1", "4700", "R1"));
+
+    expect(screen.getByRole("textbox", { name: "Resistance" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Resistor/ }));
+
+    expect(screen.queryByRole("textbox", { name: "Resistance" })).toBeNull();
+    // formatEngineering, the app's one number formatter - not a second one.
+    expect(screen.getByRole("button", { name: /R1 · 4\.7 kΩ/ })).toBeTruthy();
+  });
+
+  it("renders one group per selected component instead of an empty panel", () => {
+    show(
+      part("pmos", "m-1", "PMOS W=3u L=200n", "M1"),
+      part("potentiometer", "rv-1", "1k Wiper=0.5", "RV1"),
+      part("vcvs", "e-1", "2", "E1"),
+    );
+
+    expect(screen.queryByText("No Selection")).toBeNull();
+    expect(screen.getByText("3 components")).toBeTruthy();
+    expect(headers().map((header) => header.textContent)).toEqual([
+      expect.stringContaining("P-channel MOSFET"),
+      expect.stringContaining("Potentiometer"),
+      expect.stringContaining("Voltage-controlled voltage source"),
+    ]);
+  });
+
+  it("edits the right component when several are selected", () => {
+    show(
+      part("resistor", "r-1", "1k", "R1"),
+      part("resistor", "r-2", "2k", "R2"),
+    );
+
+    const [first, second] = screen.getAllByRole("textbox", { name: "Resistance" }) as HTMLInputElement[];
+    expect(first.value).toBe("1");
+    expect(second.value).toBe("2");
+
+    fireEvent.change(second, { target: { value: "9" } });
+    const stored = useSchematic.getState().components;
+    expect(stored.find((component) => component.id === "r-1")?.value).toBe("1k");
+    expect(stored.find((component) => component.id === "r-2")?.value).toBe("9k");
+  });
+
+  it("collapses one group without touching its neighbour", () => {
+    show(
+      part("resistor", "r-1", "1k", "R1"),
+      part("resistor", "r-2", "2k", "R2"),
+    );
+
+    fireEvent.click(headers()[1]);
+    expect(screen.getAllByRole("textbox", { name: "Resistance" }).length).toBe(1);
+  });
+
+  it("shows a normalised wiper as a percentage and takes a percentage back", () => {
+    show(part("potentiometer", "rv-1", "1k Wiper=0.5", "RV1"));
+
+    const wiper = screen.getByRole("textbox", { name: "Wiper position" }) as HTMLInputElement;
+    expect(wiper.value).toBe("50");
+    expect(screen.getByText("%")).toBeTruthy();
+    // A percentage is not SI-prefixable, so it must NOT get a prefix picker.
+    expect(screen.queryByRole("combobox", { name: "Wiper position SI prefix" })).toBeNull();
+
+    fireEvent.change(wiper, { target: { value: "25" } });
+    fireEvent.blur(wiper);
+    expect(useSchematic.getState().components[0].value).toBe("1k Wiper=0.25");
+  });
+
+  it("puts an engineering unit inline with a value stored without one", () => {
+    show(part("resistor", "r-1", "1000", "R1"));
+
+    // 1000 Ω is what a datasheet calls 1 kΩ. The stored spelling is untouched
+    // until the reader edits it.
+    expect((screen.getByRole("textbox", { name: "Resistance" }) as HTMLInputElement).value).toBe("1");
+    expect(screen.getByRole("combobox", { name: "Resistance SI prefix" }).textContent).toContain("kΩ");
+    expect(useSchematic.getState().components[0].value).toBe("1000");
+  });
+
+  it("keeps the geometry units the reference prints", () => {
+    show(part("pmos", "m-1", "PMOS W=3u L=200n", "M1"));
+
+    expect((screen.getByRole("textbox", { name: "Width (W)" }) as HTMLInputElement).value).toBe("3");
+    expect(screen.getByRole("combobox", { name: "Width (W) SI prefix" }).textContent).toContain("µm");
+    expect((screen.getByRole("textbox", { name: "Length (L)" }) as HTMLInputElement).value).toBe("200");
+    expect(screen.getByRole("combobox", { name: "Length (L) SI prefix" }).textContent).toContain("nm");
+  });
+
+  it("reads an unset label as none rather than as an empty box", () => {
+    show(part("resistor", "r-1", "1k", ""));
+
+    const refdes = screen.getByRole("textbox", { name: "Reference designator" }) as HTMLInputElement;
+    expect(refdes.value).toBe("");
+    expect(refdes.getAttribute("placeholder")).toBe("none");
+  });
+
+  it("still serves a kind's fields instead of one raw Value box", () => {
+    show(part("vcvs", "e-1", "2", "E1"));
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+    expect((screen.getByRole("textbox", { name: "Voltage gain" }) as HTMLInputElement).value).toBe("2");
+    expect(screen.getByRole("combobox", { name: "Voltage gain SI prefix" }).textContent).toContain("V/V");
+  });
+});
+
+/**
+ * The row treatment, asserted against App.css because jsdom computes no
+ * layout and no cascade.
+ *
+ * This is the half of the redesign a render test cannot see: rows are quiet,
+ * borderless text until one is being edited, and the row being edited is boxed
+ * and carries a short accent bar on its leading edge. Lose that and the panel
+ * silently reverts to a stack of form fields that all look equally active,
+ * which is the exact failure the reference is a corrective for.
+ */
+describe("property row focus treatment (App.css contract)", () => {
+  const css = readFileSync(join(__dirname, "..", "App.css"), "utf8");
+  const ruleBody = (selector: string): string => {
+    const start = css.indexOf(`\n${selector} {`);
+    expect(start, `${selector} is missing from App.css`).toBeGreaterThan(-1);
+    return css.slice(start, css.indexOf("}", start));
+  };
+
+  it("draws the accent bar on the leading edge, from the token", () => {
+    const bar = ruleBody(".property-field::before");
+    expect(bar).toMatch(/background:\s*var\(--accent\)/);
+    expect(bar).toMatch(/left:\s*0/);
+    expect(bar).toMatch(/width:\s*2px/);
+    // Collapsed to nothing at rest: an always-on bar is decoration, not focus.
+    expect(bar).toMatch(/height:\s*0/);
+  });
+
+  it("boxes only the row that has focus inside it", () => {
+    expect(ruleBody(".property-field:focus-within")).toMatch(/box-shadow:\s*inset 0 0 0 1px var\(--border-subtle\)/);
+    expect(ruleBody(".property-field:focus-within::before")).toMatch(/height:\s*\d+%/);
+  });
+
+  it("sets the value column against the right edge, the way a spec table does", () => {
+    expect(ruleBody(".property-field")).toMatch(/justify-items:\s*end/);
+    expect(ruleBody(".property-field > span:first-child")).toMatch(/justify-self:\s*start/);
+    expect(ruleBody(".property-field .eng-input")).toMatch(/justify-self:\s*end/);
+    expect(ruleBody(".property-field input")).toMatch(/text-align:\s*right/);
+    // Prose opts out: an expression box scrolled to its tail is unreadable.
+    expect(ruleBody(".property-field input.property-text")).toMatch(/text-align:\s*left/);
+  });
+
+  it("renders an unset value's placeholder as a muted whisper", () => {
+    expect(ruleBody(".property-field input::placeholder")).toMatch(/color:\s*var\(--faint\)/);
+  });
+
+  it("wraps its motion for prefers-reduced-motion", () => {
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.property-field,/);
   });
 });

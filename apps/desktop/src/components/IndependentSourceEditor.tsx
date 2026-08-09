@@ -56,6 +56,9 @@ function SourceField({ label, value, unit = "", onBeginChange, onValueChange }: 
           className="mono-num"
           aria-label={label}
           value={value}
+          // Same treatment as the rest of the panel: an unset optional field
+          // reads "none" rather than as an empty box that says nothing.
+          placeholder="none"
           spellCheck={false}
           onChange={(event) => onValueChange(event.currentTarget.value)}
         />

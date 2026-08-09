@@ -1,3 +1,5 @@
+import { formatEngineering, parseQuantity } from "../simulation/quantity";
+
 /** SI prefixes exposed by the component inspector. Follows LTspice suffix
  * semantics (see simulation/quantity.ts, the value-parsing authority):
  * suffixes are case-insensitive, `m` and `M` are BOTH milli, and mega is
@@ -90,3 +92,62 @@ export function compactEngineeringMantissa(value: string, maxCharacters = 12): s
 }
 
 export const composeEngineeringValue = (mantissa: string, prefix: EngineeringPrefix) => `${mantissa.trim()}${prefix}`;
+
+/** Plain decimals inside this band read fine as written; outside it they stop
+ *  being countable at a glance and want a prefix. */
+const PLAIN_DECIMAL_FLOOR = 1e-3;
+const PLAIN_DECIMAL_CEILING = 1e3;
+
+/**
+ * Re-spell a raw value in engineering notation, for DISPLAY only.
+ *
+ * The inspector shows a value the way it is stored, which is right almost
+ * always and wrong at the extremes: a resistance saved as `1000` read "1000 Ω"
+ * where the reference standard - and every datasheet - says `1 kΩ`, and a
+ * geometry saved as `0.000003` was a digit-counting exercise instead of `3 µm`.
+ *
+ * Three rules keep this from being a value rewriter wearing a formatter's coat:
+ *
+ * - **A prefix the author chose is never overruled.** `50n` stays `50n`, even
+ *   though `0.05µ` is the same number: they picked the decade they think in.
+ * - **A plain decimal from 1m to 1k is left alone.** `0.25` is not improved by
+ *   becoming `250m`, and rewriting it would fight the person typing.
+ * - **The result must parse back to the same number.** Built on
+ *   `formatEngineering`, whose whole job is significant digits, so the loop
+ *   asks it for the fewest digits that round-trip and gives up rather than
+ *   return a spelling that moved the value. A formatter that quietly rounds a
+ *   component value is a lie about what the deck will run. "Same" is to within
+ *   a few ulps, not bit-identical: `200 * 1e-9` and `2e-7` are one ulp apart in
+ *   IEEE754 and are the same number, while any actual rounding is off by ~1e-3
+ *   relative - twelve orders of magnitude outside this window.
+ *
+ * Returns the SPICE spelling (`3µ`), not a display string: the caller feeds it
+ * back through {@link splitEngineeringValue} into the mantissa + prefix picker,
+ * so `Meg` matters and a space would not survive.
+ */
+export function engineeringSpelling(value: string, unit = ""): string {
+  const text = value.trim();
+  if (!text) return value;
+  // An explicit suffix means the author picked the decade. Bare digits (with an
+  // optional exponent) are the only thing this re-spells.
+  if (!/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i.test(text)) return value;
+  let numeric: number;
+  try {
+    numeric = parseQuantity(text, unit);
+  } catch {
+    return value;
+  }
+  if (!Number.isFinite(numeric) || numeric === 0) return value;
+  const magnitude = Math.abs(numeric);
+  if (magnitude >= PLAIN_DECIMAL_FLOOR && magnitude < PLAIN_DECIMAL_CEILING) return value;
+  const tolerance = magnitude * 4 * Number.EPSILON;
+  for (let digits = 1; digits <= 15; digits += 1) {
+    const candidate = formatEngineering(numeric, "", digits).replace(/\s+/g, "");
+    try {
+      if (Math.abs(parseQuantity(candidate) - numeric) <= tolerance) return candidate;
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}

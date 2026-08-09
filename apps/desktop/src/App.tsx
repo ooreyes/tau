@@ -251,6 +251,7 @@ function App() {
   const wires = useSchematic((s) => s.wires);
   const toolMode = useSchematic((s) => s.tool.mode);
   const selectedId = useSchematic((s) => s.selectedId);
+  const selectedCount = useSchematic((s) => (s.selectedId ? 1 : s.selectedIds.length));
   const select = useSchematic((s) => s.select);
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
@@ -430,10 +431,13 @@ function App() {
   // instead of the stale ones captured before the circuit swapped.
   const pendingAutoRunRef = useRef<AutoRunAnalysis | null>(null);
 
-  // Selecting a part opens the Components rail so Properties is immediately usable.
+  // Selecting a part opens the Components rail so Properties is immediately
+  // usable. Keyed on the count, not on `selectedId`: the store nulls that the
+  // moment a second part joins the selection, so a marquee drag used to leave
+  // the rail shut over a panel that now had something to show.
   useEffect(() => {
-    if (selectedId && mode === "schematic") setPartsOpen(true);
-  }, [selectedId, mode]);
+    if (selectedCount > 0 && mode === "schematic") setPartsOpen(true);
+  }, [selectedCount, mode]);
 
   const writeSim = useProject((s) => s.writeSim);
   const projectRootPath = useProject((s) => s.rootPath);

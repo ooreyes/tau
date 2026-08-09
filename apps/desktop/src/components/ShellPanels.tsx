@@ -33,16 +33,21 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
+import { componentDisplayName } from "../schematic/componentNames";
+import { engineeringSpelling } from "../schematic/engineering";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 import {
   clampParamValue,
   decodeParams,
+  displayParamField,
   encodeParams,
+  fromDisplayParamValue,
   isBoundedParamField,
   paramFields,
   paramRangeLabel,
   paramSummary,
+  toDisplayParamValue,
   type ParamField,
 } from "../schematic/params";
 import { buildSubcircuitPinOverride, localSubcircuitPins } from "../schematic/subcircuitGeometry";
@@ -85,7 +90,7 @@ import { basename, isAscFile, type ProjectNode } from "../project/types";
 import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
 import type { AnalysisResult } from "../simulation/linearTransient";
-import { formatEngineering } from "../simulation/quantity";
+import { formatEngineering, parseQuantity } from "../simulation/quantity";
 import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "@/components/ui/resizable";
 
 /** Drag-to-resize bounds for the two side panels. Minimums keep
@@ -1615,7 +1620,9 @@ function BoundedParamInput({
  * Built once because bounds are a property of the SCHEMA, not of a kind: a
  * potentiometer's wiper, a pulse source's duty and a gate's input count all
  * declare a range, and enforcing it at one of those three call sites is how the
- * other two stay broken.
+ * other two stay broken. The display unit rides the same argument: the panel
+ * asks `displayParamField` what the field looks like to a reader, and converts
+ * on the way in and out, so nothing here knows a percentage from an ohm.
  */
 function ParamValueControl({
   field,
@@ -1630,57 +1637,121 @@ function ParamValueControl({
   onFocusField: () => void;
   onValueChange: (next: string) => void;
 }) {
-  const range = paramRangeLabel(field);
-  const control = field.unit ? (
+  // Bounds, unit and the number itself, all in the unit the reader sees.
+  const shown = displayParamField(field);
+  const shownValue = toDisplayParamValue(field, value);
+  const commit = (next: string) => onValueChange(fromDisplayParamValue(field, next));
+  const range = paramRangeLabel(shown);
+  const control = field.display ? (
+    // A display unit is deliberately NOT SI-prefixable - "m%" is not a quantity
+    // - so it is a static suffix beside a clamped box rather than the prefix
+    // picker an engineering field gets.
+    <span className="property-quantity">
+      <BoundedParamInput
+        field={shown}
+        value={shownValue}
+        onBeginChange={onBeginChange}
+        onFocusField={onFocusField}
+        onCommit={commit}
+      />
+      <span className="property-unit" aria-hidden="true">{shown.unit}</span>
+    </span>
+  ) : shown.unit ? (
     <EngineeringInput
-      label={field.label}
-      value={value}
-      unit={field.unit}
-      min={field.min}
-      max={field.max}
+      label={shown.label}
+      // Display spelling only: a value saved as `1000` shows as 1 + kΩ, and is
+      // still stored as `1000` until the reader edits it.
+      value={engineeringSpelling(shownValue, shown.unit)}
+      unit={shown.unit}
+      min={shown.min}
+      max={shown.max}
       onBeginChange={onBeginChange}
-      onValueChange={onValueChange}
+      onValueChange={commit}
     />
-  ) : isBoundedParamField(field) ? (
+  ) : isBoundedParamField(shown) ? (
     <BoundedParamInput
-      field={field}
-      value={value}
+      field={shown}
+      value={shownValue}
       onBeginChange={onBeginChange}
       onFocusField={onFocusField}
-      onCommit={onValueChange}
+      onCommit={commit}
     />
   ) : (
     // Unbounded text: nothing to clamp, so it keeps committing as you type.
     <input
-      className="mono-num"
-      value={value}
-      aria-label={field.label}
+      // An expression is prose, so it reads from the left; a number is a
+      // number and belongs in the right-aligned value column with the rest.
+      className={`mono-num${shown.kind === "text" ? " property-text" : ""}`}
+      value={shownValue}
+      aria-label={shown.label}
+      placeholder="none"
       spellCheck={false}
       onFocus={onFocusField}
       onChange={(event) => {
         onBeginChange();
-        onValueChange(event.currentTarget.value);
+        commit(event.currentTarget.value);
       }}
     />
   );
   if (!range) return control;
   return (
     <span className="property-value">
-      {control}
+      {/* Ahead of the control, not after it: the value column ends at the
+          panel's right edge, and a bound parked past it was the one thing on
+          the row that got clipped. */}
       <small className="property-range mono-num">{range}</small>
+      {control}
     </span>
   );
 }
 
-// Exported for component tests only (same pattern as the plot components).
-export function ComponentInspector({
-  selected,
+/**
+ * The one number that identifies a part, spelled the way a datasheet spells it.
+ *
+ * A collapsed group would otherwise be a title and nothing else, which is
+ * exactly the state a reader collapses INTO once they know what the part is and
+ * only want its value. `formatEngineering` is the app's single number
+ * formatter, so `10000` reads `10 kΩ` here for the same reason it does on a
+ * measurement card.
+ */
+function componentHeadline(component: SchematicComponent): string {
+  const entry = CATALOG_BY_KIND[component.kind];
+  const source = component.value.trim() || entry?.defaultValue || "";
+  const field = paramFields(component.kind, source)
+    .find((candidate) => candidate.kind === "number" && (candidate.unit || candidate.display));
+  if (!field) return source.split(/\s+/)[0] ?? "";
+  const shown = displayParamField(field);
+  const raw = toDisplayParamValue(field, decodeParams(component.kind, source)[field.key] ?? "");
+  if (!raw.trim()) return "";
+  try {
+    return formatEngineering(parseQuantity(raw, shown.unit), shown.unit);
+  } catch {
+    // An expression or a parameter reference is not a quantity; show it as
+    // written rather than inventing a number for it.
+    return raw;
+  }
+}
+
+/**
+ * One collapsible, titled group of properties for one part.
+ *
+ * This is the unit the reference builds its panel out of, and the reason a
+ * two-part selection can be a two-group panel instead of an empty state: every
+ * piece of per-part editor state - which row is mid-edit, whether Advanced is
+ * open, whether the group itself is open - lives in this component, so a second
+ * group is a second instance and nothing has to be threaded through a shared
+ * inspector.
+ */
+function ComponentPropertyGroup({
+  component,
   onOpenModelLibraries,
 }: {
-  selected: SchematicComponent | null;
+  component: SchematicComponent;
   onOpenModelLibraries?: () => void;
 }) {
-  const entry = selected ? CATALOG_BY_KIND[selected.kind] : null;
+  const selected = component;
+  const entry = CATALOG_BY_KIND[selected.kind];
+  const [groupOpen, setGroupOpen] = useState(true);
   const setValue = useSchematic((s) => s.setValue);
   const setSubcircuitModel = useSchematic((s) => s.setSubcircuitModel);
   const setOpampModel = useSchematic((s) => s.setOpampModel);
@@ -1871,27 +1942,35 @@ export function ComponentInspector({
           ? junctionModelSummary(selected, null)
           : `Generic starter · fine for topology checks; not a manufacturer part.`;
 
+  const title = componentDisplayName(selected.kind);
+  const headline = componentHeadline(selected);
+
   return (
-    <div className="component-inspector">
-      <div className={`inspector-summary${selected && entry ? "" : " empty"}`}>
-        {selected && entry ? (
-          <>
-            <svg viewBox="-44 -40 88 80">
-              <g className="symbol">
-                <ComponentSymbol kind={selected.kind} value={selected.value} />
-              </g>
-            </svg>
-            <strong>{selected.label || entry.name}</strong>
-            <span>{entry.name} · {selected.kind}</span>
-          </>
-        ) : (
-          <>
-            <strong>No Selection</strong>
-            <span>Select a component, wire, node, or label to view and edit its properties.</span>
-          </>
-        )}
-      </div>
-      {selected && (
+    <section className="property-group" aria-label={`${selected.label || title} properties`}>
+      <button
+        type="button"
+        className="property-group-header"
+        aria-expanded={groupOpen}
+        onClick={() => setGroupOpen((open) => !open)}
+      >
+        <span className={`property-group-chevron${groupOpen ? " open" : ""}`} aria-hidden="true">›</span>
+        {/* The symbol rides in the header rather than in a separate identity
+            block above the grid. One group looks like every other group that
+            way, and in a multi-part selection the drawing is what tells a
+            resistor's group from a capacitor's at a glance. */}
+        <svg className="property-group-symbol" viewBox="-44 -40 88 80" aria-hidden="true">
+          <g className="symbol">
+            <ComponentSymbol kind={selected.kind} value={selected.value} />
+          </g>
+        </svg>
+        <span className="property-group-title">{title}</span>
+        {/* Collapsed, the title alone is not enough to tell two resistors
+            apart, so the group keeps carrying its identity and its value. */}
+        <span className="property-group-aside mono-num">
+          {groupOpen ? selected.label : [selected.label, headline].filter(Boolean).join(" · ")}
+        </span>
+      </button>
+      {groupOpen && (
         <div className="property-grid">
           <label className="property-field">
             <span>Refdes</span>
@@ -1899,6 +1978,9 @@ export function ComponentInspector({
               className="mono-num"
               value={selected.label}
               aria-label="Reference designator"
+              // An empty box says nothing; "none" says the part has no
+              // designator yet, which is a different and true statement.
+              placeholder="none"
               spellCheck={false}
               onFocus={() => {
                 editKeyRef.current = null;
@@ -2011,7 +2093,7 @@ export function ComponentInspector({
                         />
                       ) : (
                         <input
-                          className="mono-num"
+                          className="mono-num property-text"
                           value={parameterValue}
                           aria-label={`Subcircuit parameter ${parameter.name}`}
                           spellCheck={false}
@@ -2099,7 +2181,7 @@ export function ComponentInspector({
                   <label className="property-field">
                     <span>Part</span>
                     <input
-                      className="mono-num"
+                      className="mono-num property-text"
                       value={opamp.partName}
                       aria-label="Op-amp part"
                       readOnly
@@ -2108,7 +2190,7 @@ export function ComponentInspector({
                   <label className="property-field">
                     <span>Simulation model</span>
                     <input
-                      className="mono-num"
+                      className="mono-num property-text"
                       value={opamp.modelName}
                       aria-label="Op-amp simulation model"
                       spellCheck={false}
@@ -2177,7 +2259,7 @@ export function ComponentInspector({
                 <label className="property-field">
                   <span>Advanced parameters</span>
                   <input
-                    className="mono-num"
+                    className="mono-num property-text"
                     value={selected.value}
                     aria-label="Advanced op-amp parameters"
                     spellCheck={false}
@@ -2241,6 +2323,67 @@ export function ComponentInspector({
           )}
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * The Properties panel: a titled group per selected part.
+ *
+ * Selection has been a LIST in the store for as long as marquee select has
+ * existed (`selectedIds`), but this panel took one component and the store
+ * nulls `selectedId` unless exactly one thing is selected - so selecting two
+ * parts produced "No Selection · Select a component…" while two components sat
+ * highlighted on the canvas. Taking the list is what fixes that, and it is also
+ * what the reference does: one group per part, each collapsible, each editing
+ * its own component.
+ *
+ * A single component is still passed as a single component, because that is
+ * what every caller and every test already had.
+ */
+// Exported for component tests only (same pattern as the plot components).
+export function ComponentInspector({
+  selected,
+  onOpenModelLibraries,
+}: {
+  selected: SchematicComponent | readonly SchematicComponent[] | null;
+  onOpenModelLibraries?: () => void;
+}) {
+  const parts: readonly SchematicComponent[] = !selected
+    ? []
+    : Array.isArray(selected)
+      ? selected
+      : [selected as SchematicComponent];
+
+  if (parts.length === 0) {
+    return (
+      <div className="component-inspector">
+        <div className="inspector-summary empty">
+          <strong>No Selection</strong>
+          <span>Select a component, wire, node, or label to view and edit its properties.</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`component-inspector${parts.length > 1 ? " component-inspector--multi" : ""}`}>
+      {/* One part identifies itself in its own group header. Several need a
+          line saying how many, because the groups below are then a list and a
+          reader has to know whether they are looking at all of it. */}
+      {parts.length > 1 && (
+        <div className="inspector-summary multi">
+          <strong className="mono-num">{parts.length} components</strong>
+          <span>Each group edits its own part.</span>
+        </div>
+      )}
+      {parts.map((part) => (
+        <ComponentPropertyGroup
+          key={part.id}
+          component={part}
+          onOpenModelLibraries={onOpenModelLibraries}
+        />
+      ))}
     </div>
   );
 }
@@ -2303,18 +2446,28 @@ export function ComponentsRail({
   embedded?: boolean;
 }) {
   const selectedId = useSchematic((s) => s.selectedId);
+  const selectedIds = useSchematic((s) => s.selectedIds);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
-  const selected = components.find((c) => c.id === selectedId) ?? null;
+  // `selectedIds` is the whole selection and `selectedId` only survives a
+  // single one, so the panel reads the list and keeps the singleton as a
+  // belt-and-braces union. Document order, so the groups do not reshuffle as
+  // parts are added to the selection.
+  const selected = useMemo(() => {
+    const ids = new Set<string>(selectedIds);
+    if (selectedId) ids.add(selectedId);
+    return components.filter((component) => ids.has(component.id));
+  }, [components, selectedIds, selectedId]);
   const selectedWire = wires.find((w) => w.id === selectedWireId) ?? null;
   const [segment, setSegment] = useState<"properties" | "library">(
-    selected || selectedWire ? "properties" : "library",
+    selected.length > 0 || selectedWire ? "properties" : "library",
   );
+  const selectionKey = selected.map((component) => component.id).join(" ");
 
   useEffect(() => {
-    if (selected || selectedWire) setSegment("properties");
-  }, [selected?.id, selectedWire?.id]);
+    if (selectionKey || selectedWire) setSegment("properties");
+  }, [selectionKey, selectedWire?.id]);
 
   useEffect(() => {
     // A blank sheet is the one state where Properties cannot help. Reset the
@@ -2373,7 +2526,7 @@ export function ComponentsRail({
       </div>
       <div className="components-rail-body">
         {segment === "properties" ? (
-          selected ? (
+          selected.length > 0 ? (
             <ComponentInspector selected={selected} onOpenModelLibraries={onOpenModelLibraries} />
           ) : selectedWire ? (
             <WireInspector wire={selectedWire} />

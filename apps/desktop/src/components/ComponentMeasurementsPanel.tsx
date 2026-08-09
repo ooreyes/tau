@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { componentDisplayName } from "../schematic/componentNames";
 import type { ComponentAdvisory, ComponentMeasurement, MeasuredSeries } from "../simulation/measurementModel";
 import { formatEngineering } from "../simulation/quantity";
 
@@ -212,55 +213,18 @@ function MeasurementCard({
   );
 }
 
-/** Human names for the schematic kind strings ("vac" → "AC source") so the
- *  dock reads like a spec sheet, not an internal enum. Unmapped kinds fall
- *  back to a capitalized identifier rather than leaking raw lowercase. */
-const KIND_DISPLAY: Partial<Record<ComponentMeasurement["kind"], string>> = {
-  resistor: "Resistor",
-  capacitor: "Capacitor",
-  inductor: "Inductor",
-  potentiometer: "Potentiometer",
-  vsource: "DC source",
-  isource: "Current source",
-  // Tau's dedicated AC source symbols carry amplitude + frequency and produce
-  // an actual sinusoid in transient analysis. Generic vsource/isource entries
-  // stay generic because a periodic classifier alone cannot prove wave shape.
-  vac: "Sine voltage source",
-  iac: "Sine current source",
-  vpulse: "Pulse source",
-  diode: "Diode",
-  led: "LED",
-  zener: "Zener diode",
-  opamp: "Op-amp",
-  comparator: "Comparator",
-  nmos: "NMOS",
-  pmos: "PMOS",
-  npn: "NPN BJT",
-  pnp: "PNP BJT",
-  njf: "N-JFET",
-  pjf: "P-JFET",
-  bsource: "Behavioral source",
-  switch: "Switch",
-  transformer: "Transformer",
-  tline: "Transmission line",
-  subckt: "Subcircuit",
-  digitalGate: "Logic gate",
-  dflop: "D flip-flop",
-  srflop: "SR latch",
-  tflop: "T flip-flop",
-  jkflop: "JK flip-flop",
-  counter: "4-bit counter",
-  timer555: "555 timer",
-  adc: "4-bit ADC",
-  dac: "4-bit DAC",
-  sevenSeg: "7-segment",
-  sampleHold: "Sample & hold",
-  modulator: "Modulator",
-  ground: "Ground",
-};
-
+/**
+ * Human names for the schematic kind strings ("vac" → "Sine voltage source")
+ * so the dock reads like a spec sheet, not an internal enum.
+ *
+ * The names themselves live in `schematic/componentNames.ts`, shared with the
+ * Properties panel's group titles. This used to be a private partial map with a
+ * capitalise-the-enum fallback, which meant a kind added to the catalog leaked
+ * "Sevenseg" here while Properties printed "sevenSeg" - two surfaces of one app
+ * disagreeing about what the part is called.
+ */
 function displayKind(kind: ComponentMeasurement["kind"]): string {
-  return KIND_DISPLAY[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
+  return componentDisplayName(kind);
 }
 
 /** One row of the compact card's spec table: full-word quantity on the left

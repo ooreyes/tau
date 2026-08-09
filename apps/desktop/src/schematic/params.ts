@@ -25,6 +25,30 @@ export interface ParamChoice {
   label: string;
 }
 
+/**
+ * A unit the panel shows a field in, when that differs from the unit the deck
+ * stores it in.
+ *
+ * A normalised 0..1 fraction is the case this exists for, and it is a general
+ * one: a potentiometer's wiper and a pulse source's duty are both stored as a
+ * fraction because that is what the solver and the `.asc` file want, and are
+ * both READ as a percentage by every engineer alive. Special-casing the wiper
+ * in the panel would have left the duty cycle - the identical problem, two
+ * lines further down the same table - still showing "0.5".
+ *
+ * `scale` is a display multiplier only. Storage, the netlist and the bounds in
+ * `min`/`max` all stay in the field's own unit; {@link displayParamField}
+ * converts the bounds so a single {@link clampParamValue} still enforces them,
+ * and {@link fromDisplayParamValue} converts a committed number back before it
+ * is encoded. Nothing downstream of the panel learns that percentages exist.
+ */
+export interface ParamDisplayUnit {
+  /** Stored value times this is what the reader sees and types. */
+  scale: number;
+  /** Shown against the number. Not SI-prefixable - "m%" is not a quantity. */
+  unit: string;
+}
+
 export interface ParamField {
   key: string;
   label: string;
@@ -47,6 +71,8 @@ export interface ParamField {
   max?: number;
   /** Whole numbers only - a gate cannot have three and a half inputs. */
   integer?: boolean;
+  /** Show and accept this field in another unit - see {@link ParamDisplayUnit}. */
+  display?: ParamDisplayUnit;
   advanced?: boolean;
   description?: string;
   /** Name used in the `Name=value` form. Defaults to `key`. */
@@ -103,7 +129,7 @@ export const EXTRA_PARAM_KEY = "$extra";
 const CHARGE_CAPACITOR: ParamSpec = {
   when: /^\s*Q\s*=/i,
   fields: [
-    { key: "charge", label: "Charge expression", unit: "" },
+    { key: "charge", label: "Charge expression", unit: "", kind: "text" },
     { key: "ic", label: "Initial voltage", unit: "V", kind: "number" },
   ],
   codec: {
@@ -220,8 +246,9 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
         fallback: "0.5",
         min: 0,
         max: 1,
+        display: { scale: 100, unit: "%" },
         omitWhenFallback: true,
-        description: "Fraction of the track between pin A and the wiper. 0.5 is centred.",
+        description: "How far along the track between pin A and the wiper the tap sits. 50 % is centred.",
       },
     ],
   },
@@ -255,7 +282,19 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
       { key: "low", label: "Low level", unit: "V", kind: "number", fallback: "0" },
       { key: "high", label: "High level", unit: "V", kind: "number", fallback: "5" },
       { key: "frequency", label: "Frequency", unit: "Hz", kind: "number", fallback: "100k" },
-      { key: "duty", label: "Duty (0-1)", unit: "", kind: "number", fallback: "0.5", min: 0, max: 1 },
+      // Stored as the 0..1 fraction the PULSE spec on disk already uses; shown
+      // as the percentage a duty cycle is quoted in. The old "(0-1)" in the
+      // label was the panel apologising for a storage detail.
+      {
+        key: "duty",
+        label: "Duty",
+        unit: "",
+        kind: "number",
+        fallback: "0.5",
+        min: 0,
+        max: 1,
+        display: { scale: 100, unit: "%" },
+      },
     ],
     codec: { form: "positional" },
   },
@@ -331,7 +370,9 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   // other three pins do. The fallbacks are `parseModulator`'s own defaults, so
   // a value that omits one shows the number the deck will run.
   modulator: {
-    summary: "Voltage-controlled oscillator. Q outputs a sine of ±1 V whose frequency follows the FM pin:"
+    // The group header already names the part, so this starts at the first
+    // thing the header does not say.
+    summary: "Q outputs a sine of ±1 V whose frequency follows the FM pin:"
       + " the space frequency at 0 V, the mark frequency at 1 V, and straight-line in between and beyond."
       + " AM scales the amplitude and counts as 1 V while it is unwired. COM is the reference the sine rides on;"
       + " leave it unwired for a ground-referenced output.",
@@ -537,6 +578,62 @@ export function clampParamValue(field: ParamField, raw: string): string {
   if (field.min !== undefined) bounded = Math.max(field.min, bounded);
   if (field.max !== undefined) bounded = Math.min(field.max, bounded);
   return bounded === numeric ? raw : String(bounded);
+}
+
+/**
+ * The field as the PANEL sees it: bounds and unit already converted into the
+ * display unit, so the one `clampParamValue` still enforces the one range.
+ *
+ * A field without a display unit is returned unchanged, which is what lets the
+ * editor call this unconditionally instead of branching on the wiper.
+ */
+export function displayParamField(field: ParamField): ParamField {
+  const display = field.display;
+  if (!display) return field;
+  return {
+    ...field,
+    unit: display.unit,
+    min: field.min === undefined ? undefined : field.min * display.scale,
+    max: field.max === undefined ? undefined : field.max * display.scale,
+  };
+}
+
+/** Trim the float dust a scale multiply leaves behind (0.7 * 100 = 70.00000000000001). */
+const tidy = (value: number): string => String(Number(value.toPrecision(12)));
+
+/**
+ * A stored value in the unit the panel shows it in.
+ *
+ * Anything that is not a plain number - an empty box, an expression, a
+ * parameter reference - passes through untouched, for the same reason
+ * {@link clampParamValue} leaves it alone: scaling something this function
+ * cannot read would invent a value the author did not write.
+ */
+export function toDisplayParamValue(field: ParamField, stored: string): string {
+  const display = field.display;
+  if (!display || !stored.trim()) return stored;
+  let numeric: number;
+  try {
+    numeric = parseQuantity(stored, field.unit);
+  } catch {
+    return stored;
+  }
+  if (!Number.isFinite(numeric)) return stored;
+  return tidy(numeric * display.scale);
+}
+
+/** The inverse: a number the reader typed, back in the unit the deck stores. */
+export function fromDisplayParamValue(field: ParamField, shown: string): string {
+  const display = field.display;
+  if (!display || !shown.trim()) return shown;
+  let numeric: number;
+  try {
+    numeric = parseQuantity(shown, display.unit);
+  } catch {
+    return shown;
+  }
+  if (!Number.isFinite(numeric)) return shown;
+  return tidy(numeric / display.scale);
 }
 
 /** Split a value string into its structured fields for the given kind. */

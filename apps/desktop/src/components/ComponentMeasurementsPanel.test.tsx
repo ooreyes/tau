@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { componentDisplayName } from "../schematic/componentNames";
 import type { ComponentMeasurement, MeasuredSeries } from "../simulation/measurementModel";
 import { ComponentMeasurementsPanel, primaryReading, sparklinePath } from "./ComponentMeasurementsPanel";
 
@@ -244,6 +245,26 @@ describe("ComponentMeasurementsPanel - variant=\"compact\" (telemetry dock grid)
     expect(screen.getByText("DC source")).toBeTruthy();
     expect(screen.getAllByText("RMS").length).toBeGreaterThan(0);
     expect(screen.queryByText("Sine", { exact: true })).toBeNull();
+  });
+
+  /**
+   * One source of truth for part names, shared with the Properties panel's
+   * group titles. This dock used to carry its own partial map with a
+   * capitalise-the-enum fallback, so it said "PMOS" where Properties said
+   * "pmos" and printed "Sevenseg" for anything nobody had remembered to add.
+   */
+  it("names parts from the shared display-name map, not a private one", () => {
+    const named: ComponentMeasurement[] = [
+      { ...rows[0], componentId: "m1", ref: "M1", kind: "pmos" },
+      { ...rows[0], componentId: "u1", ref: "U1", kind: "sevenSeg" },
+    ];
+    render(<ComponentMeasurementsPanel rows={named} selectedId={null} onSelect={() => {}} variant="compact" />);
+
+    expect(screen.getByText(componentDisplayName("pmos"))).toBeTruthy();
+    expect(screen.getByText("P-channel MOSFET")).toBeTruthy();
+    // The old fallback capitalised the enum and produced exactly this.
+    expect(screen.queryByText("Sevenseg")).toBeNull();
+    expect(screen.getByText("7-segment display")).toBeTruthy();
   });
 
   it("shows a one-line empty hint distinct from the full variant's copy", () => {

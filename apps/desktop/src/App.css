@@ -5609,7 +5609,19 @@ body {
   border-bottom: 0;
 }
 
-.components-rail-body > .component-inspector .property-grid {
+.components-rail-body > .component-inspector .inspector-summary.multi {
+  grid-template-columns: 1fr;
+}
+
+/* One group per selected part: the rail scrolls, the groups do not. A
+   `flex: 1` grid was right when there was exactly one; with several it would
+   hand the last group all the slack and shove the rest off the top. */
+.components-rail-body > .component-inspector .property-group {
+  flex: none;
+  min-height: 0;
+}
+
+.components-rail-body > .component-inspector .property-group:only-of-type .property-grid {
   flex: 1;
   min-height: 0;
 }
@@ -6211,6 +6223,14 @@ button.bottom-panel-head:focus-visible {
   font-size: var(--fs-body);
 }
 
+/* A multi-part selection has no single symbol to show, so the identity block
+   states the count instead of leaving a 60px hole where a thumbnail was. */
+.inspector-summary.multi {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  row-gap: 2px;
+}
+
 .inspector-summary.empty {
   grid-column: 1 / -1;
   grid-template-columns: 1fr;
@@ -6293,10 +6313,13 @@ button.bottom-panel-head:focus-visible {
   margin-top: var(--sp-1);
 }
 
+/* The value column ends at the panel's right edge, so this control ends there
+   too: parked at the start of the column it sat directly against the truncated
+   label, reading as part of the text rather than as the row's answer. */
 .source-ac-toggle input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  justify-self: start;
+  justify-self: end;
   accent-color: var(--accent);
 }
 
@@ -6586,7 +6609,93 @@ button.bottom-panel-head:focus-visible {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* ── Properties: one titled, collapsible group per selected part ──────────
+   The reference standard here is an inspector that stacks a group per selected
+   component: a chevron and the part's FULL name over a quiet label/value
+   table. The group header is the only chrome the panel spends - rows stay
+   borderless text until one is being edited, which is what lets the grid read
+   as a spec sheet instead of a stack of form controls. */
+.property-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Separated by a hairline, not by a card: docked surfaces do not get shadows
+   or fills (DESIGN_SYSTEM §4), and a second selected part is not a second
+   panel - it is the next section of this one. */
+.property-group + .property-group {
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.property-group-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: var(--row-h-dense);
+  padding: 0 2px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.property-group-chevron {
+  flex: none;
+  color: var(--faint);
+  font-size: var(--fs-caption);
+  line-height: 1;
+  transition: transform var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.property-group-chevron.open {
+  transform: rotate(90deg);
+}
+
+/* Small enough to be identity rather than illustration - the schematic is
+   where a symbol is read; here it only has to say "this group is the diode". */
+.property-group-symbol {
+  flex: none;
+  width: 22px;
+  height: 20px;
+  overflow: visible;
+}
+
+.property-group-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font: 550 var(--fs-label) var(--font-ui);
+}
+
+/* Refdes while open; refdes + headline value once collapsed, so a group that
+   is shut still says which part it is and what it is set to. */
+.property-group-aside {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+
+.property-group-header:hover .property-group-chevron,
+.property-group-header:hover .property-group-title {
+  color: var(--accent);
+}
+
+.property-group-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .property-field {
+  position: relative;
   min-width: 0;
   display: grid;
   /* A fixed cap (not a %) so the label column tracks its own content instead
@@ -6594,8 +6703,93 @@ button.bottom-panel-head:focus-visible {
   grid-template-columns: minmax(64px, 112px) minmax(0, 1fr);
   column-gap: var(--sp-2);
   align-items: center;
+  /* Values sit against the right edge, the way a spec table sets a numeric
+     column. The label overrides this back to the start below. */
+  justify-items: end;
   height: var(--row-h);
+  padding-left: 6px;
+  border-radius: var(--r-sm);
   border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+/* The accent bar. A short rule on the leading edge of the row being edited -
+   the one place in this panel that spends colour, and it spends it on "here is
+   the caret", which is the only thing here that is not data. */
+.property-field::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 0;
+  border-radius: 1px;
+  background: var(--accent);
+  transform: translateY(-50%);
+  transition: height var(--motion-fast) var(--ease-out);
+}
+
+.property-field:focus-within {
+  background: var(--overlay-hover-faint);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+.property-field:focus-within::before {
+  height: 56%;
+}
+
+.property-field > span:first-child {
+  justify-self: start;
+}
+
+/* An unset value is a fact, not a blank: "none" says the part has no
+   designator yet, where an empty box says nothing at all. */
+.property-field input::placeholder {
+  color: var(--faint);
+  font-style: italic;
+}
+
+/* Numeric columns are mono, tabular and right-aligned (DESIGN_SYSTEM §4), and
+   in this panel every value column is a numeric column - so the default is
+   right and prose opts out, rather than the other way round. An expression box
+   scrolled to its tail is unreadable, which is what `.property-text` is for. */
+.property-field input {
+  text-align: right;
+}
+
+.property-field input.property-text {
+  text-align: left;
+}
+
+/* A quantity whose unit is not SI-prefixable (a percentage) carries the unit
+   as a static suffix instead of the prefix picker an engineering field gets -
+   "m%" is not a quantity. Same visual rhythm either way: mono number, then the
+   unit one step down and dimmer, hard against it. */
+.property-quantity {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.property-quantity .property-unit {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+}
+
+.property-quantity > input {
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .property-field,
+  .property-field::before,
+  .property-group-chevron {
+    transition: none;
+  }
 }
 
 .property-field:last-child {
@@ -6639,9 +6833,11 @@ button.bottom-panel-head:focus-visible {
   color: var(--muted);
 }
 
+/* Mantissa + unit, hard against the value column's right edge, so the number
+   and its unit read as the single run the reference sets them as. */
 .property-field .eng-input {
   grid-column: 2;
-  justify-self: start;
+  justify-self: end;
   width: auto;
   max-width: 100%;
 }
@@ -6651,8 +6847,10 @@ button.bottom-panel-head:focus-visible {
    screen: found by having a keystroke clamped, it is a surprise. */
 .property-value {
   grid-column: 2;
+  justify-self: stretch;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--sp-2);
   min-width: 0;
 }
@@ -6663,6 +6861,12 @@ button.bottom-panel-head:focus-visible {
 .property-value > input {
   min-width: 0;
   flex: 1 1 auto;
+  text-align: right;
+}
+
+.property-value > .property-quantity {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .property-value .eng-input {
@@ -6709,6 +6913,42 @@ button.bottom-panel-head:focus-visible {
 .property-field .eng-input select:hover:not(:focus),
 .property-field .eng-input [data-slot="select-trigger"].eng-input-prefix:hover:not(:focus-visible) {
   background: var(--overlay-hover-faint);
+}
+
+/* The unit belongs to the number: baseline-aligned, hard against it, one step
+   down the scale and dimmer, so "3 µm" reads as one quantity rather than a
+   number next to a dropdown. It is still a picker - the caret just stops
+   competing with the digits until the row is in play. */
+.property-field .eng-input {
+  gap: 1px;
+}
+
+.property-field .eng-input [data-slot="select-trigger"].eng-input-prefix {
+  padding: 0 2px;
+  color: var(--muted);
+  font: 550 var(--fs-caption) var(--font-mono);
+}
+
+.property-field .eng-input [data-slot="select-trigger"].eng-input-prefix svg {
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+
+.property-field:hover .eng-input [data-slot="select-trigger"].eng-input-prefix svg,
+.property-field .eng-input [data-slot="select-trigger"].eng-input-prefix:focus-visible svg,
+.property-field .eng-input [data-slot="select-trigger"].eng-input-prefix[data-state="open"] svg {
+  opacity: 1;
+}
+
+.property-field:hover .eng-input [data-slot="select-trigger"].eng-input-prefix,
+.property-field:focus-within .eng-input [data-slot="select-trigger"].eng-input-prefix {
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .property-field .eng-input [data-slot="select-trigger"].eng-input-prefix svg {
+    transition: none;
+  }
 }
 
 .sim-results {

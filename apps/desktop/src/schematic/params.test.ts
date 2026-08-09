@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   clampParamValue,
   decodeParams,
+  displayParamField,
   encodeParams,
+  fromDisplayParamValue,
   isBoundedParamField,
   paramFields,
   paramRangeLabel,
   paramSummary,
+  toDisplayParamValue,
 } from "./params";
 import { CATALOG } from "./catalog";
 import { parseModulator } from "../engine/modulatorSpec";
@@ -374,7 +377,9 @@ describe("modulator (VCO) frequencies", () => {
   // no field at all, so the part is unreadable without a summary above them.
   it("says what the part outputs and what drives each pin", () => {
     const summary = paramSummary("modulator", "mark=1K space=1K");
-    expect(summary).toMatch(/oscillator/i);
+    // Not "oscillator": the group header names the part, so the summary starts
+    // at the pin story, which is the thing the header cannot say.
+    expect(summary).toMatch(/sine/i);
     expect(summary).toMatch(/FM/);
     expect(summary).toMatch(/AM/);
     expect(summary).toMatch(/COM/);
@@ -508,5 +513,78 @@ describe("declared bounds are enforced, not decorative", () => {
         expect(paramRangeLabel(field), `${entry.kind}.${field.key}`).not.toBe("");
       }
     }
+  });
+});
+
+/**
+ * A normalised 0..1 fraction is a STORAGE unit. The deck and the `.asc` file
+ * want it; nobody reads a wiper position as "0.5". This is the general shape of
+ * that problem - the potentiometer's wiper and the pulse source's duty are the
+ * same field twice - so it is a property of the schema rather than a branch in
+ * the panel, and the bounds convert with it so one `clampParamValue` still
+ * enforces the one range.
+ */
+describe("display units", () => {
+  const fieldFor = (kind: Parameters<typeof paramFields>[0], key: string) =>
+    paramFields(kind).find((candidate) => candidate.key === key)!;
+  const wiper = () => fieldFor("potentiometer", "wiper");
+  const duty = () => fieldFor("vpulse", "duty");
+
+  it("shows the fraction as a percentage and takes the percentage back", () => {
+    expect(toDisplayParamValue(wiper(), "0.5")).toBe("50");
+    expect(toDisplayParamValue(wiper(), "0.25")).toBe("25");
+    expect(fromDisplayParamValue(wiper(), "50")).toBe("0.5");
+    expect(fromDisplayParamValue(wiper(), "25")).toBe("0.25");
+  });
+
+  it("survives a round trip through the unit the reader sees", () => {
+    for (const stored of ["0", "0.07", "0.123", "0.5", "0.7", "1"]) {
+      expect(fromDisplayParamValue(wiper(), toDisplayParamValue(wiper(), stored))).toBe(stored);
+    }
+  });
+
+  it("carries no float dust from the scale multiply", () => {
+    // 0.7 * 100 is 70.00000000000001 before it is tidied.
+    expect(toDisplayParamValue(wiper(), "0.7")).toBe("70");
+    expect(fromDisplayParamValue(wiper(), "3")).toBe("0.03");
+  });
+
+  it("converts the bounds too, so the one clamp still enforces the one range", () => {
+    const shown = displayParamField(wiper());
+    expect(shown.unit).toBe("%");
+    expect(paramRangeLabel(shown)).toBe("0–100");
+    expect(clampParamValue(shown, "900")).toBe("100");
+    expect(clampParamValue(shown, "-4")).toBe("0");
+    expect(clampParamValue(shown, "50")).toBe("50");
+  });
+
+  it("applies to the duty cycle as well, which is the same field in another part", () => {
+    expect(duty().label).toBe("Duty");
+    expect(toDisplayParamValue(duty(), "0.5")).toBe("50");
+    expect(fromDisplayParamValue(duty(), "20")).toBe("0.2");
+    expect(paramRangeLabel(displayParamField(duty()))).toBe("0–100");
+  });
+
+  it("leaves a field without a display unit exactly as it is", () => {
+    const resistance = fieldFor("resistor", "r");
+    expect(displayParamField(resistance)).toBe(resistance);
+    expect(toDisplayParamValue(resistance, "1k")).toBe("1k");
+    expect(fromDisplayParamValue(resistance, "1k")).toBe("1k");
+  });
+
+  it("passes through an empty box and anything that is not a number", () => {
+    expect(toDisplayParamValue(wiper(), "")).toBe("");
+    expect(fromDisplayParamValue(wiper(), "")).toBe("");
+    expect(toDisplayParamValue(wiper(), "{tap}")).toBe("{tap}");
+    expect(fromDisplayParamValue(wiper(), "{tap}")).toBe("{tap}");
+  });
+
+  it("keeps the stored value a fraction, so the netlist never learns about percentages", () => {
+    const stored = encodeParams("potentiometer", {
+      r: "10k",
+      wiper: fromDisplayParamValue(wiper(), "25"),
+    });
+    expect(stored).toBe("10k Wiper=0.25");
+    expect(decodeParams("potentiometer", stored).wiper).toBe("0.25");
   });
 });
