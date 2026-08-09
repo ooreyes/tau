@@ -161,6 +161,35 @@ describe("Model configuration key handling", () => {
     expect(screen.getByRole("list", { name: /Steps to create a .* key/ })).toBeTruthy();
   });
 
+  it("discards a half-typed key when the provider changes", async () => {
+    // A secret typed for one provider must never follow the dropdown to
+    // another. React reconciles by element type and position, so without a
+    // `key` on the field the SAME instance survives the provider change and
+    // carries its draft with it -- and the next Save would send an Anthropic
+    // key to OpenAI as a bearer token.
+    render(<SettingsWindow />);
+    go("Model configuration");
+
+    const typed = "sk-ant-WRONG-PROVIDER-CANARY-4471";
+    fireEvent.change(await screen.findByLabelText("Google Gemini API key"), {
+      target: { value: typed },
+    });
+
+    const chooser = screen.getByRole("combobox", { name: "API key provider" });
+    fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });
+    const option = await screen.findByRole("option", { name: /OpenAI/i });
+    fireEvent.pointerUp(option, { button: 0, pointerId: 1, pointerType: "mouse" });
+    fireEvent.click(option);
+
+    const openaiField = await screen.findByLabelText(/OpenAI API key/i) as HTMLInputElement;
+    expect(openaiField.value).toBe("");
+    // Belt and braces: the canary must not survive anywhere in the page.
+    expect(document.body.textContent ?? "").not.toContain(typed);
+    for (const input of Array.from(document.querySelectorAll("input"))) {
+      expect((input as HTMLInputElement).value).not.toContain(typed);
+    }
+  });
+
   it("saves a key, reports it as saved, and never renders it back into the DOM", async () => {
     render(<SettingsWindow />);
     go("Model configuration");

@@ -116,7 +116,14 @@ export function ModelConfigurationPage({
           <span className="tau-howto-url">{info.keyPageUrl}</span>
         </div>
 
+        {/* `key` is load-bearing, not a list-rendering habit. React reconciles
+            by element type and position, so without it the SAME field instance
+            survives a provider change and carries its half-typed `draft` with
+            it -- a key pasted for Anthropic would then save to, and be sent as
+            a bearer token to, whichever provider was selected next. Remounting
+            per provider is what discards the draft. */}
         <ProviderKeyField
+          key={provider}
           id={`provider-key-${provider}`}
           label={`${info.label} API key`}
           keyPrefix={info.keyPrefix}
