@@ -253,6 +253,11 @@
   --z-inspector: 40;
   --z-modal: 50;
   --z-toast: 60;
+
+  /* Referenced by the learning-path coach's `bottom` offset and defined
+     nowhere until now, so it silently relied on its own 28px fallback and
+     would have mispositioned the moment the status readout changed height. */
+  --status-bar-height: 28px;
 }
 
 /* ── Light theme - DESIGN_SYSTEM.md §1 ───────────────────────────────────
@@ -1628,7 +1633,14 @@ body {
 
 .scope-svg {
   width: 100%;
-  aspect-ratio: 340 / 190;
+  /* Matches the viewBox, which is 340 x 210 (PLOT_HEIGHT in
+     SimulationPanel.tsx), not 340 x 190. With the default
+     preserveAspectRatio="xMidYMid meet", a 210-tall viewBox fitted into a
+     190-tall box renders at 190/210 = 90.5% and centres itself, so every plot
+     was silently 9.5% small with a dead margin down each side. One pane
+     (TranScopePane) already set the correct ratio inline, which is why they
+     did not all look the same. */
+  aspect-ratio: 340 / 210;
   display: block;
   /* The scope face is the "oscilloscope screen" - flat instrument black, one
      notch lighter than the schematic canvas so the two stay distinguishable

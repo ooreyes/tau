@@ -74,6 +74,11 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
           className={`mode-btn${mode === "schematic" ? " active" : ""}`}
           onClick={() => onModeChange("schematic")}
           aria-pressed={mode === "schematic"}
+          // Explicit, not inherited from the text node. The redesign drops
+          // these labels to icons at the 900px floor, and without an
+          // aria-label that would silently delete the accessible name these
+          // buttons are found by in thirteen places across three test files.
+          aria-label="Schematic"
           disabled={!projectOpen}
         >
           <CircuitBoard {...ICON} aria-hidden="true" />
@@ -83,6 +88,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
           className={`mode-btn${mode === "simulator" ? " active" : ""}`}
           onClick={() => onModeChange("simulator")}
           aria-pressed={mode === "simulator"}
+          aria-label="Simulator"
           disabled={!schematicOpen}
         >
           <Activity {...ICON} aria-hidden="true" />
