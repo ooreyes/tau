@@ -85,21 +85,26 @@ fi
 # plus documented non-UI sentinels / SVG plan previews / CSS color helper fallback.
 HEX_RAW="$(scan_src '#[0-9a-fA-F]{3,8}\b' ts tsx css)"
 
-# Where the token zone ends is DERIVED from the file, not hardcoded. A literal
-# line number drifts the moment a token is added, and it drifts *into* the last
-# `:root` block - at which point the gate either rejects a legitimate new token
-# or gets bumped by hand and quietly stops checking real rules. The zone is the
-# run of `:root` / `prefers-color-scheme` blocks at the head of App.css; its end
-# is the column-0 `}` that closes the last of them.
-TOKEN_ZONE_END="$(awk '
-  /^(:root|@media \(prefers-color-scheme)/ { zone = 1 }
-  /^\}/ { if (zone) { end = NR; zone = 0 } }
-  END { print end + 0 }
-' "$SRC/App.css")"
-# A zone that failed to parse would read as "everything is a token", so an
-# implausible answer is a hard stop rather than a silent pass.
+# Where the token zone ends is an explicit marker in App.css, not a hardcoded
+# line number and not an inference.
+#
+# A literal line number drifts the moment a token is added. But the inference
+# that replaced it was worse in a quieter way: it took the LAST column-0 `:root`
+# block anywhere in the file, so adding something like `:root[data-density]`
+# further down would extend the "tokens may declare raw color" zone over
+# everything above it, turning the hex check off for thousands of lines while
+# still printing PASS. A gate that fails loudly when it cannot find its anchor
+# is the only safe shape here.
+TOKEN_ZONE_END="$(awk '/TAU-TOKEN-ZONE-END/ { print NR; exit }' "$SRC/App.css")"
+if [[ -z "$TOKEN_ZONE_END" ]]; then
+  fail "App.css has no TAU-TOKEN-ZONE-END marker, so the hex gate cannot tell tokens from drift."
+  TOKEN_ZONE_END=0
+fi
+# A marker that somehow landed near the top of the file would read as "almost
+# nothing is a token", and one that failed to parse reads as "everything is".
+# Both are hard stops rather than a silent pass.
 if [[ "$TOKEN_ZONE_END" -lt 100 ]]; then
-  fail "could not locate the App.css token zone (derived end: $TOKEN_ZONE_END)"
+  fail "the App.css token-zone marker is at line $TOKEN_ZONE_END, which is too early to be real."
   TOKEN_ZONE_END=0
 fi
 
@@ -130,21 +135,32 @@ for f in command.tsx sonner.tsx resizable.tsx; do
   fi
 done
 
-has_match 'from "@/components/ui/command"|from '\''@/components/ui/command'\''' "$SRC/components/CommandPalette.tsx" \
-  && pass "CommandPalette consumes ui/command" \
-  || fail "CommandPalette does not import ui/command"
-
-has_match 'from "\./components/ui/sonner"|from "@/components/ui/sonner"' "$SRC/App.tsx" \
-  && pass "App consumes ui/sonner" \
-  || fail "App does not import ui/sonner"
-
-has_match 'from "@/components/ui/resizable"' "$SRC/components/ShellPanels.tsx" \
-  && pass "ShellPanels consumes ui/resizable" \
-  || fail "ShellPanels does not import ui/resizable"
-
-has_match 'from "\./components/ui/resizable"|from "@/components/ui/resizable"' "$SRC/App.tsx" \
-  && pass "App consumes ui/resizable" \
-  || fail "App does not import ui/resizable"
+# Adoption is checked file-agnostically: does anything outside components/ui
+# import this primitive at all?
+#
+# These four checks used to name the importing file - "ShellPanels consumes
+# ui/resizable", "App consumes ui/sonner". That encodes today's file layout
+# into a gate whose actual job is to prove the primitive is adopted, so the
+# canvas-first redesign (which dissolves ShellPanels.tsx entirely) would have
+# tripped it while adopting the primitives perfectly well. The gate would have
+# been right to complain and wrong about why, which is the worst kind of red.
+#
+# What is deliberately NOT checked here any more is PLACEMENT - "the Toaster is
+# mounted at the app root" is a real requirement, but a grep cannot survive a
+# refactor and a render assertion can, so it lives in the shell contract test.
+for primitive in command sonner resizable; do
+  # Exclude by the FILE the hit is in, anchored to the start of the line, not
+  # by the line's content: every one of these hits contains the substring
+  # "/components/ui/" inside the import path itself, so an unanchored filter
+  # silently removes every consumer and reports the primitive as unadopted.
+  CONSUMERS="$(scan_src "from \"[./@][^\"]*/ui/$primitive\"" ts tsx \
+    | grep -vE "^$SRC/components/ui/" || true)"
+  if [[ -n "$CONSUMERS" ]]; then
+    pass "ui/$primitive is consumed ($(printf '%s\n' "$CONSUMERS" | wc -l | tr -d ' ') site(s))"
+  else
+    fail "nothing outside components/ui imports ui/$primitive"
+  fi
+done
 
 # ── 4. Unit proof ──────────────────────────────────────────────────────────
 pnpm -C apps/desktop exec vitest run \

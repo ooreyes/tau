@@ -574,6 +574,17 @@
   --pill-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
 }
 
+/* TAU-TOKEN-ZONE-END
+   Everything above this line may define raw colors, because it is where tokens
+   are declared. Everything below may not, and scripts/design-system-drift.sh
+   enforces that by finding this exact marker.
+
+   It used to infer the boundary instead, by taking the last column-0 `:root`
+   block in the file. That silently widens the allowed zone the moment anyone
+   adds a `:root[...]` selector further down: every hex above the new block
+   stops being checked, and the gate still prints PASS. Move this marker only
+   if you are moving the token blocks. */
+
 * {
   box-sizing: border-box;
 }

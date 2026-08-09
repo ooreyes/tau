@@ -45,15 +45,43 @@ function rotationTokens(relative: readonly string[]): string[] {
   return [...block![1].matchAll(/--trace-([a-z]+)/g)].map((m) => m[1]);
 }
 
-/** Resolve a token inside a specific theme block of App.css. */
-function themeValues(tokens: string[], theme: "dark" | "light"): string[] {
-  // Dark lives in the bare :root; light in the prefers-color-scheme block.
-  const scope = theme === "dark"
-    ? CSS.slice(0, CSS.indexOf("@media (prefers-color-scheme: light)"))
-    : CSS.slice(CSS.indexOf("@media (prefers-color-scheme: light)"));
+/**
+ * The four blocks in App.css that can define a trace palette, each named by the
+ * selector that introduces it.
+ *
+ * This used to be a two-way split on the position of the
+ * `@media (prefers-color-scheme: light)` string: everything before it was
+ * "dark", everything after was "light". That validated the two media-query
+ * blocks and left the two `:root[data-theme]` blocks unchecked - which are the
+ * ones that actually ship, because index.html stamps `data-theme` on load and
+ * only removes it for the explicit "System" setting. The two pairs agree today.
+ * Nothing was enforcing that they keep agreeing, and a redesign that
+ * consolidates theming is exactly when they would stop.
+ */
+const THEME_BLOCKS = [
+  { mode: "dark", selector: ":root {", label: "bare :root (system, OS dark)" },
+  {
+    mode: "light",
+    selector: "@media (prefers-color-scheme: light)",
+    label: "@media light (system, OS light)",
+  },
+  { mode: "light", selector: ':root[data-theme="light"]', label: 'data-theme="light"' },
+  { mode: "dark", selector: ':root[data-theme="dark"]', label: 'data-theme="dark"' },
+] as const;
+
+/** Resolve a token inside one named theme block, reading forward from it. */
+function blockValues(tokens: string[], selector: string, label: string): string[] {
+  const start = CSS.indexOf(selector);
+  expect(start, `App.css has no ${label} block`).toBeGreaterThan(-1);
+  // Read from this block's start to the next block's, so a token defined only
+  // in a later block cannot be borrowed by an earlier one.
+  const laterStarts = THEME_BLOCKS.map((block) => CSS.indexOf(block.selector)).filter(
+    (index) => index > start,
+  );
+  const scope = CSS.slice(start, laterStarts.length ? Math.min(...laterStarts) : undefined);
   return tokens.map((name) => {
     const hit = new RegExp(`--trace-${name}:\\s*(#[0-9A-Fa-f]{6})`).exec(scope);
-    expect(hit, `--trace-${name} missing from ${theme}`).not.toBeNull();
+    expect(hit, `--trace-${name} missing from ${label}`).not.toBeNull();
     return hit![1];
   });
 }
@@ -79,12 +107,26 @@ describe("trace palette", () => {
         expect(new Set(tokens).size).toBe(6);
       });
 
-      for (const mode of ["dark", "light"] as const) {
-        it(`passes every colour check in ${mode} mode, in rotation order`, () => {
-          const report = validate(themeValues(tokens, mode), mode);
+      for (const { mode, selector, label } of THEME_BLOCKS) {
+        it(`passes every colour check in ${label}, in rotation order`, () => {
+          const report = validate(blockValues(tokens, selector, label), mode);
           expect(report, report).toContain("ALL CHECKS PASS");
         });
       }
+
+      // The pair a user sees depends on whether they chose a theme or left it
+      // on System, and they must not be able to tell the difference.
+      it("gives the shipped data-theme blocks the same palette as the media queries", () => {
+        for (const mode of ["dark", "light"] as const) {
+          const media = THEME_BLOCKS.find((b) => b.mode === mode && b.selector.startsWith("@") )
+            ?? THEME_BLOCKS.find((b) => b.mode === mode && b.selector === ":root {")!;
+          const stamped = THEME_BLOCKS.find((b) => b.selector.includes(`data-theme="${mode}"`))!;
+          expect(
+            blockValues(tokens, stamped.selector, stamped.label),
+            `${mode}: the stamped ${stamped.label} palette differs from ${media.label}, so choosing a theme would change the trace colours`,
+          ).toEqual(blockValues(tokens, media.selector, media.label));
+        }
+      });
     });
   }
 
