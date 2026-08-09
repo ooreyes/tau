@@ -15,19 +15,31 @@ vi.mock("@tauri-apps/api/core", () => ({
 describe("cloud AI credential boundary", () => {
   beforeEach(() => {
     invokeMock.mockReset();
-    // Debounced keychain writes must always get a thenable.
+    // Every command must get a thenable; keychain writes go out immediately.
     invokeMock.mockResolvedValue(undefined);
     isTauriMock.mockReturnValue(true);
     vi.useRealTimers();
     vi.resetModules();
   });
 
+  /**
+   * Answer presence queries by command name rather than by call order. Call
+   * order was load-bearing here while saves were debounced out of the way: a
+   * `mockResolvedValueOnce` meant for `has_*` is eaten by the `save_*` that now
+   * goes out first, and hydration then reads `undefined` as its answer.
+   */
+  function answerPresence(command: string, present: boolean) {
+    invokeMock.mockImplementation((name: string) =>
+      Promise.resolve(name === command ? present : undefined),
+    );
+  }
+
   afterEach(() => {
     vi.useRealTimers();
   });
 
   it("hydrates Anthropic presence only — never a raw key — under Tauri", async () => {
-    invokeMock.mockResolvedValueOnce(true);
+    answerPresence("has_assistant_api_key", true);
     const { hydrateAssistantApiKey, loadAssistantApiKey, hasAssistantApiKey, saveAssistantApiKey } =
       await import("./assistant");
     saveAssistantApiKey("");
@@ -38,19 +50,22 @@ describe("cloud AI credential boundary", () => {
   });
 
   it("writes Anthropic keys to the keychain without retaining them in Tauri", async () => {
+    // Fake timers on purpose, never advanced: the write must already be out.
+    // It used to sit behind a 350 ms debounce that coalesced nothing - the only
+    // caller is an explicit Save press - and quitting Tau inside that window
+    // dropped the key after the UI had said it was saved.
     vi.useFakeTimers();
     const { saveAssistantApiKey, loadAssistantApiKey, hasAssistantApiKey } = await import("./assistant");
     saveAssistantApiKey("sk-ant-never-in-renderer");
     expect(hasAssistantApiKey()).toBe(true);
     expect(loadAssistantApiKey()).toBe("");
-    await vi.advanceTimersByTimeAsync(400);
     expect(invokeMock).toHaveBeenCalledWith("save_assistant_api_key", {
       apiKey: "sk-ant-never-in-renderer",
     });
   });
 
   it("hydrates Gemini presence only under Tauri", async () => {
-    invokeMock.mockResolvedValueOnce(true);
+    answerPresence("has_provider_api_key", true);
     const { hydrateGeminiApiKey, loadGeminiApiKey, hasGeminiApiKey, saveGeminiApiKey } =
       await import("./providerApiKey");
     saveGeminiApiKey("");

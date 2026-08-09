@@ -14,27 +14,23 @@
 
 /* ── Shell ────────────────────────────────────────────────────────────────── */
 
+/* The schematic is behind Settings, not replaced by it, so the surface needs
+   its own edge to read as a sheet rather than as a repainted window. */
 .tau-settings {
   display: grid;
   grid-template-columns: 216px minmax(0, 1fr);
-  height: 100vh;
+  height: 100%;
   min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
   font-size: var(--fs-body);
 }
 
-/* In-app route: the schematic window is behind it, so it needs an edge. */
-.tau-settings[data-standalone="no"] {
-  height: 100%;
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-
-/* Browser fallback: Settings as an in-app route over the schematic window.
-   Only ever mounted where there is no window manager to ask for a real one. */
+/* Settings covers the schematic window; Tau is one app with one window. */
 .tau-settings-route {
   position: fixed;
   inset: 0;
@@ -137,7 +133,7 @@
   min-height: 0;
 }
 
-.tau-settings-route-bar {
+.tau-settings-close-bar {
   display: flex;
   justify-content: flex-end;
   padding: var(--sp-2) var(--sp-4) 0;

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * Settings window: the window opens, every page renders, a saved key is never
- * readable from the DOM, the payment statement is present, and the browser
- * fallback does not claim keychain storage.
+ * Settings: every page renders, a saved key reaches the keychain and the same
+ * store the assistant reads, a saved key is never readable from the DOM, the
+ * payment statement is present, and the browser build does not claim keychain
+ * storage it does not have.
  *
  * Each test below was checked by reverting the behaviour it guards and
  * confirming this file goes red; the mapping is recorded in the report.
@@ -25,10 +26,10 @@ vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
 }));
 
 import { SettingsWindow } from "./SettingsWindow";
-import { openProviderPage, openSettings } from "./settingsSurface";
+import { openProviderPage } from "./settingsSurface";
 import { PROVIDERS } from "./providerCatalog";
 import { saveAssistantApiKey } from "../lib/assistant";
-import { saveGeminiApiKey, saveOpenAiApiKey } from "../lib/providerApiKey";
+import { hasGeminiApiKey, saveGeminiApiKey, saveOpenAiApiKey } from "../lib/providerApiKey";
 
 // Radix Select needs pointer-capture APIs jsdom does not implement.
 Element.prototype.hasPointerCapture = () => false;
@@ -76,17 +77,32 @@ function go(page: string) {
   fireEvent.click(screen.getByRole("button", { name: page }));
 }
 
-describe("opening Settings", () => {
-  it("asks Rust for a real second window in the desktop app", async () => {
+describe("Settings runs in the schematic window", () => {
+  it("saves a key into the same store the assistant reads, with no timer in between", async () => {
     tauri.isTauri.mockReturnValue(true);
-    await expect(openSettings()).resolves.toBe("window");
-    expect(tauri.invoke).toHaveBeenCalledWith("open_settings_window");
-  });
+    render(<SettingsWindow />);
+    go("Model configuration");
 
-  it("falls back to an in-app route where there is no window manager", async () => {
-    tauri.isTauri.mockReturnValue(false);
-    await expect(openSettings()).resolves.toBe("route");
-    expect(tauri.invoke).not.toHaveBeenCalled();
+    fireEvent.change(await screen.findByLabelText("Google Gemini API key"), {
+      target: { value: "AIza-one-window" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save key" }));
+
+    // No timer is advanced here on purpose. The write used to be debounced by
+    // 350 ms even though the only caller is this button, so quitting Tau inside
+    // that window discarded the key with the UI already saying it was saved.
+    expect(tauri.invoke).toHaveBeenCalledWith("save_provider_api_key", {
+      provider: "gemini",
+      apiKey: "AIza-one-window",
+    });
+
+    // The module instance the assistant's send gate reads. While Settings was a
+    // second WebviewWindow this was a *different copy* of the store, so a key
+    // saved here left the assistant gated until the app was relaunched.
+    expect(hasGeminiApiKey()).toBe(true);
+
+    // And nothing asks the shell for a second window any more.
+    expect(tauri.invoke).not.toHaveBeenCalledWith("open_settings_window");
   });
 
   it("routes external links through the allowlisted Rust command, never the webview", async () => {

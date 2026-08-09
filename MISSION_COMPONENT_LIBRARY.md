@@ -568,10 +568,14 @@ the wiper drags, the hover affordance landed (`simulatorOperability` plus
 its input count, and `relocatedPins.ts` names the parts a saved document has to
 re-attach.
 
-One thing outside this mission is in flight: a **standalone Settings window**
-(General / Profile / Model configuration / Usage, provider keys in the OS
-keychain, and an unmissable statement that the user pays their own provider
-bills). Not tracked here because it is a different surface.
+One thing outside this mission landed alongside it: **Settings** (General /
+Profile / Model configuration / Usage, provider keys in the OS keychain, and an
+unmissable statement that the user pays their own provider bills). Not tracked
+here because it is a different surface. It shipped briefly as a second
+`WebviewWindow` and was collapsed back into the schematic window: a second
+window is a second JavaScript context, so the credential store, the model
+libraries and the preference reads all silently forked. Tau is one Mac app with
+one window.
 
 **Redrawing any part in future means adding a row to `relocatedPins.ts`**, the
 same way retiring a kind means adding one to `retiredKinds.ts`. That is the

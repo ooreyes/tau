@@ -37,18 +37,8 @@ export default defineConfig(async () => ({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
 
-  build: {
-    rollupOptions: {
-      // Two entry points, one origin. `settings.html` is what the standalone
-      // Settings `WebviewWindow` loads; keeping it in the same bundle means the
-      // strict CSP (`default-src 'self'`) covers it without being relaxed, and
-      // both windows share localStorage for preference sync.
-      input: {
-        main: fileURLToPath(new URL("./index.html", import.meta.url)),
-        settings: fileURLToPath(new URL("./settings.html", import.meta.url)),
-      },
-    },
-  },
+  // One HTML entry point, because Tau is one window. `index.html` is Vite's
+  // default, so there is no `build.rollupOptions.input` to keep in sync.
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

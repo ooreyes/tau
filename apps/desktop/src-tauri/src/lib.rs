@@ -1,8 +1,8 @@
 mod credentials;
+mod external_url;
 mod local_ai;
 mod ltspice_library;
 mod project_fs;
-mod settings_window;
 mod spice;
 mod step_expand;
 pub mod staged_engine;
@@ -37,8 +37,7 @@ pub fn run() {
             project_fs::create_project_directory,
             project_fs::create_project_text_file_exclusive,
             project_fs::move_project_entry,
-            settings_window::open_settings_window,
-            settings_window::open_external_url,
+            external_url::open_external_url,
             spice::simulate_spice,
             spice::cancel_spice
         ])

@@ -26,7 +26,6 @@ export function createProviderKeyStore(provider: string): ProviderKeyStore {
   let sessionHasKey = false;
   let webOnlyKey = "";
   let hydration: Promise<void> | null = null;
-  let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let revision = 0;
 
   const notify = () => {
@@ -66,13 +65,13 @@ export function createProviderKeyStore(provider: string): ProviderKeyStore {
     }
     notify();
     if (!isTauri()) return;
-    if (saveTimer) globalThis.clearTimeout(saveTimer);
-    saveTimer = globalThis.setTimeout(() => {
-      saveTimer = null;
-      void invoke("save_provider_api_key", { provider, apiKey: trimmed }).catch(() => {
-        // Settings remains responsive; a later edit retries the keychain write.
-      });
-    }, 350);
+    // Written straight through, not debounced. `save` is only ever called from
+    // an explicit Save key / Remove press, so there are no keystrokes to
+    // coalesce - a delay here bought nothing and lost the write outright if the
+    // app quit inside it.
+    void invoke("save_provider_api_key", { provider, apiKey: trimmed }).catch(() => {
+      // Settings remains responsive; a later edit retries the keychain write.
+    });
   };
 
   const useHasKey = (): boolean => {

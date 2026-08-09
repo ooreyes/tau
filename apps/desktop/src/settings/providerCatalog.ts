@@ -7,7 +7,7 @@
  * or that it is attached to a billing account they are responsible for.
  *
  * Every URL here must also appear in `ALLOWED_EXTERNAL_URLS` in
- * `src-tauri/src/settings_window.rs`. Tau opens no other address, so a link
+ * `src-tauri/src/external_url.rs`. Tau opens no other address, so a link
  * added here without its Rust counterpart simply refuses, loudly, rather than
  * opening something unreviewed.
  */

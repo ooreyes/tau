@@ -1,19 +1,9 @@
-//! The standalone Settings window, plus the only way Tau opens a web page.
+//! The only way Tau opens a web page.
 //!
-//! Settings is a second `WebviewWindow` on the same origin as the schematic
-//! window, loading `settings.html` from the same bundle. Same origin matters
-//! twice: the app's strict CSP (`default-src 'self'`) covers it with no
-//! loosening, and both windows share `localStorage`, which is how a preference
-//! changed in Settings reaches the schematic window without any IPC.
-//!
-//! Creating the window from Rust rather than from `WebviewWindow` in the
-//! renderer keeps `core:webview:allow-create-webview-window` out of the
-//! renderer's capability set: the front end can ask for *this* window and
-//! nothing else.
-
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
-
-pub const SETTINGS_LABEL: &str = "settings";
+//! Tau is a single-window app: the renderer has no way to create a webview, and
+//! this module deliberately does not give it one. Provider pages go to the
+//! system browser instead, so nothing that asks for an API key can ever be
+//! rendered inside Tau's own chrome.
 
 /// Exactly the pages Settings links to, matched in full. Following the
 /// credential allowlist's lead: an open-anything command is a phishing
@@ -36,34 +26,6 @@ const ALLOWED_EXTERNAL_URLS: &[&str] = &[
 
 fn is_allowed_external_url(url: &str) -> bool {
     ALLOWED_EXTERNAL_URLS.contains(&url)
-}
-
-/// Show the Settings window, creating it the first time. A second call focuses
-/// the existing window instead of stacking duplicates, which is what a user
-/// pressing the toolbar button twice means.
-#[tauri::command]
-pub async fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(existing) = app.get_webview_window(SETTINGS_LABEL) {
-        existing
-            .show()
-            .map_err(|error| format!("Could not show the Settings window: {error}"))?;
-        existing
-            .unminimize()
-            .map_err(|error| format!("Could not restore the Settings window: {error}"))?;
-        existing
-            .set_focus()
-            .map_err(|error| format!("Could not focus the Settings window: {error}"))?;
-        return Ok(());
-    }
-
-    WebviewWindowBuilder::new(&app, SETTINGS_LABEL, WebviewUrl::App("settings.html".into()))
-        .title("Tau Settings")
-        .inner_size(940.0, 660.0)
-        .min_inner_size(720.0, 480.0)
-        .resizable(true)
-        .build()
-        .map_err(|error| format!("Could not open the Settings window: {error}"))?;
-    Ok(())
 }
 
 /// Hand one allowlisted provider page to the system browser. Tau's own webview

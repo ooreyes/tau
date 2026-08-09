@@ -581,6 +581,30 @@ describe("App schematic workspace tools", () => {
   });
 });
 
+describe("Settings is a surface in this window", () => {
+  it("opens Settings over the schematic and closes it again, from every entry point", async () => {
+    await renderOpenProject();
+
+    // The toolbar gear and the rail button are separate affordances; both have
+    // to reach the same in-window surface, because there is no longer a second
+    // window for either of them to fall back to.
+    const entryPoints = screen.getAllByRole("button", { name: "Settings" }).length;
+    expect(entryPoints).toBeGreaterThan(1);
+
+    for (let index = 0; index < entryPoints; index += 1) {
+      fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[index]);
+      const settings = await screen.findByRole("dialog", { name: "Settings" });
+      expect(within(settings).getByRole("navigation", { name: "Settings pages" })).toBeTruthy();
+      // The schematic window is still the window: the open tab is mounted
+      // behind Settings rather than replaced by it.
+      expect(screen.getByRole("tab", { name: /untitled\.asc/ })).toBeTruthy();
+
+      fireEvent.click(within(settings).getByRole("button", { name: "Close settings" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+    }
+  });
+});
+
 describe("App project-folder gate", () => {
   it("requires a project before exposing schematic editing or Bode", () => {
     render(<App />);

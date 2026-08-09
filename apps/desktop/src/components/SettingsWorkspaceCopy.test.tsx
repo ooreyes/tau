@@ -7,19 +7,19 @@
  * assert that its advanced workspace rows stayed behind a closed disclosure at
  * 900x600.
  *
- * That sheet no longer exists. Settings is now a standalone OS window
- * (`settings/SettingsWindow.tsx`, loaded by `settings.html`), so "advanced rows
- * hidden behind a disclosure inside a viewport-capped sheet" is not a property
- * the product has any more: the pages are reached from a left nav and each one
- * scrolls on its own. Keeping the old assertions would have meant keeping a
- * second Settings surface alive purely to be tested.
+ * That sheet no longer exists. Settings is now `settings/SettingsWindow.tsx`, a
+ * full surface over the schematic window, so "advanced rows hidden behind a
+ * disclosure inside a viewport-capped sheet" is not a property the product has
+ * any more: the pages are reached from a left nav and each one scrolls on its
+ * own. Keeping the old assertions would have meant keeping a second Settings
+ * surface alive purely to be tested.
  *
  * What the old file was actually protecting - a student is not shown solver
  * internals on the first screen, and the calm everyday switches are reachable
- * without hunting - is protected here against the new window instead. The
+ * without hunting - is protected here against the new surface instead. The
  * sheet's one unique action, Clear probes, moved to the simulator beside the
- * probes it clears, because a separate window has its own store and cannot
- * reach this schematic's probes.
+ * probes it clears, where it appears only when there are probes and names how
+ * many it will remove.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

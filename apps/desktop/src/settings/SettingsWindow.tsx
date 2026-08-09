@@ -1,12 +1,8 @@
 /**
- * The Settings window: a left nav of pages and one page at a time.
- *
- * The same component serves both surfaces. In the desktop app it fills a real
- * second OS window (`settings.html`). In the browser build, where there is no
- * window to create, it fills an in-app route. `standalone` is the only
- * difference: the window version has no close control of its own, because the
- * OS titlebar already has one, and adding a second would be a second answer to
- * the same question.
+ * Settings: a left nav of pages and one page at a time, filling the schematic
+ * window rather than a window of its own. Tau is one Mac app with one window;
+ * see `settingsSurface.ts` for why the second window was removed and what it
+ * was silently breaking.
  *
  * Pages are chosen, not accumulated. Each one is justified in its own file
  * header; a page that cannot say who needs it and what real state backs it does
@@ -62,21 +58,19 @@ const NAV: readonly NavEntry[] = [
 const SECTIONS: readonly NavEntry["section"][] = ["You", "Engine"];
 
 export function SettingsWindow({
-  standalone = false,
   initialPage = "general",
   onClose,
 }: {
-  /** True when this fills its own OS window rather than an in-app route. */
-  standalone?: boolean;
   initialPage?: SettingsPageId;
+  /** Omitted only in tests that render one page in isolation. */
   onClose?: () => void;
 }) {
   const [page, setPage] = useState<SettingsPageId>(initialPage);
   const [notice, setNotice] = useState<string | null>(null);
 
   // A notice is a confirmation, not a log: it says what just happened and gets
-  // out of the way. Toasts belong to the schematic window, which this one
-  // cannot reach.
+  // out of the way. It stays local to this surface rather than going to the
+  // app's toaster, which sits behind Settings and would confirm underneath it.
   useEffect(() => {
     if (!notice) return;
     const timer = globalThis.setTimeout(() => setNotice(null), 4200);
@@ -95,7 +89,7 @@ export function SettingsWindow({
   const onNotice = (message: string) => setNotice(message);
 
   return (
-    <div className="tau-settings" data-standalone={standalone ? "yes" : "no"}>
+    <div className="tau-settings">
       <nav className="tau-settings-nav" aria-label="Settings pages">
         <div className="tau-settings-nav-head">
           <span className="tau-settings-nav-title">Settings</span>
@@ -124,8 +118,8 @@ export function SettingsWindow({
       </nav>
 
       <main className="tau-settings-main">
-        {!standalone && onClose && (
-          <div className="tau-settings-route-bar">
+        {onClose && (
+          <div className="tau-settings-close-bar">
             <Button
               size="sm"
               variant="ghost"

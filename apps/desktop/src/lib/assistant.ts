@@ -116,7 +116,6 @@ let sessionHasApiKey = false;
 /** Web/test only — never populated when `isTauri()` is true. */
 let webOnlyApiKey = "";
 let credentialHydration: Promise<void> | null = null;
-let credentialSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let credentialRevision = 0;
 
 /** Raw key for web/test seams only. Always "" in the packaged Tauri app. */
@@ -165,13 +164,12 @@ export function saveAssistantApiKey(key: string): void {
   }
   notifyApiKeyChanged();
   if (!isTauri()) return;
-  if (credentialSaveTimer) globalThis.clearTimeout(credentialSaveTimer);
-  credentialSaveTimer = globalThis.setTimeout(() => {
-    credentialSaveTimer = null;
-    void invoke("save_assistant_api_key", { apiKey: trimmed }).catch(() => {
-      // Settings remains responsive; a later edit retries the keychain write.
-    });
-  }, 350);
+  // Written straight through: the only caller is an explicit Save key / Remove
+  // press, so a debounce coalesced nothing and only opened a window in which
+  // quitting Tau discarded the write. See providerApiKey.ts.
+  void invoke("save_assistant_api_key", { apiKey: trimmed }).catch(() => {
+    // Settings remains responsive; a later edit retries the keychain write.
+  });
 }
 
 /** Reactive presence of an Anthropic key (never the raw secret in Tauri). */

@@ -3,8 +3,7 @@ import ReactDOM from "react-dom/client";
 // Design-system token/utility layers - loaded before App.css (imported
 // by App) so the existing hand-written rules keep final say while panels migrate.
 import "./styles/tokens.css";
-// Settings can open as an in-app route in the browser build, so its stylesheet
-// has to be present in this window too, not only in settings.html's bundle.
+// Settings is a surface inside this window, not a window of its own.
 import "./styles/settings.css";
 import App from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";

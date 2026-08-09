@@ -68,7 +68,6 @@ import {
   UnsavedChangesDialog,
 } from "./components/ShellPanels";
 import { SettingsWindow } from "./settings/SettingsWindow";
-import { openSettings } from "./settings/settingsSurface";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { useRuntimeModelLibraries } from "./store/useRuntimeModelLibraries";
 import { CATALOG } from "./schematic/catalog";
@@ -574,21 +573,11 @@ function App() {
   }, []);
 
   /**
-   * Show Settings. In the packaged app this asks Rust for a real second OS
-   * window and this component renders nothing; in the browser build, where
-   * there is no window to create, it falls back to an in-app route. The
-   * fallback is a genuine downgrade and the pages say so, rather than claiming
-   * storage the browser does not have.
+   * Show Settings, in this window. It briefly opened a second OS window; that
+   * gave it a second JavaScript context, and with it a second credential store
+   * the assistant never read - see `settings/settingsSurface.ts`.
    */
-  const openSettingsSurface = useCallback(() => {
-    void openSettings()
-      .then((surface) => {
-        if (surface === "route") setSettingsOpen(true);
-      })
-      .catch((error: unknown) => {
-        showNotice(userFacingErrorMessage(error, "Settings could not be opened."));
-      });
-  }, [showNotice]);
+  const openSettingsSurface = useCallback(() => setSettingsOpen(true), []);
 
   const invalidateAnalysis = useCallback((state: "idle" | "stopped" = "idle") => {
     analysisRequestRef.current += 1;
@@ -2659,8 +2648,6 @@ function App() {
           onDiscard={discardExternalEdit}
         />
       )}
-      {/* Browser fallback only. In the desktop app `openSettingsSurface` asks
-          Rust for a real second window and this never mounts. */}
       {settingsOpen && (
         <div className="tau-settings-route" role="dialog" aria-modal="true" aria-label="Settings">
           <SettingsWindow onClose={() => setSettingsOpen(false)} />

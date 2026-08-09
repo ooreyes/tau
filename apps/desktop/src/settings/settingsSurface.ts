@@ -1,19 +1,17 @@
 /**
- * How Settings is opened, and how it links out, in each of the two places Tau
- * runs.
+ * The two environment questions Settings has to ask, and the one way it links
+ * out.
  *
- * Desktop: Settings is a real second OS window. Rust owns creating it, so the
- * renderer can ask for that one window and cannot create arbitrary webviews.
- *
- * Browser (`pnpm dev:web`): there is no window manager to ask and no keychain
- * to write to. Settings opens as a full-surface in-app route instead. That is a
- * genuine downgrade, and the pages say so rather than pretending: see
- * `keychainAvailable`, which every piece of storage copy is written against.
+ * Settings is part of the schematic window, not a window of its own. It was a
+ * second `WebviewWindow` for one revision and that was the wrong shape: a
+ * second window is a second JavaScript context, so the key you saved there
+ * updated a copy of the credential store the assistant never read, the model
+ * libraries the schematic window had hydrated were absent, and preferences
+ * could only cross back through `storage` events that WebKit does not promise
+ * to deliver between WKWebView processes. One window means one store and no
+ * sync layer to get wrong.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
-
-/** Fired in the browser fallback, where there is no second window to open. */
-export const SETTINGS_ROUTE_EVENT = "tau:open-settings-route";
 
 /**
  * True only where an OS keychain actually exists. Storage copy must be written
@@ -23,26 +21,6 @@ export const SETTINGS_ROUTE_EVENT = "tau:open-settings-route";
  */
 export function keychainAvailable(): boolean {
   return isTauri();
-}
-
-/** True when Settings can be a separate OS window rather than an in-app route. */
-export function standaloneWindowAvailable(): boolean {
-  return isTauri();
-}
-
-/**
- * Show Settings. Returns the surface actually used, so a caller can tell the
- * difference between "a window is now in front of you" and "this page changed".
- */
-export async function openSettings(): Promise<"window" | "route"> {
-  if (isTauri()) {
-    await invoke("open_settings_window");
-    return "window";
-  }
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(SETTINGS_ROUTE_EVENT));
-  }
-  return "route";
 }
 
 /**
