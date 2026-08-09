@@ -6,6 +6,7 @@ import {
   suggestAcSweep,
   suggestTransientOptions,
   transientDetailSteps,
+  type AutoResolutionInputs,
 } from "./autoResolution";
 import { MAX_TRANSIENT_STEPS } from "./linearTransient";
 import type { SchematicComponent } from "../schematic/types";
@@ -151,5 +152,64 @@ describe("suggestAcSweep", () => {
     // 1 kHz source → start 10 Hz, stop 100 kHz.
     expect(suggestAcSweep([part("vac", "SINE(0 1 1k)", "V1")]))
       .toEqual({ startHz: 10, stopHz: 1e5, pointsPerDecade: 20 });
+  });
+});
+
+describe("autoTransientOptions detail level", () => {
+  it("defaults to balanced, which is the density Tau has always shipped", () => {
+    const withSourceAndTau: AutoResolutionInputs = {
+      maxSourceHz: 1000, minSourceHz: 1000, maxTauSeconds: 0.002, minTauSeconds: 0.002,
+    };
+    const tauOnly: AutoResolutionInputs = {
+      maxSourceHz: 0, minSourceHz: 0, maxTauSeconds: 0.001, minTauSeconds: 1e-6,
+    };
+    expect(autoTransientOptions(withSourceAndTau)).toEqual(autoTransientOptions(withSourceAndTau, "balanced"));
+    expect(autoTransientOptions(tauOnly)).toEqual(autoTransientOptions(tauOnly, "balanced"));
+  });
+
+  it("detail changes sample density without moving the window", () => {
+    const inputs: AutoResolutionInputs = {
+      maxSourceHz: 1000, minSourceHz: 1000, maxTauSeconds: 0, minTauSeconds: 0,
+    };
+    const quick = autoTransientOptions(inputs, "quick");
+    const balanced = autoTransientOptions(inputs, "balanced");
+    const precision = autoTransientOptions(inputs, "precision");
+
+    // Same window (5 cycles of the 1 kHz source) at every detail level.
+    expect(quick.stopTime).toBeCloseTo(balanced.stopTime, 9);
+    expect(precision.stopTime).toBeCloseTo(balanced.stopTime, 9);
+
+    // Expected step counts come straight from the same profile-driven formula
+    // transientDetailSteps uses - not hardcoded guesses - evaluated at the
+    // shared window.
+    expect(quick.steps).toBe(transientDetailSteps(inputs, balanced.stopTime, "quick"));
+    expect(balanced.steps).toBe(transientDetailSteps(inputs, balanced.stopTime, "balanced"));
+    expect(precision.steps).toBe(transientDetailSteps(inputs, balanced.stopTime, "precision"));
+
+    // And density strictly increases quick -> balanced -> precision.
+    expect(quick.steps).toBeLessThan(balanced.steps);
+    expect(balanced.steps).toBeLessThan(precision.steps);
+  });
+
+  it("the source-less fallback keeps its window and takes its point count from the detail", () => {
+    const inputs: AutoResolutionInputs = {
+      maxSourceHz: 0, minSourceHz: 0, maxTauSeconds: 0, minTauSeconds: 0,
+    };
+    const quick = autoTransientOptions(inputs, "quick");
+    const balanced = autoTransientOptions(inputs, "balanced");
+    const precision = autoTransientOptions(inputs, "precision");
+
+    // The fallback window (0.006 s) never moves with detail.
+    expect(quick.stopTime).toBe(balanced.stopTime);
+    expect(precision.stopTime).toBe(balanced.stopTime);
+
+    // Steps track each profile's own minimum point count, derived the same
+    // way transientDetailSteps derives it for a source-less, memory-less
+    // circuit (nothing pushes the count above the floor).
+    expect(quick.steps).toBe(transientDetailSteps(inputs, quick.stopTime, "quick"));
+    expect(balanced.steps).toBe(transientDetailSteps(inputs, balanced.stopTime, "balanced"));
+    expect(precision.steps).toBe(transientDetailSteps(inputs, precision.stopTime, "precision"));
+    expect(quick.steps).toBeLessThan(balanced.steps);
+    expect(balanced.steps).toBeLessThan(precision.steps);
   });
 });

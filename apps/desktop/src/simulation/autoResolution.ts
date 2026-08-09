@@ -24,19 +24,17 @@ import { parseQuantity } from "./quantity";
  * - Window: long enough to show 5 cycles of the SLOWEST periodic source and
  *   the settling of the slowest time constant (7·τ ≈ settle to <0.1%),
  *   whichever is longer.
- * - Steps: dense enough for 2× the solver's minimum samples/cycle on the
- *   FASTEST source and ≥4 samples per fastest time constant, floored at the
- *   classic 240 default and capped at the solver's step limit. If the cap
- *   binds, the window shrinks so per-cycle density is preserved (shape over
- *   duration).
+ * - Steps: dense enough for the `detail` level's samples/cycle on the FASTEST
+ *   source and its samples per fastest time constant, floored at that
+ *   level's minimum point count and capped at the solver's step limit. If
+ *   the cap binds, the window shrinks so per-cycle density is preserved
+ *   (shape over duration).
  */
 
-const DEFAULT_OPTIONS: AnalysisOptions = { stopTime: 0.006, steps: 240 };
+const DEFAULT_STOP_TIME_S = 0.006;
 const FALLBACK_R_OHMS = 1_000;
 const CYCLES_OF_SLOWEST = 5;
 const SETTLE_TAU_MULTIPLE = 7;
-const TARGET_SAMPLES_PER_CYCLE = MIN_SAMPLES_PER_CYCLE * 2;
-const MIN_AUTO_STEPS = 240;
 
 /** First whitespace token of a component value, so `100p IC=1` parses as
  *  100p; NaN (a skip, never a throw) when the token is unparsable. */
@@ -154,22 +152,26 @@ export function collectAutoResolutionInputs(
 }
 
 /** Pure core of the heuristic, unit-testable on hand-computed inputs. */
-export function autoTransientOptions(inputs: AutoResolutionInputs): AnalysisOptions {
+export function autoTransientOptions(
+  inputs: AutoResolutionInputs,
+  detail: TransientDetailLevel = "balanced",
+): AnalysisOptions {
   const { maxSourceHz, minSourceHz, maxTauSeconds, minTauSeconds } = inputs;
+  const profile = DETAIL_PROFILES[detail];
 
   const windowCandidates: number[] = [];
   if (minSourceHz > 0) windowCandidates.push(CYCLES_OF_SLOWEST / minSourceHz);
   if (maxTauSeconds > 0) windowCandidates.push(SETTLE_TAU_MULTIPLE * maxTauSeconds);
-  if (windowCandidates.length === 0) return DEFAULT_OPTIONS;
+  if (windowCandidates.length === 0) return { stopTime: DEFAULT_STOP_TIME_S, steps: profile.minimumPoints };
   let stopTime = Math.max(...windowCandidates);
 
   // ceil with a relative epsilon so float artifacts (0.007/1e-6 →
   // 7000.000000000001) don't manufacture an extra step.
   const ceilSafe = (x: number) => Math.ceil(x * (1 - 1e-12));
   const stepsFor = (window: number): number => {
-    let required = MIN_AUTO_STEPS;
-    if (maxSourceHz > 0) required = Math.max(required, ceilSafe(window * maxSourceHz * TARGET_SAMPLES_PER_CYCLE));
-    if (minTauSeconds > 0) required = Math.max(required, ceilSafe((window / minTauSeconds) * 4));
+    let required = profile.minimumPoints;
+    if (maxSourceHz > 0) required = Math.max(required, ceilSafe(window * maxSourceHz * profile.samplesPerCycle));
+    if (minTauSeconds > 0) required = Math.max(required, ceilSafe((window / minTauSeconds) * profile.samplesPerFastestTau));
     return required;
   };
 
@@ -189,8 +191,9 @@ export function autoTransientOptions(inputs: AutoResolutionInputs): AnalysisOpti
 /** Auto transient options for a schematic (the one-call form the app uses). */
 export function suggestTransientOptions(
   components: readonly SchematicComponent[],
+  detail: TransientDetailLevel = "balanced",
 ): AnalysisOptions {
-  return autoTransientOptions(collectAutoResolutionInputs(components));
+  return autoTransientOptions(collectAutoResolutionInputs(components), detail);
 }
 
 export interface AcSweepDefaults {

@@ -1,13 +1,12 @@
 /**
- * Versioned preference stores shared by every Tau window.
+ * Versioned preference stores shared by the app.
  *
- * Settings runs in its own OS window in the packaged app, so a preference
- * written there has to reach the schematic window without a round trip through
- * Rust. Two `WebviewWindow`s share one origin, so they share `localStorage` and
- * the `storage` event: the writer updates its own listeners with a same-window
- * `CustomEvent`, and the other window is woken by `storage`. That pair is the
- * whole cross-window story - there is no IPC, no polling, and no state that
- * only one window can see.
+ * Settings is a surface inside the schematic window, not a separate window.
+ * A preference written by Settings reaches the rest of the app via a same-window
+ * `CustomEvent`, which is the live notification path. The `storage` event listener
+ * remains in the codebase as a harmless leftover from the two-window era when
+ * Settings ran in its own OS window and had to wake the schematic window through
+ * cross-process storage events.
  *
  * Shape follows `assistantPreferences.ts`: a versioned key, a validator that
  * returns `null` rather than throwing, and a defaults constant that a corrupt

@@ -1,6 +1,6 @@
 /**
  * Appearance control for the Settings sheet - System / Light / Dark
- * (DESIGN_SYSTEM.md section 1). Rendered by ShellPanels.tsx's Settings sheet
+ * (DESIGN_SYSTEM.md section 1). Rendered by GeneralPage.tsx
  * under the "Appearance" section.
  *
  * Reuses the existing `.settings-row` / `.settings-row-copy` / `.mode-toggle`

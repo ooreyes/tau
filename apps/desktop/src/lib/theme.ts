@@ -66,14 +66,11 @@ export function applyThemeMode(mode: ThemeMode): void {
   }
 }
 
-/** Reads the persisted preference and applies it in one call. Intended to
- *  run once, as early as possible at startup, so there is no flash of the
- *  wrong theme on launch. Nothing currently calls this - wiring it into the
- *  app's boot path (main.tsx or an inline index.html script) is outside
- *  this change's file ownership; see the handoff note in this feature's
- *  report. Until it is wired in, an explicit Light/Dark choice applies as
- *  soon as SettingsPanel.tsx's ThemeControl mounts, and "System" already
- *  works with zero JavaScript via the App.css media query. */
+/** Reads the persisted preference and applies it in one call. Called by
+ *  main.tsx:21 before the first render so there is no flash of the wrong
+ *  theme on launch. An explicit Light/Dark choice applies immediately on
+ *  startup, and "System" also works with zero JavaScript via the App.css
+ *  media query. */
 export function initThemeMode(): ThemeMode {
   const mode = loadThemeMode();
   applyThemeMode(mode);

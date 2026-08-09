@@ -8,6 +8,7 @@
  * ignored, and each says which engine it reaches, because a tolerance that
  * silently applies to only one of two solvers is worse than no control.
  */
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DEFAULT_OPTIONS } from "../../engine/spiceOptions";
@@ -44,20 +45,79 @@ const DETAIL_OPTIONS: readonly { value: TransientDetailPreference; label: string
   { value: "precision", label: TRANSIENT_DETAIL_LABELS.precision },
 ];
 
+/**
+ * A single tolerance override input.
+ *
+ * Draft state plus a resync effect, same shape as `OutputPointsControl` in
+ * `SimulationPanel.tsx`. The field has to be controlled: with an uncontrolled
+ * `defaultValue`, clicking Restore updates the store and the state label next
+ * to it but leaves whatever the user typed sitting in the box, because React
+ * never re-applies `defaultValue` to a mounted input.
+ */
+function ToleranceField({
+  id,
+  name,
+  override,
+  placeholder,
+  onCommit,
+}: {
+  id: string;
+  name: string;
+  override: string | null;
+  placeholder: string;
+  onCommit: (raw: string) => string | null;
+}) {
+  const [draft, setDraft] = useState(override ?? "");
+  useEffect(() => setDraft(override ?? ""), [override]);
+
+  return (
+    <div className="tau-tolerance-control">
+      <Input
+        id={id}
+        aria-label={`${name} override`}
+        variant="mono"
+        inputMode="decimal"
+        autoComplete="off"
+        spellCheck={false}
+        placeholder={placeholder}
+        value={draft}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        onBlur={(event) => setDraft(onCommit(event.currentTarget.value) ?? "")}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+      />
+      <span className="tau-tolerance-state">
+        {override ? "overridden" : `default ${placeholder}`}
+      </span>
+    </div>
+  );
+}
+
 export function SimulationPage({ onNotice }: { onNotice: (message: string) => void }) {
   const preferences = useSimulationPreferences();
   const overridden = hasToleranceOverrides(preferences);
 
-  const setTolerance = (key: ToleranceKey, raw: string) => {
+  // Returns the value that actually ended up in the store, so the field can
+  // snap to what is really persisted rather than trusting the keystroke that
+  // triggered the commit.
+  const setTolerance = (key: ToleranceKey, raw: string): string | null => {
     const trimmed = raw.trim();
+    const resolved =
+      trimmed === ""
+        ? null
+        : isValidToleranceValue(trimmed)
+          ? trimmed
+          : preferences.tolerances[key];
     simulationPreferences.update({
       tolerances: {
         ...preferences.tolerances,
         // Empty means "no override": the field goes back to showing Tau's
         // default rather than pinning the default as if the user chose it.
-        [key]: trimmed === "" ? null : isValidToleranceValue(trimmed) ? trimmed : preferences.tolerances[key],
+        [key]: resolved,
       },
     });
+    return resolved;
   };
 
   return (
@@ -86,37 +146,22 @@ export function SimulationPage({ onNotice }: { onNotice: (message: string) => vo
         title="Solver tolerances"
         note="These become the baseline for every deck. A schematic that carries its own .options directives still wins, so opening someone else's circuit does not silently simulate it your way. Applies to ngspice only: the preview solver does not accept .options."
       >
-        {TOLERANCE_KEYS.map((key) => {
-          const override = preferences.tolerances[key];
-          return (
-            <SettingsRow
-              key={key}
-              label={key}
-              hint={TOLERANCE_HELP[key]}
-              htmlFor={`tolerance-${key}`}
-            >
-              <div className="tau-tolerance-control">
-                <Input
-                  id={`tolerance-${key}`}
-                  aria-label={`${key} override`}
-                  variant="mono"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder={DEFAULT_OPTIONS[key]}
-                  defaultValue={override ?? ""}
-                  onBlur={(event) => setTolerance(key, event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") event.currentTarget.blur();
-                  }}
-                />
-                <span className="tau-tolerance-state">
-                  {override ? "overridden" : `default ${DEFAULT_OPTIONS[key]}`}
-                </span>
-              </div>
-            </SettingsRow>
-          );
-        })}
+        {TOLERANCE_KEYS.map((key) => (
+          <SettingsRow
+            key={key}
+            label={key}
+            hint={TOLERANCE_HELP[key]}
+            htmlFor={`tolerance-${key}`}
+          >
+            <ToleranceField
+              id={`tolerance-${key}`}
+              name={key}
+              override={preferences.tolerances[key]}
+              placeholder={DEFAULT_OPTIONS[key]}
+              onCommit={(raw) => setTolerance(key, raw)}
+            />
+          </SettingsRow>
+        ))}
         <SettingsRow
           label="Tau's defaults"
           hint={
