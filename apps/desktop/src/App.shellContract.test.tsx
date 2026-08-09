@@ -167,11 +167,17 @@ describe("shell inventory by app state", () => {
   it("in the simulator, replaces the canvas with the read-only overview", async () => {
     await openProject();
     fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
-    // Explorer and the components rail are not rendered in simulator mode, and
-    // `analysisPlotter` only exists once a run has produced something. The
-    // redesign's drawer changes all three of those facts, which is exactly why
-    // they are pinned here first.
-    expectExactly(["navRail", "circuitOverview", "assistant"]);
+    // Explorer and the components rail are not rendered in simulator mode.
+    //
+    // `analysisPlotter` IS here, from the moment simulator mode opens: App.tsx
+    // defaults `graphOpen` to true. An earlier version of this comment claimed
+    // it appeared only after a run, and the test agreed, because the contract
+    // declared the plotter as role "region" while it renders as an <aside>,
+    // which maps to complementary. `isPresent` therefore returned false for it
+    // in every state and the inventory could neither require nor forbid it.
+    // Two wrongs reading as one right is exactly the failure this file exists
+    // to prevent, so it is worth naming here.
+    expectExactly(["navRail", "circuitOverview", "assistant", "analysisPlotter"]);
   });
 
   it("with Settings open, the shell behind it leaves the accessibility tree", async () => {

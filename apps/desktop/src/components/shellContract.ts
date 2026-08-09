@@ -59,10 +59,19 @@ export const SHELL = {
   emptySchematic: { role: "region", name: "Empty schematic" },
   /** The simulator's read-only view of the circuit. */
   circuitOverview: { role: "region", name: "Circuit overview" },
-  /** The waveform surface. Becomes the results drawer's Waveforms tab. */
-  analysisPlotter: { role: "region", name: "Analysis plotter" },
-  /** The restore affordance when the analysis panel is collapsed. */
-  minimizedPanels: { role: "region", name: "Minimized panels" },
+  /**
+   * The waveform surface. Becomes the results drawer's Waveforms tab.
+   *
+   * `complementary`, not `region`: it renders as `<aside>`, and an aside with
+   * an accessible name maps to complementary and never to region. Declared as
+   * region originally, which meant `isPresent` returned false for it in every
+   * app state, so the inventory test could neither require nor forbid it. The
+   * review instrument was switched off precisely where stage 4 operates.
+   */
+  analysisPlotter: { role: "complementary", name: "Analysis plotter" },
+  /** The restore affordance when the analysis panel is collapsed. Also an
+   *  `<aside>`, so also complementary; same blindness as above. */
+  minimizedPanels: { role: "complementary", name: "Minimized panels" },
   /** Interactive-circuit controls, shown only when the schematic has any. */
   liveControls: { role: "group", name: "Live controls" },
   /**
