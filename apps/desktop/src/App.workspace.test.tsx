@@ -618,12 +618,63 @@ describe("Settings is a surface in this window", () => {
       const settings = await screen.findByRole("dialog", { name: "Settings" });
       expect(within(settings).getByRole("navigation", { name: "Settings pages" })).toBeTruthy();
       // The schematic window is still the window: the open tab is mounted
-      // behind Settings rather than replaced by it.
-      expect(screen.getByRole("tab", { name: /untitled\.asc/ })).toBeTruthy();
+      // behind Settings rather than replaced by it. `hidden: true` is
+      // required here now that Settings is a real Radix modal: a true
+      // aria-modal dialog correctly marks the rest of the document
+      // `aria-hidden` while it is open (Radix's `hideOthers`), so the tab
+      // is legitimately absent from the default accessible-role query -
+      // this assertion is about DOM presence, not AT-visibility.
+      expect(screen.getByRole("tab", { name: /untitled\.asc/, hidden: true })).toBeTruthy();
 
       fireEvent.click(within(settings).getByRole("button", { name: "Close settings" }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
     }
+  });
+
+  it("keeps focus inside Settings while it is open", async () => {
+    await renderOpenProject();
+
+    const rail = screen.getByRole("navigation", { name: "Workspace sections" });
+    fireEvent.click(within(rail).getByRole("button", { name: "Settings" }));
+
+    const settingsDialog = await screen.findByRole("dialog", { name: "Settings" });
+    await waitFor(() => expect(settingsDialog.contains(document.activeElement)).toBe(true));
+  });
+
+  it("returns focus to the control that opened Settings", async () => {
+    await renderOpenProject();
+
+    // The rail button is the control under test; it is its own affordance
+    // (see the entry-point loop above), so it stays addressable after the
+    // dialog unmounts and can be compared by reference below.
+    const rail = screen.getByRole("navigation", { name: "Workspace sections" });
+    const openSettingsButton = within(rail).getByRole("button", { name: "Settings" });
+    // `fireEvent.click` (unlike a real click, or `userEvent.click`) does not
+    // focus its target, but Radix's FocusScope captures whatever element is
+    // focused at mount time as the thing to restore focus to on unmount.
+    // Focus the button explicitly so this test exercises the real-world
+    // case: a mouse click on a button focuses it before the handler runs.
+    openSettingsButton.focus();
+    fireEvent.click(openSettingsButton);
+
+    const settingsDialog = await screen.findByRole("dialog", { name: "Settings" });
+    const closeSettingsButton = within(settingsDialog).getByRole("button", { name: "Close settings" });
+    // Same reasoning as above: a real click would have focused this button
+    // first. That focused node is what's about to be removed from the
+    // document when Settings unmounts - the exact moment a browser (or
+    // jsdom) drops focus to document.body absent explicit restoration.
+    closeSettingsButton.focus();
+    fireEvent.click(closeSettingsButton);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+
+    // Radix restores focus to the element that had it before the dialog
+    // opened, but it does so from a `setTimeout(0)` in FocusScope's unmount
+    // cleanup, not synchronously with the state update - hence the waitFor.
+    // Without that restoration, focus drops to document.body and the
+    // canvas's keyboard shortcuts go dead until the user clicks something;
+    // that regression is exactly what this assertion catches.
+    await waitFor(() => expect(document.activeElement).toBe(openSettingsButton));
+    expect(document.activeElement).not.toBe(document.body);
   });
 });
 

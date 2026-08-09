@@ -11,6 +11,7 @@ import { TelemetryDock } from "./components/TelemetryDock";
 import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/AssistantPanel";
 import { clampPanelWidth, usePanelWidth } from "./components/ui/resizable";
 import { Toaster, toast } from "./components/ui/sonner";
+import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog";
 import {
   SHELL_LAYOUT,
   workspaceCanFitIndependentColumns,
@@ -572,12 +573,24 @@ function App() {
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
   }, []);
 
+  // Radix only restores focus to a `<Dialog.Trigger>` automatically. Settings
+  // has three separate entry points (toolbar gear, rail button, and any
+  // future one) living in components far from where `<Dialog>` mounts below,
+  // so none of them is a `Dialog.Trigger` - Radix's own restoration is a
+  // silent no-op here. This ref plus `Dialog`'s `onCloseAutoFocus` (below)
+  // is the manual equivalent: remember what had focus when Settings opened,
+  // and hand it back when Settings closes.
+  const settingsOpenerRef = useRef<HTMLElement | null>(null);
+
   /**
    * Show Settings, in this window. It briefly opened a second OS window; that
    * gave it a second JavaScript context, and with it a second credential store
    * the assistant never read - see `settings/settingsSurface.ts`.
    */
-  const openSettingsSurface = useCallback(() => setSettingsOpen(true), []);
+  const openSettingsSurface = useCallback(() => {
+    settingsOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSettingsOpen(true);
+  }, []);
 
   const invalidateAnalysis = useCallback((state: "idle" | "stopped" = "idle") => {
     analysisRequestRef.current += 1;
@@ -2648,11 +2661,26 @@ function App() {
           onDiscard={discardExternalEdit}
         />
       )}
-      {settingsOpen && (
-        <div className="tau-settings-route" role="dialog" aria-modal="true" aria-label="Settings">
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName="bg-transparent"
+          className="tau-settings-route top-0 left-0 max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+          onCloseAutoFocus={(event) => {
+            // See settingsOpenerRef above: there is no Dialog.Trigger for
+            // Radix to return focus to on its own.
+            event.preventDefault();
+            settingsOpenerRef.current?.focus();
+          }}
+        >
+          {/* Radix requires a Title for the dialog's accessible name; visually
+              hidden so the rendered surface matches today's design exactly.
+              Text must stay exactly "Settings" - App.workspace.test.tsx
+              queries getByRole("dialog", { name: "Settings" }). */}
+          <DialogTitle className="sr-only">Settings</DialogTitle>
           <SettingsWindow onClose={() => setSettingsOpen(false)} />
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
       {confirmClearOpen && (
         <ConfirmDialog
           title="Clear schematic?"

@@ -44,13 +44,23 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
 
 function DialogContent({
   className,
+  overlayClassName,
   children,
   showCloseButton = true,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  showCloseButton?: boolean;
+  /**
+   * Escape hatch for a content that provides its own full-bleed backdrop
+   * (Settings' `.tau-settings-route`, which is itself the scrim+blur layer).
+   * Without this the default overlay's own `bg-[var(--scrim-strong)]` stacks
+   * underneath the content's identical scrim and visibly double-darkens.
+   */
+  overlayClassName?: string;
+}) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

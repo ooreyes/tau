@@ -12,8 +12,23 @@ import {
   simulationPreferences,
   useSimulationPreferences,
 } from "../../lib/simulationPreferences";
-import { aiUsage } from "../../lib/aiUsage";
+import { resetAllPreferences } from "../../lib/preferenceRegistry";
 import { SettingsGroup, SettingsPage, SettingsRow, SettingsToggle } from "../SettingsPrimitives";
+
+/**
+ * What Reset clears, named by page rather than by knob.
+ *
+ * Being thorough here would mean writing "solver tolerances", and General is
+ * the first page a student opens. `SettingsWorkspaceCopy.test.tsx` holds this
+ * page to showing no solver internals, and it is right to: spelling out the
+ * jargon would put it on the one page that exists to keep it away. Naming the
+ * Simulation page is both calmer and exactly as accurate, because everything
+ * on it lives in the single preference this clears.
+ */
+const RESET_SCOPE_NOTE =
+  "Returns the preferences on these pages to their shipped defaults: appearance, " +
+  "everything on the Simulation page, the assistant provider and model, cloud " +
+  "consent, and Tau's local usage counters.";
 
 export function GeneralPage({ onNotice }: { onNotice: (message: string) => void }) {
   const simulation = useSimulationPreferences();
@@ -29,12 +44,11 @@ export function GeneralPage({ onNotice }: { onNotice: (message: string) => void 
 
   const resetEverything = () => {
     const confirmed = window.confirm(
-      "Reset every Tau setting to its default? Saved API keys and your schematics are not touched.",
+      "Reset Tau's preferences to their defaults? Your API keys, schematics, model libraries, assistant conversations, run history, and panel sizes are not touched.",
     );
     if (!confirmed) return;
-    simulationPreferences.reset();
-    aiUsage.reset();
-    onNotice("Settings reset to defaults. API keys and schematics were left alone.");
+    resetAllPreferences();
+    onNotice("Preferences reset to defaults. Keys, schematics, conversations, and history were left alone.");
   };
 
   return (
@@ -75,16 +89,16 @@ export function GeneralPage({ onNotice }: { onNotice: (message: string) => void 
         </SettingsRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title="Reset"
-        note="Returns every preference on every page to its default. Your saved API keys, your schematics, and your model libraries are not affected."
-      >
+      <SettingsGroup title="Reset" note={RESET_SCOPE_NOTE}>
         {/* Outline, not filled. Reset is the least likely thing anyone came to
             this page to do, and a filled destructive control made it the
             loudest element on the screen (DESIGN_SYSTEM.md section 4: at most
             one filled control per surface, and it should be the primary one).
             The confirmation prompt carries the weight instead. */}
-        <SettingsRow label="All Tau settings" hint="Cannot be undone">
+        <SettingsRow
+          label="All Tau settings"
+          hint="Not affected: your API keys, your schematics, your imported model libraries, the unsaved-work recovery snapshot, your simulation run history, your assistant conversations, and the panel sizes in this window."
+        >
           <Button size="sm" variant="outline" onClick={resetEverything}>
             Reset to defaults
           </Button>

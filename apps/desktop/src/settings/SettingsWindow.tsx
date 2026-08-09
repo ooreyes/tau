@@ -77,15 +77,13 @@ export function SettingsWindow({
     return () => globalThis.clearTimeout(timer);
   }, [notice]);
 
-  useEffect(() => {
-    if (!onClose) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
+  // Escape-to-close used to be handled here with a raw window keydown
+  // listener. Settings is now always mounted inside the app's Radix Dialog
+  // (App.tsx), which already owns Escape (focus trap + dismissable layer);
+  // a second handler here would double-fire the same onClose on every
+  // Escape press. There is no other mount site - `<SettingsWindow />` in
+  // the test files always renders without `onClose`, so nothing depended on
+  // this effect.
   const onNotice = (message: string) => setNotice(message);
 
   return (
