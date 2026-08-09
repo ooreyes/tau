@@ -217,6 +217,42 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+
+  /* ── Floating chrome (REDESIGN.md) ──────────────────────────────────────
+     The material persistent chrome is made of once it sits ON the canvas
+     rather than beside it. Alpha is chosen so the grid stays faintly visible
+     through it: that translucency is the whole signal that the rail is above
+     the drawing, not another panel docked next to it. `-strong` is for the
+     same material over dense content, such as a drawer above plots. Two
+     steps only; a third would be a gradient of arbitrary values. */
+  --chrome-veil:        rgba(12, 12, 14, 0.72);
+  --chrome-veil-strong: rgba(12, 12, 14, 0.88);
+  /* Between --elev-2 (docked, effectively nothing) and --elev-pop (modal).
+     Summoned surfaces need to say "this came from somewhere and will go
+     back"; without a step here they read as either docked or modal, and both
+     are wrong. Deliberately NOT used by the rail, transport or status
+     readout: persistent chrome gets veil and no shadow, and the absence of a
+     token for it is how that rule is enforced. */
+  --elev-float: 0 6px 20px rgba(0, 0, 0, 0.38), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
+
+  /* One blur and one saturate for every veiled surface. App.css carried four
+     hand-picked blurs (20/18/16/2px) and three saturates (180/160/145%), each
+     chosen locally, which is how a "material" stops being one material. Not
+     redefined per theme: this is geometry, not colour. */
+  --chrome-blur: 12px;
+  --chrome-blur-saturate: 160%;
+
+  /* Stacking, stated once. The previous values were 1, 2, 3, 5, 6, 8, 20, 22,
+     40 and 90, assigned locally, with no order anyone could state out loud. A
+     shell where chrome floats over the canvas has exactly these strata, and
+     two of them chosen independently is how a drawer ends up over a modal. */
+  --z-canvas: 0;
+  --z-chrome: 10;
+  --z-drawer: 20;
+  --z-summoned: 30;
+  --z-inspector: 40;
+  --z-modal: 50;
+  --z-toast: 60;
 }
 
 /* ── Light theme - DESIGN_SYSTEM.md §1 ───────────────────────────────────
@@ -351,6 +387,11 @@
     --status-ink-mix:       black;
     --pill-shadow: 0 0.5px 1px rgba(8, 16, 32, 0.13);
   }
+
+    /* Floating chrome, light. See the :root block for what these are for. */
+    --chrome-veil:        rgba(247, 249, 252, 0.78);
+    --chrome-veil-strong: rgba(247, 249, 252, 0.92);
+    --elev-float: 0 6px 20px rgba(8, 16, 32, 0.12), 0 0 0 0.5px rgba(11, 16, 23, 0.10);
 }
 
 :root[data-theme="light"] {
@@ -464,6 +505,11 @@
   --fill-track:           rgba(11, 16, 23, 0.07);
   --status-ink-mix:       black;
   --pill-shadow: 0 0.5px 1px rgba(8, 16, 32, 0.13);
+
+  /* Floating chrome, light. See the :root block for what these are for. */
+  --chrome-veil:        rgba(247, 249, 252, 0.78);
+  --chrome-veil-strong: rgba(247, 249, 252, 0.92);
+  --elev-float: 0 6px 20px rgba(8, 16, 32, 0.12), 0 0 0 0.5px rgba(11, 16, 23, 0.10);
 }
 
 /* Explicit Dark re-affirms the plain :root values so a user who picks Dark
@@ -572,6 +618,11 @@
   --fill-track:           rgba(120, 120, 128, 0.16);
   --status-ink-mix:       white; /* status text mixes toward white on a dark fill */
   --pill-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
+
+  /* Floating chrome, dark. See the :root block for what these are for. */
+  --chrome-veil:        rgba(12, 12, 14, 0.72);
+  --chrome-veil-strong: rgba(12, 12, 14, 0.88);
+  --elev-float: 0 6px 20px rgba(0, 0, 0, 0.38), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
 }
 
 /* TAU-TOKEN-ZONE-END
@@ -1377,6 +1428,10 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--scrim);
+  /* A scrim haze, not the chrome veil: this dims what is behind an overlay
+     rather than being a surface chrome sits on, so it deliberately does not
+     use --chrome-blur. Unifying the two would push a 12px blur behind every
+     run overlay and cost a compositor pass for no gain. */
   backdrop-filter: blur(2px);
 }
 
@@ -4596,8 +4651,8 @@ body {
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   border-bottom: 0.5px solid var(--border);
   -webkit-app-region: drag;
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
+  -webkit-backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
   box-shadow: none;
 }
 
@@ -6048,8 +6103,8 @@ body {
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--diagnostic-color) 7%, transparent),
     0 -8px 24px color-mix(in srgb, var(--diagnostic-glow) 18%, transparent);
-  backdrop-filter: saturate(145%) blur(16px);
-  -webkit-backdrop-filter: saturate(145%) blur(16px);
+  backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
+  -webkit-backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
 }
 
 .bottom-panel.is-idle {
@@ -7138,8 +7193,8 @@ button.bottom-panel-head:focus-visible {
   color: var(--text);
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   border-bottom: 1px solid var(--border);
-  backdrop-filter: saturate(160%) blur(18px);
-  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
+  -webkit-backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
   /* Structural guarantee, independent of the queries below: every child here
      is `flex: none`, so their combined intrinsic width (379px) used to spill
      straight out of a 306px pane and paint the Current Mode toggle and the
@@ -8952,8 +9007,8 @@ button.bottom-panel-head:focus-visible {
   font: 500 var(--fs-caption) var(--font-ui);
   letter-spacing: -0.01em;
   white-space: nowrap;
-  backdrop-filter: saturate(160%) blur(16px);
-  -webkit-backdrop-filter: saturate(160%) blur(16px);
+  backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
+  -webkit-backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
 }
 
 /* The mode/run-state indicator is the shared `.status-lamp` component

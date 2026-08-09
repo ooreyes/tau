@@ -7,6 +7,13 @@ import { decodeIndependentSourceValue } from "../schematic/sourceValue";
 import { DEFAULT_WIPER, parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { withoutGateInputCount } from "../engine/digitalGateSpec";
 import { isNativeMultiPinSubcircuit, nativeSubcircuitBody } from "../schematic/subcircuitGeometry";
+import { overlapArea, padRect, placeOverlay } from "./overlayPlacement";
+import type { Rect } from "./overlayPlacement";
+
+// Re-exported so existing importers of `Rect` from this module (e.g.
+// Canvas.tsx) don't need to change - the type now lives in
+// overlayPlacement.ts alongside the placement kernel that scores it.
+export type { Rect };
 
 export const snap = (v: number) => {
   const snapped = Math.round(v / GRID) * GRID;
@@ -349,13 +356,6 @@ const labelAxis = (component: SchematicComponent) => {
   return dy > dx ? "vertical" : "horizontal";
 };
 
-export interface Rect {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
-
 interface WireSegment {
   a: Point;
   b: Point;
@@ -454,19 +454,6 @@ interface LabelPlacement {
   box: Rect;
 }
 
-const padRect = (rect: Rect, pad: number): Rect => ({
-  minX: rect.minX - pad,
-  minY: rect.minY - pad,
-  maxX: rect.maxX + pad,
-  maxY: rect.maxY + pad,
-});
-
-const overlapArea = (a: Rect, b: Rect) => {
-  const x = Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX));
-  const y = Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
-  return x * y;
-};
-
 const estimateTextWidth = (text: string, kind: "ref" | "val") => text.length * (kind === "ref" ? 5.5 : 4.9);
 
 const labelLineRect = (text: string, x: number, y: number, anchor: "start" | "middle" | "end", kind: "ref" | "val") => {
@@ -564,13 +551,8 @@ export const buildLabelPlacements = (components: SchematicComponent[], wires: Sc
     if (!refText && !valText) continue;
 
     const candidates = labelCandidates(component, refText || valText, valText);
-    const scored = candidates.map((candidate) => {
-      const obstacles = [...componentRects, ...wireRects, ...placed];
-      const score = obstacles.reduce((total, rect) => total + overlapArea(candidate.box, rect), 0);
-      return { candidate, score };
-    });
-    const chosen = scored.find((entry) => entry.score === 0)?.candidate
-      ?? scored.sort((a, b) => a.score - b.score)[0].candidate;
+    const obstacles = [...componentRects, ...wireRects, ...placed];
+    const chosen = placeOverlay({ candidates, obstacles });
     placements.set(component.id, chosen);
     placed.push(padRect(chosen.box, 3));
   }

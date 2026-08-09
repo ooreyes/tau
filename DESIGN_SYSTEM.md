@@ -245,6 +245,52 @@ likely to be wrong; check the light theme.
 The grid must stay clearly below wires and components in contrast. If the grid competes with
 the circuit, the grid is wrong.
 
+### 1.8 Floating chrome
+
+The canvas is the substrate. Chrome that sits **on** it, rather than docked beside it, is made
+of one material.
+
+| Token | Dark | Light |
+|---|---|---|
+| `--chrome-veil` | `rgba(12, 12, 14, 0.72)` | `rgba(247, 249, 252, 0.78)` |
+| `--chrome-veil-strong` | `rgba(12, 12, 14, 0.88)` | `rgba(247, 249, 252, 0.92)` |
+| `--chrome-blur` | `12px` | `12px` |
+| `--chrome-blur-saturate` | `160%` | `160%` |
+| `--elev-float` | `0 6px 20px rgba(0,0,0,0.38), 0 0 0 0.5px rgba(255,255,255,0.10)` | `0 6px 20px rgba(8,16,32,0.12), 0 0 0 0.5px rgba(11,16,23,0.10)` |
+
+**Veil, not panel.** The alpha is chosen so the grid stays faintly visible through it. That
+translucency is the entire signal that a surface is *above* the drawing rather than another
+panel next to it. An opaque `--panel-3` rail is a docked column wearing a float costume.
+
+**Two tiers of elevation, and the second one is an absence.**
+
+- **Persistent** chrome (nav rail, transport cluster, status readout) gets veil and **no
+  shadow**. There is deliberately no token for a persistent-chrome shadow; not having one is
+  how the rule is enforced.
+- **Summoned** surfaces (parts palette, inspector, sheets) get `--elev-float`. A shadow's job
+  is to say "this came from somewhere and will go back". Six shadowed floating panels is a
+  generic dashboard, which is the failure this tier exists to prevent.
+- **Modal** surfaces keep `--elev-pop` and a `--scrim`.
+
+`--chrome-blur` and `--chrome-blur-saturate` are geometry, not colour, so they are defined once
+in `:root` and not redefined per theme. Every veiled surface uses both; a surface that picks its
+own blur has stopped being the same material. The one documented exception is the run-overlay
+scrim, which uses a 2px haze to dim content behind it rather than to be a surface.
+
+### 1.9 Stacking
+
+| Token | Value | Stratum |
+|---|---|---|
+| `--z-canvas` | 0 | the substrate |
+| `--z-chrome` | 10 | rail, transport, status readout |
+| `--z-drawer` | 20 | results drawer |
+| `--z-summoned` | 30 | palette, explorer, assistant sheets |
+| `--z-inspector` | 40 | must clear a sheet it may overlap |
+| `--z-modal` | 50 | scrim, dialogs, command palette |
+| `--z-toast` | 60 | |
+
+Stated once, in order. Two strata chosen independently is how a drawer ends up over a modal.
+
 ---
 
 ## 2. Typography
