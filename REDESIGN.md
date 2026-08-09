@@ -1,7 +1,9 @@
 # Tau canvas-first redesign
 
-> **Status:** prerequisites P0-P3 complete. No shell change has landed yet.
-> Baseline captured as `screenshots/redesign-baseline/`. Stage 0 is next.
+> **Status:** P0-P3, stage 0, stage 1, stage 2 (partial) and stage 3a are
+> landed. Remaining: 3b, 4a, 4b, 6, 5, 7 in that corrected order.
+> Baseline: `screenshots/redesign-baseline/` (light frames only; see the
+> evidence-protocol warning below).
 > **Normative sources, in order:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), then
 > `.claude/skills/tau-instrument-aesthetic/` and its five reference plates.
 > Where this file and `DESIGN_SYSTEM.md` disagree, `DESIGN_SYSTEM.md` wins and
@@ -141,6 +143,54 @@ the same commit. Already exist, do not re-add: `--scrim`, `--scrim-strong`,
 
 **Deliberately no shadow token for the rail, transport or status readout.** That
 absence *is* the two-tier rule, and having no token is how it is enforced.
+
+## Corrected ordering, and what a reconnaissance pass found
+
+A five-reader survey of every subsystem the remaining stages touch changed the
+plan in three ways. Run **3b → 4a → 4b → 6 → 5 → 7**.
+
+- **Stage 6 must precede stage 5.** They share a container the plan treated as
+  belonging only to 5. Deleting `ComponentsRail` first strands the inspector.
+- **Stage 4 is two stages wearing one number.** 4a is the drawer merge, 4b is
+  the 1:1 plot geometry. Tag them separately: the merge is a container change
+  and the geometry is a 60-call-site refactor, and a single diff containing
+  both is unreviewable.
+- **Stage 5 will legitimately delete a lot of assertions** (two tests in
+  `App.workspace.test.tsx`, three in `ShellPanels.test.tsx`, seven of nine in
+  `resolveChrome.test.ts`). Stop condition 4 flags exactly that shape, so
+  pre-declare the expect-line drop in the unit spec or the reviewer cannot tell
+  it apart from a model deleting checks to go green.
+
+### Hazards found, with evidence
+
+- **`ComponentsRail`'s deletion breaks typecheck before it breaks a test.**
+  `App.shellContract.test.tsx` uses `keyof typeof SHELL` in two `as const`
+  arrays. Also update `scripts/design-shot.mjs`, which mirrors the contract by
+  hand and says so.
+- **Deleting the ComponentsRail export fails all 79 tests in
+  `ShellPanels.test.tsx` at the import line**, not the 3 in its describe.
+- **Stage 6 breaks zero tests, and that is the finding.** The inventory test
+  never selects a component, and `inspectorName` is in neither `SHELL` nor
+  `PLANNED`, so the review instrument ignores the inspector entirely. Its five
+  correctness rules are wholly unasserted. Stage 6's spec must carry its own
+  new tests as deliverables; a green suite proves nothing there.
+- **`R1 properties` is already taken** by the property-group `section`. Naming
+  the inspector with `inspectorName()` puts two live nodes under one accessible
+  name, which is stop condition 7, and nothing currently catches it.
+- **jsdom actively lies about plot geometry.** Two tests mock
+  `getBoundingClientRect` to 340x190 to get a 1:1 mapping. A measured-container
+  viewBox reads 0 in jsdom, and the failure mode is a degenerate plot that
+  still renders rather than a crash, so nearby assertions can pass vacuously.
+- **`scripts/min-window-dod.mjs` is not part of `pnpm test`** and hardcodes
+  `.editor-toolbar`, `.statusbar` and `.scope-svg`. Stages 3b and 4 break it
+  behind a green suite.
+- **Two live buttons are named "Run simulation"**, which is why six App-level
+  tests reach for `getAllByRole(...)[0]`. Stage 3b's transport consolidation
+  should resolve that deliberately rather than discover it.
+- **`onClose` on SimulationPanel is dead** (declared, passed, never
+  destructured), so `setGraphOpen(false)` is unreachable and
+  `MinimizedPanelDock` is dead code. Do not port a non-functional collapse into
+  the drawer in the name of preserving behaviour.
 
 ## Stages
 
