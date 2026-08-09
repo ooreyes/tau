@@ -9,15 +9,11 @@ import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
 import { TelemetryDock } from "./components/TelemetryDock";
 import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/AssistantPanel";
-import { clampPanelWidth, usePanelWidth } from "./components/ui/resizable";
+import { usePanelWidth } from "./components/ui/resizable";
 import { Toaster, toast } from "./components/ui/sonner";
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog";
-import {
-  SHELL_LAYOUT,
-  workspaceCanFitIndependentColumns,
-  workspaceExplorerMax,
-  workspaceRightColumnMax,
-} from "./components/WorkspaceRightDock";
+import { SHELL_LAYOUT, canFitIndependentColumns, resolveChrome } from "./chrome/resolveChrome";
+import { SURFACES } from "./chrome/surfaces";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
@@ -2197,65 +2193,40 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shellWidth, mode, graphOpen]);
 
-  const independentColumnsFit = workspaceCanFitIndependentColumns(shellWidth, [
-    COMPONENTS_RAIL_WIDTH.minWidth,
-    ASSISTANT_PANEL_WIDTH.minWidth,
+  // One pure function decides what is on screen and how wide it may be. The
+  // rule used to be stated across four derived values here that all had to
+  // agree; `chrome/resolveChrome.ts` is now the single place it lives, and it
+  // is unit-tested without rendering an app or faking a ResizeObserver.
+  // Same predicate the resolver uses, called once here so the Explorer swap
+  // below and the layout cannot disagree about whether all three columns fit.
+  const independentColumnsFit = canFitIndependentColumns(shellWidth, [
+    SURFACES.components.width.minWidth,
+    SURFACES.assistant.width.minWidth,
   ]);
-  // At the 900px floor Explorer + Components + Assistant cannot all coexist.
-  // Components and Assistant are the active creation tools, so keep them
-  // together and temporarily yield the passive Explorer column. Selecting
-  // Explorer explicitly below swaps Components out; widening restores all
-  // three without mutating the user's Components preference.
-  const componentsColumnOpen = mode === "schematic" && partsOpen;
-  const explorerColumnOpen = mode === "schematic"
-    && (!assistantOpen || !componentsColumnOpen || independentColumnsFit);
-  const assistantResponsiveMax = workspaceRightColumnMax(
-    shellWidth,
+  const chrome = resolveChrome({
     mode,
-    ASSISTANT_PANEL_WIDTH,
-    mode === "schematic" && assistantOpen && componentsColumnOpen
-      ? [COMPONENTS_RAIL_WIDTH.minWidth]
-      : [],
-  );
-  const effectiveAssistantWidth = clampPanelWidth(
-    assistantResize.width,
-    ASSISTANT_PANEL_WIDTH.minWidth,
-    assistantResponsiveMax,
-  );
-  const componentsRailResponsiveMax = workspaceRightColumnMax(
     shellWidth,
-    "schematic",
-    COMPONENTS_RAIL_WIDTH,
-    assistantOpen ? [effectiveAssistantWidth] : [],
-  );
-  const effectiveComponentsRailWidth = clampPanelWidth(
-    componentsRailResize.width,
-    COMPONENTS_RAIL_WIDTH.minWidth,
-    componentsRailResponsiveMax,
-  );
-  const explorerResponsiveMax = explorerColumnOpen
-    ? workspaceExplorerMax(shellWidth, [
-        ...(componentsColumnOpen ? [effectiveComponentsRailWidth] : []),
-        ...(assistantOpen ? [effectiveAssistantWidth] : []),
-      ])
-    : undefined;
+    intent: { explorer: true, components: partsOpen, assistant: assistantOpen },
+    widths: {
+      // The Explorer owns its own width inside ExplorerPanel; App only hands
+      // it a ceiling. The resolver still needs a number to reserve against,
+      // so it gets the configured default.
+      explorer: SURFACES.explorer.width.defaultWidth,
+      components: componentsRailResize.width,
+      assistant: assistantResize.width,
+    },
+  });
+  const componentsColumnOpen = chrome.components.visible;
+  const explorerColumnOpen = chrome.explorer.visible;
+  const effectiveAssistantWidth = chrome.assistant.width ?? assistantResize.width;
+  const componentsRailResponsiveMax = chrome.components.maxWidth!;
+  const explorerResponsiveMax = chrome.explorer.maxWidth;
 
-  // Same responsive floor for the independent Assistant column in both modes.
-  // Persisted desktop widths must not make either the schematic editor or
-  // simulator analysis unreachable when the window returns at 900px.
-  useEffect(() => {
-    if (shellWidth === 0 || !assistantOpen) return;
-    if (assistantResize.width > assistantResponsiveMax) assistantResize.setWidth(assistantResponsiveMax);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shellWidth, mode, assistantOpen, assistantResize.width, assistantResponsiveMax]);
-
-  useEffect(() => {
-    if (shellWidth === 0 || !componentsColumnOpen) return;
-    if (componentsRailResize.width > componentsRailResponsiveMax) {
-      componentsRailResize.setWidth(componentsRailResponsiveMax);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shellWidth, componentsColumnOpen, componentsRailResize.width, componentsRailResponsiveMax]);
+  // The two clamping effects that used to live here are gone. They wrote the
+  // clamped width back into storage, which meant a narrow window permanently
+  // shrank the size the user had chosen: widening it again gave back the
+  // floor's width, not theirs. `resolveChrome` clamps for display only, so the
+  // stored preference survives and comes back when there is room for it.
 
   const effectiveAssistantResize = {
     ...assistantResize,
