@@ -233,12 +233,52 @@ function killProcessGroup(child) {
   }
 }
 
+/**
+ * Refuse to capture a theme that did not take.
+ *
+ * The previous theme mechanism failed silently for the entire life of the
+ * archive. A capture pipeline whose only failure mode is "the pictures are
+ * quietly wrong" is worse than one that stops, so this asserts the two things
+ * that have to be true: the boot script stamped the attribute we asked for,
+ * and the resulting background is actually dark or light.
+ */
+async function assertTheme(page, theme) {
+  const seen = await page.evaluate(() => {
+    const root = document.documentElement;
+    const bg = getComputedStyle(document.body).backgroundColor;
+    const [r, g, b] = (bg.match(/\d+/g) ?? ["255", "255", "255"]).map(Number);
+    return { attr: root.getAttribute("data-theme"), luminance: (r + g + b) / 3 };
+  });
+  if (seen.attr !== theme) {
+    throw new Error(`theme did not take: asked for ${theme}, document says ${seen.attr}`);
+  }
+  const looksDark = seen.luminance < 128;
+  if (looksDark !== (theme === "dark")) {
+    throw new Error(
+      `theme ${theme} stamped but the page does not look it (mean background ${Math.round(seen.luminance)})`,
+    );
+  }
+}
+
 async function shootViewport(page, viewport, theme) {
   await page.setViewportSize({ width: viewport.width, height: viewport.height });
-  // Persist the theme before navigation so index.html's FOUC boot script
-  // stamps data-theme correctly. emulateMedia alone is no longer enough now
-  // that Light is the product default (stamped via data-theme).
-  await page.goto("about:blank");
+  // Persist the theme so index.html's FOUC boot script stamps data-theme
+  // correctly. emulateMedia alone is not enough, because Light is the product
+  // default and the boot script stamps it explicitly whenever no preference is
+  // stored, which overrides the media query in both directions.
+  //
+  // This used to write the preference while sitting on about:blank. That is an
+  // opaque origin, so the write threw, the catch swallowed it, and the value
+  // never reached the app's origin: EVERY "dark" capture in the archive was
+  // actually light, silently, including the redesign baseline. Caught by
+  // noticing a dark screenshot rendering light and then finding that the dark
+  // and light captures of the same state were visually identical.
+  //
+  // The write now happens on the app's own origin and the page is reloaded so
+  // the boot script reads it. `assertTheme` below refuses to capture if it did
+  // not take, because a theme gate that cannot fail is not a gate.
+  await page.emulateMedia({ colorScheme: theme });
+  await page.goto(DEV_URL, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
   await page.evaluate((nextTheme) => {
     try {
       localStorage.setItem("tau.ui.theme", nextTheme);
@@ -246,7 +286,8 @@ async function shootViewport(page, viewport, theme) {
       /* private mode */
     }
   }, theme);
-  await page.emulateMedia({ colorScheme: theme });
+  await page.reload({ waitUntil: "networkidle", timeout: NAV_TIMEOUT_MS });
+  await assertTheme(page, theme);
 
   // --- empty: fresh load, blank scratchpad -------------------------------
   await page.goto(DEV_URL, { waitUntil: "networkidle", timeout: NAV_TIMEOUT_MS });

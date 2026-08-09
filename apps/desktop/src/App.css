@@ -4648,8 +4648,8 @@ body {
   align-items: center;
   gap: var(--sp-4);
   padding: 0 var(--sp-3);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  border-bottom: 0.5px solid var(--border);
+  background: var(--chrome-veil);
+  border-bottom: 0.5px solid var(--border-subtle);
   -webkit-app-region: drag;
   backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
   -webkit-backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
@@ -4959,8 +4959,16 @@ body {
   align-items: center;
   gap: 2px;
   padding: 10px 0;
-  background: var(--panel-3);
-  border-right: 0.5px solid var(--border);
+  /* Veil, not panel (DESIGN_SYSTEM.md section 1.8). This was an opaque
+     --panel-3 column with a hard right edge, which is what a docked sidebar
+     looks like. The canvas is the substrate, so the rail sits ON it: the
+     translucency is the signal that it is above the drawing rather than
+     beside it, and it makes its own edge, so the border goes. No shadow
+     either, deliberately, because persistent chrome does not float away. */
+  background: var(--chrome-veil);
+  backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
+  -webkit-backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
+  z-index: var(--z-chrome);
 }
 
 .rail-btn {
@@ -9001,8 +9009,8 @@ button.bottom-panel-head:focus-visible {
   gap: var(--sp-3);
   padding: 0 var(--sp-3);
   overflow: hidden;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
-  border-top: 0.5px solid var(--border);
+  background: var(--chrome-veil);
+  border-top: 0.5px solid var(--border-subtle);
   color: var(--muted);
   font: 500 var(--fs-caption) var(--font-ui);
   letter-spacing: -0.01em;

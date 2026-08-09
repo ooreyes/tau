@@ -53,28 +53,27 @@ export function StatusBar({
         <span className="status-lamp-text mono-num">{state}</span>
       </span>
       <span className="status-file mono-num">{title}</span>
+      {/*
+        * One contextual hint, not a wall of keycaps.
+        *
+        * This used to end with twenty `kbd` chips listing every placement key,
+        * wire, label, rotate, mirror, duplicate, delete and cancel, on screen
+        * permanently. It is the antipattern the design language exists to
+        * prevent: ink that carries no information after the first read. An
+        * expert has long since learned it, and a student cannot parse a
+        * twenty-item legend anyway, so it was costing every user a strip of
+        * the window to help nobody.
+        *
+        * Nothing is lost. Every one of those keys is still discoverable in
+        * three places that are better at it: the command palette lists each
+        * command beside its own hotkey, the parts palette shows each part's
+        * key on its row, and Settings has a Keyboard shortcuts page that
+        * derives the list from the real bindings rather than restating them.
+        * What stays here is the one line that changes as you work, which is
+        * the only part that was ever worth a permanent slot.
+        */}
       <span className="status-hints">
-        {mode === "simulator" ? (
-          <>
-            <span>{simulatorHint}</span>
-            <span className="dot">·</span>
-            <kbd>⌘</kbd>+scroll zoom · two-finger pan
-          </>
-        ) : (
-          <>
-            <span>{toolLabel}</span>
-            <span className="dot">·</span>
-            <kbd>R</kbd><kbd>C</kbd><kbd>L</kbd><kbd>V</kbd><kbd>I</kbd><kbd>A</kbd><kbd>G</kbd> place
-            <span className="dot">·</span><kbd>W</kbd> wire
-            <span className="dot">·</span><kbd>F4</kbd> label
-            <span className="dot">·</span><kbd>Space</kbd> rotate
-            <span className="dot">·</span><kbd>⌘</kbd>+<kbd>E</kbd> mirror
-            <span className="dot">·</span><kbd>⌘</kbd>+<kbd>D</kbd> duplicate
-            <span className="dot">·</span><kbd>⌫</kbd> delete
-            <span className="dot">·</span><kbd>Esc</kbd> cancel
-            <span className="dot">·</span><kbd>⌘</kbd>+scroll zoom · two-finger pan
-          </>
-        )}
+        <span>{mode === "simulator" ? simulatorHint : toolLabel}</span>
       </span>
     </footer>
   );
