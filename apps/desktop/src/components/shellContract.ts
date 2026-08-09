@@ -65,6 +65,16 @@ export const SHELL = {
   minimizedPanels: { role: "region", name: "Minimized panels" },
   /** Interactive-circuit controls, shown only when the schematic has any. */
   liveControls: { role: "group", name: "Live controls" },
+  /**
+   * The command palette, which is already titled "Add component" and is
+   * already a summoned overlay that places parts.
+   *
+   * Recorded here rather than under PLANNED because the redesign's "floating
+   * parts palette" turns out to be mostly this, not a new surface. Stage 5 is
+   * therefore smaller than planned: it moves the Library half of the
+   * components rail into a surface that exists, instead of building one.
+   */
+  commandPalette: { role: "dialog", name: "Add component" },
   /** First-success coach. */
   learningPath: { role: "complementary", name: "Learning path" },
 } as const satisfies Record<string, ShellSurface>;
@@ -79,8 +89,6 @@ export const SHELL = {
  * tells a screen-reader user nothing about which part they are editing.
  */
 export const PLANNED = {
-  /** Summoned parts palette, replacing the Library half of `componentsRail`. */
-  partsPalette: { role: "dialog", name: "Add component" },
   /** Bottom drawer, replacing BottomPanel, TelemetryDock and the panel chrome. */
   resultsDrawer: { role: "complementary", name: "Waveforms" },
 } as const satisfies Record<string, ShellSurface>;

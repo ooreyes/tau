@@ -1,6 +1,7 @@
 # Tau canvas-first redesign
 
-> **Status:** prerequisites in progress. No shell change has landed yet.
+> **Status:** prerequisites P0-P3 complete. No shell change has landed yet.
+> Baseline captured as `screenshots/redesign-baseline/`. Stage 0 is next.
 > **Normative sources, in order:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), then
 > `.claude/skills/tau-instrument-aesthetic/` and its five reference plates.
 > Where this file and `DESIGN_SYSTEM.md` disagree, `DESIGN_SYSTEM.md` wins and
@@ -237,15 +238,34 @@ Observable, with thresholds. Any one of these pauses the work.
   mechanical signal is "did the suite stay green", and a flaky suite makes the
   reviewer unable to tell a broken unit from a timeout.
 - **P1. This file.** Done.
-- **P2. `shellContract.ts` and `App.shellContract.test.tsx`,** plus re-pointing
-  the 35 coupled assertions while the shell is still the old one, so the rewrite
-  is provably behaviour-preserving.
-- **P3. Re-point `design-shot.mjs`** at roles and contract names before anything
-  moves, or every later stage produces no evidence. Amend the drift gate's
-  hardcoded primitive-to-file checks and its token-zone `awk`. Each amendment
-  lands as its own commit and must be **green on the unmodified tree**; an
-  amendment that only goes green after the change it was blocking is a weakened
-  gate, and there is no way to tell after the fact.
+- **P2. `shellContract.ts` and `App.shellContract.test.tsx`.** Done.
+- **P3. Gates and evidence.** Done. Drift-gate primitive checks are now
+  file-agnostic, the token zone is an explicit marker, `palette.test.ts`
+  validates all four theme blocks, and `design-shot.mjs` drives the app through
+  role locators taken from the contract. `redesign-baseline` is captured: 48
+  PNGs, 8 states, both themes, three viewports. Never overwrite it.
+
+### What the prerequisites changed about the plan
+
+- **The parts palette already exists.** `CommandPalette.tsx` is titled "Add
+  component" and is already a summoned overlay that places parts. Stage 5 is
+  therefore smaller than planned: it moves the Library half of the components
+  rail into a surface that exists, rather than building one.
+- **The screenshot pipeline was already broken.** Two of its selectors
+  (`.settings-panel[role="dialog"]`, `.cmdk[role="dialog"]`) were dead against
+  the current DOM and the script hung on them, and three waits swallowed their
+  own failures. Had the redesign started without P3, the first stage would have
+  produced either nothing or the wrong screen.
+- **Settings does not fully aria-hide the shell.** The canvas, rail, explorer
+  and components rail all leave the accessibility tree behind the modal; the
+  assistant column does not, and its ancestor chain is entirely unhidden. The
+  mechanism is unexplained. `App.shellContract.test.tsx` pins the behaviour as
+  it is, with a note, rather than blessing it. **Stage 3 owns resolving this**
+  and flipping that assertion to `false`.
+- **The baseline confirms the two claims this redesign rests on.** At 900x600
+  the schematic gets roughly a 300x290 box while chrome takes the rest, and the
+  plot's own text renders far larger than the 11px chrome around it, because
+  the `viewBox` is stretched. A toast also covers the trace legend at the floor.
 
 **`TRACE_COLORS` is frozen for the whole migration.** Any unit whose diff
 touches `TRACE_COLORS` or a `--trace-` line is rejected on sight.

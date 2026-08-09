@@ -85,12 +85,14 @@ const SHELL = {
   componentsRail: { role: "complementary", name: "Components" },
   settings: { role: "dialog", name: "Settings" },
   circuitOverview: { role: "region", name: "Circuit overview" },
+  commandPalette: { role: "dialog", name: "Add component" },
 };
-// shellContract.ts's PLANNED.partsPalette - filed there as a future surface,
-// but CommandPalette.tsx already implements it today (title="Add component"
-// passed through ui/command's CommandDialog to a ui/Dialog, so the live
-// role="dialog" element already carries this exact accessible name).
-const PARTS_PALETTE = { role: "dialog", name: "Add component" };
+// shellContract.ts's SHELL.commandPalette. It was briefly filed as a planned
+// surface until this script's rewrite showed CommandPalette.tsx already
+// implements it (title="Add component" passed through ui/command's
+// CommandDialog to a ui/Dialog, so the live role="dialog" element already
+// carries exactly this accessible name).
+const PARTS_PALETTE = SHELL.commandPalette;
 const SHELL_CONTROLS = {
   railSearch: "Search",
   railComponents: "Components",
