@@ -132,7 +132,10 @@ describe("WaveformPlot (TRAN) - real tick axes", () => {
     const frame = container.querySelector(".scope-frame");
     const titles = container.querySelectorAll(".scope-axis-title");
     expect(frame?.getAttribute("x")).toBe("46");
-    expect(titles[0]?.getAttribute("y")).toBe("184");
+    // `height - 6`, where height is the pane's real pixel height (PLOT_HEIGHT,
+    // 260). Was 184 when the pane was 190 viewBox units tall and the browser
+    // stretched the whole drawing to fit its box.
+    expect(titles[0]?.getAttribute("y")).toBe("254");
     expect(titles[1]?.getAttribute("x")).toBe("5");
     const yTick = container.querySelector<SVGTextElement>('.scope-tick[text-anchor="end"]');
     expect(Number(yTick?.getAttribute("x")) - Number(titles[1]?.getAttribute("x"))).toBeGreaterThanOrEqual(30);

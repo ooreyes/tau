@@ -1925,8 +1925,11 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
 
   it("reads a value off the line on hover, in pan mode, per pane", () => {
     const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
-      // Matches the 340x190 viewBox so svg units map 1:1 to client pixels.
-      left: 0, top: 0, width: 340, height: 190, right: 340, bottom: 190, x: 0, y: 0, toJSON: () => ({}),
+      // Matches the pane's own 340x260 viewBox so svg units map 1:1 to client
+      // pixels. The pane is 260 tall because PLOT_HEIGHT is now a real pixel
+      // height rather than a viewBox unit that got stretched (see the geometry
+      // note at the top of SimulationPanel.tsx).
+      left: 0, top: 0, width: 340, height: 260, right: 340, bottom: 260, x: 0, y: 0, toJSON: () => ({}),
     } as DOMRect);
     try {
       renderTwoTracePanel();
@@ -1937,18 +1940,18 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
 
       // x = 170 is the middle of a 340-wide plot padded by 30, i.e. t = 1 s,
       // where the 0 -> 4 ramp is worth 2 V. No cursor was armed first.
-      fireEvent.pointerMove(surfaces[0], { clientX: 170, clientY: 95 });
+      fireEvent.pointerMove(surfaces[0], { clientX: 170, clientY: 130 });
       const chip = document.querySelector(".scope-hover text");
       expect(chip?.textContent).toContain(formatEngineering(2, "V", 3));
       expect(chip?.textContent).toContain(formatEngineering(1, "s", 3));
       // The readout dot sits on the interpolated point, not on a sample.
-      expect(document.querySelector(".scope-hover-point")?.getAttribute("cy")).toBe("95");
+      expect(document.querySelector(".scope-hover-point")?.getAttribute("cy")).toBe("130");
 
       fireEvent.pointerLeave(surfaces[0]);
       expect(document.querySelector(".scope-hover")).toBeNull();
 
       // The flat 5 V trace's own pane reads 5 V at the same x.
-      fireEvent.pointerMove(surfaces[1], { clientX: 170, clientY: 95 });
+      fireEvent.pointerMove(surfaces[1], { clientX: 170, clientY: 130 });
       expect(document.querySelector(".scope-hover text")?.textContent)
         .toContain(formatEngineering(5, "V", 3));
     } finally {
@@ -1967,7 +1970,7 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
 
   it("names the nearest trace when several share one pane", () => {
     const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
-      left: 0, top: 0, width: 340, height: 190, right: 340, bottom: 190, x: 0, y: 0, toJSON: () => ({}),
+      left: 0, top: 0, width: 340, height: 260, right: 340, bottom: 260, x: 0, y: 0, toJSON: () => ({}),
     } as DOMRect);
     try {
       const result = twoTraceResult();
@@ -1982,7 +1985,7 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
       );
       expect(document.querySelectorAll(".scope-hover-surface")).toHaveLength(1);
       // Point near the flat 5 V rail (top of the padded 0..5 domain) so V(in) wins.
-      fireEvent.pointerMove(document.querySelector(".scope-hover-surface")!, { clientX: 170, clientY: 40 });
+      fireEvent.pointerMove(document.querySelector(".scope-hover-surface")!, { clientX: 170, clientY: 55 });
       const chip = document.querySelector(".scope-hover text")?.textContent ?? "";
       expect(chip).toContain("V(in)");
       expect(chip).toContain(formatEngineering(5, "V", 3));

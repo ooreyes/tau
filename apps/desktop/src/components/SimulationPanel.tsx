@@ -167,7 +167,7 @@ import {
   toggleCardWidth,
 } from "./cardLayout";
 import { PlotAxes, ScopeClip } from "./PlotAxes";
-import { useMeasuredSize, tickCountsFromSize } from "./useMeasuredSize";
+import { useMeasuredSize, tickCountsFromSize, type MeasuredSize } from "./useMeasuredSize";
 import { usePlotViewport } from "./usePlotViewport";
 import { ScopeZoomCluster } from "./ScopeZoomCluster";
 import type { Viewport } from "../simulation/plotViewport";
@@ -260,8 +260,41 @@ interface SimulationPanelProps {
   liveSchematicPlayback?: boolean;
 }
 
-const PLOT_WIDTH = 340;
-const PLOT_HEIGHT = 210;
+/**
+ * The scope's coordinate system is 1:1 with rendered CSS pixels.
+ *
+ * It was not. Every `<svg>` here declared `viewBox="0 0 340 <h>"` and was then
+ * stretched to whatever width the panel gave it, so the browser applied one
+ * uniform scale to the whole drawing. In the 1052px-wide plotter that is 3.1x:
+ * an 11px tick label rendered at 34px, the 46-unit axis gutter ate 143px a
+ * side, and a 1.5-unit trace drew as a 4.7px slab. The plot's own text was the
+ * largest type in the product, sitting inside a window whose chrome is 11px.
+ *
+ * The fix is not to shrink the type, it is to stop scaling it: each pane
+ * measures its own `<svg>` (they all already did, for tick-count thinning) and
+ * uses that width as the viewBox width, so one user unit is one device pixel.
+ * `PLOT_PAD`, the font sizes in `App.css`, and `PlotAxes`'s "7.2px per glyph"
+ * label-collision estimate then all mean what they say. That estimate is the
+ * tell that 1:1 was the original intent and the stretch was the accident.
+ *
+ * `PLOT_WIDTH_FALLBACK` covers the case where there is no measurement: jsdom
+ * has no layout, so `ResizeObserver` and `getBoundingClientRect` both report
+ * zero there, and a viewBox of width 0 is a degenerate plot that still renders
+ * rather than throwing. Falling back to the historical 340 keeps that case
+ * behaving exactly as it did before, which is what the existing tests pin.
+ */
+const PLOT_WIDTH_FALLBACK = 340;
+
+/** viewBox width for a pane, in CSS pixels once its `<svg>` has been measured. */
+function scopeWidth(size: MeasuredSize): number {
+  return size.width > 0 ? Math.round(size.width) : PLOT_WIDTH_FALLBACK;
+}
+
+// Fixed pane height, in real pixels now that the viewBox is 1:1. Previously
+// 210 units stretched to ~650px in a wide panel; 260 real pixels leaves 168px
+// of trace area inside the gutters, which is a readable scope face without
+// giving one plot the whole drawer. Card-sized panes use PLOT_HEIGHT_PX.
+const PLOT_HEIGHT = 260;
 // Labels and axis titles need separate visual bands; the shared plot box stays
 // at 46px so the waveform retains useful vertical range. PlotAxes places the
 // vertical title and Y tick anchors at opposite sides of this gutter.
@@ -2634,7 +2667,7 @@ function TranScopePane({
   sharedX,
   onSharedXChange,
   showStatistics,
-  plotHeight = 190,
+  plotHeight = PLOT_HEIGHT,
   cursors,
   activeTrace,
   cursorTool,
@@ -2657,8 +2690,8 @@ function TranScopePane({
   onSharedXChange: (x: { xMin: number; xMax: number }) => void;
   /** MIN/AVG/MAX overlay on this pane, when it carries exactly one trace. */
   showStatistics: boolean;
-  /** Dashboard card height (S/M/L → 160/190/260, see cardLayout.ts). Defaults
-   *  to the old fixed 190 for any caller that doesn't specify one. */
+  /** Dashboard card height in real pixels (S/M/L, see cardLayout.ts).
+   *  Defaults to the same height every other pane uses. */
   plotHeight?: number;
   cursors?: { x1: number; x2: number | null } | null;
   activeTrace?: Trace | null;
@@ -2674,6 +2707,9 @@ function TranScopePane({
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  // Shadows the module-level fallback deliberately: this pane's viewBox width
+  // is its own rendered width, so every constant below is in real pixels.
+  const PLOT_WIDTH = scopeWidth(size);
   // Placeholder domain for a pane with no traces yet (e.g. just added via
   // "move to pane", data not resolved this tick) - 0..1 is arbitrary and must
   // never be shared: `onXViewportChange` below is only wired up when `plot`
@@ -2731,7 +2767,7 @@ function TranScopePane({
       const y = yRangeForTrace(trace);
       return {
         trace,
-        path: tracePath(trace, times, viewport.xMin, viewport.xMax, y.min, y.max, plotHeight),
+        path: tracePath(trace, times, viewport.xMin, viewport.xMax, y.min, y.max, { width: PLOT_WIDTH, height: plotHeight }),
       };
     }),
     [paneTraces, times, viewport.xMin, viewport.xMax, yRangeForTrace, plotHeight],
@@ -2831,7 +2867,7 @@ function TranScopePane({
         ref={setRefs}
         className={isPanning ? "scope-svg panning" : "scope-svg"}
         viewBox={`0 0 ${PLOT_WIDTH} ${plotHeight}`}
-        style={{ aspectRatio: `${PLOT_WIDTH} / ${plotHeight}` }}
+        style={{ height: plotHeight }}
         role={selectedPaneTrace && cursorTool?.activeCursor ? "group" : "img"}
         aria-label={ariaLabel}
         {...dragHandlers}
@@ -2876,6 +2912,7 @@ function TranScopePane({
                 trace={paneTraces[0]}
                 times={times}
                 viewport={viewport}
+                width={PLOT_WIDTH}
                 height={plotHeight}
               />
             )}
@@ -3031,11 +3068,15 @@ function ScopeStatisticsOverlay({
   trace,
   times,
   viewport,
+  width: PLOT_WIDTH,
   height,
 }: {
   trace: Trace;
   times: number[];
   viewport: Viewport;
+  /** Pane width in pixels. Destructured to `PLOT_WIDTH` so the geometry below
+   *  reads the same as it does in every pane that computes its own. */
+  width: number;
   height: number;
 }) {
   const statistics = useMemo(() => traceStatistics(times, trace.values), [times, trace.values]);
@@ -3087,12 +3128,20 @@ function tracePath(
   xMax: number,
   min: number,
   max: number,
-  height = PLOT_HEIGHT,
+  /**
+   * Named rather than positional, and required rather than defaulted, because
+   * two adjacent `number` parameters called `width` and `height` are a bug
+   * that typechecks. Adding `width` in front of an optional `height` silently
+   * turned `tracePath(..., plotHeight)` into a 260px-wide trace inside a
+   * 1052px plot: the curve rendered, it just stopped a fifth of the way
+   * across. Caught by SimulationPanel.geometry.test.tsx, not by tsc.
+   */
+  { width, height }: { width: number; height: number },
 ): string {
   const xSpan = xMax - xMin || 1;
   let path = "";
   let started = false;
-  const innerWidth = PLOT_WIDTH - PLOT_PAD * 2;
+  const innerWidth = width - PLOT_PAD * 2;
   const traceWidth = Math.max(0, innerWidth - TRACE_EDGE_GUTTER * 2);
   for (const index of waveformEnvelopeIndices(times, trace.values, xMin, xMax, innerWidth)) {
     const value = trace.values[index];
@@ -3228,6 +3277,9 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  // Shadows the module-level fallback deliberately: this pane's viewBox width
+  // is its own rendered width, so every constant below is in real pixels.
+  const PLOT_WIDTH = scopeWidth(size);
   const [exprList, setExprList] = useState<string[]>([]);
   const [exprInput, setExprInput] = useState("");
   const [exprError, setExprError] = useState<string | null>(null);
@@ -3392,7 +3444,7 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
         yScale,
       }
     : null;
-  const path = pathArgs ? noisePath(result.onoise, result.freqs, pathArgs) : "";
+  const path = pathArgs ? noisePath(result.onoise, result.freqs, pathArgs, PLOT_WIDTH) : "";
   const baseSources = [
     { id: "onoise", label: "V(onoise)", color: "var(--trace-red)" },
     { id: "inoise", label: "V(inoise)", color: "var(--trace-cyan)" },
@@ -3435,6 +3487,7 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
             ref={setRefs}
             className={isPanning ? "scope-svg panning" : "scope-svg"}
             viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+            style={{ height: PLOT_HEIGHT }}
             role="img"
             aria-label="Output noise density"
             {...dragHandlers}
@@ -3458,7 +3511,7 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
               <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
                 {path && <path className="scope-trace" stroke="var(--trace-red)" d={path} />}
                 {overlays.map((t, i) => {
-                  const d = noisePath(t.values, result.freqs, pathArgs);
+                  const d = noisePath(t.values, result.freqs, pathArgs, PLOT_WIDTH);
                   return d ? (
                     <path
                       key={t.id}
@@ -3623,6 +3676,7 @@ function noisePath(
   values: number[],
   freqs: number[],
   plot: { yMin: number; yMax: number; f0: number; f1: number; yScale: AxisScale },
+  width: number,
 ): string {
   const span = plot.yMax - plot.yMin || 1;
   const fSpan = plot.f1 - plot.f0 || 1;
@@ -3639,7 +3693,7 @@ function noisePath(
       continue;
     }
     const lx = (Math.log10(frequency) - plot.f0) / fSpan;
-    const x = PLOT_PAD + lx * (PLOT_WIDTH - PLOT_PAD * 2);
+    const x = PLOT_PAD + lx * (width - PLOT_PAD * 2);
     const rawY = plot.yScale === "log" ? Math.log10(v) : v;
     const ly = Math.max(plot.yMin, Math.min(plot.yMax, rawY));
     const y = PLOT_HEIGHT - PLOT_PAD - ((ly - plot.yMin) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
@@ -3689,6 +3743,9 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  // Shadows the module-level fallback deliberately: this pane's viewBox width
+  // is its own rendered width, so every constant below is in real pixels.
+  const PLOT_WIDTH = scopeWidth(size);
 
   const success = result?.ok ? result : null;
   const signals = useMemo(() => {
@@ -3898,6 +3955,7 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
                 ref={setRefs}
                 className={isPanning ? "scope-svg panning" : "scope-svg"}
                 viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+                style={{ height: PLOT_HEIGHT }}
                 role="img"
                 aria-label="FFT magnitude"
                 {...dragHandlers}
@@ -3929,7 +3987,7 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
                         xMin: viewport.xMin,
                         xMax: viewport.xMax,
                         xScale: "log",
-                      })}
+                      }, PLOT_WIDTH)}
                     />
                   </ScopeClip>
                 )}
@@ -4346,6 +4404,11 @@ export function AcPlot({
   const detachedPhaseClipId = useId();
   const [detachedPhaseMeasureRef, detachedPhaseSize] = useMeasuredSize<SVGSVGElement>();
   const detachedPhaseTicks = tickCountsFromSize(detachedPhaseSize);
+  // One width for both phase panes, because only one of them is mounted at a
+  // time: the lower pane lives under the magnitude plot until it is popped out
+  // into its own window, and the two never render together. Whichever is up
+  // has a measurement; the other reports zero and must not win.
+  const PLOT_WIDTH = scopeWidth(phaseSize.width > 0 ? phaseSize : detachedPhaseSize);
   const traces = useMemo(
     () => (success ? success.traces.slice(0, 4) : []),
     [success],
@@ -4598,6 +4661,7 @@ export function AcPlot({
             ref={setPhaseRefs}
             className={phaseVp.isPanning ? "scope-svg panning" : "scope-svg"}
             viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+            style={{ height: PLOT_HEIGHT }}
             role="img"
             aria-label={lowerMode === "groupDelay" ? "Bode group delay" : "Bode phase"}
             {...phaseVp.dragHandlers}
@@ -4630,7 +4694,7 @@ export function AcPlot({
                           xMin: phaseVp.viewport.xMin,
                           xMax: phaseVp.viewport.xMax,
                           xScale: freqScale,
-                        })}
+                        }, PLOT_WIDTH)}
                       />
                     ))
                   : traces.map((t, i) => (
@@ -4644,7 +4708,7 @@ export function AcPlot({
                           xMin: phaseVp.viewport.xMin,
                           xMax: phaseVp.viewport.xMax,
                           xScale: freqScale,
-                        })}
+                        }, PLOT_WIDTH)}
                       />
                     ))}
               </ScopeClip>
@@ -4993,6 +5057,7 @@ export function AcPlot({
                 ref={setDetachedPhaseRefs}
                 className={detachedPhaseVp.isPanning ? "scope-svg panning" : "scope-svg"}
                 viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+                style={{ height: PLOT_HEIGHT }}
                 role="img"
                 aria-label={
                   lowerMode === "groupDelay"
@@ -5034,7 +5099,7 @@ export function AcPlot({
                               xMin: detachedPhaseVp.viewport.xMin,
                               xMax: detachedPhaseVp.viewport.xMax,
                               xScale: freqScale,
-                            })}
+                            }, PLOT_WIDTH)}
                           />
                         ))
                       : traces.map((t, i) => (
@@ -5048,7 +5113,7 @@ export function AcPlot({
                               xMin: detachedPhaseVp.viewport.xMin,
                               xMax: detachedPhaseVp.viewport.xMax,
                               xScale: freqScale,
-                            })}
+                            }, PLOT_WIDTH)}
                           />
                         ))}
                   </ScopeClip>
@@ -5126,6 +5191,9 @@ function AcMagScopePane({
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  // Shadows the module-level fallback deliberately: this pane's viewBox width
+  // is its own rendered width, so every constant below is in real pixels.
+  const PLOT_WIDTH = scopeWidth(size);
 
   const magY = useMemo(
     () => bodeMagYDomain(traces.map((t) => t.magDb), magYScale),
@@ -5189,6 +5257,7 @@ function AcMagScopePane({
           ref={setRefs}
           className={isPanning ? "scope-svg panning" : "scope-svg"}
           viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+          style={{ height: PLOT_HEIGHT }}
           role="img"
           aria-label={ariaLabel}
           {...dragHandlers}
@@ -5224,7 +5293,7 @@ function AcMagScopePane({
                       xMin: viewport.xMin,
                       xMax: viewport.xMax,
                       xScale: freqScale,
-                    })}
+                    }, PLOT_WIDTH)}
                   />
                 );
               })}
@@ -5304,6 +5373,7 @@ function bodePath(
   magDb: number[],
   freqs: number[],
   plot: { minDb: number; maxDb: number; xMin: number; xMax: number; xScale?: AxisScale },
+  width: number,
 ): string {
   return bodeValuePath(magDb, freqs, {
     min: plot.minDb,
@@ -5311,7 +5381,7 @@ function bodePath(
     xMin: plot.xMin,
     xMax: plot.xMax,
     xScale: plot.xScale,
-  });
+  }, width);
 }
 
 // Generic "value vs. frequency" trace path shared by Bode magnitude (dB) and
@@ -5321,6 +5391,7 @@ function bodeValuePath(
   values: number[],
   freqs: number[],
   plot: { min: number; max: number; xMin: number; xMax: number; xScale?: AxisScale },
+  width: number,
 ): string {
   const span = plot.max - plot.min || 1;
   const xScale = plot.xScale ?? "log";
@@ -5333,7 +5404,7 @@ function bodeValuePath(
     if (!Number.isFinite(v) || !Number.isFinite(frequency) || frequency <= 0) continue;
     const lx = freqToFraction(frequency, plot.xMin, plot.xMax, xScale);
     if (lx === null) continue;
-    const x = PLOT_PAD + lx * (PLOT_WIDTH - PLOT_PAD * 2);
+    const x = PLOT_PAD + lx * (width - PLOT_PAD * 2);
     const yv = Math.max(plot.min, Math.min(plot.max, v));
     const y = PLOT_HEIGHT - PLOT_PAD - ((yv - plot.min) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
     path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
@@ -5507,6 +5578,9 @@ function DcScopePane({
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  // Shadows the module-level fallback deliberately: this pane's viewBox width
+  // is its own rendered width, so every constant below is in real pixels.
+  const PLOT_WIDTH = scopeWidth(size);
 
   const plot = useMemo(() => {
     if (nets.length === 0 || sweep.length === 0) return null;
@@ -5585,6 +5659,7 @@ function DcScopePane({
           ref={setRefs}
           className={isPanning ? "scope-svg panning" : "scope-svg"}
           viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+          style={{ height: PLOT_HEIGHT }}
           role="img"
           aria-label={ariaLabel}
           {...dragHandlers}
@@ -5609,7 +5684,7 @@ function DcScopePane({
                   key={net.id}
                   className="scope-trace"
                   stroke={colorForNet(net)}
-                  d={dcPath(net.voltages, sweep, viewPlot)}
+                  d={dcPath(net.voltages, sweep, viewPlot, PLOT_WIDTH)}
                 />
               ))}
             </ScopeClip>
@@ -5619,6 +5694,7 @@ function DcScopePane({
               trace={soloTrace}
               times={sweep}
               viewport={viewport}
+              width={PLOT_WIDTH}
               height={PLOT_HEIGHT}
             />
           )}
@@ -5685,6 +5761,7 @@ function dcPath(
   voltages: number[],
   sweep: number[],
   plot: { vMin: number; vMax: number; xMin: number; xMax: number },
+  width: number,
 ): string {
   const vSpan = plot.vMax - plot.vMin || 1;
   const xSpan = plot.xMax - plot.xMin || 1;
@@ -5695,7 +5772,7 @@ function dcPath(
     const v = voltages[index];
     const sx = sweep[index];
     if (!Number.isFinite(v) || !Number.isFinite(sx)) continue;
-    const x = PLOT_PAD + ((sx - plot.xMin) / xSpan) * (PLOT_WIDTH - PLOT_PAD * 2);
+    const x = PLOT_PAD + ((sx - plot.xMin) / xSpan) * (width - PLOT_PAD * 2);
     const yv = Math.max(plot.vMin, Math.min(plot.vMax, v));
     const y = PLOT_HEIGHT - PLOT_PAD - ((yv - plot.vMin) / vSpan) * (PLOT_HEIGHT - PLOT_PAD * 2);
     path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
@@ -5722,6 +5799,8 @@ const STEP_COLORS = [
  */
 export function StepPlot({ result, probes, wires }: { result: StepFamilyResult | null; probes: Probe[]; wires: SchematicWire[] }) {
   const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  // See scopeWidth: the viewBox is this pane's own pixel width, not 340.
+  const PLOT_WIDTH = scopeWidth(size);
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const [exprInput, setExprInput] = useState("");
   const [exprList, setExprList] = useState<string[]>([]);
@@ -6002,7 +6081,7 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
         </div>
       )}
       <div className="scope-shell">
-        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Step family plot">
+        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} style={{ height: PLOT_HEIGHT }} role="img" aria-label="Step family plot">
           <PlotAxes
             width={PLOT_WIDTH}
             height={PLOT_HEIGHT}
@@ -6024,7 +6103,7 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
                 key={s.label}
                 className="scope-trace"
                 stroke={STEP_COLORS[i % STEP_COLORS.length]}
-                d={tracePath(s.trace, s.times, 0, visibleFrame.tMax, yDomain.yMin, yDomain.yMax)}
+                d={tracePath(s.trace, s.times, 0, visibleFrame.tMax, yDomain.yMin, yDomain.yMax, { width: PLOT_WIDTH, height: PLOT_HEIGHT })}
               />
             );
           })}
@@ -6235,6 +6314,8 @@ function pickFamilyTraceId(
  */
 export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | null }) {
   const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  // See scopeWidth: the viewBox is this pane's own pixel width, not 340.
+  const PLOT_WIDTH = scopeWidth(size);
   const [activeExpr, setActiveExpr] = useState<string | null>(null);
   const [exprError, setExprError] = useState<string | null>(null);
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
@@ -6412,7 +6493,7 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
   return (
     <>
       <div className="scope-shell">
-        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="AC step family plot">
+        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} style={{ height: PLOT_HEIGHT }} role="img" aria-label="AC step family plot">
           <PlotAxes
             width={PLOT_WIDTH}
             height={PLOT_HEIGHT}
@@ -6434,7 +6515,7 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
                 key={s.label}
                 className="scope-trace"
                 stroke={STEP_COLORS[i % STEP_COLORS.length]}
-                d={bodeValuePath(s.magDb, s.freqs, framedPlot)}
+                d={bodeValuePath(s.magDb, s.freqs, framedPlot, PLOT_WIDTH)}
               />
             );
           })}
@@ -6605,6 +6686,8 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
  */
 export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult> | null }) {
   const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  // See scopeWidth: the viewBox is this pane's own pixel width, not 340.
+  const PLOT_WIDTH = scopeWidth(size);
   const [activeExpr, setActiveExpr] = useState<string | null>(null);
   const [exprError, setExprError] = useState<string | null>(null);
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
@@ -6776,7 +6859,7 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
   return (
     <>
       <div className="scope-shell">
-        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="DC step family plot">
+        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} style={{ height: PLOT_HEIGHT }} role="img" aria-label="DC step family plot">
           <PlotAxes
             width={PLOT_WIDTH}
             height={PLOT_HEIGHT}
@@ -6796,7 +6879,7 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
                 key={s.label}
                 className="scope-trace"
                 stroke={STEP_COLORS[i % STEP_COLORS.length]}
-                d={dcPath(s.voltages, s.sweep, framedPlot)}
+                d={dcPath(s.voltages, s.sweep, framedPlot, PLOT_WIDTH)}
               />
             );
           })}

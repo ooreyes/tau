@@ -1603,7 +1603,9 @@ body {
 }
 
 .scope-empty-state {
-  min-height: 210px;
+  /* Same 260px as a real plot pane (PLOT_HEIGHT), so the panel does not jump
+     when the first run replaces this placeholder with a scope. */
+  min-height: 260px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1634,14 +1636,11 @@ body {
 
 .scope-svg {
   width: 100%;
-  /* Matches the viewBox, which is 340 x 210 (PLOT_HEIGHT in
-     SimulationPanel.tsx), not 340 x 190. With the default
-     preserveAspectRatio="xMidYMid meet", a 210-tall viewBox fitted into a
-     190-tall box renders at 190/210 = 90.5% and centres itself, so every plot
-     was silently 9.5% small with a dead margin down each side. One pane
-     (TranScopePane) already set the correct ratio inline, which is why they
-     did not all look the same. */
-  aspect-ratio: 340 / 210;
+  /* No aspect-ratio, deliberately. The height is set inline, in real pixels,
+     because the viewBox is now 1:1 with the rendered box (see the geometry
+     note at the top of SimulationPanel.tsx). An aspect-ratio here would tie
+     the height to the width and re-introduce the uniform stretch that made
+     an 11px tick label render at 34px in a wide panel. */
   display: block;
   /* The scope face is the "oscilloscope screen" - flat instrument black, one
      notch lighter than the schematic canvas so the two stay distinguishable

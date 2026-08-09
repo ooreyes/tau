@@ -10,8 +10,19 @@ export type CardWidth = "half" | "full";
 export type CardHeight = "S" | "M" | "L";
 export type CardKind = "plot" | "table";
 
-/** viewBox height in px for each plot card size - threaded into TranScopePane. */
-export const PLOT_HEIGHT_PX: Record<CardHeight, number> = { S: 160, M: 190, L: 260 };
+/**
+ * Rendered height in CSS pixels for each plot card size, threaded into
+ * TranScopePane as both its viewBox height and its box height.
+ *
+ * These are real pixels now. They used to be viewBox units against a fixed
+ * 340-unit width, so the pane's actual height was whatever the uniform stretch
+ * made it - "M" was 190 units, which came out around 290px in the panel and
+ * would have grown with every pixel of extra drawer width. Sized up to match
+ * roughly what the stretch used to produce, so a card keeps the presence it
+ * had, and so the 46px axis gutters still leave a usable trace band: S gives
+ * 108px of trace, M gives 168px, L gives 268px.
+ */
+export const PLOT_HEIGHT_PX: Record<CardHeight, number> = { S: 200, M: 260, L: 360 };
 
 export interface CardSpec {
   /** Stable id - `plot:<traceId>` for plot cards (never the pane's own id,
