@@ -158,6 +158,7 @@ import {
 import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRun";
 import { technicalErrorDetails, userFacingErrorMessage } from "./lib/errorMessage";
 import { useSimulationPreferences } from "./lib/simulationPreferences";
+import { SHELL } from "./components/shellContract";
 
 // The temporary browser workspace exists only inside the project store; fsBridge
 // helpers reach Tauri plugin-fs for anything that is not `web://`, which throws
@@ -2384,7 +2385,12 @@ function App() {
             onNewCircuit={startNewCircuit}
             onHideSimulator={() => setMode("schematic")}
           />
-          <main className="stage">
+          {/* Named, unlike the empty-state stage above it, because this is the
+              one a keyboard or screen-reader user needs to be able to reach and
+              return to. The redesign makes the canvas the whole window and
+              gives Escape a "return focus here" job, which needs a landmark to
+              return to. See shellContract.ts. */}
+          <main className="stage" aria-label={SHELL.canvas.name}>
             <Canvas
               op={opAnalysis}
               tran={analysis}
