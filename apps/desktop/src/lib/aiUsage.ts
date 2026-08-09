@@ -100,6 +100,7 @@ export const aiUsage = createPreferenceStore<AiUsage>({
   key: "tau.ai.usage.v1",
   defaults: emptyUsage(),
   validate: validUsage,
+  makeDefaults: emptyUsage,
 });
 
 export const loadAiUsage = aiUsage.load;

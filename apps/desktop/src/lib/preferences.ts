@@ -53,16 +53,27 @@ export function createPreferenceStore<T extends object>({
   key,
   defaults,
   validate,
+  makeDefaults,
 }: {
   key: string;
   defaults: T;
   /** Returns a fully-populated value, or `null` when the stored blob is unusable. */
   validate: (raw: unknown) => T | null;
+  /**
+   * Recomputes the defaults at the moment they are needed, for stores whose
+   * defaults depend on the clock or the environment (e.g. a "since" timestamp
+   * stamped at module load). When absent, the constant `defaults` captured at
+   * construction time is reused, which is correct for defaults that are truly
+   * static.
+   */
+  makeDefaults?: () => T;
 }): PreferenceStore<T> {
   const changeEvent = `tau:preferences-changed:${key}`;
   // Cached so `load()` stays cheap enough to call from render, and so a webview
   // that cannot persist still holds the user's choice for the session.
   let cached: T | null = null;
+
+  const freshDefaults = (): T => makeDefaults?.() ?? defaults;
 
   const parse = (text: string | null): T | null => {
     if (!text) return null;
@@ -75,7 +86,7 @@ export function createPreferenceStore<T extends object>({
 
   const load = (): T => {
     if (cached) return cached;
-    cached = parse(readStorage(key)) ?? defaults;
+    cached = parse(readStorage(key)) ?? freshDefaults();
     return cached;
   };
 
@@ -95,7 +106,7 @@ export function createPreferenceStore<T extends object>({
   const update = (patch: Partial<T>): void => save({ ...load(), ...patch });
 
   const reset = (): void => {
-    cached = defaults;
+    cached = freshDefaults();
     writeStorage(key, null);
     notify();
   };
@@ -108,7 +119,7 @@ export function createPreferenceStore<T extends object>({
       // only fires in windows that did not perform the write.
       const onStorage = (event: StorageEvent) => {
         if (event.key !== null && event.key !== key) return;
-        cached = parse(readStorage(key)) ?? defaults;
+        cached = parse(readStorage(key)) ?? freshDefaults();
         setValue(cached);
       };
       window.addEventListener(changeEvent, sync);

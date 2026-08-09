@@ -156,11 +156,7 @@ import {
 } from "./lib/assistantActions";
 import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRun";
 import { technicalErrorDetails, userFacingErrorMessage } from "./lib/errorMessage";
-
-const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
-  stopTime: 0.006,
-  steps: 240,
-};
+import { useSimulationPreferences } from "./lib/simulationPreferences";
 
 // The temporary browser workspace exists only inside the project store; fsBridge
 // helpers reach Tauri plugin-fs for anything that is not `web://`, which throws
@@ -283,12 +279,16 @@ function App() {
   const deleteSelected = useSchematic((s) => s.deleteSelected);
   const undo = useSchematic((s) => s.undo);
   const redo = useSchematic((s) => s.redo);
-  const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
+  const simulationPrefs = useSimulationPreferences();
+  const autoAnalysisOptions = useMemo(
+    () => suggestTransientOptions(components, simulationPrefs.transientDetail),
+    [components, simulationPrefs.transientDetail],
+  );
+  const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(autoAnalysisOptions);
   // Tau chooses transient resolution automatically (from the
   // circuit's time constants + source frequencies) until the user chooses a
   // duration/detail override; that manual state sticks until explicitly reset.
   const [optionsOverridden, setOptionsOverridden] = useState(false);
-  const autoAnalysisOptions = useMemo(() => suggestTransientOptions(components), [components]);
   const authoredAnalysisOptions = useMemo(
     () => analysesFromDirectives(directives).tran,
     [directives],

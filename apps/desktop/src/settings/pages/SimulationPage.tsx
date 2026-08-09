@@ -188,11 +188,11 @@ export function SimulationPage({ onNotice }: { onNotice: (message: string) => vo
 
       <SettingsGroup
         title="Output resolution"
-        note="Where a new transient run starts before Tau's automatic sizing adjusts for the circuit. A schematic with its own .tran directive is unaffected."
+        note="How dense Tau makes a new transient run when it sizes the run itself. The length of the window still comes from the circuit's own time constants and source frequencies. A schematic that carries its own .tran directive is unaffected, and the Waveform detail control in the simulator overrides this for the run in front of you."
       >
         <SettingsRow
           label="Default waveform detail"
-          hint="Precision costs run time and memory; Quick is for a first look at a slow circuit"
+          hint="Precision costs run time and memory. Quick is for a first look at a slow circuit."
         >
           <SegmentedControl
             label="Default waveform detail"

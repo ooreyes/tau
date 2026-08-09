@@ -37,6 +37,7 @@ import {
   saveConversationMessages,
   setActiveConversationId,
 } from "./lib/assistantMemory";
+import { simulationPreferences } from "./lib/simulationPreferences";
 import {
   DEFAULT_WORKSPACE_ID,
   DEFAULT_WORKSPACE_NAME,
@@ -97,6 +98,7 @@ let shellWidth = 1440;
 beforeEach(() => {
   shellWidth = 1440;
   storage.clear();
+  simulationPreferences.reset();
   storage.set("tau.assistant.open", "1");
   useSchematic.getState().newCircuit();
   useProject.setState({
@@ -178,7 +180,27 @@ describe("App schematic workspace tools", () => {
     expect(screen.queryByRole("complementary", { name: "Components" })).toBeNull();
   });
 
+  it("starts a new run at the waveform detail chosen in Settings", async () => {
+    simulationPreferences.update({ transientDetail: "precision" });
+    await renderOpenProject();
+
+    fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+
+    expect((screen.getByLabelText("Exact output points") as HTMLInputElement).value).toBe("480");
+  });
+
+  it("leaves Tau's shipped balance alone when nobody has chosen", async () => {
+    await renderOpenProject();
+
+    fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+
+    expect((screen.getByLabelText("Exact output points") as HTMLInputElement).value).toBe("240");
+  });
+
   it("uses an imported .tran card instead of auto-resolution until manually overridden", async () => {
+    simulationPreferences.update({ transientDetail: "precision" });
     await renderOpenProject();
     act(() => useSchematic.setState({ directives: [".tran 500µ startup"] }));
 
