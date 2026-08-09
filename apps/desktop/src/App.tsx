@@ -12,7 +12,7 @@ import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistant
 import { usePanelWidth } from "./components/ui/resizable";
 import { Toaster, toast } from "./components/ui/sonner";
 import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog";
-import { SHELL_LAYOUT, canFitIndependentColumns, resolveChrome } from "./chrome/resolveChrome";
+import { canFitIndependentColumns, resolveChrome } from "./chrome/resolveChrome";
 import { SURFACES } from "./chrome/surfaces";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
@@ -229,11 +229,6 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
 // responsive floor - App.css's `.editor-shell`/`.plotter` mirror these as
 // a CSS backstop. The schematic column must stay usable - tabs, canvas
 // overlays, and the results table - down to the app's stated 900px minimum
-// window width, so the scope column budgets around it instead of squeezing
-// it to nothing.
-const RAIL_W = SHELL_LAYOUT.railWidth; // .activity-rail
-const HANDLE_W = SHELL_LAYOUT.handleWidth; // .col-resize-handle, one per open column
-const SCOPE_MIN = 300; // analysis scope column floor (matches old drag clamp)
 // Names the engine on an error result: nothing was returned to attribute, but
 // the failure still came from whichever solver the run reached for.
 const attemptedEngine = (): SimulationEngine => (isNativeSpiceRuntime() ? "ngspice" : "preview");
@@ -370,7 +365,6 @@ function App() {
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
   const [partsOpen, setPartsOpen] = useState(true);
   const [fitSignal, setFitSignal] = useState(0);
-  const [scopeWidth, setScopeWidth] = useState(440);
   // Closed by default - persists across sessions
   // like graphOpen/partsOpen, but doesn't reset on a schematic/simulator mode
   // switch since it's not view-specific. Width is lifted (not owned by
@@ -2176,21 +2170,11 @@ function App() {
     return () => observer.disconnect();
   }, []);
 
-  // responsive floor: whenever the window narrows (or the scope opens/
-  // closes), re-clamp the scope width so the layout never drops below a
-  // usable width. This only ever shrinks toward the current values, so it
-  // never fights a manual drag that already fits.
-  useEffect(() => {
-    if (mode !== "simulator" || shellWidth === 0) return;
-    if (graphOpen) {
-      const budget = shellWidth - RAIL_W - HANDLE_W;
-      setScopeWidth((w) => Math.min(w, Math.max(SCOPE_MIN, budget)));
-    }
-    // scopeWidth is intentionally excluded: this effect only reacts to layout
-    // changes (window size, panel open/close), and reads the latest width via
-    // the functional updater without re-running on every drag-driven change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shellWidth, mode, graphOpen]);
+  // A `scopeWidth` state, a responsive clamp for it, and a `--scope-w` custom
+  // property used to live here. Nothing read any of it: no CSS rule in the repo
+  // referenced --scope-w, and the value was never consumed in JS either. It was
+  // a complete apparatus, effect and all, driving nothing.
+
 
   // One pure function decides what is on screen and how wide it may be. The
   // rule used to be stated across four derived values here that all had to
@@ -2264,7 +2248,7 @@ function App() {
       <div
         ref={shellBodyRef}
         className="shell-body"
-        style={{ "--scope-w": `${scopeWidth}px`, "--assistant-w": `${effectiveAssistantWidth}px` } as CSSProperties}
+        style={{ "--assistant-w": `${effectiveAssistantWidth}px` } as CSSProperties}
       >
         <ActivityRail
           mode={mode}

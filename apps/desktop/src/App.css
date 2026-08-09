@@ -4662,7 +4662,6 @@ body {
   padding: 0 var(--sp-3);
   background: var(--chrome-veil);
   border-bottom: 0.5px solid var(--border-subtle);
-  -webkit-app-region: drag;
   backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
   -webkit-backdrop-filter: saturate(var(--chrome-blur-saturate)) blur(var(--chrome-blur));
   box-shadow: none;
@@ -4694,7 +4693,6 @@ body {
   gap: var(--sp-2);
   flex-shrink: 0;
   padding: 0;
-  -webkit-app-region: no-drag;
 }
 
 /* Brand lockup (mark + .brand-name below) - kept outside the type
@@ -4746,7 +4744,6 @@ body {
   border: 0.5px solid var(--border);
   border-radius: var(--r-md);
   background: var(--fill-track);
-  -webkit-app-region: no-drag;
 }
 
 .mode-btn {

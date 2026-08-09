@@ -114,7 +114,6 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
               disabled={isRunning || !schematicOpen}
               className={cn(
                 "gap-1.5 bg-secondary hover:bg-accent",
-                "[-webkit-app-region:no-drag]",
                 runHasError && "run-button--error",
                 runIsAcceptable && "run-button--ok",
                 isRunning && "run-button--running",
@@ -134,7 +133,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
               variant="outline"
               size="icon-sm"
               className={cn(
-                "assistant-toolbar-button [-webkit-app-region:no-drag]",
+                "assistant-toolbar-button",
                 assistantOpen && "assistant-toolbar-button--active",
               )}
               aria-label={assistantOpen ? "Close Bode" : "Open Bode"}
@@ -152,7 +151,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
             <Button
               variant="outline"
               size="icon-sm"
-              className="text-muted-foreground hover:text-foreground [-webkit-app-region:no-drag]"
+              className="text-muted-foreground hover:text-foreground"
               aria-label="Settings"
               onClick={onOpenSettings}
             >
