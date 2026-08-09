@@ -14,7 +14,7 @@
  */
 import { createPreferenceStore } from "./preferences";
 
-export type UsageProvider = "anthropic" | "openai" | "gemini" | "local-mlx";
+export type UsageProvider = "anthropic" | "gemini" | "local-mlx";
 
 export interface ProviderUsage {
   /** Requests Tau sent to this provider from this Mac. */
@@ -31,16 +31,10 @@ export interface AiUsage {
   providers: Record<UsageProvider, ProviderUsage>;
 }
 
-export const USAGE_PROVIDERS: readonly UsageProvider[] = [
-  "anthropic",
-  "openai",
-  "gemini",
-  "local-mlx",
-];
+export const USAGE_PROVIDERS: readonly UsageProvider[] = ["anthropic", "gemini", "local-mlx"];
 
 export const USAGE_PROVIDER_LABELS: Record<UsageProvider, string> = {
   anthropic: "Anthropic",
-  openai: "OpenAI",
   gemini: "Google Gemini",
   "local-mlx": "On-device",
 };
@@ -54,7 +48,6 @@ function emptyUsage(): AiUsage {
     since: Date.now(),
     providers: {
       anthropic: emptyProvider(),
-      openai: emptyProvider(),
       gemini: emptyProvider(),
       "local-mlx": emptyProvider(),
     },
@@ -87,9 +80,13 @@ function validUsage(raw: unknown): AiUsage | null {
   const since = source.since;
   return {
     since: typeof since === "number" && Number.isFinite(since) && since > 0 ? since : Date.now(),
+    // A stored blob is read field-by-field, not passed through: an old
+    // "openai" bucket (or any other key that no longer means anything) is
+    // simply not one of the fields read here, so it is silently dropped
+    // rather than failing validation and wiping the providers that are
+    // still recognised.
     providers: {
       anthropic: validProviderUsage(providers.anthropic),
-      openai: validProviderUsage(providers.openai),
       gemini: validProviderUsage(providers.gemini),
       "local-mlx": validProviderUsage(providers["local-mlx"]),
     },

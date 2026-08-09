@@ -14,7 +14,7 @@
 import { keychainAvailable } from "../settingsSurface";
 import { PROVIDERS } from "../providerCatalog";
 import { useHasAssistantApiKey } from "../../lib/assistant";
-import { useHasGeminiApiKey, useHasOpenAiApiKey } from "../../lib/providerApiKey";
+import { useHasGeminiApiKey } from "../../lib/providerApiKey";
 import { SettingsGroup, SettingsNotice, SettingsPage, SettingsRow } from "../SettingsPrimitives";
 
 export function ProfilePage() {
@@ -22,7 +22,6 @@ export function ProfilePage() {
   // Presence booleans only. No key value reaches this page.
   const saved: Record<string, boolean> = {
     anthropic: useHasAssistantApiKey(),
-    openai: useHasOpenAiApiKey(),
     gemini: useHasGeminiApiKey(),
   };
   const savedCount = Object.values(saved).filter(Boolean).length;

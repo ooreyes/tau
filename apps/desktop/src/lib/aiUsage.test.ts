@@ -66,14 +66,14 @@ describe("aiUsage", () => {
 
     recordAiRequest("anthropic", { input: 10, output: 20 });
     recordAiRequest("anthropic", { input: 5 });
-    recordAiRequest("openai", { input: 1, output: 2 });
+    recordAiRequest("gemini", { input: 1, output: 2 });
 
     const usage = loadAiUsage();
     expect(usage.providers.anthropic.requests).toBe(2);
     expect(usage.providers.anthropic.inputTokens).toBe(15);
     expect(usage.providers.anthropic.outputTokens).toBe(20);
     expect(usage.providers.anthropic.lastUsedAt).not.toBeNull();
-    expect(usage.providers.openai.requests).toBe(1);
+    expect(usage.providers.gemini.requests).toBe(1);
 
     clearAiUsage();
     const cleared = loadAiUsage();
@@ -83,6 +83,6 @@ describe("aiUsage", () => {
       outputTokens: 0,
       lastUsedAt: null,
     });
-    expect(cleared.providers.openai.requests).toBe(0);
+    expect(cleared.providers.gemini.requests).toBe(0);
   });
 });

@@ -88,13 +88,17 @@ export function createProviderKeyStore(provider: string): ProviderKeyStore {
   return { load, hasKey, hydrate, save, useHasKey };
 }
 
-const openAiStore = createProviderKeyStore("openai");
+// OpenAI is no longer offered anywhere in Settings (nothing in the assistant
+// can use the key), so this store has no live caller for saving a new key.
+// It stays only so a follow-up unit can offer to delete a key a user already
+// saved before OpenAI was removed — a secret already sitting in the keychain
+// needs a code path that can clear it. These exports are slated for removal
+// once that delete-only follow-up has shipped a release.
+const legacyOpenAiStore = createProviderKeyStore("openai");
 
-export const loadOpenAiApiKey = openAiStore.load;
-export const hasOpenAiApiKey = openAiStore.hasKey;
-export const hydrateOpenAiApiKey = openAiStore.hydrate;
-export const saveOpenAiApiKey = openAiStore.save;
-export const useHasOpenAiApiKey = openAiStore.useHasKey;
+export const hasLegacyOpenAiApiKey = legacyOpenAiStore.hasKey;
+export const saveLegacyOpenAiApiKey = legacyOpenAiStore.save;
+export const useHasLegacyOpenAiApiKey = legacyOpenAiStore.useHasKey;
 
 const geminiStore = createProviderKeyStore("gemini");
 

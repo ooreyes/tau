@@ -29,7 +29,7 @@ import { SettingsWindow } from "./SettingsWindow";
 import { openProviderPage } from "./settingsSurface";
 import { PROVIDERS } from "./providerCatalog";
 import { saveAssistantApiKey } from "../lib/assistant";
-import { hasGeminiApiKey, saveGeminiApiKey, saveOpenAiApiKey } from "../lib/providerApiKey";
+import { hasGeminiApiKey, saveGeminiApiKey } from "../lib/providerApiKey";
 import { simulationPreferences } from "../lib/simulationPreferences";
 
 // Radix Select needs pointer-capture APIs jsdom does not implement.
@@ -59,7 +59,6 @@ beforeEach(() => {
   // earlier test into the next one.
   saveAssistantApiKey("");
   saveGeminiApiKey("");
-  saveOpenAiApiKey("");
   tauri.invoke.mockReset().mockResolvedValue(undefined);
   tauri.isTauri.mockReset().mockReturnValue(false);
   runtime.getStatus.mockReset().mockResolvedValue({
@@ -165,9 +164,14 @@ describe("Usage page payment responsibility", () => {
 });
 
 describe("Model configuration key handling", () => {
-  it("offers all three providers with a how-to and a link", async () => {
+  it("offers both providers with a how-to and a link", async () => {
     render(<SettingsWindow />);
     go("Model configuration");
+    // Pins the removal: OpenAI can be saved in Settings but nothing in the
+    // assistant can use it, so it must not be offered here. If this
+    // assertion is failing, someone put OpenAI back in `PROVIDERS` without
+    // giving the assistant a way to use it.
+    expect(PROVIDERS.map((p) => p.id)).toEqual(["anthropic", "gemini"]);
     for (const provider of PROVIDERS) {
       expect(provider.steps.length).toBeGreaterThan(3);
       expect(provider.keyPageUrl.startsWith("https://")).toBe(true);
@@ -182,8 +186,8 @@ describe("Model configuration key handling", () => {
     // A secret typed for one provider must never follow the dropdown to
     // another. React reconciles by element type and position, so without a
     // `key` on the field the SAME instance survives the provider change and
-    // carries its draft with it -- and the next Save would send an Anthropic
-    // key to OpenAI as a bearer token.
+    // carries its draft with it -- and the next Save would send a Gemini
+    // key to Anthropic as a bearer token.
     render(<SettingsWindow />);
     go("Model configuration");
 
@@ -194,12 +198,12 @@ describe("Model configuration key handling", () => {
 
     const chooser = screen.getByRole("combobox", { name: "API key provider" });
     fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });
-    const option = await screen.findByRole("option", { name: /OpenAI/i });
+    const option = await screen.findByRole("option", { name: /Anthropic/i });
     fireEvent.pointerUp(option, { button: 0, pointerId: 1, pointerType: "mouse" });
     fireEvent.click(option);
 
-    const openaiField = await screen.findByLabelText(/OpenAI API key/i) as HTMLInputElement;
-    expect(openaiField.value).toBe("");
+    const anthropicField = await screen.findByLabelText(/Anthropic API key/i) as HTMLInputElement;
+    expect(anthropicField.value).toBe("");
     // Belt and braces: the canary must not survive anywhere in the page.
     expect(document.body.textContent ?? "").not.toContain(typed);
     for (const input of Array.from(document.querySelectorAll("input"))) {

@@ -9,13 +9,22 @@ const OPENAI_ACCOUNT: &str = "openai-api-key";
 
 const ANTHROPIC_URL_PREFIX: &str = "https://api.anthropic.com/";
 const GEMINI_URL_PREFIX: &str = "https://generativelanguage.googleapis.com/";
-const OPENAI_URL_PREFIX: &str = "https://api.openai.com/";
 const MAX_PROXY_BODY_BYTES: usize = 2 * 1024 * 1024;
 const PROXY_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// Map a frontend provider id to its keychain account. The set is closed on
 /// purpose: an unrecognized id must never be able to name an arbitrary keychain
 /// item, and each provider's key stays in its own entry.
+///
+/// "openai" MUST STAY here even though OpenAI is no longer an offered
+/// provider (see `allowed_cloud_url` / `auth_header_for` below, which now
+/// refuse it). This mapping is exactly what lets
+/// `save_provider_api_key("openai", "")` reach `write_entry`'s empty-string
+/// delete path, which is the only way to clear a key a user saved before
+/// OpenAI was removed from Settings. Deleting this arm would strand that
+/// secret in the keychain with no code path left to remove it. Remove it
+/// only once a follow-up unit ships a "forget this saved key" action that
+/// does not depend on it.
 fn account_for(provider: &str) -> Result<&'static str, String> {
     match provider {
         "anthropic" => Ok(ANTHROPIC_ACCOUNT),
@@ -116,7 +125,6 @@ fn allowed_cloud_url(provider: &str, url: &str) -> Result<(), String> {
     let prefix = match provider {
         "anthropic" => ANTHROPIC_URL_PREFIX,
         "gemini" => GEMINI_URL_PREFIX,
-        "openai" => OPENAI_URL_PREFIX,
         other => return Err(format!("Unknown assistant provider: {other}")),
     };
     if !url.starts_with(prefix) {
@@ -138,7 +146,7 @@ fn header_allowed_from_renderer(name: &str) -> bool {
 fn auth_header_for(provider: &str, api_key: &str) -> Result<(&'static str, String), String> {
     match provider {
         "anthropic" => Ok(("x-api-key", api_key.to_string())),
-        "gemini" | "openai" => Ok(("Authorization", format!("Bearer {api_key}"))),
+        "gemini" => Ok(("Authorization", format!("Bearer {api_key}"))),
         other => Err(format!("Unknown assistant provider: {other}")),
     }
 }
@@ -235,24 +243,28 @@ mod tests {
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
         )
         .is_ok());
-        // OpenAI became a first-class provider when Settings gained a
-        // three-provider Model configuration page; this line previously
-        // asserted the opposite.
-        assert!(allowed_cloud_url("openai", "https://api.openai.com/v1/chat/completions").is_ok());
         assert!(allowed_cloud_url("anthropic", "https://evil.example/v1/messages").is_err());
         assert!(allowed_cloud_url(
             "gemini",
             "https://api.anthropic.com/v1/messages"
         )
         .is_err());
-        // The allowlist stays per-provider: a known provider may not borrow
-        // another's host.
+        // OpenAI was a first-class provider when Settings had a three-provider
+        // Model configuration page. Settings offers only Anthropic and Gemini
+        // now (nothing in the assistant could actually use a saved OpenAI
+        // key), so the cloud proxy must refuse it like any other unknown
+        // provider rather than dispatch a live HTTPS call for it.
+        assert!(allowed_cloud_url("openai", "https://api.openai.com/v1/chat/completions").is_err());
         assert!(allowed_cloud_url("openai", "https://api.anthropic.com/v1/messages").is_err());
         assert!(allowed_cloud_url("mistral", "https://api.mistral.ai/v1/chat").is_err());
     }
 
     #[test]
     fn every_supported_provider_maps_to_its_own_keychain_account() {
+        // "openai" stays in this list even though it is no longer offered in
+        // Settings or reachable via the cloud proxy: `account_for` is the
+        // deletion-only path (see its doc comment) that lets a key saved
+        // before OpenAI's removal still be cleared from the keychain.
         let accounts = ["anthropic", "gemini", "openai"]
             .map(|provider| super::account_for(provider).expect("supported provider"));
         // Distinct entries: one provider's key must never overwrite another's.
@@ -282,9 +294,9 @@ mod tests {
         let (name, value) = auth_header_for("gemini", "AIza").unwrap();
         assert_eq!(name, "Authorization");
         assert_eq!(value, "Bearer AIza");
-        let (name, value) = auth_header_for("openai", "sk-proj").unwrap();
-        assert_eq!(name, "Authorization");
-        assert_eq!(value, "Bearer sk-proj");
+        // OpenAI is no longer an offered provider, so it gets no auth header
+        // shape at all - same as any other unrecognized provider.
+        assert!(auth_header_for("openai", "sk-proj").is_err());
         assert!(auth_header_for("mistral", "x").is_err());
     }
 }

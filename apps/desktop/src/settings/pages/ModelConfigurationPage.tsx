@@ -24,12 +24,7 @@ import {
 } from "@/components/ui/select";
 import { SettingsAiSection } from "../../components/SettingsAiSection";
 import { saveAssistantApiKey, useHasAssistantApiKey } from "../../lib/assistant";
-import {
-  saveGeminiApiKey,
-  saveOpenAiApiKey,
-  useHasGeminiApiKey,
-  useHasOpenAiApiKey,
-} from "../../lib/providerApiKey";
+import { saveGeminiApiKey, useHasGeminiApiKey } from "../../lib/providerApiKey";
 import { userFacingErrorMessage } from "../../lib/errorMessage";
 import { PROVIDERS, providerInfo, type ProviderId } from "../providerCatalog";
 import { ProviderKeyField } from "../ProviderKeyField";
@@ -44,18 +39,15 @@ export function ModelConfigurationPage({
   const [provider, setProvider] = useState<ProviderId>("gemini");
   const info = providerInfo(provider);
 
-  // All three hooks run every render: presence booleans only, never a value.
+  // Both hooks run every render: presence booleans only, never a value.
   const hasAnthropic = useHasAssistantApiKey();
-  const hasOpenAi = useHasOpenAiApiKey();
   const hasGemini = useHasGeminiApiKey();
   const saved: Record<ProviderId, boolean> = {
     anthropic: hasAnthropic,
-    openai: hasOpenAi,
     gemini: hasGemini,
   };
   const savers: Record<ProviderId, (key: string) => void> = {
     anthropic: saveAssistantApiKey,
-    openai: saveOpenAiApiKey,
     gemini: saveGeminiApiKey,
   };
 

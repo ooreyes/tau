@@ -12,15 +12,12 @@
 const ALLOWED_EXTERNAL_URLS: &[&str] = &[
     // Key creation
     "https://console.anthropic.com/settings/keys",
-    "https://platform.openai.com/api-keys",
     "https://aistudio.google.com/apikey",
     // Spending and usage, which is the provider's number, not Tau's
     "https://console.anthropic.com/settings/usage",
-    "https://platform.openai.com/usage",
     "https://aistudio.google.com/usage",
     // Pricing, linked from the payment-responsibility copy
     "https://www.anthropic.com/pricing",
-    "https://openai.com/api/pricing/",
     "https://ai.google.dev/pricing",
 ];
 
@@ -70,7 +67,6 @@ mod tests {
         assert!(is_allowed_external_url(
             "https://console.anthropic.com/settings/keys"
         ));
-        assert!(is_allowed_external_url("https://platform.openai.com/api-keys"));
         assert!(is_allowed_external_url("https://aistudio.google.com/apikey"));
 
         // A prefix check would pass these. A full match does not.
@@ -100,7 +96,7 @@ mod tests {
 
     #[test]
     fn every_supported_provider_has_a_key_page() {
-        for host in ["anthropic.com", "openai.com", "google.com"] {
+        for host in ["anthropic.com", "google.com"] {
             assert!(
                 ALLOWED_EXTERNAL_URLS.iter().any(|url| url.contains(host)),
                 "no linkable page for {host}"

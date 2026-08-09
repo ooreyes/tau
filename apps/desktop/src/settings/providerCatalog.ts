@@ -12,7 +12,7 @@
  * opening something unreviewed.
  */
 
-export type ProviderId = "anthropic" | "openai" | "gemini";
+export type ProviderId = "anthropic" | "gemini";
 
 export interface ProviderInfo {
   id: ProviderId;
@@ -48,25 +48,6 @@ export const PROVIDERS: readonly ProviderInfo[] = [
       "Go to Settings, then API keys, and choose Create key.",
       "Give it a name you will recognise later, such as Tau on my laptop.",
       "Copy the key the moment it appears. Anthropic shows it once and cannot show it again.",
-      "Paste it below and choose Save key.",
-    ],
-  },
-  {
-    id: "openai",
-    label: "OpenAI",
-    consoleName: "OpenAI Platform",
-    keyPageUrl: "https://platform.openai.com/api-keys",
-    usagePageUrl: "https://platform.openai.com/usage",
-    pricingPageUrl: "https://openai.com/api/pricing/",
-    keyPrefix: "sk-",
-    costNote:
-      "Pay as you go. OpenAI bills the API separately from ChatGPT Plus. Paying for ChatGPT gives you no API credit.",
-    steps: [
-      "Open the OpenAI Platform and sign in, or create an account.",
-      "Under Billing, add a payment method and buy credit. A new account with no credit is refused on the first request.",
-      "Go to API keys and choose Create new secret key.",
-      "Name it so you can revoke this one later without touching your others.",
-      "Copy the key straight away. OpenAI shows the full value once.",
       "Paste it below and choose Save key.",
     ],
   },
