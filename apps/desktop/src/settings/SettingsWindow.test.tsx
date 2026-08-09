@@ -30,6 +30,7 @@ import { openProviderPage } from "./settingsSurface";
 import { PROVIDERS } from "./providerCatalog";
 import { saveAssistantApiKey } from "../lib/assistant";
 import { hasGeminiApiKey, saveGeminiApiKey, saveOpenAiApiKey } from "../lib/providerApiKey";
+import { simulationPreferences } from "../lib/simulationPreferences";
 
 // Radix Select needs pointer-capture APIs jsdom does not implement.
 Element.prototype.hasPointerCapture = () => false;
@@ -283,5 +284,31 @@ describe("Profile page does not invent an account", () => {
     // No text input anywhere: an editable name or avatar row would be a lie.
     expect(document.querySelectorAll(".tau-settings-page input").length).toBe(0);
     expect(screen.getByText("Never")).toBeTruthy();
+  });
+});
+
+describe("General and Simulation share one technical-details setting", () => {
+  beforeEach(() => simulationPreferences.update({ alwaysShowTechnicalDetails: false }));
+
+  it("the two technical-details toggles are one setting", async () => {
+    render(<SettingsWindow />);
+
+    const generalToggle = document.getElementById("general-technical-details") as HTMLInputElement;
+    expect(generalToggle.checked).toBe(false);
+    fireEvent.click(generalToggle);
+    expect(generalToggle.checked).toBe(true);
+    expect(
+      screen.getByText(/same setting as Expand technical details on the Simulation page/i),
+    ).toBeTruthy();
+
+    go("Simulation");
+    await waitFor(() => expect(screen.getByText("Deck inspection")).toBeTruthy());
+    const simulationToggle = document.getElementById(
+      "simulation-technical-details",
+    ) as HTMLInputElement;
+    expect(simulationToggle.checked).toBe(true);
+    expect(
+      screen.getByText(/same setting as Expand technical details on the General page/i),
+    ).toBeTruthy();
   });
 });

@@ -11,6 +11,7 @@ import {
   type ChatProviderProfile,
   type OpenAiCompatibleAssistantOptions,
 } from "./openAiCompatibleAssistant";
+import { createLocalAiFetch } from "./localAiFetch";
 
 export const LOCAL_MLX_MODEL_PRESETS = {
   "qwen3-1.7b-4bit": {
@@ -71,6 +72,12 @@ export interface LocalMlxAssistantOptions extends OpenAiCompatibleAssistantOptio
  * file/canvas mutation remains entirely outside this interface. */
 export class LocalMlxAssistant extends OpenAiCompatibleAssistant {
   constructor(options: LocalMlxAssistantOptions = {}) {
-    super(LOCAL_MLX_PROFILE, { ...options, model: options.model ?? LOCAL_MLX_DEFAULT_MODEL });
+    super(LOCAL_MLX_PROFILE, {
+      ...options,
+      model: options.model ?? LOCAL_MLX_DEFAULT_MODEL,
+      // Wrapped unconditionally (not just as a default) so injected fetches
+      // in tests exercise the same Usage-page counting path as production.
+      fetchImpl: createLocalAiFetch(options.fetchImpl),
+    });
   }
 }

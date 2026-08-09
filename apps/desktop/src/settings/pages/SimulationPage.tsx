@@ -210,7 +210,7 @@ export function SimulationPage({ onNotice }: { onNotice: (message: string) => vo
         <SettingsToggle
           id="simulation-technical-details"
           label="Expand technical details automatically"
-          hint="Shows the engine transcript under a failed run without a click"
+          hint="Shows the engine transcript under a failed run without a click. This is the same setting as Expand technical details on the General page."
           checked={preferences.alwaysShowTechnicalDetails}
           onChange={(next) =>
             simulationPreferences.update({ alwaysShowTechnicalDetails: next })
