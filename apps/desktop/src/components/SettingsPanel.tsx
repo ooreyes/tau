@@ -14,7 +14,13 @@
  */
 import { useEffect, useState } from "react";
 
-import { applyThemeMode, saveThemeMode, loadThemeMode, type ThemeMode } from "../lib/theme";
+import {
+  THEME_CHANGE_EVENT,
+  applyThemeMode,
+  saveThemeMode,
+  loadThemeMode,
+  type ThemeMode,
+} from "../lib/theme";
 
 const OPTIONS: { mode: ThemeMode; label: string }[] = [
   { mode: "light", label: "Light" },
@@ -32,6 +38,17 @@ export function ThemeControl() {
   useEffect(() => {
     applyThemeMode(mode);
   }, [mode]);
+
+  // The mode can change from outside this control: "Reset to defaults" on the
+  // same page calls resetThemeMode. Without this the segmented control would
+  // keep showing Dark over a now-light app, and clicking Dark would be a
+  // no-op against its own stale state, with no way back short of leaving the
+  // page and returning.
+  useEffect(() => {
+    const onChange = () => setMode(loadThemeMode());
+    window.addEventListener(THEME_CHANGE_EVENT, onChange);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, onChange);
+  }, []);
 
   const choose = (next: ThemeMode) => {
     setMode(next);

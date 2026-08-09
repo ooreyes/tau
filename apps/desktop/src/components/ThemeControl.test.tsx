@@ -6,9 +6,10 @@
 // different module, owned by another concurrent change) - reusing that
 // filename would clobber those tests instead of adding to them.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { ThemeControl } from "./SettingsPanel";
+import { resetThemeMode } from "../lib/theme";
 
 const backing = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
@@ -69,5 +70,33 @@ describe("ThemeControl", () => {
     render(<ThemeControl />);
     expect(screen.getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("true");
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+  });
+
+  // Reset to defaults lives on the same Settings page as this control, so the
+  // mode can change without this component being the one that changed it.
+  it("follows a reset performed elsewhere on the page", () => {
+    render(<ThemeControl />);
+    fireEvent.click(screen.getByRole("radio", { name: "Dark" }));
+
+    act(() => resetThemeMode());
+
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(screen.getByRole("radio", { name: "Light" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("false");
+  });
+
+  // The failure this really guards. Without the change event the control keeps
+  // its own stale `mode`, so choosing the level it wrongly believes is already
+  // selected sets the same value, the apply effect never re-runs, and the user
+  // is stuck in Light with no way back except leaving the page.
+  it("can still return to Dark after a reset", () => {
+    render(<ThemeControl />);
+    fireEvent.click(screen.getByRole("radio", { name: "Dark" }));
+    act(() => resetThemeMode());
+
+    fireEvent.click(screen.getByRole("radio", { name: "Dark" }));
+
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(localStorage.getItem("tau.ui.theme")).toBe("dark");
   });
 });

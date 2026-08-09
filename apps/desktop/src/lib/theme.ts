@@ -23,6 +23,25 @@ const MODES: readonly ThemeMode[] = ["system", "light", "dark"];
 /** First-run / corrupt-storage fallback - Light, not System. */
 const DEFAULT_THEME_MODE: ThemeMode = "light";
 
+/**
+ * Fired whenever the stored mode changes, matching the shape every other
+ * preference module in `lib/` already uses.
+ *
+ * This exists because the mode can now change from somewhere other than the
+ * control that displays it: "Reset to defaults" calls `resetThemeMode`. A
+ * control that seeded its state once from `loadThemeMode` would keep showing
+ * Dark over a light app, and - worse - clicking Dark would then be a no-op
+ * against its own stale state, leaving no way back without remounting the
+ * page. The attribute on <html> is enough to repaint the app; it is not
+ * enough to correct a control that is reading its own copy.
+ */
+export const THEME_CHANGE_EVENT = "tau:theme-changed";
+
+function notifyThemeChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+}
+
 function isThemeMode(value: unknown): value is ThemeMode {
   return typeof value === "string" && (MODES as readonly string[]).includes(value);
 }
@@ -44,12 +63,16 @@ export function loadThemeMode(): ThemeMode {
  *  theme still applies for the current session via applyThemeMode, it just
  *  will not survive a reload. */
 export function saveThemeMode(mode: ThemeMode): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(STORAGE_KEY, mode);
-  } catch {
-    /* quota exceeded or storage disabled - nothing more to do here */
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY, mode);
+    } catch {
+      /* quota exceeded or storage disabled - nothing more to do here */
+    }
   }
+  // Announced even when the write failed: the in-session mode still changed,
+  // and a control showing the old one would be wrong either way.
+  notifyThemeChanged();
 }
 
 /** Stamps (or clears) data-theme on the document root so App.css's cascade
@@ -88,14 +111,13 @@ export function setThemeMode(mode: ThemeMode): void {
  *  linger on whatever was set before the reset - see the "Reset to
  *  defaults" contract in Settings. */
 export function resetThemeMode(): void {
-  if (typeof localStorage === "undefined") {
-    applyThemeMode(DEFAULT_THEME_MODE);
-    return;
-  }
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* quota exceeded or storage disabled - still apply the default below */
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* quota exceeded or storage disabled - still apply the default below */
+    }
   }
   applyThemeMode(DEFAULT_THEME_MODE);
+  notifyThemeChanged();
 }
