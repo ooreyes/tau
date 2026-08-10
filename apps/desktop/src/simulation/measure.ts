@@ -410,14 +410,36 @@ function safeEval(expr: string, scope: Scope, funcs: Record<string, FuncDef>): n
 
 // --- measurement evaluation -------------------------------------------------
 
-/** Indices of samples whose time lies within [from, to] (inclusive). */
-function windowIndices(times: number[], from: number | null, to: number | null): number[] {
-  const lo = from ?? -Infinity;
-  const hi = to ?? Infinity;
-  const out: number[] = [];
-  for (let i = 0; i < times.length; i++) {
-    if (times[i] >= lo && times[i] <= hi) out.push(i);
+/**
+ * A measurement's piecewise-linear samples inside its requested window.
+ *
+ * SPICE's FROM/TO bounds are positions on the independent axis, not a filter
+ * for already-recorded samples. Include interpolated endpoints so an adaptive
+ * transient output cannot silently shorten an AVG/RMS/INTEG window (and so a
+ * MAX/MIN at a bound is not lost between output samples).
+ */
+function windowPoints(
+  axis: number[],
+  expr: CompiledExpr,
+  from: number | null,
+  to: number | null,
+): Array<{ x: number; value: number }> {
+  if (axis.length === 0) return [];
+  const first = axis[0];
+  const last = axis[axis.length - 1];
+  if (!Number.isFinite(first) || !Number.isFinite(last)) return [];
+  const requestedFrom = from ?? first;
+  const requestedTo = to ?? last;
+  if (!Number.isFinite(requestedFrom) || !Number.isFinite(requestedTo)) return [];
+  const lo = Math.max(first, requestedFrom);
+  const hi = Math.min(last, requestedTo);
+  if (lo > hi) return [];
+
+  const out: Array<{ x: number; value: number }> = [{ x: lo, value: interpAt(axis, expr, lo) }];
+  for (let i = 0; i < axis.length; i++) {
+    if (axis[i] > lo && axis[i] < hi) out.push({ x: axis[i], value: expr.at(i) });
   }
+  if (hi > lo) out.push({ x: hi, value: interpAt(axis, expr, hi) });
   return out;
 }
 
@@ -478,19 +500,19 @@ function evalAggregateOnAxis(
   expr: CompiledExpr,
   spec: Extract<MeasSpec, { kind: "aggregate" }>,
 ): MeasResult {
-  const indices = windowIndices(axis, spec.from, spec.to);
-  if (indices.length === 0) return { name: spec.name, value: null, error: "Empty measurement window." };
+  const points = windowPoints(axis, expr, spec.from, spec.to);
+  if (points.length === 0) return { name: spec.name, value: null, error: "Empty measurement window." };
 
   if (spec.op === "MAX" || spec.op === "MIN" || spec.op === "PP") {
     let max = -Infinity;
     let min = Infinity;
-    let atMax = axis[indices[0]];
-    let atMin = axis[indices[0]];
-    for (const i of indices) {
-      const v = expr.at(i);
+    let atMax = points[0].x;
+    let atMin = points[0].x;
+    for (const point of points) {
+      const { value: v } = point;
       if (!Number.isFinite(v)) continue;
-      if (v > max) { max = v; atMax = axis[i]; }
-      if (v < min) { min = v; atMin = axis[i]; }
+      if (v > max) { max = v; atMax = point.x; }
+      if (v < min) { min = v; atMin = point.x; }
     }
     if (!Number.isFinite(max)) return { name: spec.name, value: null, error: "No finite samples." };
     if (spec.op === "MAX") return { name: spec.name, value: max, at: atMax };
@@ -501,17 +523,20 @@ function evalAggregateOnAxis(
   // Trapezoidal integrals over the axis for AVG / RMS / INTEG.
   let integral = 0;
   let sqIntegral = 0;
-  for (let k = 1; k < indices.length; k++) {
-    const i0 = indices[k - 1];
-    const i1 = indices[k];
-    const dt = axis[i1] - axis[i0];
+  for (let k = 1; k < points.length; k++) {
+    const p0 = points[k - 1];
+    const p1 = points[k];
+    const dt = p1.x - p0.x;
     if (dt <= 0) continue;
-    const v0 = expr.at(i0);
-    const v1 = expr.at(i1);
+    const v0 = p0.value;
+    const v1 = p1.value;
+    if (!Number.isFinite(v0) || !Number.isFinite(v1)) {
+      return { name: spec.name, value: null, error: "No finite samples." };
+    }
     integral += ((v0 + v1) / 2) * dt;
     sqIntegral += ((v0 * v0 + v1 * v1) / 2) * dt;
   }
-  const duration = axis[indices[indices.length - 1]] - axis[indices[0]];
+  const duration = points[points.length - 1].x - points[0].x;
   if (spec.op === "INTEG") return { name: spec.name, value: integral };
   if (duration <= 0) return { name: spec.name, value: null, error: "Zero-duration window." };
   if (spec.op === "AVG") return { name: spec.name, value: integral / duration };

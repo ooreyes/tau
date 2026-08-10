@@ -116,6 +116,24 @@ describe("aggregate measurements", () => {
     expect(r.value).toBe(3);
   });
 
+  it("clips aggregate windows at interpolated FROM/TO boundaries", () => {
+    // V(a)=2t sampled only at t=0,1,2. A `.meas` window must retain its
+    // exact 0.5/1.5 boundaries rather than silently contracting to t=1.
+    const ramp = wf([0, 1, 2], { a: [0, 2, 4] });
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran mmax MAX V(a) FROM=.5 TO=1.5")!, ramp, {}).value)
+      .toBeCloseTo(3, 12);
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran mpp PP V(a) FROM=.5 TO=1.5")!, ramp, {}).value)
+      .toBeCloseTo(2, 12);
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran mavg AVG V(a) FROM=.5 TO=1.5")!, ramp, {}).value)
+      .toBeCloseTo(2, 12);
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran mint INTEG V(a) FROM=.5 TO=1.5")!, ramp, {}).value)
+      .toBeCloseTo(2, 12);
+    // The measurement contract uses trapezoidal integration of the squared
+    // piecewise-linear trace: (1²+2²)/4 + (2²+3²)/4 = 4.5.
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran mrms RMS V(a) FROM=.5 TO=1.5")!, ramp, {}).value)
+      .toBeCloseTo(Math.sqrt(4.5), 12);
+  });
+
   it("INTEG is the trapezoidal integral", () => {
     // constant 2 over [0,4] => area 8
     const c = wf([0, 1, 2, 3, 4], { a: [2, 2, 2, 2, 2] });
