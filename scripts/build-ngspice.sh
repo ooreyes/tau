@@ -37,9 +37,95 @@ require_command() {
   fi
 }
 
+die() {
+  echo "$*" >&2
+  exit 1
+}
+
+# Keep the native engine's loader metadata in lockstep with the desktop app.
+# Tauri owns the supported macOS floor, so do not duplicate it in this script.
+tauri_macos_minimum_system_version() {
+  node - "$ROOT/apps/desktop/src-tauri/tauri.conf.json" <<'NODE'
+const fs = require("fs");
+const path = process.argv[2];
+const config = JSON.parse(fs.readFileSync(path, "utf8"));
+const target = config?.bundle?.macOS?.minimumSystemVersion;
+if (typeof target !== "string" || !/^\d+(?:\.\d+){0,2}$/.test(target)) {
+  throw new Error(`${path} must declare bundle.macOS.minimumSystemVersion as a numeric version`);
+}
+process.stdout.write(target);
+NODE
+}
+
+macos_version_key() {
+  local version="$1" major minor patch extra
+  [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || die "Invalid macOS deployment target: $version"
+  IFS=. read -r major minor patch extra <<<"$version"
+  minor="${minor:-0}"
+  patch="${patch:-0}"
+  printf '%d.%d.%d\n' "$((10#$major))" "$((10#$minor))" "$((10#$patch))"
+}
+
+# Remove every explicit -mmacosx-version-min flag from a compiler flag string,
+# reject a conflicting value, then append the one target that Tauri declares.
+# configure treats these as shell-style flag strings, so its normal word
+# splitting is the representation we must normalize here as well.
+normalize_macos_min_flags() {
+  local flags="$1" target="$2" token value="" awaiting_value=0
+  local -a kept=()
+  local target_key
+  target_key="$(macos_version_key "$target")"
+
+  for token in $flags; do
+    if (( awaiting_value )); then
+      value="$token"
+      awaiting_value=0
+    else
+      case "$token" in
+        -mmacosx-version-min=*) value="${token#-mmacosx-version-min=}" ;;
+        -mmacosx-version-min) awaiting_value=1; continue ;;
+        *) kept+=("$token"); continue ;;
+      esac
+    fi
+
+    if [[ "$(macos_version_key "$value")" != "$target_key" ]]; then
+      die "Conflicting -mmacosx-version-min=$value (Tau declares $target)."
+    fi
+    value=""
+  done
+  (( awaiting_value == 0 )) || die "-mmacosx-version-min needs a version value."
+
+  kept+=("-mmacosx-version-min=$target")
+  (IFS=' '; printf '%s' "${kept[*]}")
+}
+
 for command in git make cc perl autoconf autoheader autom4te automake aclocal; do
   require_command "$command"
 done
+
+# Keep the configure environment defined on Linux too; the Darwin branch below
+# rewrites these values to contain exactly one deployment-minimum flag.
+CFLAGS="${CFLAGS:-}"
+CPPFLAGS="${CPPFLAGS:-}"
+LDFLAGS="${LDFLAGS:-}"
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  require_command node
+  TAU_MACOS_DEPLOYMENT_TARGET="$(tauri_macos_minimum_system_version)"
+  target_key="$(macos_version_key "$TAU_MACOS_DEPLOYMENT_TARGET")"
+  if [[ -n "${MACOSX_DEPLOYMENT_TARGET:-}" ]] &&
+    [[ "$(macos_version_key "$MACOSX_DEPLOYMENT_TARGET")" != "$target_key" ]]; then
+    die "Conflicting MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET (Tau declares $TAU_MACOS_DEPLOYMENT_TARGET)."
+  fi
+
+  # Export before autogen/configure/make. Autoconf helper programs and every
+  # compiler/link invocation now agree with the app bundle's declared floor.
+  export MACOSX_DEPLOYMENT_TARGET="$TAU_MACOS_DEPLOYMENT_TARGET"
+  CFLAGS="$(normalize_macos_min_flags "${CFLAGS:-}" "$TAU_MACOS_DEPLOYMENT_TARGET")"
+  CPPFLAGS="$(normalize_macos_min_flags "${CPPFLAGS:-}" "$TAU_MACOS_DEPLOYMENT_TARGET")"
+  LDFLAGS="$(normalize_macos_min_flags "${LDFLAGS:-}" "$TAU_MACOS_DEPLOYMENT_TARGET")"
+  export CFLAGS CPPFLAGS LDFLAGS
+fi
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   require_command glibtoolize
@@ -147,8 +233,9 @@ pushd "$BUILD_DIR" >/dev/null
 # that can run a digital part and one that cannot, and that has been an opt-in
 # upstream before: the flag states the requirement rather than inheriting it.
 PATH="$BISON_DIR:$AUTOTOOLS_BIN:$PATH" \
-  CFLAGS="${CFLAGS:-} -O2 -fPIC $EXTRA_CFLAGS" \
-  LDFLAGS="${LDFLAGS:-} $EXTRA_LDFLAGS" \
+  CFLAGS="$CFLAGS -O2 -fPIC $EXTRA_CFLAGS" \
+  CPPFLAGS="$CPPFLAGS" \
+  LDFLAGS="$LDFLAGS $EXTRA_LDFLAGS" \
   "$SOURCE_DIR/configure" \
     --with-ngshared \
     --enable-xspice \

@@ -130,6 +130,7 @@ record_completion() {
   [[ -d "$app" ]] || die "tauri build produced no Tau.app"
   [[ -n "$dmg" && -f "$dmg" ]] || die "tauri build produced no DMG"
   codesign --verify --deep --strict "$app"
+  scripts/verify-macos-deployment-target.sh "$app" --require-macos
   hdiutil verify "$dmg"
 
   mount_dir="$proof_dir/mount"
@@ -141,6 +142,7 @@ record_completion() {
   mounted_resource="$mounted_app/Contents/Resources/ngspice"
   mounted_library="$mounted_resource/lib/libngspice.dylib"
   [[ -f "$mounted_library" ]] || die "mounted Tau.app has no bundled ngspice library"
+  scripts/verify-macos-deployment-target.sh "$mounted_app" --require-macos
   # build.rs verified every source-resource digest before packaging. Require
   # the DMG to contain that exact tree so a copy/sign/bundle defect cannot
   # mutate an unexercised support file and still produce a completion signal.
