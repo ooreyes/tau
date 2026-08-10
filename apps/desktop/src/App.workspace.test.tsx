@@ -660,6 +660,8 @@ describe("Settings is a surface in this window", () => {
     for (let index = 0; index < entryPoints; index += 1) {
       fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[index]);
       const settings = await screen.findByRole("dialog", { name: "Settings" });
+      expect(settings.getAttribute("data-slot")).toBe("sheet-content");
+      expect(settings.classList.contains("tau-settings-route")).toBe(true);
       expect(within(settings).getByRole("navigation", { name: "Settings pages" })).toBeTruthy();
       // The schematic window is still the window: the open tab is mounted
       // behind Settings rather than replaced by it. `hidden: true` is

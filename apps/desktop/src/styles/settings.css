@@ -42,6 +42,21 @@
   backdrop-filter: blur(3px);
 }
 
+/* Settings deliberately uses the Sheet primitive for its focus, dismissal,
+   and accessibility contract, but this route is the one full-window sheet.
+   The combined selector outranks SheetContent's ordinary 360px side-panel
+   utilities, so this geometry cannot depend on stylesheet import order. */
+[data-slot="sheet-content"].tau-settings-route {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
 .tau-settings-route > .tau-settings {
   max-width: 1100px;
   max-height: 100%;

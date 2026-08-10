@@ -48,6 +48,7 @@ function SheetOverlay({ className, ...props }: React.ComponentProps<typeof Dialo
 
 function SheetContent({
   className,
+  overlayClassName,
   children,
   showCloseButton = true,
   closeLabel = "Close",
@@ -55,10 +56,12 @@ function SheetContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   closeLabel?: string;
+  /** Preserve a surface's established backdrop treatment when it is migrated from Dialog. */
+  overlayClassName?: string;
 }) {
   return (
     <SheetPortal>
-      <SheetOverlay />
+      <SheetOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="sheet-content"
         className={cn(

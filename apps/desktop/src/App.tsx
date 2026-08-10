@@ -12,7 +12,7 @@ import { formatEngineering } from "./simulation/quantity";
 import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/AssistantPanel";
 import { usePanelWidth } from "./components/ui/resizable";
 import { Toaster, toast } from "./components/ui/sonner";
-import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog";
+import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet";
 import { canFitIndependentColumns, resolveChrome } from "./chrome/resolveChrome";
 import { SURFACES } from "./chrome/surfaces";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
@@ -166,11 +166,11 @@ import { SHELL, inspectorName } from "./components/shellContract";
  * it is fetched the first time somebody actually opens it rather than parsed
  * at launch.
  *
- * Its Suspense boundary deliberately sits OUTSIDE `DialogContent`: while the
+ * Its Suspense boundary deliberately sits OUTSIDE `SheetContent`: while the
  * chunk is in flight there must be no half-built modal in the accessibility
  * tree, only nothing, so that "a dialog named Settings exists" and "its pages
  * are in it" stay the single observable event they have always been. The
- * `Dialog` root above the boundary stays mounted either way, which is what
+ * `Sheet` root above the boundary stays mounted either way, which is what
  * preserves the close transition and the `onCloseAutoFocus` focus return.
  */
 const SettingsWindow = lazy(async () => ({
@@ -3095,9 +3095,9 @@ function App() {
           onDiscard={discardExternalEdit}
         />
       )}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
         <Suspense fallback={null}>
-          <DialogContent
+          <SheetContent
             showCloseButton={false}
             overlayClassName="bg-transparent"
             className="tau-settings-route top-0 left-0 max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-transparent p-0 shadow-none"
@@ -3112,11 +3112,11 @@ function App() {
                 hidden so the rendered surface matches today's design exactly.
                 Text must stay exactly "Settings" - App.workspace.test.tsx
                 queries getByRole("dialog", { name: "Settings" }). */}
-            <DialogTitle className="sr-only">Settings</DialogTitle>
+            <SheetTitle className="sr-only">Settings</SheetTitle>
             <SettingsWindow onClose={() => setSettingsOpen(false)} />
-          </DialogContent>
+          </SheetContent>
         </Suspense>
-      </Dialog>
+      </Sheet>
       {confirmClearOpen && (
         <ConfirmDialog
           title="Clear schematic?"
