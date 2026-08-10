@@ -473,6 +473,39 @@ fn unmanaged_listener_status() -> LocalAiStatus {
     )
 }
 
+/// Build the managed-server status from one readiness probe. Calling the HTTP
+/// probe twice here used to hold the process lock through two 400 ms socket
+/// reads whenever the server was still warming up. The UI polls this command
+/// while a model loads, so one observation must drive both the state and its
+/// explanation.
+fn managed_listener_status(preset: &ModelPreset, ready: bool) -> LocalAiStatus {
+    status_with(
+        if ready { "ready" } else { "starting" },
+        true,
+        Some(preset),
+        if ready {
+            "On-device AI is ready."
+        } else {
+            "Loading on-device AI…"
+        },
+    )
+}
+
+/// Like [`managed_listener_status`], preserve one loopback observation for
+/// every displayed outcome after Tau stops its child process.
+fn stopped_listener_status(listener_remains: bool) -> LocalAiStatus {
+    status_with(
+        if listener_remains { "error" } else { "stopped" },
+        false,
+        None,
+        if listener_remains {
+            "Another app is still using on-device AI. Tau will not send circuit context to it."
+        } else {
+            "On-device AI is off."
+        },
+    )
+}
+
 fn reject_unmanaged_listener(listening: bool) -> Result<(), String> {
     if listening {
         Err(
@@ -498,20 +531,7 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
                 );
             }
             Ok(None) => {
-                return status_with(
-                    if endpoint_is_listening() {
-                        "ready"
-                    } else {
-                        "starting"
-                    },
-                    true,
-                    Some(&process.preset),
-                    if endpoint_is_listening() {
-                        "On-device AI is ready."
-                    } else {
-                        "Loading on-device AI…"
-                    },
-                );
+                return managed_listener_status(&process.preset, endpoint_is_listening());
             }
             Err(error) => {
                 return status_with(
@@ -665,20 +685,7 @@ pub fn stop_local_ai(state: State<'_, LocalAiState>) -> Result<LocalAiStatus, St
             .map_err(|error| format!("Could not stop local inference: {error}"))?;
         let _ = process.child.wait();
     }
-    Ok(status_with(
-        if endpoint_is_listening() {
-            "error"
-        } else {
-            "stopped"
-        },
-        false,
-        None,
-        if endpoint_is_listening() {
-            "Another app is still using on-device AI. Tau will not send circuit context to it."
-        } else {
-            "On-device AI is off."
-        },
-    ))
+    Ok(stopped_listener_status(endpoint_is_listening()))
 }
 
 #[cfg(test)]
@@ -758,6 +765,35 @@ mod tests {
         assert!(status.detail.contains("did not start"));
         assert!(reject_unmanaged_listener(true).is_err());
         assert!(reject_unmanaged_listener(false).is_ok());
+    }
+
+    #[test]
+    fn one_endpoint_observation_drives_each_managed_status() {
+        let preset = preset_by_id("qwen3-1.7b-4bit").unwrap();
+        let ready = managed_listener_status(&preset, true);
+        assert_eq!(ready.state, "ready");
+        assert!(ready.managed);
+        assert_eq!(ready.detail, "On-device AI is ready.");
+
+        let starting = managed_listener_status(&preset, false);
+        assert_eq!(starting.state, "starting");
+        assert!(starting.managed);
+        assert_eq!(starting.detail, "Loading on-device AI…");
+    }
+
+    #[test]
+    fn one_endpoint_observation_drives_each_stopped_status() {
+        let stopped = stopped_listener_status(false);
+        assert_eq!(stopped.state, "stopped");
+        assert!(!stopped.managed);
+        assert_eq!(stopped.detail, "On-device AI is off.");
+
+        let foreign_listener = stopped_listener_status(true);
+        assert_eq!(foreign_listener.state, "error");
+        assert!(!foreign_listener.managed);
+        assert!(foreign_listener
+            .detail
+            .contains("will not send circuit context"));
     }
 
     #[test]
