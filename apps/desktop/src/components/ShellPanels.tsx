@@ -20,7 +20,6 @@ import {
   Crosshair,
   Undo2,
   Redo2,
-  Activity,
   Library,
   SlidersHorizontal,
   Play,
@@ -2338,21 +2337,14 @@ export function ComponentsRail({
   );
 }
 
-export function MinimizedPanelDock({
-  graphHidden,
-  onRestoreGraph,
-}: {
-  graphHidden: boolean;
-  onRestoreGraph: () => void;
-}) {
-  return (
-    <aside className="minimized-panel-dock" aria-label="Minimized panels">
-      {graphHidden && (
-        <button className="restore-orb graph" aria-label="Restore graphs panel" title="Restore graphs panel" onClick={onRestoreGraph}>
-          <Activity size={16} strokeWidth={1.6} aria-hidden="true" />
-          <span>Graphs</span>
-        </button>
-      )}
-    </aside>
-  );
-}
+/*
+ * `MinimizedPanelDock` stood here: a floating orb offering to restore the
+ * analysis panel. It is gone with stage 4a, and it was already dead before
+ * that - the `onClose` that hid the panel was declared, passed and never
+ * destructured, so nothing could reach the state the orb existed to undo.
+ *
+ * Nothing replaces it. The results drawer's peek state is a readout, not an
+ * icon: the lamp, the run facts and the issue count are all still on screen
+ * when it is collapsed, which is strictly more than an orb labelled "Graphs"
+ * ever said.
+ */

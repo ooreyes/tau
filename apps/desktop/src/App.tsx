@@ -7,7 +7,8 @@ import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
-import { TelemetryDock } from "./components/TelemetryDock";
+import { ComponentMeasurementsPanel } from "./components/ComponentMeasurementsPanel";
+import { formatEngineering } from "./simulation/quantity";
 import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/AssistantPanel";
 import { usePanelWidth } from "./components/ui/resizable";
 import { Toaster, toast } from "./components/ui/sonner";
@@ -58,10 +59,10 @@ import {
   EditorTabs,
   EditorToolbar,
   ExplorerPanel,
-  MinimizedPanelDock,
 } from "./components/ShellPanels";
 import { ActivityRail } from "./components/shell/NavRail";
 import { BottomPanel } from "./components/drawer/DiagnosticsTab";
+import { ResultsDrawer } from "./components/drawer/ResultsDrawer";
 import { ConfirmDialog, UnsavedChangesDialog } from "./components/ui/confirm";
 import { SettingsWindow } from "./settings/SettingsWindow";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
@@ -361,7 +362,16 @@ function App() {
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
   const [savingCloseTab, setSavingCloseTab] = useState(false);
-  const [graphOpen, setGraphOpen] = useState(true);
+  /**
+   * Bumped whenever a run produces something worth reading, which raises the
+   * results drawer if it is collapsed. A counter rather than the old
+   * `graphOpen` boolean: `setGraphOpen(true)` on an already-open panel is a
+   * no-op, so "a new result arrived" and "the panel happens to be open" were
+   * the same state and the second run of a session could not raise anything.
+   */
+  const [resultsRaise, setResultsRaise] = useState(0);
+  /** Pixels of canvas the results drawer is covering; see its onCoverChange. */
+  const [drawerCover, setDrawerCover] = useState(0);
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
   const [partsOpen, setPartsOpen] = useState(true);
   const [fitSignal, setFitSignal] = useState(0);
@@ -650,6 +660,38 @@ function App() {
     () => (analysis?.ok ? componentMeasurements(analysis) : []),
     [analysis],
   );
+
+  /**
+   * The two things the results drawer needs that only App can compute.
+   *
+   * `resultsSummary` is the whole readout when the drawer is collapsed, so it
+   * has to say what happened without the plots: the run's span and how many
+   * points it took, or the error's own message. Two facts, not the plotter's
+   * five - a peek strip is a glance, and the detail is one click away.
+   *
+   * `diagnosticsBadge` is the same count the Errors tab renders, hoisted so it
+   * is legible with the drawer shut. It mirrors BottomPanel's own arithmetic
+   * (the failure message, the run's warnings, and any import notices for this
+   * file), which is a duplication worth accepting: the alternative is the tab
+   * reporting its own count upward through state, and a surface that has to
+   * render before its label is correct cannot be collapsed.
+   */
+  const resultsSummary = useMemo(() => {
+    if (analysisRunning) return undefined;
+    if (!analysis) return undefined;
+    if (!analysis.ok) return analysis.message;
+    const { stopTime, sampleCount } = analysis.stats;
+    return `${formatEngineering(stopTime, "s", 2)} \u00b7 ${sampleCount} samples`;
+  }, [analysis, analysisRunning]);
+
+  const diagnosticsBadge = useMemo(() => {
+    if (analysisRunning) return null;
+    const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
+    const failed = Boolean(analysis && !analysis.ok);
+    const count = (failed ? 1 : 0) + (analysis?.warnings?.length ?? 0) + notices.length;
+    if (count === 0) return null;
+    return { text: String(count), tone: failed ? ("error" as const) : ("warning" as const) };
+  }, [analysis, analysisRunning, activeFilePath, importWarningsByPath]);
 
   // Prefer ngspice `.meas ac` printout when present (P1.6).
   const acMeasurements = useMemo<MeasResult[]>(() => {
@@ -1144,7 +1186,7 @@ function App() {
   const runAndShowSimulator = useCallback(async () => {
     await saveActiveToProjectRef.current({ quietBlocked: true });
     setMode("simulator");
-    setGraphOpen(true);
+    setResultsRaise((n) => n + 1);
     if (preferredAnalysis === "op") void runOperatingAnalysis();
     else if (preferredAnalysis === "ac") void runAcAnalysis();
     else if (preferredAnalysis === "dc") void runDcAnalysis();
@@ -1569,34 +1611,34 @@ function App() {
         if (!tran) return;
         confirmLargeRunIfNeeded(tran, () => {
           setMode("simulator");
-          setGraphOpen(true);
+          setResultsRaise((n) => n + 1);
           void executeTransient(tran);
         });
         break;
       }
       case "ac":
         setMode("simulator");
-        setGraphOpen(true);
+        setResultsRaise((n) => n + 1);
         void runAcAnalysis();
         break;
       case "dc":
         setMode("simulator");
-        setGraphOpen(true);
+        setResultsRaise((n) => n + 1);
         void runDcAnalysis();
         break;
       case "tf":
         setMode("simulator");
-        setGraphOpen(true);
+        setResultsRaise((n) => n + 1);
         void runTfAnalysis();
         break;
       case "noise":
         setMode("simulator");
-        setGraphOpen(true);
+        setResultsRaise((n) => n + 1);
         void runNoiseAnalysis_();
         break;
       case "op":
         setMode("simulator");
-        setGraphOpen(true);
+        setResultsRaise((n) => n + 1);
         void runOperatingAnalysis();
         break;
     }
@@ -1754,7 +1796,7 @@ function App() {
     openDocument(blankDocument(), basename(path), path, [], {
       ...(fingerprint !== undefined ? { diskFingerprint: fingerprint } : {}),
     });
-    setGraphOpen(true);
+    setResultsRaise((n) => n + 1);
     showNotice(`Created ${basename(path)}`);
   }, [createSchematicInRoot, openDocument, showNotice]);
 
@@ -1790,7 +1832,7 @@ function App() {
     });
     setLearningPath(startLearningPath());
     setLearningPathCoachHidden(false);
-    setGraphOpen(true);
+    setResultsRaise((n) => n + 1);
   }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
 
   const dismissLearningPathCoach = useCallback(() => {
@@ -1892,7 +1934,7 @@ function App() {
     invalidateAnalysis();
     setMode("schematic");
     setConfirmClearOpen(false);
-    setGraphOpen(true);
+    setResultsRaise((n) => n + 1);
     showNotice("Schematic cleared.");
   }, [activeId, newCircuit, invalidateAnalysis, showNotice]);
 
@@ -2351,6 +2393,7 @@ function App() {
               readoutTime={schematicReadoutTime}
               interactive
               fitSignal={fitSignal}
+              fitInsetBottom={drawerCover}
             />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState
@@ -2362,16 +2405,10 @@ function App() {
               />
             )}
           </main>
-          <BottomPanel
-            result={analysis}
-            isRunning={analysisRunning}
-            notices={activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : []}
-          />
           <ImportDropOverlay active={importDragActive} />
         </section>
         )}
-        {mode === "simulator" && activeProjectFile && graphOpen && (
-          <>
+        {mode === "simulator" && activeProjectFile && (
             <section className="sim-schematic-pane" aria-label="Circuit overview">
               <header className="sim-schematic-header">
                 <div className="sim-schematic-title">
@@ -2480,11 +2517,54 @@ function App() {
                   interactive={false}
                   onActuate={handleActuate}
                   fitSignal={fitSignal}
+                  fitInsetBottom={drawerCover}
                   currentVisualizer={currentVisualizer}
                 />
               </div>
-              <TelemetryDock rows={componentRows} selectedId={selectedId} onSelect={select} />
             </section>
+        )}
+        {/*
+          * One bottom surface for every result the app produces.
+          *
+          * It replaces three that each owned a slice of the window: the
+          * schematic's diagnostics strip, the simulator's telemetry dock, and
+          * the analysis plotter as a 400px right-hand column. The plotter is
+          * the one an engineer actually reads, and it was getting whatever
+          * width was left after the circuit, the explorer and the assistant
+          * had taken theirs. Over the canvas instead of beside it, it gets
+          * the window.
+          *
+          * Rendered outside the mode branches on purpose: it is the one
+          * surface that means the same thing in both modes, and mounting one
+          * per branch would put two live landmarks under a single accessible
+          * name every time the mode changed.
+          */}
+        {activeProjectFile && (
+          <ResultsDrawer
+            status={analysisRunning ? "running" : analysis ? (analysis.ok ? "complete" : "error") : "idle"}
+            statusLine={resultsSummary}
+            onStop={stopAnalysis}
+            raiseSignal={resultsRaise}
+            onCoverChange={setDrawerCover}
+            preferredHeight={mode === "simulator" ? "half" : "peek"}
+            preferredTab={mode === "simulator" ? "waveforms" : "errors"}
+            errorBadge={diagnosticsBadge}
+            errors={
+              <BottomPanel
+                result={analysis}
+                isRunning={analysisRunning}
+                notices={activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : []}
+              />
+            }
+            measurements={componentRows.length === 0 ? null : (
+              <ComponentMeasurementsPanel
+                rows={componentRows}
+                selectedId={selectedId}
+                onSelect={select}
+                variant="compact"
+              />
+            )}
+            waveforms={mode !== "simulator" ? null : (
             <AnalysisErrorBoundary>
               <SimulationPanel
                 circuitTitle={documentTitle}
@@ -2523,7 +2603,6 @@ function App() {
                 onRunNoise={runNoiseAnalysis_}
                 onRunStep={runStepAnalysis}
                 onStop={stopAnalysis}
-                onClose={() => setGraphOpen(false)}
                 dcSetup={dcSetup}
                 onDcSetupChange={setDcSetup}
                 tfSetup={tfSetup}
@@ -2536,12 +2615,7 @@ function App() {
                 liveSchematicPlayback={currentVisualizer}
               />
             </AnalysisErrorBoundary>
-          </>
-        )}
-        {mode === "simulator" && activeProjectFile && !graphOpen && (
-          <MinimizedPanelDock
-            graphHidden={!graphOpen}
-            onRestoreGraph={() => setGraphOpen(true)}
+            )}
           />
         )}
         {componentsColumnOpen && activeProjectFile && (

@@ -4,7 +4,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
-import { Crosshair, FileDown, Maximize2, Minimize2, Square } from "lucide-react";
+import { Crosshair, FileDown } from "lucide-react";
 import {
   buildRunRecord,
   rememberRunRecord,
@@ -241,7 +241,6 @@ interface SimulationPanelProps {
   onRunNoise: () => void | Promise<void>;
   onRunStep: () => void | Promise<void>;
   onStop: () => void;
-  onClose: () => void;
   dcSetup: DcSweepSpec;
   onDcSetupChange: (next: DcSweepSpec) => void;
   tfSetup: TfSpec;
@@ -444,7 +443,6 @@ export function SimulationPanel({
     result,
   ]);
 
-  const [maximized, setMaximized] = useState(false);
   // User-entered expression traces overlaid on the transient scope, e.g.
   // `V(out)-V(in)` or power `V(out)*I(R1)`.
   const [exprList, setExprList] = useState<string[]>([]);
@@ -920,14 +918,6 @@ export function SimulationPanel({
     downloadText(bytes, "transient", "raw", "application/octet-stream");
   };
 
-  const title =
-    mode === "tran" ? "Transient scope"
-    : mode === "op" ? "Operating point"
-    : mode === "ac" ? "AC sweep"
-    : mode === "dc" ? "DC sweep"
-    : mode === "tf" ? "Transfer function"
-    : mode === "noise" ? "Noise analysis"
-    : "Step sweep";
   // The native engine returns its own solver timepoints, so this bounds what
   // Tau asks for rather than what comes back; the transfer guard resamples an
   // overshoot rather than discarding the run.
@@ -985,14 +975,13 @@ export function SimulationPanel({
   // solver that produced it. Absent while running or idle - there is no result
   // to attribute yet - and absent on a result that never chose an engine.
   const activeEngine = isRunning ? undefined : activeResult?.engine;
-  const statusLabel =
-    runStatus === "running" ? "Running"
-    : runStatus === "complete" ? "Complete"
-    : runStatus === "error" ? "Error"
-    : "Idle";
   const lastRunInfo =
     runStatus === "complete" && mode === "tran" && result?.ok
-      ? `${formatEngineering(result.stats.stopTime, "s", 2)} · ${result.stats.sampleCount} samples · ${result.stats.netCount} nets · ${result.stats.componentCount} parts${lastRunDurationMs !== null ? ` · ${formatElapsed(lastRunDurationMs)} elapsed` : ""}`
+      // Span and sample count are deliberately absent: the drawer head above
+      // already carries them, and it carries them when this panel is
+      // collapsed away. What is left is what only makes sense next to the
+      // plots - the size of the circuit and what the run cost.
+      ? `${result.stats.netCount} nets · ${result.stats.componentCount} parts${lastRunDurationMs !== null ? ` · ${formatElapsed(lastRunDurationMs)} elapsed` : ""}`
       : runStatus === "error"
         ? "Simulation failed - details below"
         : runStatus === "idle"
@@ -1194,74 +1183,55 @@ export function SimulationPanel({
   const runPercent = runProgress != null ? Math.round(runProgress * 100) : null;
 
   return (
-    <aside className={`plotter${maximized ? " maximized" : ""}`} aria-label="Analysis plotter" aria-busy={isRunning}>
-      <div className="plotter-header">
-        <div>
-          <div className="plotter-kicker">Analysis</div>
-          <div className="plotter-title">{title}</div>
-        </div>
-        <div className="plotter-actions">
-          {isRunning && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={onStop}
-                  aria-label="Stop simulation"
-                >
-                  <Square size={13} strokeWidth={1.8} aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Stop the running analysis</TooltipContent>
-            </Tooltip>
-          )}
+    /*
+     * A plain div, not a landmark. This used to be
+     * `<aside aria-label="Analysis plotter">` because it was a column of the
+     * shell; it is the Waveforms body inside the results drawer now, and the
+     * drawer owns the landmark. Two nested complementary regions, one named
+     * for the panel rather than for what the reader is looking at, is noise
+     * in the accessibility tree.
+     *
+     * The header that stood here went with it: an "Analysis / Transient scope"
+     * kicker-and-title stacked directly above a tab strip whose active tab
+     * reads TRAN, above a caption that already reads "Voltage and current over
+     * time". Three restatements of one fact. Stop and the size control moved
+     * to the drawer head; Export keeps its job beside the mode rail, which is
+     * the row it actually belongs to. The single primary Run stays in the top
+     * toolbar, as it always has.
+     */
+    <div className="plotter" aria-busy={isRunning}>
+      <div className="plotter-tabs">
+        <AnalysisModeRail value={mode} onValueChange={handleModeChange} disabled={isRunning} />
+        {activeResult && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="outline"
                 size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => setMaximized((m) => !m)}
-                aria-label="Toggle maximized analysis"
+                className="plotter-export text-muted-foreground hover:text-foreground"
+                onClick={exportRunRecord}
+                aria-label="Export run record"
               >
-                {maximized
-                  ? <Minimize2 size={13} strokeWidth={1.8} aria-hidden="true" />
-                  : <Maximize2 size={13} strokeWidth={1.8} aria-hidden="true" />}
+                <FileDown size={13} strokeWidth={1.8} aria-hidden="true" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{maximized ? "Restore panel" : "Maximize analysis"}</TooltipContent>
+            <TooltipContent>Export reproducible .tau-run.json run record</TooltipContent>
           </Tooltip>
-          {activeResult && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={exportRunRecord}
-                  aria-label="Export run record"
-                >
-                  <FileDown size={13} strokeWidth={1.8} aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export reproducible .tau-run.json run record</TooltipContent>
-            </Tooltip>
-          )}
-          {/* No Run button here - the single primary Run lives in the top
-              toolbar. Duration/detail live in Advanced ▸ Simulation settings;
-              run status lives in the dashboard strip under the tabs. */}
-        </div>
+        )}
       </div>
 
-      <div className="plotter-tabs">
-        <AnalysisModeRail value={mode} onValueChange={handleModeChange} disabled={isRunning} />
-      </div>
-
-      <div className={`plotter-status plotter-status--${runStatus}`} role="status" aria-live="polite">
-        <span className="plotter-status-lamp" aria-hidden="true" />
-        <span className="plotter-status-state">{statusLabel}</span>
+      {/*
+        * The lamp and the state word moved to the drawer head, which is the
+        * one line that stays visible when the drawer is collapsed. What is
+        * left here is the detail that only means something with the plots in
+        * front of you: the run's own facts, and which engine produced them.
+        *
+        * The engine badge is not decoration and must not be dropped to save a
+        * row. Tau falls back to a preview solver for circuits the native
+        * engine cannot take, and a result that does not say so is a silent
+        * model substitution.
+        */}
+      <div className="plotter-status" role="status" aria-live="polite">
         {lastRunInfo && <span className="plotter-status-info">{lastRunInfo}</span>}
         {activeEngine && (
           <Tooltip>
@@ -1923,7 +1893,7 @@ export function SimulationPanel({
 
       {/* Run warnings live in Diagnostics — avoid a duplicate banner here. */}
       </div>
-    </aside>
+    </div>
   );
 }
 

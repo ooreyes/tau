@@ -89,7 +89,6 @@ function renderPanel(overrides: Partial<Parameters<typeof SimulationPanel>[0]> =
       onRunNoise={vi.fn()}
       onRunStep={vi.fn()}
       onStop={vi.fn()}
-      onClose={vi.fn()}
       onOptionsChange={vi.fn()}
       onDcSetupChange={vi.fn()}
       onTfSetupChange={vi.fn()}
@@ -122,7 +121,9 @@ describe("SimulationPanel - engine attribution badge", { timeout: 20_000 }, () =
     renderPanel({ result: tranResult });
     expect(badge()).toBeNull();
     // The strip itself still rendered - absence is the badge, not the strip.
-    expect(screen.getByRole("status").textContent).toContain("Complete");
+    // Asserted on the run facts rather than on the word "Complete", which
+    // moved to the results drawer's head when the panel lost its own chrome.
+    expect(screen.getByRole("status").textContent).toContain("6 parts");
   });
 
   it("shows no badge while a run is in flight, when nothing is attributable yet", () => {
@@ -146,7 +147,7 @@ describe("SimulationPanel - engine attribution badge", { timeout: 20_000 }, () =
       preferredMode: "noise",
       noiseResult: { ok: false, message: "no AC source", warnings: [], engine: "ngspice" },
     });
-    expect(screen.getByRole("status").textContent).toContain("Error");
+    expect(screen.getByRole("status").textContent).toContain("details below");
     expect(badge()?.textContent).toBe("ngspice");
   });
 });

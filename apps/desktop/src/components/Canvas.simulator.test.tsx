@@ -540,12 +540,22 @@ describe("Canvas - simulator fit viewport", () => {
     const view = { x: Number(match[1]), y: Number(match[2]), zoom: Number(match[3]) };
 
     // Rotated body+pins span 56×96 including the world margin. The 300px-high
-    // viewport has 204px after fit padding, so height is the constrained axis.
-    expect(view.zoom).toBeCloseTo(204 / 96, 6);
+    // viewport has 204px after fit padding, so height is the constrained axis
+    // and the fit wants 204/96 = 2.125x.
+    //
+    // It gets 2x, because the fit clamps there. One rotated resistor is not a
+    // circuit worth magnifying past life size, and the cap became load-bearing
+    // when the canvas stopped being a column and became the window: a
+    // four-part RC filled 1400px and read as a cartoon.
+    expect(204 / 96).toBeGreaterThan(2);
+    expect(view.zoom).toBeCloseTo(2, 6);
+    // Centred either way. The part still sits in the middle of the viewport;
+    // the clamp only means it does not touch the fit padding.
     expect(view.x + 100 * view.zoom).toBeCloseTo(200, 6);
     expect(view.y + 200 * view.zoom).toBeCloseTo(150, 6);
-    expect(view.y + 152 * view.zoom).toBeCloseTo(48, 6);
-    expect(300 - (view.y + 248 * view.zoom)).toBeCloseTo(48, 6);
+    const margin = (300 - 96 * view.zoom) / 2;
+    expect(view.y + 152 * view.zoom).toBeCloseTo(margin, 6);
+    expect(300 - (view.y + 248 * view.zoom)).toBeCloseTo(margin, 6);
   });
 });
 

@@ -141,13 +141,22 @@ describe("SimulationPanel - no redundant Run button", { timeout: 20_000 }, () =>
     expect(screen.queryByRole("button", { name: /run transient/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^run/i })).toBeNull();
     expect(screen.queryByRole("button", { name: "Minimize graphs" })).toBeNull();
-    expect(screen.getByRole("status").textContent).toContain("Idle");
+    // The state word ("Idle", "Running", "Complete") belongs to the results
+    // drawer now - it is the one line that survives a collapse, so it cannot
+    // live in the body the collapse unmounts. What is left in this strip is
+    // the pointer at where Run actually is. See ResultsDrawer.test.tsx.
+    expect(screen.getByRole("status").textContent).toContain("press Run");
+    expect(document.querySelector(".plotter-status-lamp")).toBeNull();
   });
 
-  it("shows Running in the status strip while a simulation is in flight", () => {
+  it("shows no state word and no Stop of its own while a simulation is in flight", () => {
     renderPanel({ isRunning: true });
-    expect(screen.getByRole("status").textContent).toContain("Running");
+    expect(screen.getByRole("status").textContent).not.toContain("Running");
     expect(screen.queryByRole("button", { name: /run/i })).toBeNull();
+    // Stop moved to the drawer head with the lamp. Two Stops for one run,
+    // one of which scrolls away with the plots, is the duplication the merge
+    // exists to remove.
+    expect(screen.queryByRole("button", { name: "Stop simulation" })).toBeNull();
   });
 
   it("treats TRAN tab selection as the run gesture, like every other tab", () => {
@@ -172,11 +181,11 @@ describe("SimulationPanel - no redundant Run button", { timeout: 20_000 }, () =>
     } as import("../simulation/linearTransient").AnalysisResult;
     renderPanel({ result: okResult });
 
-    expect(screen.getByRole("status").textContent).toContain("241 samples");
+    expect(screen.getByRole("status").textContent).toContain("6 parts");
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
     expect(screen.getByRole("status").textContent).toContain("No analysis yet");
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Transient analysis (.tran)" }), { button: 0 });
-    expect(screen.getByRole("status").textContent).toContain("241 samples");
+    expect(screen.getByRole("status").textContent).toContain("6 parts");
   });
 
   it("uses explicit waveform-detail choices instead of an opaque refine action", () => {
@@ -226,12 +235,15 @@ describe("SimulationPanel - dashboard status strip", { timeout: 20_000 }, () => 
   it("shows Complete with last-run figures after a successful transient", () => {
     renderPanel({ result: okResult });
     const strip = screen.getByRole("status");
-    expect(strip.textContent).toContain("Complete");
-    expect(strip.textContent).toContain("6 ms");
-    expect(strip.textContent).toContain("241 samples");
+    // What stays here is what only means something next to the plots. The
+    // state word and the lamp are the drawer's, because they have to read
+    // correctly with this whole panel unmounted; the span and the sample
+    // count are the drawer's for the same reason, and repeating them 100px
+    // apart was the duplication the merge exists to remove.
     expect(strip.textContent).toContain("4 nets");
     expect(strip.textContent).toContain("6 parts");
-    expect(strip.classList.contains("plotter-status--complete")).toBe(true);
+    expect(strip.textContent).not.toContain("Complete");
+    expect(strip.textContent).not.toContain("241 samples");
   });
 
   it("goes to the danger Error state and surfaces the failure message inline", () => {
@@ -244,9 +256,8 @@ describe("SimulationPanel - dashboard status strip", { timeout: 20_000 }, () => 
     } as import("../simulation/linearTransient").AnalysisResult;
     renderPanel({ result: failed });
     const strip = screen.getByRole("status");
-    expect(strip.textContent).toContain("Error");
     expect(strip.textContent).toContain("details below");
-    expect(strip.classList.contains("plotter-status--error")).toBe(true);
+    expect(strip.textContent).not.toContain("Error");
     // The pointer must not dangle: the failed run's own message renders in
     // the scope area (the footer that used to carry it is gone).
     expect(screen.getByRole("alert").textContent).toContain("singular matrix at t=0");
@@ -257,9 +268,8 @@ describe("SimulationPanel - dashboard status strip", { timeout: 20_000 }, () => 
   it("stays Idle with a pointer at the toolbar Run before anything has run", () => {
     renderPanel();
     const strip = screen.getByRole("status");
-    expect(strip.textContent).toContain("Idle");
     expect(strip.textContent).toContain("press Run");
-    expect(strip.classList.contains("plotter-status--idle")).toBe(true);
+    expect(strip.textContent).not.toContain("Idle");
   });
 
   it("uses success semantics for the operating-point ground check", () => {

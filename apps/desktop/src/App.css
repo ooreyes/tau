@@ -259,6 +259,9 @@
      would have mispositioned the moment the status readout changed height. */
   --toolbar-height: 44px;
   --status-bar-height: 28px;
+  /* The nav rail's width. Anything that spans the shell but must not cover
+     the rail (the results drawer) offsets by this rather than repeating 52. */
+  --rail-width: 52px;
 }
 
 /* ── Light theme - DESIGN_SYSTEM.md §1 ───────────────────────────────────
@@ -1253,10 +1256,7 @@ body {
    SIMULATION PANEL (plotter)
 ══════════════════════════════════════════════════════════════════════════════ */
 .plotter {
-  grid-area: plotter;
   min-width: 0;
-  background: var(--canvas-bg);
-  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -1510,8 +1510,15 @@ body {
    keys off Radix's own `data-state` attribute rather than a hand-toggled
    "active" class. As with every primitive, this plain rule is unlayered
    so it wins over the Tailwind utility classes tabs.tsx ships by default. */
+/* A row, so the Export button that lost the panel header sits beside the mode
+   rail instead of dropping under it. `flex-start` because the rail is two
+   lines - the abbreviations and the caption that says what the active one
+   does - and the button aligns to the abbreviations, not to the block. */
 .plotter-tabs {
   flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
   padding: var(--sp-1) var(--sp-3);
   border-bottom: 1px solid var(--border);
   background: transparent;
@@ -1630,9 +1637,6 @@ body {
   line-height: 1.45;
 }
 
-.plotter.maximized .scope-shell {
-  max-width: none;
-}
 
 .scope-svg {
   width: 100%;
@@ -4495,18 +4499,9 @@ body {
   min-width: 0;
 }
 
-/* ── Maximizable analysis panel ────────────────────────── */
-.plotter.maximized {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  width: auto;
-  border-left: none;
-  border-radius: 0;
-}
-.plotter.maximized .scope-shell {
-  flex: 1;
-}
+/* The "maximize the analysis panel" escape hatch is gone with the panel: the
+   drawer's own peek/half/full control does that job, and it does it without
+   a fixed-position layer over the whole window. */
 .plotter-actions {
   display: flex;
   align-items: center;
@@ -4976,7 +4971,7 @@ body {
 
 /* activity rail + explorer */
 .activity-rail {
-  width: 52px;
+  width: var(--rail-width);
   flex: none;
   display: flex;
   flex-direction: column;
@@ -7184,13 +7179,196 @@ button.bottom-panel-head:focus-visible {
   line-height: 1.5;
 }
 
-/* waveform column */
-.plotter {
-  width: 400px;
-  flex: none;
-  grid-area: auto;
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESULTS DRAWER - the one bottom surface
+   Replaces three: the schematic's diagnostics strip, the simulator's telemetry
+   dock, and the analysis plotter's right-hand column. Over the canvas, not
+   beside it, so a waveform gets the window's width instead of what is left
+   after four other panels have taken theirs.
+
+   Elevation: this one DOES get a shadow. The two-tier rule is that persistent
+   chrome (rail, transport, status readout) is a veil with no shadow because it
+   never went anywhere, while a summoned surface carries --elev-float to say
+   "this came from somewhere and will go back". The drawer is summoned - by
+   Run, by the rail, by its own control - so it is the shadowed tier, and it
+   sits on an opaque surface rather than a veil because a waveform read through
+   a blurred schematic is not a measurement.
+══════════════════════════════════════════════════════════════════════════════ */
+.results-drawer {
+  position: absolute;
+  left: var(--rail-width);
+  right: 0;
+  bottom: var(--status-bar-height);
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--canvas-bg);
-  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  box-shadow: var(--elev-float);
+  transition: height var(--motion-med) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results-drawer { transition: none; }
+}
+
+/* Peek is the header alone, and the header is a readout: the lamp, the run
+   facts and the issue count are all still legible. That is why there is no
+   separate restore affordance - the collapsed state earns its own strip. */
+.results-drawer--peek {
+  height: auto;
+}
+
+.results-drawer--half {
+  height: 46%;
+}
+
+/* Deliberately short of the top. A drawer that covers its own subject is a
+   page. 180px is roughly the smallest circuit still worth looking at, and it
+   is the figure the 900x600 floor was sized against. */
+.results-drawer--full {
+  height: calc(100% - var(--toolbar-height) - 180px);
+}
+
+.results-drawer-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: 34px;
+  padding: 0 var(--sp-3);
+}
+
+/* Run state. Same lamp semantics as the toolbar transport and the status
+   readout: colour is state, never mode. */
+.results-drawer-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.results-drawer-lamp {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--comp);
+  flex: none;
+}
+
+.results-drawer-status--running .results-drawer-lamp { background: var(--signal); }
+.results-drawer-status--complete .results-drawer-lamp { background: var(--success); }
+.results-drawer-status--error .results-drawer-lamp { background: var(--danger); }
+
+.results-drawer-state {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.results-drawer-status--error .results-drawer-state { color: var(--danger); }
+
+.results-drawer-info {
+  font-size: var(--fs-caption);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tabs sit on the substrate: no track and no box. The active one is the single
+   accent this module gets, and one hairline under it is enough to say which. */
+.results-drawer-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-1);
+  height: 34px;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.results-drawer-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-bottom: 1.5px solid transparent;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-out);
+}
+
+.results-drawer-tab:hover:not([data-state="active"]) {
+  color: var(--text);
+}
+
+.results-drawer-tab[data-state="active"] {
+  color: var(--text);
+  border-bottom-color: var(--accent-line);
+  background: none;
+  box-shadow: none;
+}
+
+.results-drawer-tab:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.results-drawer-badge {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.results-drawer-badge--error { color: var(--danger); }
+.results-drawer-badge--warning { color: var(--signal); }
+
+.results-drawer-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.results-drawer-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* At the 900x600 floor the run facts are the first thing to go: the lamp and
+   the state word still say what happened, and the tabs must stay reachable. */
+@media (max-width: 1000px) {
+  .results-drawer-info { display: none; }
+}
+
+/* The plotter is no longer a column. It was 400px pinned to the right edge
+   with its own left border; it is now the Waveforms body inside the results
+   drawer, which owns the width, the border and the elevation. */
+.plotter {
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+}
+
+/* Export sits with the analysis-mode rail now that the panel has no header
+   of its own. Pushed to the row's right edge, away from the tab strip. */
+.plotter-export {
+  margin-left: auto;
+  flex: none;
 }
 
 /* Simulator workspace: preserve circuit context beside the analysis instead
@@ -7200,9 +7378,11 @@ button.bottom-panel-head:focus-visible {
    material is limited to the compact header/control layer - the schematic and
    plots stay on opaque content surfaces for legibility. */
 .sim-schematic-pane {
-  flex: 0 1 38%;
+  /* Was `0 1 38%` capped at 560px, because it was sharing the row with the
+     scope. The scope is a drawer under it now, so the circuit gets the width
+     it always should have had. */
+  flex: 1;
   min-width: 280px;
-  max-width: 560px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -7450,43 +7630,10 @@ button.bottom-panel-head:focus-visible {
   overflow: hidden;
 }
 
-/* ── Component telemetry dock ──────────────────────────────────────────────
-   Anchored to the bottom of the circuit column, under the read-only
-   schematic. Collapsed = header only; expanded height is user-resizable via
-   panelResize.tsx's edge="top" handle (dragging up grows it). */
-.telemetry-dock {
-  position: relative;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  max-height: min(300px, calc(100% - 180px));
-  border-top: 1px solid var(--border);
-  background: var(--panel);
-}
-
-.telemetry-dock-header {
-  flex: none;
-  padding: 0 var(--sp-3);
-  height: 32px;
-  margin: 0;
-}
-
-.telemetry-dock-count {
-  flex: none;
-  color: var(--faint);
-  font-size: var(--fs-micro);
-  font-family: var(--font-mono);
-  letter-spacing: var(--tracking-micro);
-}
-
-.telemetry-dock-body {
-  flex: 1;
-  min-height: 0;
-  padding: 0 var(--sp-3) var(--sp-3);
-  overflow: hidden;
-}
-
+/* The telemetry dock's own chrome is gone: a collapsible header, a resize
+   handle and a bordered strip, all to wrap the compact measurement cards that
+   are now simply the results drawer's Measurements tab. The cards below are
+   what survived, because they were the only part carrying data. */
 .telemetry-compact-layout {
   display: flex;
   flex-direction: column;
@@ -7761,16 +7908,8 @@ button.bottom-panel-head:focus-visible {
   color: var(--trace-amber);
 }
 
-/* Resizable simulator columns: circuit (flex), analysis scope, and the same
-   independent Assistant column used by the schematic workspace. The scope
-   column (.plotter) still auto-fills remaining space (flex: 1); Assistant is
-   the width-driven right edge. */
-.app-simulator .shell-body > .plotter {
-  flex: 1;
-  width: auto;
-  min-width: 280px;
-  border-left: 0;
-}
+/* The scope is not a shell column any more (see .results-drawer), so the
+   simulator's only flex children are the circuit and the Assistant. */
 
 /* ── Assistant column ────────────────────────────────────
    Docks to the right of the scope column, same "resizable side panel"
@@ -9448,53 +9587,10 @@ button.bottom-panel-head:focus-visible {
   align-items: center;
 }
 
-.minimized-panel-dock {
-  width: 86px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: 18px 10px;
-  background: var(--panel);
-  border-left: 1px solid var(--border);
-}
-
-.restore-orb {
-  width: 64px;
-  min-height: 86px;
-  display: grid;
-  justify-items: center;
-  gap: var(--sp-2);
-  border: 0;
-  color: var(--text);
-  background: transparent;
-  cursor: pointer;
-  font: 700 var(--fs-caption) var(--font-mono);
-}
-
-.restore-orb svg {
-  width: 58px;
-  height: 58px;
-  padding: var(--sp-4);
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  background: var(--overlay-hover-faint);
-}
-
-.restore-orb.graph {
-  color: var(--trace-green);
-}
-
-.restore-orb:hover svg {
-  background: var(--overlay-hover);
-  transform: translateY(-1px);
-}
+/* `.minimized-panel-dock` and `.restore-orb` are gone with the component:
+   an 86px column holding one circular button offering to bring the analysis
+   panel back. The results drawer's peek strip is the replacement, and it says
+   more while taking a third of the height. */
 
 /* .confirm-dialog / .confirm-actions are now identity markers only - every
    visual property (true-black popover, hairline ring, --elev-pop, --scrim-

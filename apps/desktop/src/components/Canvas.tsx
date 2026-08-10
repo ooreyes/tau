@@ -154,6 +154,7 @@ export function Canvas({
   interactive = true,
   onActuate,
   fitSignal = 0,
+  fitInsetBottom = 0,
   currentVisualizer = false,
 }: {
   /** Last DC operating point; drives the current-flow visualizer. */
@@ -171,6 +172,16 @@ export function Canvas({
   onActuate?: () => void;
   /** Bumped by App on open/new/tab switch so the schematic auto-fits once. */
   fitSignal?: number;
+  /**
+   * Pixels along the bottom edge that something is covering, so the fit frames
+   * the circuit into the part of the canvas the reader can actually see.
+   *
+   * The results drawer floats over the canvas rather than squeezing it, which
+   * is deliberate - you can pan under it, and the canvas keeps its full
+   * extent. But a fit that measures the whole element and centres in it put
+   * half the circuit behind the drawer the moment the simulator opened.
+   */
+  fitInsetBottom?: number;
   /** Current Mode: animated flow dots along the wires, from real branch
    *  currents. Defaults OFF and is opted into by the simulator only - it is a
    *  reading of a completed run, and an editor canvas showing moving current
@@ -206,6 +217,11 @@ export function Canvas({
   componentsRef.current = components;
   wiresRef.current = wires;
   ascShapesRef.current = ascShapes;
+  // Same reason as the geometry refs above: `fitView` must stay identity-
+  // stable, or the auto-fit effect re-fires and stomps the user's pan every
+  // time the drawer is resized.
+  const fitInsetBottomRef = useRef(fitInsetBottom);
+  fitInsetBottomRef.current = fitInsetBottom;
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const selectedWireIds = useSchematic((s) => s.selectedWireIds);
@@ -1233,6 +1249,13 @@ export function Canvas({
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
+    // Reserve the occluded band. `fitViewTransform` centres within the height
+    // it is given and returns a transform relative to the element's top, so a
+    // smaller height is all that is needed - the free space lands at the
+    // bottom, which is exactly where the obstruction is. Guarded so a drawer
+    // taller than the canvas degrades to "fit what is left" rather than
+    // asking for a negative viewport.
+    const visibleHeight = Math.max(120, r.height - Math.max(0, fitInsetBottomRef.current));
     // Hierarchical imports pack flattened block bodies far right of the sheet
     // (ascImport places them from x = 1e6). Framing those makes a 1M-unit-wide
     // fit where the authored circuit is sub-pixel - the sheet looks EMPTY. Fit
@@ -1253,7 +1276,7 @@ export function Canvas({
     // text never touches (or clips at) the canvas edge.
     const framingBounds = circuitBoundsWithLabels(fitComponents, fitWires, fitShapes);
     if (!framingBounds) {
-      setView({ x: r.width / 2, y: r.height / 2, zoom: 1 });
+      setView({ x: r.width / 2, y: visibleHeight / 2, zoom: 1 });
       return;
     }
     const topologyBounds = circuitBounds(fitComponents, fitWires, undefined, fitShapes);
@@ -1263,12 +1286,35 @@ export function Canvas({
           y: (topologyBounds.minY + topologyBounds.maxY) / 2,
         }
       : undefined;
-    setView(fitViewTransform(framingBounds, r.width, r.height, {
+    setView(fitViewTransform(framingBounds, r.width, visibleHeight, {
       minZoom: 0.25,
-      maxZoom: 5,
+      // Fit, do not magnify. 5x was survivable while the canvas was a column
+      // sharing the window; now that it is the window, a four-part RC filled
+      // 1400px and the symbols read as a cartoon rather than a schematic.
+      maxZoom: 2,
       center,
     }));
   }, []);
+
+  // Re-frame when the size of the obstruction changes.
+  //
+  // Needed because the cover is measured, not declared: the drawer reports its
+  // height in an effect, which lands after the mount fit has already run with
+  // an inset of zero. Without this the circuit came up half-hidden at the
+  // 900x600 floor, where the drawer takes nearly half the window - and only
+  // there, because at 1440 the slack happened to cover the mistake, which is
+  // exactly the kind of bug that ships.
+  //
+  // It does re-frame on a manual drawer resize, and so stomps a pan. That is
+  // the right trade here: resizing the drawer IS a request to change how much
+  // circuit you can see, and the alternative is leaving the part you just
+  // uncovered off-screen.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const id = requestAnimationFrame(() => fitView());
+    return () => cancelAnimationFrame(id);
+  }, [fitInsetBottom, fitView]);
 
   // Auto-fit when the document identity changes (open / new / tab switch).
   // Deliberately does NOT depend on components/wires - user pan is preserved

@@ -161,6 +161,11 @@ describe("shell inventory by app state", () => {
       "componentsRail",
       "assistant",
       "emptySchematic",
+      // The results drawer is present in the schematic too, collapsed to its
+      // peek strip. That is the merge: diagnostics used to be a strip welded
+      // under the editor and the plotter a column only the simulator had, so
+      // "where do I read what just happened" had two different answers.
+      "resultsDrawer",
     ]);
   });
 
@@ -169,15 +174,14 @@ describe("shell inventory by app state", () => {
     fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
     // Explorer and the components rail are not rendered in simulator mode.
     //
-    // `analysisPlotter` IS here, from the moment simulator mode opens: App.tsx
-    // defaults `graphOpen` to true. An earlier version of this comment claimed
-    // it appeared only after a run, and the test agreed, because the contract
-    // declared the plotter as role "region" while it renders as an <aside>,
-    // which maps to complementary. `isPresent` therefore returned false for it
-    // in every state and the inventory could neither require nor forbid it.
-    // Two wrongs reading as one right is exactly the failure this file exists
-    // to prevent, so it is worth naming here.
-    expectExactly(["navRail", "circuitOverview", "assistant", "analysisPlotter"]);
+    // The drawer is here from the moment the simulator opens, holding the
+    // waveforms. It used to be `analysisPlotter`, declared in the contract as
+    // role "region" while it rendered as an <aside>, which maps to
+    // complementary - so `isPresent` returned false for it in every state and
+    // the inventory could neither require nor forbid it. Two wrongs reading
+    // as one right is the exact failure this file exists to prevent, and it
+    // was sitting on the surface stage 4 replaces.
+    expectExactly(["navRail", "circuitOverview", "assistant", "resultsDrawer"]);
   });
 
   it("with Settings open, the shell behind it leaves the accessibility tree", async () => {

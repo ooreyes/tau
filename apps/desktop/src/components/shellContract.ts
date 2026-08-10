@@ -60,18 +60,21 @@ export const SHELL = {
   /** The simulator's read-only view of the circuit. */
   circuitOverview: { role: "region", name: "Circuit overview" },
   /**
-   * The waveform surface. Becomes the results drawer's Waveforms tab.
+   * The one bottom surface: waveforms, per-component measurements and
+   * diagnostics behind three tabs, at peek/half/full.
    *
-   * `complementary`, not `region`: it renders as `<aside>`, and an aside with
-   * an accessible name maps to complementary and never to region. Declared as
-   * region originally, which meant `isPresent` returned false for it in every
-   * app state, so the inventory test could neither require nor forbid it. The
-   * review instrument was switched off precisely where stage 4 operates.
+   * Named "Results" rather than the "Waveforms" this was planned under. The
+   * landmark names the drawer, not whichever tab happens to be up, and a
+   * landmark whose name changes under the reader is worse than a generic one.
+   * "Waveforms" survives as the tab and as the rail control.
+   *
+   * It replaces three entries that used to be here. `analysisPlotter` is gone
+   * because the plotter is no longer a landmark - it is this drawer's
+   * Waveforms body, and two nested complementary regions is noise.
+   * `minimizedPanels` is gone with the restore orb it named: peek is a
+   * readout, so there is nothing left to restore from.
    */
-  analysisPlotter: { role: "complementary", name: "Analysis plotter" },
-  /** The restore affordance when the analysis panel is collapsed. Also an
-   *  `<aside>`, so also complementary; same blindness as above. */
-  minimizedPanels: { role: "complementary", name: "Minimized panels" },
+  resultsDrawer: { role: "complementary", name: "Results" },
   /** Interactive-circuit controls, shown only when the schematic has any. */
   liveControls: { role: "group", name: "Live controls" },
   /**
@@ -93,14 +96,13 @@ export const SHELL = {
  * REDESIGN.md and the code cannot disagree about them, and so the stage that
  * builds each surface has no reason to invent its own wording.
  *
- * `selectionInspector` is a template rather than a constant: the inspector is
- * named for what it inspects (`R1 properties`), because "Properties" alone
- * tells a screen-reader user nothing about which part they are editing.
+ * Empty right now: the results drawer shipped and moved up into SHELL. The
+ * next entries land with stage 5's summoned side surfaces and stage 6's
+ * selection inspector, which is a template rather than a constant because the
+ * inspector is named for what it inspects (`R1 properties`) - "Properties"
+ * alone tells a screen-reader user nothing about which part they are editing.
  */
-export const PLANNED = {
-  /** Bottom drawer, replacing BottomPanel, TelemetryDock and the panel chrome. */
-  resultsDrawer: { role: "complementary", name: "Waveforms" },
-} as const satisfies Record<string, ShellSurface>;
+export const PLANNED = {} as const satisfies Record<string, ShellSurface>;
 
 /** Inspector name for a given designator, e.g. `R1 properties`. */
 export function inspectorName(designator: string): string {
