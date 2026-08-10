@@ -3,16 +3,14 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash scripts/checkpoint.sh" },
-          { "type": "command", "command": "bash scripts/refresh-tau-app.sh" }
+          { "type": "command", "command": "bash scripts/checkpoint.sh" }
         ]
       }
     ],
     "SubagentStop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash scripts/checkpoint.sh" },
-          { "type": "command", "command": "bash scripts/refresh-tau-app.sh" }
+          { "type": "command", "command": "bash scripts/checkpoint.sh" }
         ]
       }
     ]
