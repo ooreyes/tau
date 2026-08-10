@@ -166,5 +166,11 @@
     "UsagePage": "src/settings/pages/UsagePage.tsx",
     "WaveformPlot": "src/components/SimulationPanel.tsx",
     "WireInspector": "src/components/ShellPanels.tsx"
+  },
+  "provider": {
+    "component": "TooltipProvider",
+    "props": {
+      "delayDuration": 0
+    }
   }
 }

@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../apps/desktop/src/*"],
+      "node:fs/promises": ["./stubs/node/fs_promises.js"],
+      "node:stream/web": ["./stubs/node/stream_web.js"],
+      "node:stream/promises": ["./stubs/node/stream_promises.js"],
+      "node:timers/promises": ["./stubs/node/timers_promises.js"],
+      "node:dns/promises": ["./stubs/node/dns_promises.js"],
+      "node:*": ["./stubs/node/*"],
+      "./bundled/tau_deadtime_driver.sub?raw": ["./.cache/stubs/raw/tau_deadtime_driver.ts"],
+      "./bundled/tau_555.sub?raw": ["./.cache/stubs/raw/tau_555.ts"]
+    }
+  }
+}
