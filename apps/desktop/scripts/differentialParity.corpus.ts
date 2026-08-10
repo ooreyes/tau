@@ -2082,6 +2082,68 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational stepAC.asc complete authored .step C family (50/100/150 pF) ---
+    // The preceding cell proves the first member because buildParamScope deliberately
+    // selects it for an interactive run.  Here the complete authored linear step is
+    // expanded explicitly, as required for ngspice (which has no native .step card),
+    // and every RLC response is compared to LTspice.  This is distinct from the
+    // first-member cell: it proves the parameterized AC family, not only its default.
+    {
+      expect(existsSync(STEPAC_ASC), `missing ${STEPAC_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(STEPAC_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "stepAC.asc must author .ac").toBeTruthy();
+      expect(dirs.some((d) => /\.step\s+param\s+C\s+50p\s+150p\s+50p\b/i.test(d))).toBe(true);
+      const capacitances = [50e-12, 100e-12, 150e-12] as const;
+      const memberNotes: string[] = [];
+      for (const capacitance of capacitances) {
+        const memberDirs = [
+          ...dirs.filter((directive) => !/^\.step\b/i.test(directive)),
+          `.param C=${capacitance}`,
+        ];
+        const params = buildParamScope(memberDirs);
+        expect(Number(params.scope.C ?? params.scope.c)).toBeCloseTo(capacitance, 20);
+        const deck = buildSpiceDeck({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          directives: memberDirs,
+          params,
+        }, {
+          kind: "ac",
+          startHz: parsed.ac!.startHz,
+          stopHz: parsed.ac!.stopHz,
+          pointsPerDecade: parsed.ac!.pointsPerDecade,
+        });
+        expect(deck.unresolvedSubckts ?? [], `stepAC C=${capacitance}`).toEqual([]);
+        expect(deck.modelSubstitutions ?? [], `stepAC C=${capacitance}`).toEqual([]);
+        expect(deck.netlist).toMatch(/^C3\b/im);
+        expect(deck.netlist).not.toMatch(/^\.step\b/im);
+        const result = runPairedBatch(`diff-stepac-family-c-${capacitance}`, deck.netlist, ["v(out)"]);
+        const lt = result.ltspice.get("v(out)")!;
+        const ng = result.ngspice.get("v(out)")!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `stepAC C=${capacitance} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `stepAC C=${capacitance} non-hollow`).toBeGreaterThan(0.1);
+        memberNotes.push(
+          `C=${(capacitance * 1e12).toFixed(0)}p nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "step",
+        circuit: "stepac",
+        topology: "Educational stepAC.asc RLC filter (.step C 50p/100p/150p; authored .ac oct 5–10 Meg; expanded)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
 
     // --- Applications 2ndOrder*.asc authored .ac (G-source RLC filter family; param-baked) ---
     // Tip a0d6080 claimed Lowpass but corpus had logamp — this lands the real Applications cells.
@@ -6254,6 +6316,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=115 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=116 sibling=5 gap=0/);
   }, 600_000);
 });
