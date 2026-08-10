@@ -289,7 +289,11 @@ async function main() {
         localStorage.removeItem("tau.unsaved.recovery.v1");
         localStorage.removeItem("tau.schematic.v1");
       }, theme);
-      await page.emulateMedia({ colorScheme: theme });
+      // Freeze JS-driven current-flow motion as well as CSS animation. This is
+      // both a reduced-motion product check and a deterministic visual proof:
+      // otherwise the simulator PNG changes solely with the rAF phase at which
+      // Playwright happens to capture it.
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
       await page.goto(DEV_URL, { waitUntil: "networkidle" });
       await page.waitForSelector(".toolbar", { timeout: 15_000 });
       await page.waitForTimeout(150);

@@ -1,6 +1,6 @@
 # Design-system DoD QA notes
 
-**Captured:** 2026-08-10T05:38:17.814Z
+**Captured:** 2026-08-10T06:19:58.821Z
 **Viewport:** 1440×900
 **Themes:** light + dark
 **States:** empty, schematic, dialog (Settings sheet), command (⌘K)

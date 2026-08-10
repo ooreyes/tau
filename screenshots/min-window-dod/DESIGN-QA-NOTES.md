@@ -15,6 +15,11 @@ surface is absent. Both themes measured exactly 900×600, fully inside the
 viewport; the former stale `.settings-panel` selector could silently record
 `dialogGeom: null` and is retired.
 
+The capture emulates the OS reduced-motion preference. Tau's JS-driven current
+overlay therefore renders its static direction markers without scheduling the
+animation loop, proving that accessibility path and keeping simulator images
+independent of the requestAnimationFrame phase at capture time.
+
 | State | Light | Dark |
 |-------|-------|------|
 | empty | PASS | PASS |
