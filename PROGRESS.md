@@ -2,32 +2,32 @@
 
 **Status: DONE - 2026-08-10**
 
-Unit: **sixth production-hardening pass**. The native simulation worker now
-streams its marker+JSON response through a fixed 64 KiB buffer (`deb4f8b`) while
-preserving byte-identical protocol output. This removes the second response-sized
-serialization allocation: up to **255.94 MiB** at the existing 256 MiB transfer
-cap. Live schematic playback still follows the real waveform clock but publishes
-App-visible electrical readouts at most 30 times per second (`0577cc7`), cutting
-expensive annotation reconciliation by 50% on 60 Hz and 75% on 120 Hz displays.
-The assistant now parses custom-model storage only on mount or a real model/
-storage change, not on every streamed text delta (`b67c9da`).
+Unit: **seventh production-hardening pass**. Parent-side worker framing now finds
+the final structured-response marker with a fixed-table linear scan (`b33a6a4`)
+instead of an overlapping 22-byte window comparison at every possible offset.
+It preserves exact last-marker and arbitrary-byte behavior while avoiding up to
+about **5.5 GiB of comparison work** at the 256 MiB response cap. The command
+palette now loads only after Search is summoned (`060b14a`): the initial entry
+falls **809.17→794.87 kB** and gzip **247.88→243.14 kB**, now about **14.9% /
+17.5%** below the pre-split baseline.
 
-Precision advanced to differential **116 pass / 5 sibling / 0 gap**: the full
-unmodified Educational/stepAC.asc authored C=50/100/150 pF `.step` + `.ac`
-family passes LTspice↔ngspice comparison (`338c5ac`). The minimum-window runner
-now explicitly closes Components for the plain schematic and opens/asserts it
-for `schematic-panels` (`c930873`), so the **12/12** 900×600 visual proof can no
-longer pass with the palette accidentally toggled away. Chrome exercised the
-900×600 empty state and Settings sheet; the reviewed screenshots are clean in
-both themes.
+Primary review found and fixed a shared precision edge: valid descending DC
+sweeps no longer look empty or clamp FIND to their first sample. Interpolation
+and FROM/TO aggregates traverse the numeric interval exactly (`56c50af`), with
+LTspice 17.2.4 ground truth for FIND/MAX/MIN/AVG/INTEG and crossing behavior.
+Differential coverage advances to **117 pass / 5 sibling / 0 gap**: every actual
+member of Educational/100W.asc's authored octave-V `.step` + `.tran` family
+passes with exact IRFP240/IRFP9240 and MJE340/MJE350 cards (`4f74e55`). A failed
+LM78XX expansion was rejected at 7.69% maximum error; no tolerance was weakened.
 
-Current gates: typecheck and production build clean; frontend **4,015 passed / 8
-skipped**; Rust **92 passed / 20 ignored** plus all **19/19** real-ngspice tests;
-Rust fmt and Clippy clean; differential **116/5/0** and minimum-window **12/12**
-green. A fresh Tau.app/DMG build, strict code signature, valid DMG checksum,
-nine-file arm64/macOS-11 deployment inspection, and packaged plus mounted-DMG
-336-sample engine smokes all pass. The canonical **82/81/79/79**, capability
-**79/3/0/0**, and zero-substitution proofs remain the current corpus baseline.
+Current gates: typecheck and production build clean; frontend **4,017 passed / 8
+skipped**; Rust **93 passed / 20 ignored** plus all **19/19** real-ngspice tests;
+Rust fmt and Clippy clean; differential **117/5/0**; current minimum-window
+**12/12** and design-system proofs remain green. A fresh Tau.app/DMG build,
+strict code signature, valid DMG checksum, nine-file arm64/macOS-11 deployment
+inspection, and packaged plus mounted-DMG 336-sample engine smokes all pass. The
+canonical **82/81/79/79**, capability **79/3/0/0**, and zero-substitution proofs
+remain the current corpus baseline.
 
 **SHIPPABLE? NO.** The named-device DoD remains honestly blocked at 48.1% by
 unavailable encrypted vendor models, and broad differential coverage remains
@@ -18786,3 +18786,19 @@ evidence is kept in full here.
   engine smokes from both bundle and mounted image. Native interaction remained
   blocked by the locked Mac; the autobuilder is still disabled. Named-device
   48.1% and incomplete broad differential coverage keep Tau not shippable.
+
+- 2026-08-10 - Completed a seventh reviewed production-hardening increment.
+  Parent worker-marker scanning is now linear and exact, avoiding a worst-case
+  ~5.5 GiB comparison workload at the response cap. The Command Palette moved
+  behind its Search affordance, taking another 14.30 kB raw / 4.74 kB gzip out
+  of first paint. Descending DC measurement axes now match LTspice FIND,
+  crossing, and numeric FROM/TO aggregate semantics. The complete authored
+  Educational/100W octave-V step family passes with exact IRFP/MJE models,
+  raising differential coverage to 117/5/0; a failing LM78XX candidate was
+  rejected without relaxing tolerance. Evidence: 4,017 frontend tests passed /
+  eight skipped; build/typecheck and Rust fmt/Clippy clean; 93 ordinary and 19
+  real-ngspice Rust tests; fresh Tau.app/DMG signature, checksum, nine-file
+  macOS-11 inspection, and 336-sample engine smokes from both bundle and mounted
+  image. Native interaction remains blocked by the locked Mac; the autobuilder
+  remains disabled. Named-device 48.1% and the still-incomplete broad matrix
+  keep Tau not shippable.

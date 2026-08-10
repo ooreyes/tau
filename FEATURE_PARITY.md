@@ -1100,8 +1100,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   expression engine. Aggregate windows include piecewise-linearly interpolated
   `FROM`/`TO` endpoints, so adaptive or resampled output cannot silently shrink
   MAX/MIN/PP/AVG/RMS/INTEG to the saved points strictly inside the authored
-  interval. `App.tsx` memoizes them off the transient result and renders a
-  `MeasTable` in `SimulationPanel`. **AC-domain `.meas` now landed**
+  interval; interpolation and numeric integration also preserve LTspice's
+  `FROM→TO` behavior on valid descending DC sweeps. `App.tsx` memoizes them off
+  the transient result and renders a `MeasTable` in `SimulationPanel`.
+  **AC-domain `.meas` now landed**
   (`simulation/measureAc.ts`): the measure core was generalized to an
   axis-agnostic `evaluateOnAxis` (time *or* frequency) and an AC compiler resolves
   `db()/mag()/ph()/re()/im()` (bare `V` ⇒ magnitude) and `V(a,b)` complex
@@ -1825,7 +1827,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-10):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=116 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=117 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
@@ -1944,7 +1946,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   SoftDiodeRecovery Vp=0 landed (pass=104; Vp>0 deferred);
   PowerAmp TIP A=0.1 landed (pass=105); astable period-meas landed (pass=106;
   continuous phase deferred); PowerAmp A=0.2..0.7 landed (pass=107); NE555 period-meas landed (pass=108;
-  continuous phase deferred); HandsFreeLayout landed (pass=109; ≠ Preamp ElectretMic); gr_del midnodes landed (pass=110; gd outs hollow deferred); PowerAmpLayout A=0.1 landed (pass=111; ≠ PowerAmp.asc 5m); Resources/sinh domain-safe DC landed (pass=112; authored ±1.01 poles deferred); PowerAmpLayout A=0.2..0.7 landed (pass=113; ≠ PowerAmp.asc 5m A-step); Documents/Draft8 Laplace dual-deck landed (pass=114); Applications/AD8237 plaintext `.lib` TRAN landed (pass=115; AD8233 ternary rewrite still fails LTspice); Educational/stepAC complete C=50/100/150 pF authored `.step` + `.ac` family landed (pass=116; ≠ help/ACstep first-member proof);
+  continuous phase deferred); HandsFreeLayout landed (pass=109; ≠ Preamp ElectretMic); gr_del midnodes landed (pass=110; gd outs hollow deferred); PowerAmpLayout A=0.1 landed (pass=111; ≠ PowerAmp.asc 5m); Resources/sinh domain-safe DC landed (pass=112; authored ±1.01 poles deferred); PowerAmpLayout A=0.2..0.7 landed (pass=113; ≠ PowerAmp.asc 5m A-step); Documents/Draft8 Laplace dual-deck landed (pass=114); Applications/AD8237 plaintext `.lib` TRAN landed (pass=115; AD8233 ternary rewrite still fails LTspice); Educational/stepAC complete C=50/100/150 pF authored `.step` + `.ac` family landed (pass=116; ≠ help/ACstep first-member proof); Educational/100W complete authored octave-V `.step` + `.tran` family landed (pass=117; exact IRFP/MJE cards; ≠ nominal 1.44 V row);
   LoopGain/Electrometer
   LT1001 OTA wall; ISO7637 spike miss; Educational/IGBT.asc NIGBT refuse (≠ IGBTeq); Resources sinh domain-safe ±0.99 landed (authored ±1.01 poles deferred); divide2/inverter deferred (`.machine` hollow — not landed); Resources mextram deferred (no authored analysis). NonLinearTransformer Chan refuse. NE555 continuous Output phase deferred (period landed). Harness-slice gaps
   closed; DoD broad-differential box remains open — see AGENTS.md.
