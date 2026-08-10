@@ -187,6 +187,14 @@ export interface AssistantPanelProps {
   onApplyCurrent?: AssistantApplyCurrentHandler;
   /** When inside the shared right dock, the dock owns width and the resize handle. */
   embedded?: boolean;
+  /**
+   * A real modal is open above this dock. Keep the panel mounted (so its
+   * conversation and width survive the visit to Settings), but take it out of
+   * both keyboard navigation and the accessibility tree until the modal
+   * closes. The visual overlay alone is not enough: a screen reader could
+   * otherwise still reach controls that a sighted user cannot use.
+   */
+  modalBlocked?: boolean;
   /** Stable project identity. One active chat follows the user across files. */
   memoryKey?: string;
   /** Previous file-scoped key, read only to migrate older Tau chat storage. */
@@ -214,6 +222,7 @@ export function AssistantPanel({
   onCreateAsc,
   onApplyCurrent,
   embedded = false,
+  modalBlocked = false,
   memoryKey = "untitled.asc",
   legacyMemoryKey,
 }: AssistantPanelProps) {
@@ -839,6 +848,8 @@ export function AssistantPanel({
     <aside
       className={cn("assistant-panel", embedded && "assistant-panel--embedded")}
       aria-label="Assistant"
+      aria-hidden={modalBlocked || undefined}
+      inert={modalBlocked || undefined}
       style={embedded ? undefined : { "--assistant-w": `${resize.width}px` } as CSSProperties}
     >
       {!embedded && (

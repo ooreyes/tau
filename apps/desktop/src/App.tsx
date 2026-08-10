@@ -3061,6 +3061,7 @@ function App() {
               onApplyCurrent={applyAssistantCircuit}
               onOpenSettings={openSettingsSurface}
               onClose={closeAssistant}
+              modalBlocked={settingsOpen}
             />
           </Suspense>
         )}

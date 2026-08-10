@@ -231,17 +231,11 @@ describe("shell inventory by app state", () => {
     }
     expect(isPresent(SHELL.settings)).toBe(true);
 
-    // KNOWN GAP, deliberately asserted as it currently is rather than as it
-    // should be. The assistant column stays in the tree while Settings is
-    // modal over it, even though its whole ancestor chain is unhidden and
-    // every sibling surface disappears. I could not account for the mechanism,
-    // and pinning behaviour I do not understand as "correct" is how a bug gets
-    // blessed. Pinned as-is so it cannot change silently; REDESIGN.md stage 3
-    // owns resolving it, and this assertion should flip to `false` there.
-    expect(
-      isPresent(SHELL.assistant),
-      "assistant modality gap resolved: flip this to false and delete the note",
-    ).toBe(true);
+    // The Assistant stays mounted to preserve its transcript and panel width,
+    // but a modal must make it inert and hide it from assistive technology.
+    // A translucent sheet is not enough: otherwise a screen reader can reach
+    // controls that a sighted user cannot interact with until Settings closes.
+    expect(isPresent(SHELL.assistant)).toBe(false);
   });
 });
 
