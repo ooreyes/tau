@@ -59,10 +59,12 @@ interface Segment {
  * keys did: `Map` compares with SameValueZero, which unifies `-0` with `0` and
  * matches `NaN` with itself, and `${x},${y}` collapsed those same pairs. The
  * only place the two forms could have drifted is the coordinate handed back
- * out, because the old reverse lookup parsed the key with `Number(...)` and so
- * turned a `-0` (which `Math.round` really does produce when snapping a small
- * negative to the grid) into `0`; `intern` normalises identically so the
- * points in the extracted nets stay byte-for-byte what they were.
+ * out. The old reverse lookup parsed the key with `Number(...)`, which quietly
+ * laundered a `-0` into `0`, and `-0` is reachable here: `rotatePoint` negates
+ * a zero pin offset (`{ x: -point.y }` at 90 degrees). Handing the interned
+ * number straight back would therefore have put a `-0` into `ExtractedNet
+ * .points` where callers have always seen `0`, so `intern` normalises the same
+ * way the old parse did.
  */
 class DisjointSet {
   private readonly idByX = new Map<number, Map<number, number>>();
@@ -97,9 +99,10 @@ class DisjointSet {
     return id;
   }
 
-  /** Double the flat arrays. Doubling keeps interning amortised O(1) even on
-   *  the schematics with thousands of independent wires that the segment index
-   *  above was written for. */
+  /** Double the flat arrays. Amortised O(1) growth matters because the node
+   *  count is not known up front - wire breakpoints mint nodes as they are
+   *  discovered - and the schematics this has to survive are the ones with
+   *  thousands of independent wires. */
   private grow(): void {
     const grownParent = new Int32Array(this.parent.length * 2);
     grownParent.set(this.parent);
@@ -109,6 +112,10 @@ class DisjointSet {
     this.size = grownSize;
   }
 
+  /** Register a coordinate. Only `x`/`y` are ever read and only the numbers are
+   *  retained, so callers hand pins and net labels in directly rather than
+   *  copying them into a bare `Point` first - nothing about the richer object
+   *  can leak into the extracted nets. */
   add(point: Point): void {
     this.intern(point);
   }

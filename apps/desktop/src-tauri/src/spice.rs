@@ -44,6 +44,17 @@ const MAX_NETLIST_BYTES: usize = 512 * 1024;
 const MAX_DECK_LINES: usize = 30_000;
 const MAX_ENGINE_MESSAGES: usize = 256;
 const MAX_ENGINE_MESSAGE_BYTES: usize = 2 * 1024;
+/** How many of the newest engine log lines a failed run carries back across
+ * the worker boundary.
+ *
+ * The live buffer is already bounded twice over - `MAX_ENGINE_MESSAGES` lines
+ * of `MAX_ENGINE_MESSAGE_BYTES` each - but that product is half a megabyte,
+ * and half a megabyte of solver chatter pasted into a single error string is
+ * not a diagnostic, it is a wall the reader will not climb. The tail is the
+ * part worth carrying for the same reason `record_engine_message` keeps the
+ * newest lines: ngspice states the cause of a failure at the end, after
+ * whatever noise preceded it. */
+const MAX_ERROR_LOG_MESSAGES: usize = 24;
 const MAX_WORKER_INPUT_BYTES: usize = MAX_NETLIST_BYTES + 64 * 1024;
 const MAX_WORKER_OUTPUT_BYTES: usize = 256 * 1024 * 1024;
 const MAX_WORKER_STDERR_BYTES: usize = 64 * 1024;
@@ -238,6 +249,18 @@ struct WorkerRequest {
 struct WorkerResponse {
     result: Option<SpiceResult>,
     error: Option<String>,
+    /** The tail of the engine log for a run that failed after ngspice had
+     * already explained itself.
+     *
+     * `SpiceResult.messages` is otherwise the only carrier for those lines,
+     * and a failure has no `SpiceResult`, so every diagnostic the engine
+     * produced used to stop at the process boundary and the parent could
+     * report nothing but Tau's own summary. Defaulted rather than required so
+     * that a response missing the field still decodes - a strict field here
+     * would reintroduce exactly the all-or-nothing decode failure this whole
+     * path exists to prevent. */
+    #[serde(default)]
+    engine_log: Vec<String>,
 }
 
 pub struct NativeSpiceState {
@@ -877,6 +900,214 @@ fn resample<T: Copy>(values: &[T], target: usize) -> Vec<T> {
         .collect()
 }
 
+/** Where a result first stops being a number. Borrows the names it reports so
+ * that scanning a result costs no allocation on the overwhelmingly common path
+ * where there is nothing to report. */
+struct NonFiniteSample<'a> {
+    plot: &'a str,
+    vector: &'a str,
+    /** Set when the offending number is the imaginary half of an AC sample,
+     * which is worth saying: the real half can look perfectly reasonable. */
+    imaginary: bool,
+    index: usize,
+    length: usize,
+    value: f64,
+}
+
+fn first_non_finite(values: &[f64]) -> Option<(usize, f64)> {
+    values
+        .iter()
+        .position(|value| !value.is_finite())
+        .map(|index| (index, values[index]))
+}
+
+/**
+ * Walk every vector this run produced - the current plot and the secondary
+ * ones a `.noise` or expanded `.step` leaves behind - and report the first
+ * non-finite sample, how many vectors carry one, and how many there are.
+ *
+ * The counts matter to the reader: one bad vector out of forty is a single
+ * misbehaving branch current, while forty out of forty is a solve that fell
+ * over altogether, and those call for different things from the engineer.
+ */
+fn scan_non_finite(result: &SpiceResult) -> (Option<NonFiniteSample<'_>>, usize, usize) {
+    let plots = std::iter::once((result.plot.as_str(), &result.vectors)).chain(
+        result
+            .extra_plots
+            .iter()
+            .map(|plot| (plot.name.as_str(), &plot.vectors)),
+    );
+    let mut first = None;
+    let mut affected = 0_usize;
+    let mut total = 0_usize;
+    for (plot, vectors) in plots {
+        for vector in vectors {
+            total += 1;
+            let hit = first_non_finite(&vector.real)
+                .map(|(index, value)| (false, index, vector.real.len(), value))
+                .or_else(|| {
+                    let imaginary = vector.imaginary.as_deref()?;
+                    first_non_finite(imaginary)
+                        .map(|(index, value)| (true, index, imaginary.len(), value))
+                });
+            let Some((imaginary, index, length, value)) = hit else {
+                continue;
+            };
+            affected += 1;
+            first.get_or_insert(NonFiniteSample {
+                plot,
+                vector: &vector.name,
+                imaginary,
+                index,
+                length,
+                value,
+            });
+        }
+    }
+    (first, affected, total)
+}
+
+/** How to name a value that is not a number, in the words an engineer would
+ * use for it rather than in Rust's. */
+fn non_finite_kind(value: f64) -> &'static str {
+    if value.is_nan() {
+        "a NaN (not a number)"
+    } else if value.is_sign_positive() {
+        "+infinity"
+    } else {
+        "-infinity"
+    }
+}
+
+/**
+ * Where in the sweep the divergence happened, when the plot carries an axis
+ * Tau can name. A sample index alone tells the reader nothing they can act on;
+ * "at t = 3.6e-3 s" points straight at the part of the waveform to look at.
+ *
+ * Only ngspice's two universal scale vectors are recognised. A `.dc` sweep
+ * names its axis after the swept source, and guessing which vector that is
+ * would risk labelling an ordinary node voltage as the axis - so those runs
+ * simply report the index, which is at least true.
+ */
+fn sweep_position(result: &SpiceResult, plot: &str, index: usize) -> Option<String> {
+    let vectors = if plot == result.plot {
+        &result.vectors
+    } else {
+        &result
+            .extra_plots
+            .iter()
+            .find(|extra| extra.name == plot)?
+            .vectors
+    };
+    for vector in vectors {
+        let (label, unit) = if vector.name.eq_ignore_ascii_case("time") {
+            ("t", "s")
+        } else if vector.name.eq_ignore_ascii_case("frequency") {
+            ("f", "Hz")
+        } else {
+            continue;
+        };
+        let value = vector.real.get(index).copied()?;
+        // A scale vector that is itself non-finite cannot locate anything.
+        return value
+            .is_finite()
+            .then(|| format!(", at {label} = {value:e} {unit}"));
+    }
+    None
+}
+
+/**
+ * Refuse a result that contains a value which is not a number, before it is
+ * ever serialised.
+ *
+ * JSON has no spelling for NaN or ±Inf. `serde_json` writes `null` in their
+ * place and the *encode still succeeds*, so the worker hands over a payload
+ * that looks complete; the parent then cannot read that `null` back into an
+ * `f64` and throws the entire `SpiceResult` away - `messages` included, which
+ * was the only record of why the solve went wrong. The user is left holding
+ * "invalid type: null, expected f64" as the explanation for a circuit that
+ * did not converge. Diagnosing it here, in the process that still holds the
+ * deck and the engine log, is the only place the real cause is knowable.
+ *
+ * Why the whole run is refused instead of truncated at the first bad sample.
+ * A partial result has to be drawn by a viewer with no way to say "this
+ * stopped early because it failed": the viewer takes the run's stop time from
+ * the last sample it is given (see `resample`), so a transient cut short at a
+ * divergence is indistinguishable from a shorter transient that succeeded -
+ * same axes, same clean curve, with the failure demoted to one line in a
+ * message list sitting next to a plot that looks right. Tau does not invent
+ * simulation values, and presenting a diverged solve as a finished waveform is
+ * that same lie told with real numbers. A run that reached no trustworthy
+ * answer says so, and shows the engine's log in place of a trace.
+ *
+ * On scope, honestly: this is a fail-closed guard at the serialisation
+ * boundary, not the fix for a divergence anyone has reproduced through Tau.
+ * Probing the engine directly - behavioural domain errors, division by zero,
+ * an unstable `s_xfer` pole, degenerate `aswitch` thresholds, `.noise` with
+ * zero gain, `.ac` down at DC - never got a non-finite number into a vector,
+ * because ngspice saturates behavioural arithmetic at ±1e32 and its code
+ * models guard their own divisions. The guard stays because the paths that
+ * are *not* guarded - `slice::from_raw_parts` over memory the engine owns,
+ * user-supplied OSDI or Verilog-A devices, any code model added later - fail
+ * mutely and take the log with them, which is the worst way for a simulator
+ * to be wrong.
+ */
+fn non_finite_failure(result: &SpiceResult) -> Option<String> {
+    let (sample, affected, total) = scan_non_finite(result);
+    let sample = sample?;
+    let position = sweep_position(result, sample.plot, sample.index).unwrap_or_default();
+    Some(format!(
+        "ngspice's {plot} analysis returned values that are not finite numbers, so it did not \
+         converge on a usable solution. First occurrence: {kind} in {vector}{part} at sample \
+         {ordinal} of {length}{position}. Affected result vectors: {affected} of {total}. Tau \
+         will not plot this run - the finite samples on either side of a divergence are not a \
+         solution to the circuit, and drawing only those would present a failed solve as a \
+         clean waveform.",
+        plot = sample.plot,
+        kind = non_finite_kind(sample.value),
+        vector = sample.vector,
+        part = if sample.imaginary {
+            " (imaginary part)"
+        } else {
+            ""
+        },
+        // Counted from one: every other place a person meets these samples -
+        // a cursor readout, an exported CSV row - counts them that way.
+        ordinal = sample.index + 1,
+        length = sample.length,
+    ))
+}
+
+/**
+ * The newest engine log lines, bounded, for an error to carry.
+ *
+ * When lines are left out the count says so, the same way `take_messages`
+ * accounts for what its own overflow discarded. A silently shortened log
+ * invites the reader to conclude the engine said nothing more.
+ */
+fn engine_log_tail(messages: &[String]) -> Vec<String> {
+    if messages.len() <= MAX_ERROR_LOG_MESSAGES {
+        return messages.to_vec();
+    }
+    let mut tail = Vec::with_capacity(MAX_ERROR_LOG_MESSAGES + 1);
+    tail.push(format!(
+        "Tau kept the last {MAX_ERROR_LOG_MESSAGES} of this run's {} engine log lines.",
+        messages.len()
+    ));
+    tail.extend_from_slice(&messages[messages.len() - MAX_ERROR_LOG_MESSAGES..]);
+    tail
+}
+
+/** Reunite a worker failure with the engine's own account of it, in the one
+ * string shape `simulate_spice` is able to return. */
+fn with_worker_engine_log(error: String, engine_log: &[String]) -> String {
+    if engine_log.is_empty() {
+        error
+    } else {
+        format!("{error} Engine log: {}", engine_log.join(" | "))
+    }
+}
+
 #[tauri::command]
 pub async fn simulate_spice(
     app: AppHandle,
@@ -935,23 +1166,40 @@ pub fn maybe_run_spice_worker() -> bool {
         return false;
     }
 
+    let failed = |error: String| WorkerResponse {
+        result: None,
+        error: Some(error),
+        engine_log: Vec::new(),
+    };
     let response = match read_worker_request() {
         Ok(worker) => match SpiceEngine::load(worker.library_candidates)
             .and_then(|mut engine| engine.run(worker.request))
         {
-            Ok(result) => WorkerResponse {
-                result: Some(result),
-                error: None,
+            // Solving is not the same as answering. A result whose samples are
+            // not all numbers cannot survive the hop to the parent process
+            // (see `non_finite_failure`), and it is only here, beside the
+            // engine log that explains it, that the failure can be named. The
+            // log travels with the refusal because the refusal replaces the
+            // `SpiceResult` that would otherwise have carried it.
+            Ok(result) => match non_finite_failure(&result) {
+                Some(error) => WorkerResponse {
+                    result: None,
+                    error: Some(error),
+                    engine_log: engine_log_tail(&result.messages),
+                },
+                None => WorkerResponse {
+                    result: Some(result),
+                    error: None,
+                    engine_log: Vec::new(),
+                },
             },
-            Err(error) => WorkerResponse {
-                result: None,
-                error: Some(error),
-            },
+            // Every other failure path already folds the engine's messages
+            // into its own text on the way out (`with_engine_messages`,
+            // `fatal_engine_messages`), so repeating them here would print
+            // the log twice.
+            Err(error) => failed(error),
         },
-        Err(error) => WorkerResponse {
-            result: None,
-            error: Some(error),
-        },
+        Err(error) => failed(error),
     };
 
     let encoded = serde_json::to_vec(&response).unwrap_or_else(|error| {
@@ -1122,7 +1370,7 @@ fn run_spice_worker_process(
         .map_err(|error| format!("Tau's ngspice worker returned invalid data: {error}"))?;
     match (response.result, response.error) {
         (Some(result), None) => Ok(result),
-        (None, Some(error)) => Err(error),
+        (None, Some(error)) => Err(with_worker_engine_log(error, &response.engine_log)),
         _ => Err("Tau's ngspice worker returned an inconsistent response.".to_string()),
     }
 }
@@ -1537,11 +1785,12 @@ mod tests {
     use std::{io::Cursor, path::PathBuf, sync::Mutex, time::Duration};
 
     use super::{
-        deck_lines, fatal_engine_messages, library_file_name, missing_codemodel_message,
-        read_bounded, record_engine_message, resample, resampled_length, take_messages,
-        transfer_keep_ratio, worker_poll_interval, worth_reporting, CallbackState, SpiceEngine,
-        SpiceRequest, SpiceResult, SpiceVector, WorkerResponse, MAX_ENGINE_MESSAGES,
-        MAX_ENGINE_MESSAGE_BYTES, MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH, WORKER_POLL_INTERVAL,
+        deck_lines, engine_log_tail, fatal_engine_messages, library_file_name,
+        missing_codemodel_message, non_finite_failure, read_bounded, record_engine_message,
+        resample, resampled_length, take_messages, transfer_keep_ratio, with_worker_engine_log,
+        worker_poll_interval, worth_reporting, CallbackState, SpiceEngine, SpiceRequest,
+        SpiceResult, SpiceVector, WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
+        MAX_ERROR_LOG_MESSAGES, MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH, WORKER_POLL_INTERVAL,
         WORKER_POLL_RAMP,
     };
 
@@ -2067,11 +2316,22 @@ M5  45 46 99 99 POX L=2E-6 W=0.98E-3
         let response = WorkerResponse {
             result: None,
             error: Some("intentional failure".to_string()),
+            engine_log: vec!["stderr Error: Timestep too small".to_string()],
         };
         let encoded = serde_json::to_vec(&response).expect("response encodes");
         let decoded: WorkerResponse = serde_json::from_slice(&encoded).expect("response decodes");
         assert!(decoded.result.is_none());
         assert_eq!(decoded.error.as_deref(), Some("intentional failure"));
+        assert_eq!(decoded.engine_log, response.engine_log);
+
+        // A payload without the field at all still decodes. The field was
+        // added to stop one missing value from destroying a whole response,
+        // so it must not become a new way to destroy a whole response.
+        let legacy: WorkerResponse =
+            serde_json::from_slice(br#"{"result":null,"error":"older worker"}"#)
+                .expect("a response without engineLog still decodes");
+        assert!(legacy.engine_log.is_empty());
+        assert_eq!(legacy.error.as_deref(), Some("older worker"));
     }
 
     /**
@@ -2100,10 +2360,8 @@ M5  45 46 99 99 POX L=2E-6 W=0.98E-3
             "serde_json must have substituted null for the non-finite samples: {text}"
         );
 
-        let decoded = serde_json::from_slice::<SpiceVector>(&encoded);
-        let error = decoded
-            .err()
-            .expect("decoding null back into f64 must fail")
+        let error = serde_json::from_slice::<SpiceVector>(&encoded)
+            .expect_err("decoding null back into f64 must fail")
             .to_string();
         assert!(
             error.contains("invalid type: null, expected f64"),
@@ -2127,16 +2385,155 @@ M5  45 46 99 99 POX L=2E-6 W=0.98E-3
                 library_path: String::new(),
             }),
             error: None,
+            engine_log: Vec::new(),
         };
         let encoded = serde_json::to_vec(&response).expect("response encodes");
         let error = serde_json::from_slice::<WorkerResponse>(&encoded)
-            .err()
-            .expect("a NaN anywhere in the result must sink the whole response")
+            .expect_err("a NaN anywhere in the result must sink the whole response")
             .to_string();
-        assert!(error.contains("invalid type: null, expected f64"), "{error}");
         assert!(
-            !String::from_utf8_lossy(&encoded).contains("__never__"),
-            "sanity guard on the payload"
+            error.contains("invalid type: null, expected f64"),
+            "{error}"
+        );
+    }
+
+    fn tran_result(out: Vec<f64>) -> SpiceResult {
+        SpiceResult {
+            plot: "tran1".to_string(),
+            vectors: vec![
+                SpiceVector {
+                    name: "time".to_string(),
+                    real: vec![0.0, 1e-3, 2e-3, 3e-3, 4e-3],
+                    imaginary: None,
+                },
+                SpiceVector {
+                    name: "v(out)".to_string(),
+                    real: out,
+                    imaginary: None,
+                },
+            ],
+            extra_plots: Vec::new(),
+            messages: Vec::new(),
+            library_path: String::new(),
+        }
+    }
+
+    /**
+     * The fix for the hazard above: the worker names the divergence itself, so
+     * the parent never has to guess at a JSON type error, and the refusal it
+     * sends in place of the result is a payload that actually survives the hop.
+     */
+    #[test]
+    fn a_diverged_run_is_named_and_refused_instead_of_becoming_a_decode_error() {
+        let mut result = tran_result(vec![0.0, 0.4, 0.9, f64::NAN, f64::NAN]);
+        result.messages = vec![
+            "stdout Circuit: probe".to_string(),
+            "stderr Warning: Dynamic gmin stepping failed".to_string(),
+            "stderr Error: Timestep too small; cause unrecorded.".to_string(),
+        ];
+
+        let error = non_finite_failure(&result).expect("a NaN in a trace must refuse the run");
+        // What actually happened, in the terms the engineer is working in.
+        assert!(error.contains("did not converge"), "{error}");
+        assert!(error.contains("not finite numbers"), "{error}");
+        // Named down to the trace, the sample, and the point on the sweep.
+        assert!(error.contains("v(out)"), "{error}");
+        assert!(error.contains("a NaN"), "{error}");
+        assert!(error.contains("sample 4 of 5"), "{error}");
+        assert!(error.contains("t = 3e-3 s"), "{error}");
+        assert!(error.contains("Affected result vectors: 1 of 2"), "{error}");
+        // And it says why no waveform is drawn, so the absence of a plot does
+        // not read as Tau having lost the data.
+        assert!(error.contains("will not plot"), "{error}");
+        // The engine's own diagnosis, which the old path discarded wholesale.
+        let carried = with_worker_engine_log(error, &engine_log_tail(&result.messages));
+        assert!(carried.contains("Timestep too small"), "{carried}");
+
+        // The refusal the worker sends in place of the result crosses the
+        // process boundary intact - which the result itself could not have.
+        let response = WorkerResponse {
+            result: None,
+            error: Some(non_finite_failure(&result).expect("still refused")),
+            engine_log: engine_log_tail(&result.messages),
+        };
+        let encoded = serde_json::to_vec(&response).expect("refusal encodes");
+        let decoded: WorkerResponse =
+            serde_json::from_slice(&encoded).expect("refusal decodes, unlike the NaN it replaced");
+        assert!(decoded.result.is_none());
+        assert!(decoded
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("v(out)")));
+        assert_eq!(decoded.engine_log, result.messages);
+    }
+
+    /**
+     * The guard must not cost anyone a working run. ngspice saturates
+     * behavioural arithmetic at ±1e32 rather than overflowing, and a rail that
+     * pegs there is an ordinary - if unhappy - result, not a divergence.
+     */
+    #[test]
+    fn an_ordinary_run_including_ngspices_own_saturated_rail_is_left_alone() {
+        let pegged = vec![0.0, -0.0, 1e32, -1e32, f64::MIN_POSITIVE];
+        assert_eq!(non_finite_failure(&tran_result(pegged)), None);
+        assert_eq!(non_finite_failure(&tran_result(vec![f64::MAX, 0.0])), None);
+    }
+
+    /**
+     * A `.noise` run answers across two plots and an `.ac` run answers in
+     * complex pairs, so a scan that only looked at the current plot's real
+     * halves would pass the exact payloads that break the decode.
+     */
+    #[test]
+    fn a_secondary_plot_and_an_imaginary_half_are_both_caught() {
+        let mut result = tran_result(vec![0.0, 0.4, 0.9, 1.0, 1.0]);
+        result.plot = "ac1".to_string();
+        result.vectors[0].name = "frequency".to_string();
+        result.vectors[1].imaginary = Some(vec![0.0, 0.0, f64::NEG_INFINITY, 0.0, 0.0]);
+        let error = non_finite_failure(&result).expect("an imaginary half counts");
+        assert!(error.contains("(imaginary part)"), "{error}");
+        assert!(error.contains("-infinity"), "{error}");
+        assert!(error.contains("f = 2e-3 Hz"), "{error}");
+
+        let mut clean = tran_result(vec![0.0, 0.4, 0.9, 1.0, 1.0]);
+        clean.extra_plots = vec![super::SpicePlot {
+            name: "noise1".to_string(),
+            vectors: vec![SpiceVector {
+                name: "onoise_spectrum".to_string(),
+                real: vec![1e-9, f64::INFINITY],
+                imaginary: None,
+            }],
+        }];
+        let error = non_finite_failure(&clean).expect("a secondary plot counts");
+        assert!(error.contains("onoise_spectrum"), "{error}");
+        assert!(error.contains("+infinity"), "{error}");
+        // The plot named is the one the bad sample is actually in, and the
+        // primary plot's sweep axis is not borrowed to locate it.
+        assert!(error.contains("noise1"), "{error}");
+        assert!(!error.contains("t = "), "{error}");
+    }
+
+    #[test]
+    fn a_carried_engine_log_keeps_the_newest_lines_and_admits_what_it_dropped() {
+        let messages: Vec<String> = (0..300).map(|index| format!("line {index}")).collect();
+        let tail = engine_log_tail(&messages);
+        // The bound, plus the one line that accounts for the bound.
+        assert_eq!(tail.len(), MAX_ERROR_LOG_MESSAGES + 1);
+        assert!(tail[0].contains("300"), "{:?}", tail[0]);
+        assert_eq!(tail.last().map(String::as_str), Some("line 299"));
+        assert!(!tail.iter().any(|line| line == "line 0"));
+
+        // A log that fits is carried whole, with no note about nothing.
+        let short = vec!["only line".to_string()];
+        assert_eq!(engine_log_tail(&short), short);
+        assert_eq!(
+            with_worker_engine_log("Run failed.".to_string(), &short),
+            "Run failed. Engine log: only line"
+        );
+        // No log means no trailing "Engine log:" with nothing behind it.
+        assert_eq!(
+            with_worker_engine_log("Run failed.".to_string(), &[]),
+            "Run failed."
         );
     }
 
