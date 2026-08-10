@@ -1,29 +1,32 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-10**
+**Status: DONE - 2026-08-10**
 
-Unit: **second production-hardening pass**. Six reviewed units are already
-pushed: complete Settings modality (`c509b78`), 30-Hz decorative current flow
+Unit: **second production-hardening pass**. Ten reviewed units are pushed:
+complete Settings modality (`c509b78`), 30-Hz decorative current flow
 (`c7216ad`), recursive attached-library identifier normalization (`29879ff`),
 one Components accessibility landmark (`cf15f24`), stale document-navigation
-suppression (`de35897`), single-probe local-AI status (`9a47aa1`), and removal
-of two unused direct runtime dependencies (`15e9199`). The formerly stale red
-canonical claim is resolved by current command output: **82 imported / 81
-warning-clean / 79 deck-built / 79 op-converged**, capability **79 success / 3
-honest refusals / 0 deck-guard leaks / 0 failures**, substitutions 0.
+suppression (`de35897`), single-probe local-AI status (`9a47aa1`), removal of
+two unused direct runtime dependencies (`15e9199`), Past chats focus return
+(`6cf2621`), resize-listener teardown (`2825808`), and the authored dimmer
+near-cutoff point at Rdim=200k (`8ebd574`). The formerly stale red canonical
+claim is resolved by current command output: **82 imported / 81 warning-clean /
+79 deck-built / 79 op-converged**, capability **79 success / 3 honest refusals /
+0 deck-guard leaks / 0 failures**, substitutions 0.
 
-Current gates: typecheck and production build clean; frontend **4,008 passed / 8
+Current gates: typecheck and production build clean; frontend **4,009 passed / 8
 skipped**; Rust **89 passed / 20 ignored** plus all **19/19** real-ngspice tests;
-full differential parity green; both-theme 1440x900 design proof and 900x600
-minimum-window **12/12** green. Fresh Tau.app/DMG build, strict code signature,
-DMG checksum, nine-file arm64/macOS-11 deployment inspection, and packaged plus
-mounted-DMG 336-sample engine smokes are green.
+full differential parity green at **115 pass / 5 sibling / 0 gap**; both-theme
+1440x900 design proof and 900x600 minimum-window **12/12** green. Fresh
+Tau.app/DMG build, strict code signature, DMG checksum, nine-file
+arm64/macOS-11 deployment inspection, and packaged plus mounted-DMG 336-sample
+engine smokes are green.
 
 **SHIPPABLE? NO.** The named-device DoD remains honestly blocked at 48.1% by
 unavailable encrypted vendor models, and broad differential coverage remains
-incomplete even though every committed cell currently passes. Active work:
-probe one additional exact authored-analysis cell and audit keyboard focus plus
-resource lifecycles. Native title-bar interaction still needs an unlocked Mac.
+incomplete even though every committed cell currently passes. Native title-bar
+interaction still needs an unlocked Mac. Next: continue exact authored-analysis
+coverage without weakening fail-closed model handling.
 
 ---
 
@@ -18685,3 +18688,23 @@ evidence is kept in full here.
   Computer Use remained blocked by the locked Mac. Scheduler intentionally
   disabled. Named-device 48.1% and the still-incomplete broad matrix keep the
   product correctly marked not shippable.
+
+- 2026-08-10 - Completed the second production-hardening pass. Closed Settings
+  modality and Past chats focus return, removed a duplicate Components
+  landmark, released global resize listeners even when the panel unmounts
+  mid-drag, and prevented stale asynchronous document imports from replacing a
+  newer navigation decision. Decorative current flow is capped at 30 Hz, native
+  local-AI readiness makes one loopback probe, and two unused direct runtime
+  dependencies are gone. Attached-library subcircuit names now normalize as one
+  collision-checked system across declarations, endings, and nested calls; the
+  canonical corpus is green again at 82/81/79/79 with capability 79/3/0/0 and
+  zero substitutions. The authored dimmer differential cell now includes its
+  Rdim=200k near-cutoff step without inflating the honest 115-pass row count.
+  Final evidence: typecheck and production build clean; 4,009 frontend tests
+  passed / eight skipped; Rust fmt and Clippy clean; 89 ordinary Rust tests and
+  all 19 ignored real-ngspice tests passed; differential 115/5/0, both-theme
+  design proof, and minimum-window 12/12 green. A fresh Tau.app and DMG passed
+  macOS 11 deployment inspection, strict signature and checksum verification,
+  plus 336-sample engine smokes from both the app bundle and mounted DMG. The
+  scheduler remains disabled. Named-device exact fidelity at 48.1% and the open
+  broad differential matrix still correctly keep the product not shippable.
