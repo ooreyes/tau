@@ -2,26 +2,28 @@
 
 **Status: DONE - 2026-08-10**
 
-Unit: **third production-hardening pass**. Palette disclosures now expose clean
-names and valid expanded-state control relationships (`2583a1f`). Native local
-AI status snapshots the managed process under its mutex, then releases the lock
-before the potentially 400 ms loopback readiness probe (`5e35211`), so concurrent
-Settings/assistant polling cannot hold Stop behind network I/O. The 900×600
-proof now targets the current shared Settings Sheet and fails if geometry is not
-measured (`2e06acc`); both themes measure the full 900×600 viewport and all 12
-states remain green. TLINE differential isolation is recorded at `4634f01`:
-ordinary matched/reversed lossless lines agree in RMS, while the authored
-TransmissionLineInverter's degenerate `T 0 0 out 0` diverges between ngspice and
-LTspice semantics; options, maxstep, and comparison-grid probes rule out a Tau
-translation or resampling fix.
+Unit: **fourth production-hardening pass**. Canvas now loads only after a
+circuit opens (`6ae2f61`), and first-paint preference code imports a lightweight
+Gemini catalog instead of the cloud-assistant runtime/compiler (`5ebc78c`).
+Together they reduce the initial renderer from **934.05 to 808.79 kB (-13.4%)**
+and gzip from **294.67 to 247.80 kB (-15.9%)**. A dedicated contract proves the
+project-start screen does not fetch Canvas and the first New schematic does.
+Native local-AI install/repeated-start/Stop paths also perform passive status,
+child reaping, and loopback checks after releasing the process mutex (`4c54a41`).
+The visual runner now emulates reduced motion, proving Tau's static current-flow
+direction path and removing requestAnimationFrame phase noise from screenshots
+(`dc970f9`).
 
-Current gates: typecheck and production build clean; frontend **4,011 passed / 8
+Current gates: typecheck and production build clean; frontend **4,012 passed / 8
 skipped**; Rust **90 passed / 20 ignored** plus all **19/19** real-ngspice tests;
-900×600 minimum-window **12/12** green. Fresh Tau.app/DMG build, strict code
-signature, DMG checksum, nine-file arm64/macOS-11 deployment inspection, and
-packaged plus mounted-DMG 336-sample engine smokes are green. The prior canonical
-**82/81/79/79**, capability **79/3/0/0**, zero-substitution and differential
-**115 pass / 5 sibling / 0 gap** proofs remain the current precision baseline.
+both-theme 1440×900 design proof and 900×600 minimum-window **12/12** green.
+Fresh Tau.app/DMG build, strict code signature, DMG checksum, nine-file
+arm64/macOS-11 deployment inspection, and packaged plus mounted-DMG 336-sample
+engine smokes are green. The prior canonical **82/81/79/79**, capability
+**79/3/0/0**, zero-substitution and differential **115 pass / 5 sibling / 0
+gap** proofs remain the current precision baseline. Fc.asc was re-probed: its
+authored deck is exact, but ngspice aborts at 21.6334 µs on the capometer `res`
+node while LTspice completes, so no fake partial waveform was added.
 
 **SHIPPABLE? NO.** The named-device DoD remains honestly blocked at 48.1% by
 unavailable encrypted vendor models, and broad differential coverage remains
@@ -18728,3 +18730,23 @@ evidence is kept in full here.
   fresh app/DMG strict signature, checksum, macOS-11 inspection, and 336-sample
   engine smokes from both bundle and mounted image. Named-device 48.1% and the
   still-open broad differential matrix keep the overall product not shippable.
+
+- 2026-08-10 - Completed a fourth reviewed production-hardening increment.
+  Deferred the 40.6 kB Canvas surface until a circuit opens and severed the
+  first-paint preference path from Gemini's provider/compiler graph by moving
+  model metadata into a dependency-free catalog. The initial production chunk
+  fell 934.05→808.79 kB (−13.4%) and gzip 294.67→247.80 kB (−15.9%); a focused
+  App contract proves Project start does not request Canvas and New schematic
+  requests it once. Native MLX install, repeated-start, and Stop now release the
+  process mutex before passive status/network work and child reaping while
+  retaining fail-closed port ownership. The 900×600 visual runner now emulates
+  reduced motion, exercising static current-direction markers and eliminating
+  rAF-phase screenshot churn. Fc.asc was re-probed without code changes: exact
+  import/deck, but ngspice aborts at 21.6334 µs on the authored capometer `res`
+  node while LTspice completes, so a partial or stripped measurement was not
+  claimed. Evidence: 4,012 frontend tests passed / eight skipped; production
+  build and typecheck clean; Rust fmt/Clippy, 90 ordinary and 19 real-ngspice
+  tests green; both-theme design and minimum-window 12/12 proofs green; fresh
+  Tau.app/DMG passed signature, checksum, macOS-11 inspection, and bundle plus
+  mounted-image 336-sample smokes. Named-device 48.1% and incomplete broad
+  differential coverage still correctly keep the product not shippable.
