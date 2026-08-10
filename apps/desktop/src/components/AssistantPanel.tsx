@@ -46,7 +46,7 @@ import {
   ensureLocalAi,
   studentFacingLocalAiDetail,
 } from "../lib/localAiEnsure";
-import { loadCustomLocalAiModels } from "../lib/localAiModels";
+import { loadCustomLocalAiModels, LOCAL_AI_MODELS_CHANGE_EVENT } from "../lib/localAiModels";
 import { hasCloudAiConsent, cloudAiConsentRefusal } from "../lib/cloudAiConsent";
 import { useCloudAiConsent } from "../lib/cloudAiConsentHooks";
 import { renderMiniMarkdown } from "../lib/miniMarkdown";
@@ -345,7 +345,19 @@ export function AssistantPanel({
     };
   }, [preferences.provider, localAiStatus?.state]);
 
-  const customLocalAiModels = loadCustomLocalAiModels();
+  // A streamed cloud response can re-render this panel for every text delta.
+  // Custom model metadata changes only through Settings (or another window's
+  // storage event), so parsing localStorage on every token is pure overhead.
+  const [customLocalAiModels, setCustomLocalAiModels] = useState(loadCustomLocalAiModels);
+  useEffect(() => {
+    const sync = () => setCustomLocalAiModels(loadCustomLocalAiModels());
+    window.addEventListener(LOCAL_AI_MODELS_CHANGE_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(LOCAL_AI_MODELS_CHANGE_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
   const localAiPresets = [
     ...(localAiStatus?.presets.length ? localAiStatus.presets : LOCAL_AI_PRESETS),
     ...customLocalAiModels,

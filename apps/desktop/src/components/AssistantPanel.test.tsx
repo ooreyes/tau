@@ -313,6 +313,25 @@ async function sendAndResolve(promptText: string, replyText: string) {
 }
 
 describe("AssistantPanel", () => {
+  it("does not reparse custom-model storage on unrelated composer renders", () => {
+    saveAssistantApiKey("test-key");
+    const getItem = vi.spyOn(localStorage, "getItem");
+    try {
+      render(<AssistantPanel {...baseProps()} />);
+      const customModelReads = () => getItem.mock.calls.filter(
+        ([key]) => key === "tau.local-ai.custom-models.v1",
+      ).length;
+      expect(customModelReads()).toBe(1);
+
+      fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
+        target: { value: "Inspect this circuit" },
+      });
+      expect(customModelReads()).toBe(1);
+    } finally {
+      getItem.mockRestore();
+    }
+  });
+
   it("refuses an Anthropic stream before any network call when cloud consent is missing", async () => {
     saveCloudAiConsent({ consented: false });
     const onError = vi.fn();
