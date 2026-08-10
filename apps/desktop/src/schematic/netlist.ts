@@ -34,53 +34,148 @@ interface Segment {
   b: Point;
 }
 
+/**
+ * Union-find over schematic points, addressed by dense integer node ids.
+ *
+ * This used to be a `Map<string, string>` keyed on `pointKey`'s `"<x>,<y>"`
+ * strings, which meant every `add`/`find`/`union` allocated a fresh string and
+ * hashed it, and every path-compression step wrote another string back into
+ * the map. `extractCircuit` sits on interactive paths — the netlist is derived
+ * again after each edit — so that allocation traffic was measurable as
+ * milliseconds of latency per keystroke on a large schematic.
+ *
+ * Now each distinct coordinate is interned exactly once into a dense id and
+ * the forest itself lives in flat `Int32Array`s, so the inner loops are array
+ * indexing with no allocation and no hashing at all. Ids are handed out in
+ * first-touch order, which is deliberately the same order the old parent map
+ * iterated in: `extractCircuit` walks every node to bucket points per root,
+ * and the order of that walk decides the order of `ExtractedNet.points`, which
+ * is observable output.
+ *
+ * The interner is a two-level `x -> y -> id` index on the raw numbers rather
+ * than a `Map` on the joined string, because a string-keyed interner would
+ * still pay the allocation on every lookup and the allocation is most of what
+ * we are trying to remove. Numeric keys discriminate exactly as the string
+ * keys did: `Map` compares with SameValueZero, which unifies `-0` with `0` and
+ * matches `NaN` with itself, and `${x},${y}` collapsed those same pairs. The
+ * only place the two forms could have drifted is the coordinate handed back
+ * out, because the old reverse lookup parsed the key with `Number(...)` and so
+ * turned a `-0` (which `Math.round` really does produce when snapping a small
+ * negative to the grid) into `0`; `intern` normalises identically so the
+ * points in the extracted nets stay byte-for-byte what they were.
+ */
 class DisjointSet {
-  private parent = new Map<string, string>();
+  private readonly idByX = new Map<number, Map<number, number>>();
+  private readonly xs: number[] = [];
+  private readonly ys: number[] = [];
+  private parent = new Int32Array(64);
+  private size = new Int32Array(64);
+  private count = 0;
 
-  add(key: string) {
-    if (!this.parent.has(key)) this.parent.set(key, key);
+  /** Node id for a coordinate, minting one on first sight. */
+  private intern(point: Point): number {
+    // See the class comment: canonicalising -0 to +0 here is what keeps the
+    // reverse lookup identical to the old parse-the-key-back round trip.
+    const x = point.x === 0 ? 0 : point.x;
+    const y = point.y === 0 ? 0 : point.y;
+    let column = this.idByX.get(x);
+    if (column === undefined) {
+      column = new Map<number, number>();
+      this.idByX.set(x, column);
+    }
+    const existing = column.get(y);
+    if (existing !== undefined) return existing;
+
+    const id = this.count;
+    this.count += 1;
+    if (this.count > this.parent.length) this.grow();
+    column.set(y, id);
+    this.xs.push(x);
+    this.ys.push(y);
+    this.parent[id] = id;
+    this.size[id] = 1;
+    return id;
+  }
+
+  /** Double the flat arrays. Doubling keeps interning amortised O(1) even on
+   *  the schematics with thousands of independent wires that the segment index
+   *  above was written for. */
+  private grow(): void {
+    const grownParent = new Int32Array(this.parent.length * 2);
+    grownParent.set(this.parent);
+    this.parent = grownParent;
+    const grownSize = new Int32Array(this.size.length * 2);
+    grownSize.set(this.size);
+    this.size = grownSize;
+  }
+
+  add(point: Point): void {
+    this.intern(point);
   }
 
   // Iterative find with path compression. Recursion here could blow the call
   // stack on large/complex nets (long union chains from wire breakpoints), so
   // we walk to the root then re-point every node on the path directly at it.
-  find(key: string): string {
-    this.add(key);
-    let root = key;
-    let parent = this.parent.get(root)!;
-    while (parent !== root) {
-      root = parent;
-      parent = this.parent.get(root)!;
-    }
-    let node = key;
-    while (node !== root) {
-      const next = this.parent.get(node)!;
-      this.parent.set(node, root);
-      node = next;
+  rootOf(node: number): number {
+    let root = node;
+    while (this.parent[root] !== root) root = this.parent[root];
+    let walk = node;
+    while (walk !== root) {
+      const next = this.parent[walk];
+      this.parent[walk] = root;
+      walk = next;
     }
     return root;
   }
 
-  // Union by size keeps trees shallow regardless of insertion order.
-  private size = new Map<string, number>();
+  /** Root for a coordinate, registering it first if it is new — the old
+   *  string-keyed `find` did the same implicit `add`, and several call sites
+   *  lean on it (a wire endpoint often reaches the forest only by being
+   *  unioned with its neighbour). */
+  find(point: Point): number {
+    return this.rootOf(this.intern(point));
+  }
 
-  union(a: string, b: string) {
+  // Union by size keeps trees shallow regardless of insertion order. The tie
+  // break matters and is load bearing: on equal sizes `b`'s root is hung under
+  // `a`'s root, so `a`'s root survives. Which node ends up as a net's root
+  // decides that net's sort key, and therefore whether it is `N001` or `N002`
+  // in the emitted deck, so this rule must not be "improved" into union by
+  // rank or into the other tie direction.
+  union(a: Point, b: Point) {
     const rootA = this.find(a);
     const rootB = this.find(b);
     if (rootA === rootB) return;
-    const sizeA = this.size.get(rootA) ?? 1;
-    const sizeB = this.size.get(rootB) ?? 1;
+    const sizeA = this.size[rootA];
+    const sizeB = this.size[rootB];
     if (sizeA < sizeB) {
-      this.parent.set(rootA, rootB);
-      this.size.set(rootB, sizeA + sizeB);
+      this.parent[rootA] = rootB;
+      this.size[rootB] = sizeA + sizeB;
     } else {
-      this.parent.set(rootB, rootA);
-      this.size.set(rootA, sizeA + sizeB);
+      this.parent[rootB] = rootA;
+      this.size[rootA] = sizeA + sizeB;
     }
   }
 
-  keys() {
-    return [...this.parent.keys()];
+  /** Number of interned points; ids are `0 .. nodeCount - 1` in first-touch
+   *  order, which is the traversal order callers must use to reproduce the
+   *  old parent-map iteration. */
+  get nodeCount(): number {
+    return this.count;
+  }
+
+  /** The coordinate behind a node id, as a fresh plain `Point` — callers put
+   *  these straight into `ExtractedNet.points`, so it must not be a pin or a
+   *  label object carrying extra fields. */
+  pointAt(node: number): Point {
+    return { x: this.xs[node], y: this.ys[node] };
+  }
+
+  /** The `"<x>,<y>"` spelling of a node, for the one place that still needs an
+   *  orderable key: the net sort. Built on demand for the surviving roots
+   *  rather than kept for every node, which is the whole saving. */
+  keyAt(node: number): string {
+    return `${this.xs[node]},${this.ys[node]}`;
   }
 }
 
@@ -109,7 +204,7 @@ export function extractCircuit(
   const warnings: string[] = [];
 
   for (const pin of allPins) {
-    dsu.add(pointKey(pin));
+    dsu.add(pin);
     pushBucket(pinByComponent, pin.componentId, pin);
   }
 
@@ -118,11 +213,11 @@ export function extractCircuit(
   // cross-schematic connectivity). Register each label point as a DSU node;
   // points coincide with wire endpoints/pins, so unions merge the real nets.
   const labelPoints: Point[] = netLabels.map((label) => ({ x: label.x, y: label.y }));
-  for (const point of labelPoints) dsu.add(pointKey(point));
+  for (const point of labelPoints) dsu.add(point);
 
   for (const pins of pinsByPoint(allPins).values()) {
     for (let i = 1; i < pins.length; i += 1) {
-      dsu.union(pointKey(pins[0]), pointKey(pins[i]));
+      dsu.union(pins[0], pins[i]);
     }
   }
 
@@ -132,7 +227,7 @@ export function extractCircuit(
     ...netLabels.filter((label) => isGroundLabel(label.text)),
   ].map((p) => ({ x: p.x, y: p.y }));
   for (let i = 1; i < groundAnchors.length; i += 1) {
-    dsu.union(pointKey(groundAnchors[0]), pointKey(groundAnchors[i]));
+    dsu.union(groundAnchors[0], groundAnchors[i]);
   }
 
   // Merge non-ground labels that share a name.
@@ -148,7 +243,7 @@ export function extractCircuit(
   }
   for (const points of labelsByName.values()) {
     for (let i = 1; i < points.length; i += 1) {
-      dsu.union(pointKey(points[0]), pointKey(points[i]));
+      dsu.union(points[0], points[i]);
     }
   }
 
@@ -164,8 +259,8 @@ export function extractCircuit(
       if (!isResistiveWire(wire)) {
         for (let k = 0; k < segs.length; k += 1) idealSegmentIndexes.push(segIdx + k);
       } else {
-        if (wire.points.length >= 1) dsu.add(pointKey(wire.points[0]));
-        if (wire.points.length >= 2) dsu.add(pointKey(wire.points[wire.points.length - 1]));
+        if (wire.points.length >= 1) dsu.add(wire.points[0]);
+        if (wire.points.length >= 2) dsu.add(wire.points[wire.points.length - 1]);
       }
       segIdx += segs.length;
     }
@@ -219,49 +314,61 @@ export function extractCircuit(
       segments[i].a.x === segments[i].b.x ? p1.y - p2.y : p1.x - p2.x,
     );
     for (let j = 1; j < segmentPoints.length; j += 1) {
-      dsu.union(pointKey(segmentPoints[j - 1]), pointKey(segmentPoints[j]));
+      dsu.union(segmentPoints[j - 1], segmentPoints[j]);
     }
   }
 
-  const rootToPoints = new Map<string, Point[]>();
-  for (const key of dsu.keys()) {
-    const root = dsu.find(key);
-    pushBucket(rootToPoints, root, pointFromKey(key));
+  // Nodes are visited in first-touch order, which is what the old parent-map
+  // iteration gave us; each root's bucket therefore accumulates its points in
+  // the same order as before, and that order is visible in `net.points`.
+  const rootToPoints = new Map<number, Point[]>();
+  const nodeCount = dsu.nodeCount;
+  for (let node = 0; node < nodeCount; node += 1) {
+    pushBucket(rootToPoints, dsu.rootOf(node), dsu.pointAt(node));
   }
 
-  const rootToPins = new Map<string, ComponentPin[]>();
+  const rootToPins = new Map<number, ComponentPin[]>();
   for (const pin of allPins) {
-    const root = dsu.find(pointKey(pin));
-    pushBucket(rootToPins, root, pin);
+    pushBucket(rootToPins, dsu.find(pin), pin);
   }
 
-  const groundRoot = groundAnchors.length > 0 ? dsu.find(pointKey(groundAnchors[0])) : null;
-  if (!groundRoot) warnings.push("No ground symbol found.");
+  // Held as a node id, so the emptiness test has to be an explicit null check:
+  // id 0 is a perfectly ordinary root (the first point the extraction touched)
+  // and would read as falsy.
+  const groundRoot = groundAnchors.length > 0 ? dsu.find(groundAnchors[0]) : null;
+  if (groundRoot === null) warnings.push("No ground symbol found.");
+
+  // Nets are ordered by their root's coordinate spelling, so materialise that
+  // spelling once per surviving root instead of inside the comparator.
+  const rootKeys = new Map<number, string>();
+  for (const root of rootToPoints.keys()) rootKeys.set(root, dsu.keyAt(root));
 
   const sortedRoots = [...rootToPoints.keys()].sort((a, b) => {
     if (a === groundRoot) return -1;
     if (b === groundRoot) return 1;
     // Root keys are plain "<x>,<y>" coordinate strings (digits/comma/hyphen
-    // only, from pointKey/pointFromKey) - a plain lexicographic compare
-    // orders them identically to localeCompare for that alphabet but without
-    // ICU collation overhead, ~50-100x slower for this hot sort where ground
+    // only, from DisjointSet.keyAt) - a plain lexicographic compare orders
+    // them identically to localeCompare for that alphabet but without ICU
+    // collation overhead, ~50-100x slower for this hot sort where ground
     // (the largest net) is always one of the compared roots.
-    return a < b ? -1 : a > b ? 1 : 0;
+    const keyA = rootKeys.get(a)!;
+    const keyB = rootKeys.get(b)!;
+    return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
   });
 
   // Prefer a user/LTspice net-label name for a net's id (so V(vcc) resolves as
   // the author intended); fall back to a generated N00x id otherwise.
-  const rootToLabelName = new Map<string, string>();
+  const rootToLabelName = new Map<number, string>();
   for (const label of netLabels) {
     if (isGroundLabel(label.text)) continue;
     const name = sanitizeNetName(label.text);
     if (name === "") continue;
-    const root = dsu.find(pointKey({ x: label.x, y: label.y }));
+    const root = dsu.find(label);
     if (!rootToLabelName.has(root)) rootToLabelName.set(root, name);
   }
   const usedNames = new Set<string>();
 
-  const rootToNetId = new Map<string, string>();
+  const rootToNetId = new Map<number, string>();
   let nextNet = 1;
   for (const root of sortedRoots) {
     if (root === groundRoot) {
@@ -277,15 +384,18 @@ export function extractCircuit(
     }
   }
 
-  const rootLabelCount = new Map<string, number>();
+  const rootLabelCount = new Map<number, number>();
   for (const label of netLabels) {
     if (isGroundLabel(label.text)) continue;
-    const root = dsu.find(pointKey({ x: label.x, y: label.y }));
+    const root = dsu.find(label);
     rootLabelCount.set(root, (rootLabelCount.get(root) ?? 0) + 1);
   }
 
   const nets: ExtractedNet[] = sortedRoots.map((root) => ({
-    id: rootToNetId.get(root) ?? root,
+    // Every sorted root was assigned a net id just above; the coordinate
+    // spelling is only a defensive fallback, and it is the same string the
+    // pre-interning code fell back to.
+    id: rootToNetId.get(root) ?? rootKeys.get(root)!,
     points: uniquePoints(rootToPoints.get(root) ?? []),
     pins: rootToPins.get(root) ?? [],
     isGround: root === groundRoot,
@@ -314,7 +424,7 @@ export function extractCircuit(
   const extractedComponents = components.map((component) => {
     const pins: Record<string, string> = {};
     for (const pin of pinByComponent.get(component.id) ?? []) {
-      pins[pin.id] = rootToNetId.get(dsu.find(pointKey(pin))) ?? "";
+      pins[pin.id] = rootToNetId.get(dsu.find(pin)) ?? "";
     }
     return { component, pins };
   });
@@ -322,7 +432,7 @@ export function extractCircuit(
   return {
     nets,
     components: extractedComponents,
-    groundNetId: groundRoot ? rootToNetId.get(groundRoot) ?? null : null,
+    groundNetId: groundRoot !== null ? rootToNetId.get(groundRoot) ?? null : null,
     warnings,
   };
 }
@@ -421,11 +531,10 @@ function sanitizeNetName(text: string): string {
   return cleaned;
 }
 
+/** Coordinate identity as a map key, for the geometry indexes that are not the
+ *  union-find. The DSU interns coordinates numerically instead (see
+ *  `DisjointSet`); these callers stay on strings because their maps are built
+ *  and thrown away once per extraction rather than probed per union. */
 function pointKey(point: Point): string {
   return `${point.x},${point.y}`;
-}
-
-function pointFromKey(key: string): Point {
-  const [x, y] = key.split(",").map(Number);
-  return { x, y };
 }

@@ -1540,8 +1540,9 @@ mod tests {
         deck_lines, fatal_engine_messages, library_file_name, missing_codemodel_message,
         read_bounded, record_engine_message, resample, resampled_length, take_messages,
         transfer_keep_ratio, worker_poll_interval, worth_reporting, CallbackState, SpiceEngine,
-        SpiceRequest, WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
-        MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH, WORKER_POLL_INTERVAL, WORKER_POLL_RAMP,
+        SpiceRequest, SpiceResult, SpiceVector, WorkerResponse, MAX_ENGINE_MESSAGES,
+        MAX_ENGINE_MESSAGE_BYTES, MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH, WORKER_POLL_INTERVAL,
+        WORKER_POLL_RAMP,
     };
 
     // libngspice owns process-global callback and circuit state. Cargo runs
@@ -2071,6 +2072,72 @@ M5  45 46 99 99 POX L=2E-6 W=0.98E-3
         let decoded: WorkerResponse = serde_json::from_slice(&encoded).expect("response decodes");
         assert!(decoded.result.is_none());
         assert_eq!(decoded.error.as_deref(), Some("intentional failure"));
+    }
+
+    /**
+     * The premise the non-finite guard is built on, pinned at the exact layer
+     * where it bites, because it is invisible everywhere else.
+     *
+     * JSON has no spelling for NaN or ±Inf, so `serde_json` writes `null` in
+     * their place and the *encode still succeeds*. Nothing in the worker
+     * notices. The loss only becomes an error one process later, when the
+     * parent tries to read that `null` back into an `f64` — and the error it
+     * raises talks about JSON types, not about a circuit that failed to
+     * converge. That asymmetry is the whole reason the guard has to live in
+     * the worker: the parent cannot tell a diverged solve from a corrupt pipe.
+     */
+    #[test]
+    fn a_non_finite_sample_encodes_as_null_and_then_refuses_to_decode() {
+        let vector = SpiceVector {
+            name: "v(out)".to_string(),
+            real: vec![0.0, 1.5, f64::NAN, f64::INFINITY, f64::NEG_INFINITY],
+            imaginary: None,
+        };
+        let encoded = serde_json::to_vec(&vector).expect("encoding a NaN must NOT fail");
+        let text = String::from_utf8(encoded.clone()).expect("payload is UTF-8");
+        assert!(
+            text.contains("null"),
+            "serde_json must have substituted null for the non-finite samples: {text}"
+        );
+
+        let decoded = serde_json::from_slice::<SpiceVector>(&encoded);
+        let error = decoded
+            .err()
+            .expect("decoding null back into f64 must fail")
+            .to_string();
+        assert!(
+            error.contains("invalid type: null, expected f64"),
+            "the decode failure must be the one the parent reports verbatim: {error}"
+        );
+
+        // And the same payload nested in a real worker response, which is the
+        // shape that actually crosses the process boundary: one NaN anywhere
+        // in the vectors discards `messages` as well, so the engine log that
+        // would have explained the divergence never reaches the user.
+        let response = WorkerResponse {
+            result: Some(SpiceResult {
+                plot: "tran1".to_string(),
+                vectors: vec![SpiceVector {
+                    name: "v(out)".to_string(),
+                    real: vec![0.0, f64::NAN],
+                    imaginary: None,
+                }],
+                extra_plots: Vec::new(),
+                messages: vec!["Warning: Timestep too small".to_string()],
+                library_path: String::new(),
+            }),
+            error: None,
+        };
+        let encoded = serde_json::to_vec(&response).expect("response encodes");
+        let error = serde_json::from_slice::<WorkerResponse>(&encoded)
+            .err()
+            .expect("a NaN anywhere in the result must sink the whole response")
+            .to_string();
+        assert!(error.contains("invalid type: null, expected f64"), "{error}");
+        assert!(
+            !String::from_utf8_lossy(&encoded).contains("__never__"),
+            "sanity guard on the payload"
+        );
     }
 
     #[test]

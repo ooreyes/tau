@@ -397,12 +397,21 @@
     --fill-track:           rgba(11, 16, 23, 0.07);
     --status-ink-mix:       black;
     --pill-shadow: 0 0.5px 1px rgba(8, 16, 32, 0.13);
-  }
 
-    /* Floating chrome, light. See the :root block for what these are for. */
+    /* Floating chrome, light. See the :root block for what these are for.
+
+       These three were appended AFTER this `:root`'s closing brace, leaving
+       them loose inside the `@media` with no selector around them. The brace
+       COUNT still balanced, which is why nothing caught it by inspection, but
+       two things followed: `vite build` failed outright in lightningcss with
+       "Invalid qualified rule", so the app could not be packaged at all; and
+       in the dev server, which does not minify, light mode silently fell back
+       to the dark `--chrome-veil`/`--elev-float` from the base `:root` -
+       including the shadow under the results drawer. */
     --chrome-veil:        rgba(247, 249, 252, 0.78);
     --chrome-veil-strong: rgba(247, 249, 252, 0.92);
     --elev-float: 0 6px 20px rgba(8, 16, 32, 0.12), 0 0 0 0.5px rgba(11, 16, 23, 0.10);
+  }
 }
 
 :root[data-theme="light"] {

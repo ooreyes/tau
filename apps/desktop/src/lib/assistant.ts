@@ -7,7 +7,27 @@
  */
 import { useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+
+/**
+ * The SDK is loaded the first time someone actually talks to Bode.
+ *
+ * It is 138 KB of the production bundle - the second-largest thing in it,
+ * larger than any file Tau owns - and a statically imported one was parsed at
+ * every launch whether or not the assistant was ever opened. It is also a
+ * Node-targeted SDK, which is why the build externalises `node:fs` and
+ * `node:path` for it; none of that belongs on the path to first paint of a
+ * schematic editor.
+ *
+ * `import type` above keeps every `Anthropic.MessageParam` annotation in the
+ * file working with no runtime cost - types are erased. Only the two places
+ * that need the real module at runtime await this.
+ */
+let sdkModule: typeof import("@anthropic-ai/sdk") | null = null;
+async function loadAnthropicSdk(): Promise<typeof import("@anthropic-ai/sdk")> {
+  sdkModule ??= await import("@anthropic-ai/sdk");
+  return sdkModule;
+}
 import {
   APPLY_CURRENT_ASC_TOOL,
   parseAssistantActions,
@@ -321,16 +341,22 @@ function parseCloudActions(content: readonly unknown[]): ParsedCloudActions {
 }
 
 function classifyAssistantError(error: unknown): AssistantError {
-  if (error instanceof Anthropic.AuthenticationError) {
+  // `sdkModule` is null only if no request was ever made, in which case the
+  // error cannot be one of the SDK's - so falling through to the generic
+  // message below is correct rather than merely safe. Kept synchronous
+  // deliberately: an error path is the wrong place to start a network fetch
+  // for a chunk.
+  const sdk = sdkModule?.default;
+  if (sdk && error instanceof sdk.AuthenticationError) {
     return { kind: "auth", message: "Authentication failed. Check your API key in Settings." };
   }
-  if (error instanceof Anthropic.RateLimitError) {
+  if (sdk && error instanceof sdk.RateLimitError) {
     return { kind: "rate_limit", message: "Rate limited - try again shortly." };
   }
-  if (error instanceof Anthropic.APIConnectionError) {
+  if (sdk && error instanceof sdk.APIConnectionError) {
     return { kind: "network", message: "Couldn't reach Anthropic. Check your connection and try again." };
   }
-  if (error instanceof Anthropic.APIError) {
+  if (sdk && error instanceof sdk.APIError) {
     return error.status !== undefined && error.status >= 500
       ? { kind: "network", message: "Anthropic's assistant service is temporarily unavailable. Retry shortly." }
       : { kind: "unknown", message: "Anthropic rejected the assistant request. Retry once; if it repeats, update Tau." };
@@ -374,7 +400,8 @@ export function streamAssistantReply(
   // progress-aware twelve-minute build budget. In Tauri the placeholder
   // `apiKey` is never sent — createCloudAiFetch strips auth headers and Rust
   // attaches the keychain credential on the allowlisted HTTPS call.
-  const client = new Anthropic({
+  const AnthropicClient = (await loadAnthropicSdk()).default;
+  const client = new AnthropicClient({
     apiKey,
     dangerouslyAllowBrowser: true,
     timeout: ASSISTANT_REQUEST_TIMEOUT_MS,
