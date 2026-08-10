@@ -1,5 +1,51 @@
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-10**
+
+Unit: **the native title bar merges into the app's own header** (`4d2a81e`).
+The macOS window carried two bars - a native strip whose only content was the
+word "Tau", sitting directly above a header already reading "tau · <file>".
+`titleBarStyle: "Overlay"` + `hiddenTitle` removes the strip; `main.tsx` marks
+the document `has-overlay-titlebar` on a Tauri macOS runtime only and App.css
+insets `.toolbar` 78px so the traffic lights do not land on the brand, and the
+header takes over window dragging via `data-tauri-drag-region` on the
+background alone (Tauri honours a drag region over a button, so tagging the
+subtree would have made Run and the mode toggle move the window). Also lands
+the design-sync scaffold's durable inputs next to the `.gitignore` describing
+them; its `stubs/` and `tsconfig.ds.json` stay untracked because that ignore
+file enumerates the durable set and does not claim them.
+
+Gates: `tsc --noEmit` clean; shell-contract + workspace + Toolbar suites 40/40.
+
+**Not verified visually, and it should be before this is trusted.** The change
+is to a native window chrome property, and `osascript` on this host has no
+assistive access (`-1719`), so the Tau window could not be focused or captured
+to confirm the traffic lights clear the brand and the drag region works. The
+code and config are right; someone with the window in front of them needs to
+look.
+
+**Two things found while testing that are NOT this unit and are still open:**
+
+1. **A flaky Settings test, new today.** Two consecutive full-suite runs failed
+   one Settings case each - `App.shellContract.test.tsx > with Settings open,
+   the shell behind it leaves the accessibility tree` on the first, then
+   `App.workspace.test.tsx > opens Settings over the schematic and closes it
+   again` on the second - and a third run was fully green (3973 passed). Both
+   pass in isolation. Settings became `React.lazy` today, so under parallel
+   worker load its chunk can miss the query's timeout. Suspected cause, not
+   proven. This is a real flake and wants a Suspense-aware wait, not a longer
+   timeout.
+2. **Dev-loop hazard, worth writing down.** `rm -rf node_modules/.vite` while a
+   Vite dev server is live destroys its optimized-deps cache, and the running
+   Tauri webview then fails every *dynamic* import of a bare specifier
+   (`@tauri-apps/plugin-dialog`, `plugin-fs`). It presents as "Open folder and
+   Create project do nothing", which reads exactly like a product bug and is
+   not one - both handlers die on the first line of their Tauri branch. Restart
+   Vite to repair. Cost an hour of misdirected debugging today.
+
+---
+
+
 **Status: DONE - 2026-08-08**
 
 Unit: **component-library item 4 closed - what a controlled source computes.**
