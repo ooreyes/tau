@@ -38,3 +38,14 @@ apps/desktop/.agent-reload
 __pycache__/
 *.py[cod]
 .tau-overnight-sdk-state.json
+
+# design-sync (claude.ai/design import) — generated, never committed.
+# Durable inputs under .design-sync/ (config.json, NOTES.md, conventions.md,
+# previews/, overrides/, gen-entry.mjs, build.sh) ARE committed.
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+apps/desktop/.ds-entry.tsx
+apps/desktop/.ds-styles.css

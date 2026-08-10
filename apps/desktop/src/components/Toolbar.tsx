@@ -60,7 +60,19 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
             : "";
 
   return (
-    <header className="toolbar">
+    /*
+     * `data-tauri-drag-region` because the native title bar is gone.
+     * `titleBarStyle: "Overlay"` in tauri.conf.json hides the bar and floats
+     * the traffic lights over this header, which removes the only thing the
+     * user could drag the window by - so this row has to become it. The
+     * attribute is inert outside Tauri, so the browser build is unaffected.
+     *
+     * Only the header background carries it, never a control: Tauri treats a
+     * drag region as a drag region even over a button, so tagging the whole
+     * subtree would make Run and the mode toggle move the window instead of
+     * clicking.
+     */
+    <header className="toolbar" data-tauri-drag-region>
       <div className="titlebar-left">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">τ</span>

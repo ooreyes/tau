@@ -15,6 +15,27 @@ import { hydrateInstalledLtspiceStandardModels } from "./store/useRuntimeModelLi
 // nothing here reaches a shipped bundle.
 if (import.meta.env.DEV) installDevBridge();
 
+/*
+ * Reserve the traffic lights' corner, but only where they exist.
+ *
+ * The macOS window uses `titleBarStyle: "Overlay"` so there is one bar
+ * instead of two - the native strip that just said "Tau" above a header
+ * already saying "tau" is gone. The cost is that the close/minimise/zoom
+ * buttons now float over the top-left of our own toolbar, exactly where the
+ * brand sits. This marks the document so App.css can inset the toolbar for
+ * them; it is deliberately not unconditional, because in a browser there are
+ * no traffic lights and the gap would just be a hole.
+ */
+void (async () => {
+  try {
+    const { isTauri } = await import("@tauri-apps/api/core");
+    const mac = navigator.userAgent.includes("Mac");
+    if (isTauri() && mac) document.documentElement.classList.add("has-overlay-titlebar");
+  } catch {
+    /* Not a Tauri runtime, so there is nothing to inset for. */
+  }
+})();
+
 // Before the first render, so an explicit Light/Dark choice does not flash the
 // other theme on launch. "System" needs no JS - App.css's prefers-color-scheme
 // block already handles it - but this still runs to clear a stale data-theme.

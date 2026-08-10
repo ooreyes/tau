@@ -4592,6 +4592,16 @@ body {
    status pill; the segmented mode toggle drops its embossed-pill look for a
    crisp hairline-bordered track, matching the flat Braun/OP-1 reference.
 ══════════════════════════════════════════════════════════════════════════════ */
+/* macOS overlay title bar: the window has no native bar of its own (see
+   tauri.conf.json's `titleBarStyle: "Overlay"`), so the traffic lights are
+   painted over this header's top-left corner. 78px clears all three plus the
+   gap Apple leaves after them. Scoped to the class main.tsx sets only on a
+   Tauri macOS runtime - in a browser there is nothing to clear and the inset
+   would read as a hole beside the logo. */
+.has-overlay-titlebar .toolbar {
+  padding-left: 78px;
+}
+
 .toolbar {
   position: absolute;
   top: 0;
