@@ -1,6 +1,6 @@
-import type { NetLabel, Point, SchematicComponent, SchematicWire } from "./types";
-import { getComponentPins, type ComponentPin } from "./pins";
-import { isEngineeringMantissa, splitEngineeringValue } from "./engineering";
+import type { NetLabel, Point, SchematicComponent, SchematicWire } from "../src/schematic/types";
+import { getComponentPins, type ComponentPin } from "../src/schematic/pins";
+import { isEngineeringMantissa, splitEngineeringValue } from "../src/schematic/engineering";
 
 /** Net-label texts that denote the global ground / reference node (case-insensitive). */
 const GROUND_LABELS = new Set(["0", "gnd"]);
@@ -120,22 +120,6 @@ class DisjointSet {
     this.intern(point);
   }
 
-  /**
-   * The id for a coordinate, as `add` computes it but handed back.
-   *
-   * Exposed so the geometry passes in `extractCircuit` can key on coordinate
-   * identity without inventing a second index. They used to build their own
-   * `Map`s on freshly allocated `"<x>,<y>"` strings; every one of those
-   * coordinates is already interned here, so the lookup is a hit on a numeric
-   * map and costs no allocation at all. Crucially it also means those passes
-   * and the forest agree on identity by construction - two indexes over the
-   * same points, disagreeing about whether `-0` and `0` are the same node, is
-   * exactly the kind of drift that renames a net.
-   */
-  idOf(point: Point): number {
-    return this.intern(point);
-  }
-
   // Iterative find with path compression. Recursion here could blow the call
   // stack on large/complex nets (long union chains from wire breakpoints), so
   // we walk to the root then re-point every node on the path directly at it.
@@ -238,29 +222,9 @@ export function extractCircuit(
   const labelPoints: Point[] = netLabels.map((label) => ({ x: label.x, y: label.y }));
   for (const point of labelPoints) dsu.add(point);
 
-  // Pins sharing a coordinate are the same node. Bucketed on the interned id
-  // rather than on a `"<x>,<y>"` string, which allocated one string per pin
-  // for a map thrown away two lines later; every pin was interned by the loop
-  // above, so these are all hits. `coincidentOrder` keeps the buckets in
-  // first-appearance order, which is the order the string map iterated in and
-  // therefore the order these unions ran in - and union order decides which
-  // node becomes a net's root, which decides its name.
-  {
-    const byNode = new Map<number, ComponentPin[]>();
-    const coincidentOrder: number[] = [];
-    for (const pin of allPins) {
-      const node = dsu.idOf(pin);
-      let bucket = byNode.get(node);
-      if (bucket === undefined) {
-        bucket = [];
-        byNode.set(node, bucket);
-        coincidentOrder.push(node);
-      }
-      bucket.push(pin);
-    }
-    for (const node of coincidentOrder) {
-      const pins = byNode.get(node)!;
-      for (let i = 1; i < pins.length; i += 1) dsu.union(pins[0], pins[i]);
+  for (const pins of pinsByPoint(allPins).values()) {
+    for (let i = 1; i < pins.length; i += 1) {
+      dsu.union(pins[0], pins[i]);
     }
   }
 
@@ -317,29 +281,7 @@ export function extractCircuit(
   // valid schematics with thousands of independent wires.
   const horizontalByY = new Map<number, number[]>();
   const verticalByX = new Map<number, number[]>();
-  /**
-   * Ideal segments by exact endpoint coordinate: `x -> y -> segment indexes`.
-   *
-   * Two numeric levels rather than one `Map` on a `"<x>,<y>"` string. This is
-   * the index `segmentsAt` probes once per pin, once per label and twice per
-   * ideal segment, and the string form allocated a throwaway key on every one
-   * of those probes as well as on every insert.
-   *
-   * Deliberately NOT the DisjointSet's interner, even though it is a numeric
-   * coordinate index sitting right there. `intern` MINTS a node for a
-   * coordinate it has not seen, and these endpoints are otherwise first
-   * touched by the union loop further down - routing them through the
-   * interner here pulled their ids earlier, and node id order is the order
-   * `net.points` is accumulated in. The equality harness caught exactly that.
-   * A pure lookup has to stay a pure lookup.
-   *
-   * Numeric keys discriminate exactly as the string keys did: `Map` compares
-   * with SameValueZero, which unifies `-0` with `0` and matches `NaN` with
-   * itself, and `${x},${y}` collapsed those same pairs.
-   */
-  const endpointIndexes = new Map<number, Map<number, number[]>>();
-  const endpointsAt = (point: Point): number[] | undefined =>
-    endpointIndexes.get(point.x)?.get(point.y);
+  const endpointIndexes = new Map<string, number[]>();
   for (const index of idealSegmentIndexes) {
     const segment = segments[index];
     if (segment.a.y === segment.b.y) {
@@ -348,80 +290,25 @@ export function extractCircuit(
       pushBucket(verticalByX, segment.a.x, index);
     }
     for (const endpoint of [segment.a, segment.b]) {
-      let column = endpointIndexes.get(endpoint.x);
-      if (column === undefined) {
-        column = new Map<number, number[]>();
-        endpointIndexes.set(endpoint.x, column);
-      }
-      pushBucket(column, endpoint.y, index);
+      pushBucket(endpointIndexes, pointKey(endpoint), index);
     }
   }
-
-  /**
-   * Which ideal segments touch `point`, written into `segmentsAtBuffer`.
-   *
-   * This was `segmentIndexesAt`, returning `[...new Set(...)]`: a `Set` and an
-   * array allocated on every call, and it is called thousands of times per
-   * extraction on a large sheet - the single largest entry in the CPU profile
-   * once the union-find stopped dominating. The dedup is now a stamp array:
-   * `segmentStamp[i] === generation` means "already emitted on this call", so
-   * bumping a counter replaces clearing anything.
-   *
-   * The emission ORDER is load bearing and unchanged: endpoint hits first in
-   * bucket order, then horizontal hits that pass `pointOnSegment`, then
-   * vertical. That is the order `Set` preserved; it decides the order points
-   * are appended to `breakpoints`, which decides the order of the unions
-   * below, which decides which node becomes a net's root - and therefore what
-   * the net is called in the emitted deck.
-   *
-   * Returns a count into a buffer the caller must finish reading before the
-   * next call. Both call sites do, and neither is re-entrant.
-   */
-  const segmentsAtBuffer: number[] = [];
-  const segmentStamp = new Int32Array(segments.length);
-  let segmentGeneration = 0;
-  const segmentsAt = (point: Point): number => {
-    segmentGeneration += 1;
-    const generation = segmentGeneration;
-    segmentsAtBuffer.length = 0;
-    const direct = endpointsAt(point);
-    if (direct !== undefined) {
-      for (const index of direct) {
-        if (segmentStamp[index] === generation) continue;
-        segmentStamp[index] = generation;
-        segmentsAtBuffer.push(index);
-      }
+  const segmentIndexesAt = (point: Point): number[] => {
+    const candidates = new Set(endpointIndexes.get(pointKey(point)) ?? []);
+    for (const index of horizontalByY.get(point.y) ?? []) {
+      if (pointOnSegment(point, segments[index])) candidates.add(index);
     }
-    const horizontal = horizontalByY.get(point.y);
-    if (horizontal !== undefined) {
-      for (const index of horizontal) {
-        if (segmentStamp[index] === generation) continue;
-        if (!pointOnSegment(point, segments[index])) continue;
-        segmentStamp[index] = generation;
-        segmentsAtBuffer.push(index);
-      }
+    for (const index of verticalByX.get(point.x) ?? []) {
+      if (pointOnSegment(point, segments[index])) candidates.add(index);
     }
-    const vertical = verticalByX.get(point.x);
-    if (vertical !== undefined) {
-      for (const index of vertical) {
-        if (segmentStamp[index] === generation) continue;
-        if (!pointOnSegment(point, segments[index])) continue;
-        segmentStamp[index] = generation;
-        segmentsAtBuffer.push(index);
-      }
-    }
-    return segmentsAtBuffer.length;
+    return [...candidates];
   };
-
   for (const point of [...allPins, ...labelPoints]) {
-    const count = segmentsAt(point);
-    for (let k = 0; k < count; k += 1) breakpoints[segmentsAtBuffer[k]].push(point);
+    for (const index of segmentIndexesAt(point)) breakpoints[index].push(point);
   }
   for (const index of idealSegmentIndexes) {
     for (const endpoint of [segments[index].a, segments[index].b]) {
-      const count = segmentsAt(endpoint);
-      for (let k = 0; k < count; k += 1) {
-        const other = segmentsAtBuffer[k];
+      for (const other of segmentIndexesAt(endpoint)) {
         if (other === index) continue;
         breakpoints[index].push(endpoint);
         breakpoints[other].push(endpoint);
@@ -616,45 +503,8 @@ function pinsByPoint(pins: ComponentPin[]): Map<string, ComponentPin[]> {
   return byPoint;
 }
 
-/**
- * Distinct coordinates, in first-appearance order.
- *
- * Was `[...new Map(points.map(p => [pointKey(p), p])).values()]`, which per
- * call allocated a string per point, a two-element array per point, a `Map`,
- * and then a spread copy of its values. It runs once per ideal segment and
- * once per net, and it was 12% of extraction on a 600-part sheet.
- *
- * Two behaviours of that `Map` are load bearing and reproduced exactly here.
- * A repeated coordinate keeps its FIRST position but takes the LAST object -
- * `Map.set` overwrites the value without moving the entry - which is what
- * `out[slot] = point` does below. And keys compare with SameValueZero, so
- * `-0` and `0` are one coordinate and two `NaN`s are one coordinate, which is
- * what `${x},${y}` did by collapsing them into the same text; the numeric
- * two-level index inherits that from `Map` unchanged.
- *
- * Not routed through the DisjointSet's interner despite that being a numeric
- * coordinate index already: `intern` mints ids, and one caller passes points
- * the forest has not seen yet, so it would reorder node ids and with them
- * `net.points`.
- */
 function uniquePoints(points: Point[]): Point[] {
-  const out: Point[] = [];
-  const byX = new Map<number, Map<number, number>>();
-  for (const point of points) {
-    let column = byX.get(point.x);
-    if (column === undefined) {
-      column = new Map<number, number>();
-      byX.set(point.x, column);
-    }
-    const slot = column.get(point.y);
-    if (slot === undefined) {
-      column.set(point.y, out.length);
-      out.push(point);
-    } else {
-      out[slot] = point;
-    }
-  }
-  return out;
+  return [...new Map(points.map((point) => [pointKey(point), point])).values()];
 }
 
 /** Greek letters common in EE net names (PowerSim FOC's `uα`/`uβ`, PLL's
