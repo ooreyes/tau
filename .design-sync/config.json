@@ -172,5 +172,163 @@
     "props": {
       "delayDuration": 0
     }
-  }
+  },
+  "overrides": {
+    "CommandPalette": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "SimulationSetupDialog": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "SelectionInspector": {
+      "cardMode": "single",
+      "primaryStory": "ComponentProperties"
+    },
+    "CommandDialog": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "ConfirmDialog": {
+      "cardMode": "single",
+      "primaryStory": "DeleteSweep"
+    },
+    "ContextMenu": {
+      "cardMode": "single",
+      "primaryStory": "OnCanvasSelection"
+    },
+    "ContextMenuGroup": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "ContextMenuLabel": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "ContextMenuRadioGroup": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "ContextMenuSeparator": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "ContextMenuShortcut": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "Dialog": {
+      "cardMode": "single",
+      "primaryStory": "SaveSchematic"
+    },
+    "DialogFooter": {
+      "cardMode": "single",
+      "primaryStory": "InADialog"
+    },
+    "DialogHeader": {
+      "cardMode": "single",
+      "primaryStory": "InADialog"
+    },
+    "DropdownMenu": {
+      "cardMode": "single",
+      "primaryStory": "OpenMenu"
+    },
+    "DropdownMenuGroup": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "DropdownMenuLabel": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "DropdownMenuRadioGroup": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "DropdownMenuSeparator": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "DropdownMenuShortcut": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenMenu"
+    },
+    "Select": {
+      "cardMode": "single",
+      "primaryStory": "Triggers"
+    },
+    "SelectGroup": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenListbox"
+    },
+    "SelectSeparator": {
+      "cardMode": "single",
+      "primaryStory": "InAnOpenListbox"
+    },
+    "Sheet": {
+      "cardMode": "single",
+      "primaryStory": "OpenSheet"
+    },
+    "SheetHeader": {
+      "cardMode": "single",
+      "primaryStory": "InASheet"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "UnsavedChangesDialog": {
+      "cardMode": "single",
+      "primaryStory": "Prompt"
+    },
+    "EditorTabs": {
+      "cardMode": "column"
+    },
+    "Toolbar": {
+      "cardMode": "column"
+    },
+    "ComponentMeasurementsPanel": {
+      "cardMode": "column"
+    },
+    "AxisLimitFields": {
+      "cardMode": "column"
+    },
+    "EngineeringTraceReadout": {
+      "cardMode": "column"
+    },
+    "PlotAxes": {
+      "cardMode": "column"
+    },
+    "Command": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    },
+    "ProviderKeyField": {
+      "cardMode": "column"
+    },
+    "LearningPathCoach": {
+      "cardMode": "single",
+      "primaryStory": "Pending"
+    },
+    "EmptyState": {
+      "cardMode": "column"
+    },
+    "EngineeringInput": {
+      "cardMode": "column"
+    },
+    "ActivityRail": {
+      "cardMode": "column"
+    },
+    "Toaster": {
+      "cardMode": "single",
+      "primaryStory": "Notices"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md",
+  "extraEntries": [
+    "./src/components/ui/sonner.tsx"
+  ]
 }

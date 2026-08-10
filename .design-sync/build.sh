@@ -14,6 +14,45 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-npx --prefix apps/desktop vite build --root apps/desktop
+(cd apps/desktop && npx vite build)
 cp "$(ls -t apps/desktop/dist/assets/*.css | head -1)" apps/desktop/.ds-styles.css
 node .design-sync/gen-entry.mjs
+
+# 3. Declaration tree → apps/desktop/types/, which is where findTypesRoot looks.
+#
+# Without it every emitted <Name>.d.ts is an empty `[key: string]: unknown` bag:
+# the converter resolves props from a component's first call-signature
+# parameter, and with no .d.ts tree there is no signature to read. Tau types
+# most props inline (`function SettingsRow({label}: {label: string})`) rather
+# than as a `<Name>Props` interface, so that call-signature path is the only
+# one that yields a real contract here.
+#
+# Type ERRORS are expected and tolerated (noEmitOnError is off): the `?raw`
+# import has no ambient declaration, and a WIP branch may not typecheck. The
+# declarations still emit.
+cat > apps/desktop/.ds-tsconfig.dts.json <<'JSON'
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./types",
+    "rootDir": ".",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "skipLibCheck": true
+  },
+  "include": ["src", ".ds-entry.tsx"],
+  "references": []
+}
+JSON
+rm -rf apps/desktop/types
+mkdir -p .design-sync/.cache
+(cd apps/desktop && npx tsc -p .ds-tsconfig.dts.json) > .design-sync/.cache/dts-emit.log 2>&1 || true
+# The converter resolves its declaration entry as `<pkgDir>/<pkg.types>` and
+# falls back to `<pkgDir>/index.d.ts` — it does NOT look inside the types root
+# it discovered. Since package.json is app code we don't touch, plant the entry
+# at the package root instead, with the emitted tree's paths rebased.
+sed 's#"\./src/#"./types/src/#g' apps/desktop/types/.ds-entry.d.ts > apps/desktop/index.d.ts
+echo "dts: $(find apps/desktop/types -name '*.d.ts' | wc -l | tr -d ' ') declaration files"

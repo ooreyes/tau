@@ -49,3 +49,6 @@ ds-bundle/
 .design-sync/node_modules
 apps/desktop/.ds-entry.tsx
 apps/desktop/.ds-styles.css
+apps/desktop/types/
+apps/desktop/.ds-tsconfig.dts.json
+apps/desktop/index.d.ts
