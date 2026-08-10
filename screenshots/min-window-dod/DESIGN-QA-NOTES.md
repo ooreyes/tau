@@ -1,4 +1,4 @@
-# Min-window DoD — 900×600 proof (2026-08-05)
+# Min-window DoD — 900×600 proof (re-proven 2026-08-10)
 
 **Pipeline:** `scripts/min-window-dod.sh` → `scripts/min-window-dod.mjs`  
 **Viewport:** tauri.conf.json `minWidth`×`minHeight` = **900×600**  
@@ -8,6 +8,12 @@
 ## Result
 
 `MIN-WINDOW: 900x600 fail=0/12` — all PASS.
+
+The Settings measurement targets the current shared Sheet surface
+(`[data-slot="sheet-content"].tau-settings-route`) and the gate fails if that
+surface is absent. Both themes measured exactly 900×600, fully inside the
+viewport; the former stale `.settings-panel` selector could silently record
+`dialogGeom: null` and is retired.
 
 | State | Light | Dark |
 |-------|-------|------|

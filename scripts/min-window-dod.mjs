@@ -205,7 +205,7 @@ async function audit(page, label) {
 
     const editor = document.querySelector(".editor-shell");
     const toolbar = document.querySelector(".editor-toolbar");
-    const sheet = document.querySelector('.settings-panel[role="dialog"], [data-slot="sheet-content"].settings-panel');
+    const sheet = document.querySelector('[data-slot="sheet-content"].tau-settings-route');
 
     let dialogGeom = null;
     if (sheet) {
@@ -356,7 +356,9 @@ async function main() {
     if (r.editorShell?.overflowX && r.label.startsWith("schematic") && r.editorToolbarScrollable !== true) {
       issues.push("editorShellOverflowWithoutToolbarScroll");
     }
-    if (r.dialogGeom) {
+    if (r.label.startsWith("dialog-") && !r.dialogGeom) {
+      issues.push("settingsDialogNotMeasured");
+    } else if (r.dialogGeom) {
       if (!r.dialogGeom.fits) issues.push("dialogOverflowViewport");
       if (!r.dialogGeom.canScroll && r.dialogGeom.scrollH > r.dialogGeom.clientH + 1) {
         issues.push("dialogCannotScroll");

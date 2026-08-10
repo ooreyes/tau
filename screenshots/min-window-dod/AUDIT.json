@@ -79,7 +79,15 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
-    "dialogGeom": null
+    "dialogGeom": {
+      "t": 0,
+      "b": 600,
+      "h": 600,
+      "fits": true,
+      "canScroll": false,
+      "scrollH": 600,
+      "clientH": 600
+    }
   },
   {
     "label": "command-light",
@@ -175,7 +183,15 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
-    "dialogGeom": null
+    "dialogGeom": {
+      "t": 0,
+      "b": 600,
+      "h": 600,
+      "fits": true,
+      "canScroll": false,
+      "scrollH": 600,
+      "clientH": 600
+    }
   },
   {
     "label": "command-dark",
