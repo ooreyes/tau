@@ -14,9 +14,15 @@
  * explain why it did nothing, and widening the window restores what the user
  * originally asked for because nothing overwrote it.
  */
-import { SHELL_LAYOUT, SURFACES, type SurfaceId, type VisibilityReason } from "./surfaces";
+import {
+  ANALYSIS_PANE_WIDTH,
+  SHELL_LAYOUT,
+  SURFACES,
+  type SurfaceId,
+  type VisibilityReason,
+} from "./surfaces";
 
-export { SHELL_LAYOUT };
+export { SHELL_LAYOUT, ANALYSIS_PANE_WIDTH };
 
 /** What the user has asked for, independent of whether it currently fits. */
 export interface ChromeIntent {
@@ -104,6 +110,101 @@ export function explorerMax(
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+/**
+ * Inner width of `.workspace-column`: what is left of the shell once the rail
+ * and every visible side column - each of which carries its own resize handle
+ * - has been paid for. The caller passes the widths it decided to show, so
+ * this works for either mode (simulator: the Assistant alone; schematic:
+ * Explorer, Components, Assistant).
+ *
+ * Worth having as a named function rather than a subtraction at the call site
+ * because it is the number App.css measures: `.workspace-column` is the
+ * `@container workspace` (`App.css:7267-7272`). Stating the split threshold in
+ * these units is what lets `SHELL_LAYOUT.splitMinWorkspace` and the 620px
+ * container query be the same fact rather than two numbers that happen to be
+ * near each other.
+ *
+ * A zero shell width is the pre-measurement frame and yields a zero workspace,
+ * which is honest: nothing is known yet. See `resolveAnalysisPane` for why
+ * that answer is safe here even though `canFitIndependentColumns` takes the
+ * opposite view of the same frame.
+ */
+export function workspaceWidth(
+  shellWidth: number,
+  sideColumnWidths: readonly number[] = [],
+): number {
+  if (shellWidth <= 0) return 0;
+  return Math.max(
+    0,
+    shellWidth -
+      SHELL_LAYOUT.railWidth -
+      SHELL_LAYOUT.handleWidth * sideColumnWidths.length -
+      sideColumnWidths.reduce((sum, width) => sum + width, 0),
+  );
+}
+
+export interface AnalysisPaneInput {
+  /** Inner width of the workspace column, from `workspaceWidth()`. */
+  workspace: number;
+  /**
+   * The user's width as loaded from storage. `resolveAnalysisPane` never
+   * writes it back: a window that got narrower is not the user changing their
+   * mind, so the clamp below is for rendering only and widening the window
+   * hands the original width back.
+   */
+  persisted: number;
+}
+
+export interface ResolvedAnalysisPane {
+  /** `split` = circuit | analysis side by side; `stacked` = today's drawer. */
+  layout: "split" | "stacked";
+  /** Width to render the pane at now - `persisted`, clamped to the bounds. */
+  width: number;
+  /** Clamp bounds the divider must respect right now. */
+  minWidth: number;
+  maxWidth: number;
+}
+
+/**
+ * The split/stack decision and the divider's clamp, as one answer.
+ *
+ * The bounds are always defined, even when stacked, because the consuming
+ * component has to call `usePanelWidth` unconditionally; handing it an
+ * `undefined` max would push it into inventing the arithmetic this function
+ * exists to own.
+ *
+ * `maxWidth` is what leaves the circuit its floor, and it is `simulatorSchematicMin`
+ * that enforces that floor - see the finding recorded on that constant: the
+ * CSS `min-width` on `.sim-schematic-pane` is overridden, so nothing else is
+ * holding the line.
+ *
+ * The pre-measurement frame (`workspace === 0`) stacks, and it does so out of
+ * the ordinary comparison rather than a special case. That is the opposite
+ * polarity to `canFitIndependentColumns`, which calls zero "fitting" - and
+ * deliberately so. There, the pessimistic answer would flash a panel closed
+ * and destroy nothing; here, the optimistic answer would mount a divider whose
+ * clamp was computed from a width of zero. Stacked is the shape that is
+ * correct at every width, so it is the honest thing to show before the first
+ * measurement.
+ */
+export function resolveAnalysisPane(input: AnalysisPaneInput): ResolvedAnalysisPane {
+  const { workspace, persisted } = input;
+  const minWidth = ANALYSIS_PANE_WIDTH.minWidth;
+  const maxWidth = Math.min(
+    ANALYSIS_PANE_WIDTH.maxWidth,
+    Math.max(
+      minWidth,
+      workspace - SHELL_LAYOUT.handleWidth - SHELL_LAYOUT.simulatorSchematicMin,
+    ),
+  );
+  return {
+    layout: workspace >= SHELL_LAYOUT.splitMinWorkspace ? "split" : "stacked",
+    width: clamp(persisted, minWidth, maxWidth),
+    minWidth,
+    maxWidth,
+  };
+}
 
 export function resolveChrome(input: ChromeInput): ResolvedChrome {
   const { mode, shellWidth, intent, widths } = input;

@@ -8,10 +8,16 @@ import { StatusBar } from "./components/StatusBar";
 import { ComponentMeasurementsPanel } from "./components/ComponentMeasurementsPanel";
 import { formatEngineering } from "./simulation/quantity";
 import { ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/assistantPanelState";
-import { usePanelWidth } from "./components/ui/resizable";
+import { PanelResizeHandle, usePanelWidth } from "./components/ui/resizable";
 import { Toaster, toast } from "./components/ui/sonner";
 import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet";
-import { canFitIndependentColumns, resolveChrome } from "./chrome/resolveChrome";
+import {
+  ANALYSIS_PANE_WIDTH,
+  canFitIndependentColumns,
+  resolveAnalysisPane,
+  resolveChrome,
+  workspaceWidth,
+} from "./chrome/resolveChrome";
 import { SURFACES } from "./chrome/surfaces";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
@@ -59,7 +65,7 @@ import {
 } from "./components/ShellPanels";
 import { ActivityRail } from "./components/shell/NavRail";
 import { BottomPanel } from "./components/drawer/DiagnosticsTab";
-import { ResultsDrawer } from "./components/drawer/ResultsDrawer";
+import { ResultsDrawer, type DrawerCover } from "./components/drawer/ResultsDrawer";
 import { SelectionInspector } from "./components/inspector/SelectionInspector";
 import { ConfirmDialog, UnsavedChangesDialog } from "./components/ui/confirm";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
@@ -155,7 +161,7 @@ import {
 import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRun";
 import { technicalErrorDetails, userFacingErrorMessage } from "./lib/errorMessage";
 import { useSimulationPreferences } from "./lib/simulationPreferences";
-import { SHELL, inspectorName } from "./components/shellContract";
+import { SHELL, SHELL_SEPARATORS, inspectorName } from "./components/shellContract";
 
 /**
  * Settings is a whole second surface — seven pages, a provider catalog, usage
@@ -517,8 +523,28 @@ function App() {
    * the same state and the second run of a session could not raise anything.
    */
   const [resultsRaise, setResultsRaise] = useState(0);
-  /** Pixels of canvas the results drawer is covering; see its onCoverChange. */
-  const [drawerCover, setDrawerCover] = useState(0);
+  /** Pixels of canvas the results drawer is covering, per axis; see its
+   *  onCoverChange. Axis-tagged because docked right its `height` is the whole
+   *  column and reserving that along the bottom collapses the fit box. */
+  const [drawerCover, setDrawerCover] = useState<DrawerCover>({ bottom: 0, right: 0 });
+  /**
+   * Stable and value-comparing, and both halves of that are load-bearing.
+   *
+   * The drawer's measuring effect is keyed on this function's identity and its
+   * cleanup reports zero, so an inline arrow - a new function every render -
+   * would tear the effect down and republish a zero cover on every commit,
+   * making the canvas fit and the inspector flicker between reserving the
+   * band and not. `useCallback` with no deps fixes that half.
+   *
+   * The comparison fixes the other half: a ResizeObserver re-reports the same
+   * rect on layout churn, and handing `setDrawerCover` a fresh object each
+   * time would re-render everything downstream of `inspectorViewport` for a
+   * value that did not change.
+   */
+  const handleDrawerCover = useCallback((next: DrawerCover) => {
+    setDrawerCover((current) =>
+      current.bottom === next.bottom && current.right === next.right ? current : next);
+  }, []);
 
   /**
    * Warm the preview worker while a browser user is still reading the
@@ -580,6 +606,10 @@ function App() {
   const shellBodyRef = useRef<HTMLDivElement | null>(null);
   const [shellWidth, setShellWidth] = useState(0);
   const componentsRailResize = usePanelWidth(COMPONENTS_RAIL_WIDTH);
+  /** The analysis pane's remembered width, dragged by the split's divider.
+   *  Bounds come from `resolveAnalysisPane` below, not from this config -
+   *  the static ones only guard a stale localStorage value. */
+  const analysisPaneResize = usePanelWidth(ANALYSIS_PANE_WIDTH);
   // ngspice runs outside React's lifecycle. A request version prevents a late
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
@@ -2602,23 +2632,72 @@ function App() {
     },
   });
   const componentsColumnOpen = chrome.components.visible;
+  const effectiveAssistantWidth = chrome.assistant.width ?? assistantResize.width;
+
+  /**
+   * The simulator's split, and the divider's live clamp.
+   *
+   * Both come from `resolveAnalysisPane`, which is where the split/stack
+   * threshold and the circuit pane's floor are stated once and unit-tested.
+   * This is deliberately TypeScript and not a container query: the fixed
+   * inspector below has to be inset by the pane's width and cannot observe a
+   * container, so a query would give the CSS and this file two answers that
+   * disagree in the band around the threshold.
+   *
+   * `workspaceWidth` is fed the columns that are actually beside the workspace
+   * in the simulator - the assistant, or nothing. Explorer and Components are
+   * schematic-only, so there is nothing else to pay for.
+   */
+  const analysisPane = resolveAnalysisPane({
+    workspace: workspaceWidth(shellWidth, chrome.assistant.visible ? [effectiveAssistantWidth] : []),
+    persisted: analysisPaneResize.width,
+  });
+  /** Only the simulator splits. The schematic keeps the full-bleed canvas and
+   *  today's peek drawer, at every width. */
+  const analysisSplit = mode === "simulator" && activeProjectFile && analysisPane.layout === "split";
 
   /**
    * Where the inspector may go, and what it should stay off.
    *
    * The viewport is the shell body inset by a gutter, less whatever the
-   * results drawer is covering along the bottom - the drawer floats, so
-   * nothing in the layout reserves that band and the inspector would happily
-   * place itself underneath it. The rail is an obstacle rather than an inset
-   * because it is narrow enough that overlapping it is sometimes the least
-   * bad option, and the placement kernel is allowed to make that call.
+   * results drawer is covering - the inspector is `position: fixed`, so it is
+   * outside every flex row in the shell and nothing in the layout reserves
+   * that space for it. Which EDGE the drawer eats is the drawer's to say, and
+   * it says so per axis: docked bottom it floats over the canvas and costs
+   * height; docked right it is the analysis pane and costs width. Reading the
+   * wrong axis is not a cosmetic error - the right-docked drawer is as tall as
+   * the whole column, so charging its height to `maxY` would flatten this box
+   * to `minY + 8` and leave the inspector nowhere legal to go.
+   *
+   * The rail is an obstacle rather than an inset because it is narrow enough
+   * that overlapping it is sometimes the least bad option, and the placement
+   * kernel is allowed to make that call.
    */
+  /**
+   * How far in from the shell body's right edge the analysis pane starts.
+   *
+   * `drawerCover.right` alone is the pane's width, not its position: the
+   * assistant sits to its right, so with Bode open the pane's left edge is
+   * `assistant + pane` in from the shell edge and clamping at `pane` would
+   * still let a 300px inspector cover the whole plot. The assistant's rendered
+   * width is exactly `--assistant-w` (`App.css:8057`; its resize handle is
+   * absolutely positioned inside it and adds nothing), so this is a measured
+   * fact rather than a model of the layout.
+   *
+   * Zero unless the drawer is docked right, which keeps the schematic and the
+   * stacked fallback on precisely today's placement - the assistant has never
+   * been an obstacle for the inspector and this is not the change that makes
+   * it one.
+   */
+  const inspectorRightReserve = drawerCover.right > 0
+    ? drawerCover.right + (chrome.assistant.visible ? effectiveAssistantWidth : 0)
+    : 0;
   const inspectorViewport = useMemo(() => ({
     minX: shellBox.minX + 8,
     minY: shellBox.minY + 8,
-    maxX: shellBox.maxX - 8,
-    maxY: Math.max(shellBox.minY + 8, shellBox.maxY - drawerCover - 8),
-  }), [shellBox, drawerCover]);
+    maxX: Math.max(shellBox.minX + 8, shellBox.maxX - inspectorRightReserve - 8),
+    maxY: Math.max(shellBox.minY + 8, shellBox.maxY - drawerCover.bottom - 8),
+  }), [shellBox, drawerCover.bottom, inspectorRightReserve]);
 
   const inspectorObstacles = useMemo(
     () => (componentsColumnOpen
@@ -2632,7 +2711,6 @@ function App() {
     [componentsColumnOpen, componentsRailResize.width, shellBox],
   );
   const explorerColumnOpen = chrome.explorer.visible;
-  const effectiveAssistantWidth = chrome.assistant.width ?? assistantResize.width;
   const componentsRailResponsiveMax = chrome.components.maxWidth!;
   const explorerResponsiveMax = chrome.explorer.maxWidth;
 
@@ -2730,8 +2808,25 @@ function App() {
           * available: two of the three are user-resizable. Making the centre
           * region the drawer's containing block excludes all of them by
           * construction, at any width.
+          *
+          * In the simulator, once the workspace is wide enough
+          * (`resolveAnalysisPane`), the same wrapper turns into the two-pane
+          * row the user asked for: circuit left, analysis right, a divider
+          * between. The results drawer is the same component and the same
+          * landmark either way - it is told which edge it is docked to, and
+          * only the axis changes.
+          *
+          * The pane's width rides on a custom property rather than a prop
+          * because it is a fact about this row, not about the drawer: the
+          * drawer must stay full-bleed in the bottom dock, where no such
+          * number exists.
           */}
-        <div className="workspace-column">
+        <div
+          className={`workspace-column${analysisSplit ? " workspace-column--split" : ""}`}
+          style={analysisSplit
+            ? ({ "--analysis-pane-w": `${analysisPane.width}px` } as CSSProperties)
+            : undefined}
+        >
         {mode === "schematic" && !activeProjectFile && (
           <section
             className="editor-shell"
@@ -2799,7 +2894,7 @@ function App() {
                 readoutTime={schematicReadoutTime}
                 interactive
                 fitSignal={fitSignal}
-                fitInsetBottom={drawerCover}
+                fitInsetBottom={drawerCover.bottom}
                 onSelectionRect={setSelectionRect}
               />
             </Suspense>
@@ -2947,13 +3042,41 @@ function App() {
                     interactive={false}
                     onActuate={handleActuate}
                     fitSignal={fitSignal}
-                    fitInsetBottom={drawerCover}
+                    fitInsetBottom={drawerCover.bottom}
                     onSelectionRect={setSelectionRect}
                     currentVisualizer={currentVisualizer}
                   />
                 </Suspense>
               </div>
             </section>
+        )}
+        {/*
+          * The divider between circuit and analysis.
+          *
+          * `panelResize`'s handle and hook, not new drag code: it already has
+          * pointer capture that survives a fast drag leaving the strip, the
+          * WAI-ARIA window-splitter arrow keys, and localStorage persistence.
+          * Edge "left" is the right-docked convention Assistant and Components
+          * already use - drag left to widen the pane.
+          *
+          * The clamp is `resolveAnalysisPane`'s, not the static config's:
+          * `App.css:7283-7286` gives `.workspace-column > .sim-schematic-pane`
+          * `min-width: 0` at specificity 0-2-0, which beats the `min-width:
+          * 280px` at `App.css:7517`, so the stylesheet is NOT holding the
+          * circuit's floor. This max is the only thing standing between a drag
+          * and a circuit pane of zero width.
+          */}
+        {analysisSplit && (
+          <PanelResizeHandle
+            edge="left"
+            label={SHELL_SEPARATORS.analysisPane}
+            width={analysisPane.width}
+            minWidth={analysisPane.minWidth}
+            maxWidth={analysisPane.maxWidth}
+            dragging={analysisPaneResize.dragging}
+            onPointerDown={analysisPaneResize.onPointerDown}
+            onKeyDown={analysisPaneResize.onKeyDown}
+          />
         )}
         {/*
           * The inspector, at the selection rather than in a column.
@@ -2988,11 +3111,12 @@ function App() {
           *
           * It replaces three that each owned a slice of the window: the
           * schematic's diagnostics strip, the simulator's telemetry dock, and
-          * the analysis plotter as a 400px right-hand column. The plotter is
-          * the one an engineer actually reads, and it was getting whatever
-          * width was left after the circuit, the explorer and the assistant
-          * had taken theirs. Over the canvas instead of beside it, it gets
-          * the window.
+          * the analysis plotter as a 400px right-hand column. That merge is
+          * what survives; the axis is what changed. In a wide simulator it is
+          * the right-hand pane again - but as ONE surface with one landmark
+          * and one name, at a width the user drags and Tau remembers, beside a
+          * circuit that is no longer a 38% offcut. Everywhere else it is
+          * still the bottom drawer over the canvas.
           *
           * Rendered outside the mode branches on purpose: it is the one
           * surface that means the same thing in both modes, and mounting one
@@ -3005,7 +3129,8 @@ function App() {
             statusLine={resultsSummary}
             onStop={stopAnalysis}
             raiseSignal={resultsRaise}
-            onCoverChange={setDrawerCover}
+            onCoverChange={handleDrawerCover}
+            orientation={analysisSplit ? "right" : "bottom"}
             preferredHeight={mode === "simulator" ? "half" : "peek"}
             preferredTab={mode === "simulator" ? "waveforms" : "errors"}
             errorBadge={diagnosticsBadge}

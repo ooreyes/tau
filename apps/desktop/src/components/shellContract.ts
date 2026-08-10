@@ -74,8 +74,8 @@ export const SHELL = {
   /** The simulator's read-only view of the circuit. */
   circuitOverview: { role: "region", name: "Circuit overview" },
   /**
-   * The one bottom surface: waveforms, per-component measurements and
-   * diagnostics behind three tabs, at peek/half/full.
+   * The one results surface: waveforms, per-component measurements and
+   * diagnostics behind three tabs.
    *
    * Named "Results" rather than the "Waveforms" this was planned under. The
    * landmark names the drawer, not whichever tab happens to be up, and a
@@ -87,6 +87,14 @@ export const SHELL = {
    * Waveforms body, and two nested complementary regions is noise.
    * `minimizedPanels` is gone with the restore orb it named: peek is a
    * readout, so there is nothing left to restore from.
+   *
+   * It docks to two edges now and the name is the same at both, deliberately.
+   * In the schematic, and in a simulator too narrow to split, it is the bottom
+   * drawer at peek/half/full. In a wide simulator it is the right-hand
+   * analysis pane beside the circuit, resized by `SHELL_SEPARATORS.analysisPane`.
+   * ONE surface, ONE landmark, ONE name: a reader who learns "Results" must
+   * not have to learn a second word because the window got wider, and the
+   * screenshot archive joins on these strings.
    */
   resultsDrawer: { role: "complementary", name: "Results" },
   /** Interactive-circuit controls, shown only when the schematic has any. */
@@ -158,5 +166,20 @@ export const SHELL_SEPARATORS = {
   explorer: "Resize project explorer",
   properties: "Resize properties panel",
   assistant: "Resize assistant panel",
-  measurements: "Resize component measurements dock",
+  /**
+   * The simulator's circuit | analysis divider.
+   *
+   * It takes the slot `measurements` held. That entry named the telemetry
+   * dock's top edge, and the dock was one of the three surfaces stage 4a
+   * merged into the results drawer - so it had been naming nothing for some
+   * time. Replaced rather than added beside, because a contract that
+   * accumulates names for deleted surfaces stops being a contract: the next
+   * reader cannot tell which entries are load-bearing.
+   *
+   * Present only when the workspace is wide enough for the split
+   * (`resolveAnalysisPane`). Below that the analysis is the bottom drawer,
+   * which has no width to drag, and a separator for it would be a control
+   * that does nothing.
+   */
+  analysisPane: "Resize analysis pane",
 } as const;

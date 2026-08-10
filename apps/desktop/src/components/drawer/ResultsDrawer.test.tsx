@@ -311,3 +311,108 @@ describe("results drawer - Escape belongs to whatever holds focus", () => {
     expect(drawer().className).toContain("results-drawer--half");
   });
 });
+
+/**
+ * The second dock: the simulator's analysis pane, beside the circuit.
+ *
+ * Every case above renders without `orientation` and is therefore the bottom
+ * drawer, unchanged. That is the point of making the dock an explicit prop
+ * rather than inferring it from a measured width - in JSDOM every rect is
+ * zero, so an inferred dock would have made all of them silently exercise
+ * whichever branch zero happens to select.
+ */
+describe("results drawer - docked right", () => {
+  /**
+   * The one measurement JSDOM will not give us for free, stubbed.
+   *
+   * `getBoundingClientRect` returns all zeros in JSDOM, which is exactly why
+   * the cover-axis bug was invisible: a scalar `height` cover reads 0 in every
+   * test and ~700 in the real window. Stubbing a plausible pane rect - narrow
+   * and full-column-height - is the only way to assert which axis is being
+   * charged, and that assertion is the whole reason `DrawerCover` is a pair.
+   */
+  function stubPaneRect(width: number, height: number) {
+    const spy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockReturnValue({ width, height, top: 0, left: 0, right: width, bottom: height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+    return () => spy.mockRestore();
+  }
+
+  it("charges its width to the right axis and nothing to the bottom", () => {
+    const restore = stubPaneRect(480, 700);
+    try {
+      const onCoverChange = vi.fn();
+      renderDrawer({ orientation: "right", onCoverChange });
+      // 700 is the full column height. Reported as `bottom` it would flow into
+      // Canvas's `fitInsetBottom` and into `inspectorViewport.maxY`, leaving
+      // the inspector an 8px-tall band to live in - no crash, no failing
+      // assertion anywhere, just a shell that does not work.
+      expect(onCoverChange).toHaveBeenLastCalledWith({ bottom: 0, right: 480 });
+    } finally {
+      restore();
+    }
+  });
+
+  it("charges its height to the bottom axis when docked bottom", () => {
+    const restore = stubPaneRect(480, 700);
+    try {
+      const onCoverChange = vi.fn();
+      renderDrawer({ onCoverChange });
+      expect(onCoverChange).toHaveBeenLastCalledWith({ bottom: 700, right: 0 });
+    } finally {
+      restore();
+    }
+  });
+
+  it("retracts both axes when it unmounts", () => {
+    const restore = stubPaneRect(480, 700);
+    try {
+      const onCoverChange = vi.fn();
+      const { unmount } = renderDrawer({ orientation: "right", onCoverChange });
+      unmount();
+      // Otherwise the inspector keeps reserving a column for a pane that is
+      // no longer on screen. The bottom dock has always retracted; the right
+      // one has to as well, or switching docks leaves a stale reservation.
+      expect(onCoverChange).toHaveBeenLastCalledWith({ bottom: 0, right: 0 });
+    } finally {
+      restore();
+    }
+  });
+
+  it("offers no size control, because it has no size to cycle", () => {
+    renderDrawer({ orientation: "right" });
+    // The three heights answer "how much circuit am I covering?", and docked
+    // right the answer is none - the circuit is beside it. A control still
+    // rendered here would cycle a class with no rule behind it, which is the
+    // silently-inert control the shell contract exists to forbid. Width is
+    // the negotiable axis and it belongs to the divider, which App renders.
+    expect(screen.queryByRole("button", { name: /^Resize results/ })).toBeNull();
+  });
+
+  it("does not wear a height class that would fight its own column", () => {
+    renderDrawer({ orientation: "right", preferredHeight: "half" });
+    expect(drawer().className).toContain("results-drawer--dock-right");
+    for (const height of ["peek", "half", "full"]) {
+      expect(drawer().className).not.toContain(`results-drawer--${height}`);
+    }
+  });
+
+  it("keeps its body open through an Escape from inside", () => {
+    renderDrawer({ orientation: "right" });
+    screen.getByRole("button", { name: "Waveform control" }).focus();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    // There is no collapsed state here, so Escape must not invent one. If it
+    // set `peek` anyway the body would vanish from the accessibility tree
+    // while the pane kept its full width - a blank column with no way back,
+    // because the size control that used to reopen it is gone.
+    expect(shownBody()).toBe("Waveform control");
+  });
+
+  it("still switches tabs, which is the chrome that does survive the move", () => {
+    renderDrawer({ orientation: "right" });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Measurements" }), { button: 0 });
+    expect(shownBody()).toBe("Measurement rows");
+  });
+});

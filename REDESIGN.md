@@ -74,7 +74,7 @@ plates forbid.
 | Selection inspector | at the selection | a selection exists | Esc, keeps the selection | corner-dock more often |
 | Explorer sheet | anchored to the rail | rail, `⌘⇧E` | Esc, canvas click, opening a file | unpins |
 | Assistant sheet | right edge | transport, `⌘I` | Esc unless pinned | unpins |
-| Results drawer | bottom, peek/half/full | Run, rail, `⌘\` | Esc to peek | full leaves 180px of canvas |
+| Results drawer | bottom, peek/half/full — or the simulator's right-hand pane | Run, rail, `⌘\` | Esc to peek (bottom only) | stacks below `splitMinWorkspace`; full leaves 180px of canvas |
 | Command palette | centred modal | `⌘K` | Esc | unchanged |
 
 Three deliberate deletions: the Properties/Library segmented control (two
@@ -219,6 +219,19 @@ EveryCircuit's scope is a squeezed strip. A full-width bottom instrument drawer
 with 1:1 plot type, endpoint-labelled scales and zone bands is a difference an
 engineer sees in ten seconds. The floating chrome is what makes room for it.
 **If stages must be cut, cut 5 and 6 before 4.**
+
+> **Amended after use.** "Full width" was the right call against the surface it
+> replaced — a 400px plotter column that got whatever the circuit, the explorer
+> and the assistant left over. It was the wrong call about the *simulator*: at
+> half height the drawer covers the circuit, and reading a waveform against the
+> node that produced it is the thing the simulator is for. So in a simulator
+> wide enough to afford it (`SHELL_LAYOUT.splitMinWorkspace`) the drawer docks
+> right instead, as a pane the user drags. What survives untouched is the claim
+> that actually mattered: three surfaces merged into **one surface, one
+> landmark, one name**, at 1:1 plot geometry. Only the axis changed. The
+> schematic keeps the bottom drawer, and so does a simulator too narrow to
+> split — that fallback is asserted, not assumed
+> (`App.shellContract.test.tsx`, the 900px case).
 
 **Plot text scaling must be fixed inside stage 4.** `.scope-svg` is
 `width:100%; aspect-ratio:340/190` against `viewBox="0 0 340 190"`, with
@@ -374,14 +387,31 @@ happened.
   tick label rendered at 3.1x and "TIME (S)" was the largest type in the
   product. Heights are real pixels now.
 - **One results drawer** (4a) replaces the diagnostics strip, the telemetry
-  dock and the plotter column. Full width, over the canvas, three tabs, three
-  heights. Its peek state is a readout, which is why the restore orb is gone.
+  dock and the plotter column. Three tabs, one landmark, one name. Its peek
+  state is a readout, which is why the restore orb is gone.
+- **The simulator is two panes, not two stacked halves.** The same drawer, told
+  `orientation="right"`, is the analysis pane beside the circuit whenever the
+  workspace clears `SHELL_LAYOUT.splitMinWorkspace`; the divider is
+  `SHELL_SEPARATORS.analysisPane`, on the existing `panelResize` hook. The
+  split/stack decision is `resolveAnalysisPane`, in TypeScript rather than a
+  container query, because the `position: fixed` inspector has to be inset by
+  the pane width and cannot observe a container — two authorities would
+  disagree in the band around the threshold. Docked right the three heights and
+  the size control are withheld, not left inert: the drawer covers nothing
+  there, so the only negotiable axis is width and the divider owns it.
 - **The inspector is at the selection** (6), not 900px away in half of a
   segmented column. Placement is `inspector/anchorPlacement.ts`; the four focus
   rules are asserted in `SelectionInspector.test.tsx` and reversion-checked.
-- **The canvas fit reserves what floats over it.** `fitInsetBottom` and
-  `fitInsetRight`. Without the first, the circuit came up half-hidden behind
-  the drawer at 900x600 - and only at 900x600.
+- **The canvas fit reserves what floats over it.** `fitInsetBottom`, and only
+  that: without it the circuit came up half-hidden behind the drawer at
+  900x600 — and only at 900x600. There is deliberately no `fitInsetRight`, and
+  `Canvas.simulator.test.tsx` keeps a `@ts-expect-error` that fails the build
+  if one comes back. The split squeezes the canvas element itself, so the
+  browser's own layout does the reservation; a prop would double-count it.
+  What the drawer reports is `{ bottom, right }`, axis-tagged, because the same
+  element is ~700px tall docked right and charging that to the bottom axis
+  collapses the fit box — a bug no JSDOM test can see, since every rect there
+  is zero.
 - **Routine toasts are gone**, and the rest moved off the bottom-right, which
   is where the trace legend and measurement cards live.
 

@@ -15,11 +15,31 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
  * the only one an engineer actually reads - got whatever was left after the
  * circuit, the explorer and the assistant had taken theirs.
  *
- * They are one drawer now: full width, over the canvas rather than beside it,
- * three heights, three tabs. The width is the point. A waveform is a wide
- * thing; giving it 1400px instead of 400px is the difference an engineer sees
- * first, and it is what the 1:1 plot geometry (see the note at the top of
- * SimulationPanel.tsx) was a prerequisite for.
+ * They are one drawer now: one surface, one landmark, one name. That merge is
+ * the part worth keeping, and it is untouched by everything below.
+ *
+ * ## Which edge it docks to
+ *
+ * `orientation` decides, and it is an EXPLICIT prop rather than something
+ * inferred from a measured width. Docked `bottom` it floats over the mode
+ * surface at peek/half/full - the schematic's only shape, and the simulator's
+ * shape below `SHELL_LAYOUT.splitMinWorkspace`. Docked `right` it is the
+ * simulator's analysis pane, a real column beside the circuit with a divider
+ * between them.
+ *
+ * Inferring the dock from a width would have made the schematic's behaviour
+ * and the narrow fallback *accidentally* unchanged - true only for as long as
+ * nobody moved the threshold. A prop makes them provably unchanged: the split
+ * decision is made once, in `chrome/resolveChrome.ts`, and this component is
+ * told the answer.
+ *
+ * The original merge note said the width was the point - a waveform is a wide
+ * thing, and 1400px beats 400px. That was written against a drawer that had to
+ * cover the schematic to get that width. Beside the circuit, the waveform and
+ * the thing it is a waveform OF are legible at the same time, which is the
+ * trade the user asked for. The 1:1 plot geometry (see the note at the top of
+ * SimulationPanel.tsx) is what makes a 480px pane read correctly rather than
+ * as a 3x-scaled miniature, so it is load-bearing for both docks.
  *
  * ## Chrome
  *
@@ -29,13 +49,23 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
  * information after the first read, which is the antipattern the design
  * language exists to prevent. The drawer names itself once, in its landmark.
  *
- * ## Heights
+ * ## Heights, and why they are a bottom-dock idea
  *
  * `peek` is the header alone: still a readout (the lamp, the sample count and
  * the issue count are all there), which is why there is no separate restore
  * affordance to build. `half` is the working size. `full` deliberately stops
  * short of the top so the circuit never disappears entirely - a drawer that
  * covers its own subject is a page, not a drawer.
+ *
+ * All three answer one question: how much of the circuit am I willing to cover
+ * to read this? Docked right the drawer covers nothing - it is a column, the
+ * circuit is beside it, and the drawer is as tall as the workspace at every
+ * size. So the question has no answer there, and the size control is NOT
+ * rendered rather than left cycling a class that changes nothing on screen: a
+ * control that silently does nothing is the defect the shell contract exists
+ * to make impossible. The axis that IS negotiable in that dock is width, and
+ * it belongs to the divider between the two panes, which is a `separator` with
+ * the WAI-ARIA arrow-key behaviour - so a keyboard user loses nothing.
  *
  * ## Focus and Escape
  *
@@ -44,6 +74,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
  * listener that does not check would silently take that over. When it does
  * collapse it hands focus to the size control first, so a keyboard user is
  * never left standing on a control that just went `display: none`.
+ *
+ * Docked right, Escape does not collapse either - for the same reason the size
+ * control is gone, and so that the two cannot disagree about whether this
+ * drawer has a collapsed state at all.
  *
  * ## Why every tab stays mounted
  *
@@ -66,6 +100,33 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 export type DrawerHeight = "peek" | "half" | "full";
 export type DrawerTab = "waveforms" | "measurements" | "errors";
+/** Which edge the drawer docks to. See "Which edge it docks to" above. */
+export type DrawerOrientation = "bottom" | "right";
+
+/**
+ * How much of the mode surface the drawer is sitting on, per axis.
+ *
+ * Axis-tagged rather than one scalar, and that is a correctness fix, not
+ * tidying. The old scalar was `getBoundingClientRect().height`, which is the
+ * right number docked bottom and the FULL COLUMN HEIGHT docked right - fed
+ * into `Canvas`'s `fitInsetBottom` it reserved the whole window along the
+ * bottom, collapsing the fit box and, through `inspectorViewport`, squashing
+ * the inspector's vertical range to nothing. It does not throw, and no test in
+ * JSDOM can see it because every rect there measures zero. The type is the
+ * only thing that can catch it, so the axes are named.
+ *
+ * Both numbers are always present: a consumer reads the axis it reserves on
+ * and gets an honest zero from the other dock, instead of having to know which
+ * dock is up.
+ */
+export interface DrawerCover {
+  /** Pixels covered along the bottom edge. Non-zero only when docked bottom. */
+  bottom: number;
+  /** Pixels covered along the right edge. Non-zero only when docked right. */
+  right: number;
+}
+
+const NO_COVER: DrawerCover = { bottom: 0, right: 0 };
 
 /** The accessible name of the drawer landmark. See shellContract.ts. */
 export const RESULTS_DRAWER_NAME = "Results";
@@ -111,18 +172,34 @@ export interface ResultsDrawerProps {
    */
   preferredTab?: DrawerTab;
   preferredHeight?: DrawerHeight;
+  /**
+   * Which edge to dock to. `bottom` is the default deliberately: it is the
+   * only shape the schematic ever uses and the fallback the simulator falls
+   * back to, so a caller that says nothing gets today's drawer exactly.
+   */
+  orientation?: DrawerOrientation;
   /** Bumping this raises a collapsed drawer, e.g. when a run finishes. */
   raiseSignal?: unknown;
   /**
-   * Reports how many pixels of canvas the drawer is covering.
+   * Reports how many pixels of canvas the drawer is covering, per axis.
    *
-   * The drawer floats rather than squeezing, so nothing in the layout knows
-   * its height - and the canvas's zoom-to-fit measured the whole element and
-   * centred in it, which put half the circuit behind the drawer the moment
-   * the simulator opened. Measured rather than derived from the height token,
-   * because "46%" is only a number the stylesheet knows.
+   * Docked bottom the drawer floats rather than squeezing, so nothing in the
+   * layout knows its height - and the canvas's zoom-to-fit measured the whole
+   * element and centred in it, which put half the circuit behind the drawer
+   * the moment the simulator opened. Measured rather than derived from the
+   * height token, because "46%" is only a number the stylesheet knows.
+   *
+   * Docked right the drawer squeezes: the browser's own layout shrinks the
+   * canvas element, so the fit needs no reservation at all and `right` exists
+   * for the surfaces that are NOT in that flex row - the `position: fixed`
+   * selection inspector, which would otherwise place itself under the pane.
+   *
+   * **This callback's identity is load-bearing.** The measuring effect is
+   * keyed on it and its cleanup reports zero, so a fresh function per render
+   * republishes a zero cover on every single commit. Pass a stable
+   * `useCallback`, and have it compare by value before setting state.
    */
-  onCoverChange?: (pixels: number) => void;
+  onCoverChange?: (cover: DrawerCover) => void;
 }
 
 const STATUS_TEXT: Record<ResultsDrawerProps["status"], string> = {
@@ -142,6 +219,7 @@ export function ResultsDrawer({
   errorBadge = null,
   preferredTab = "waveforms",
   preferredHeight = "half",
+  orientation = "bottom",
   raiseSignal,
   onCoverChange,
 }: ResultsDrawerProps) {
@@ -219,7 +297,15 @@ export function ResultsDrawer({
   useEffect(() => {
     const el = rootRef.current;
     if (!el || !onCoverChange) return;
-    const report = () => onCoverChange(el.getBoundingClientRect().height);
+    const report = () => {
+      const rect = el.getBoundingClientRect();
+      // Only the axis this dock actually eats into. See `DrawerCover`.
+      onCoverChange(
+        orientation === "right"
+          ? { bottom: 0, right: rect.width }
+          : { bottom: rect.height, right: 0 },
+      );
+    };
     report();
     // The observer is optional; the cleanup is not. Returning early when
     // ResizeObserver is missing skipped the `onCoverChange(0)` below, so an
@@ -229,21 +315,27 @@ export function ResultsDrawer({
     observer?.observe(el);
     return () => {
       observer?.disconnect();
-      onCoverChange(0);
+      onCoverChange(NO_COVER);
     };
-  }, [onCoverChange]);
+    // `orientation` belongs here: changing dock changes which axis is being
+    // reported, and the cleanup's zero is what retracts the stale axis.
+  }, [onCoverChange, orientation]);
 
   const containsFocus = useCallback(
     () => Boolean(rootRef.current && rootRef.current.contains(document.activeElement)),
     [],
   );
 
+  const dockedRight = orientation === "right";
+  /** Docked right there is no collapsed state; see the heights note above. */
+  const collapsed = !dockedRight && height === "peek";
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       // Escape belongs to whatever holds focus. Outside the drawer it still
       // means "cancel the current tool" on the canvas.
-      if (!containsFocus() || height === "peek") return;
+      if (!containsFocus() || dockedRight || height === "peek") return;
       event.preventDefault();
       setHeight("peek");
       // Peek hides the body, so focus has to leave first or it sits on a
@@ -252,7 +344,7 @@ export function ResultsDrawer({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [containsFocus, height]);
+  }, [containsFocus, dockedRight, height]);
 
   const cycleHeight = () => {
     setHeight((current) => {
@@ -261,12 +353,16 @@ export function ResultsDrawer({
     });
   };
 
-  const collapsed = height === "peek";
-
   return (
     <aside
       ref={rootRef}
-      className={`results-drawer results-drawer--${height}`}
+      // The height modifier is withheld docked right on purpose: those classes
+      // ARE the three heights (`height: 46%`, `calc(100% - 180px)`), and the
+      // right dock is a full-height column. Emitting one would have the
+      // stylesheet quietly contradict the "no collapsed state" rule above.
+      className={`results-drawer results-drawer--dock-${orientation}${
+        dockedRight ? "" : ` results-drawer--${height}`
+      }`}
       aria-label={RESULTS_DRAWER_NAME}
       aria-busy={status === "running"}
     >
@@ -332,6 +428,10 @@ export function ResultsDrawer({
               <TooltipContent>Stop the running analysis</TooltipContent>
             </Tooltip>
           )}
+          {/* Withheld docked right. The three heights are a bottom-dock idea
+              and the divider owns the axis that is still negotiable there;
+              see the heights note at the top of this file. */}
+          {!dockedRight && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -352,6 +452,7 @@ export function ResultsDrawer({
               {collapsed ? "Open results" : height === "half" ? "Fill the window" : "Collapse results"}
             </TooltipContent>
           </Tooltip>
+          )}
         </div>
       </div>
 

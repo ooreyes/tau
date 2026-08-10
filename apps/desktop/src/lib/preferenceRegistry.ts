@@ -133,6 +133,11 @@ export const PRESERVED_PREFERENCES: readonly {
     controlledAt: "The panel's own drag handle",
   },
   {
+    key: "tau.ui.analysisPaneWidth",
+    label: "Analysis pane width",
+    controlledAt: "The divider between the circuit and the analysis pane",
+  },
+  {
     key: "tau.assistant.width",
     label: "Assistant panel width",
     controlledAt: "The panel's own drag handle",

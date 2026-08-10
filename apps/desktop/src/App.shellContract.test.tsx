@@ -46,7 +46,7 @@ vi.mock("./lib/localAiRuntime", async (importOriginal) => ({
 }));
 
 import App from "./App";
-import { SHELL, SHELL_CONTROLS, type ShellSurface } from "./components/shellContract";
+import { SHELL, SHELL_CONTROLS, SHELL_SEPARATORS, type ShellSurface } from "./components/shellContract";
 import { simulationPreferences } from "./lib/simulationPreferences";
 import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./project/defaultWorkspace";
 // The shell assertion begins once Settings is visible.  Keep that assertion
@@ -213,6 +213,39 @@ describe("shell inventory by app state", () => {
     // the inventory could neither require nor forbid it. Two wrongs reading
     // as one right is the exact failure this file exists to prevent, and it
     // was sitting on the surface stage 4 replaces.
+    //
+    // This inventory is UNCHANGED by the circuit | analysis split, and that is
+    // the assertion, not an incidental pass. The split moves the drawer from
+    // the bottom edge to the right edge of the same workspace; it does not
+    // hand the analysis its own landmark. One surface, one landmark, one name
+    // was what stage 4a bought by merging three surfaces, and re-earning a
+    // second entry here for a change of AXIS would spend it for nothing.
+    expectExactly(["navRail", "circuitOverview", "assistant", "resultsDrawer"]);
+    // The divider is a control, not a surface, so it is named in
+    // SHELL_SEPARATORS rather than SHELL - and it has to be findable by that
+    // name, because it is now the only way to change the analysis pane's size
+    // (the drawer's height control is withheld in this dock, deliberately).
+    expect(screen.getByRole("separator", { name: SHELL_SEPARATORS.analysisPane })).toBeTruthy();
+  });
+
+  it("at the 900px floor the simulator stacks, and the divider is absent", async () => {
+    // A promise, not an accident. Below `SHELL_LAYOUT.splitMinWorkspace` the
+    // simulator falls back to exactly today's stacked drawer, and the way that
+    // fallback fails silently is a divider that renders anyway: `usePanelWidth`
+    // would happily clamp a pane into a workspace that has no room for one, and
+    // the circuit would be squeezed under its own floor with nothing on screen
+    // saying why. Asserting the absence is what makes the fallback checkable.
+    //
+    // 900 is the app's stated minimum window (tauri.conf.json). With Bode open
+    // - which `beforeEach` arranges - the workspace is 900 less the rail, the
+    // assistant and its handle, which is under the split threshold.
+    shellWidth = 900;
+    await openProject();
+    fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
+
+    expect(screen.queryByRole("separator", { name: SHELL_SEPARATORS.analysisPane })).toBeNull();
+    // Same inventory at both widths: the drawer is the same landmark whichever
+    // edge it is on, so narrowing the window must not add or drop a surface.
     expectExactly(["navRail", "circuitOverview", "assistant", "resultsDrawer"]);
   });
 

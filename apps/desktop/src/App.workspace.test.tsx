@@ -216,6 +216,11 @@ describe("App schematic workspace tools", () => {
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
     expect(screen.getByRole("separator", { name: "Resize assistant panel" })).toBeTruthy();
     expect(screen.queryByRole("complementary", { name: "Components" })).toBeNull();
+    // The simulator's own divider, between the circuit and the analysis. Named
+    // rather than counted: the count-of-2 case above is schematic mode, which
+    // the split cannot reach, and a bare count here would pass just as happily
+    // if the analysis divider replaced the assistant's rather than joining it.
+    expect(screen.getByRole("separator", { name: "Resize analysis pane" })).toBeTruthy();
   });
 
   it("starts a new run at the waveform detail chosen in Settings", async () => {

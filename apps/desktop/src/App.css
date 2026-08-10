@@ -1457,6 +1457,47 @@ body {
   padding: var(--sp-1) var(--sp-3);
   border-bottom: 1px solid var(--border);
   background: transparent;
+  /* The same treatment `.editor-toolbar` takes at the 900px floor, and for the
+     same reason. The mode rail is TRAN/OP/AC/DC/TF/NOISE/STEP plus the Export
+     button - about 312px including this padding - and the analysis pane's
+     floor is 280px. `.plotter` above is `overflow-x: hidden`, so without a
+     scroll of its own the STEP tab is simply unreachable at the floor: not
+     clipped-but-scrollable, gone. `scripts/min-window-dod.sh` audits exactly
+     that (an interactive control outside its box with no scroll ancestor). */
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-4) transparent;
+}
+
+.plotter-tabs::-webkit-scrollbar {
+  height: 3px;
+}
+
+.plotter-tabs::-webkit-scrollbar-thumb {
+  background: var(--panel-4);
+  border-radius: var(--r-2xs);
+}
+
+/* A scroll container only scrolls what refuses to shrink. The rail's Radix
+   root is an unstyled flex item, so it would have absorbed the squeeze
+   instead, leaving the rail's pill narrower than the tabs inside it and the
+   Export button sitting on top of the overflow. Pinning the root is what turns
+   the squeeze into a scroll. */
+.plotter-tabs > [data-slot="tabs"] {
+  flex: none;
+}
+
+/* ...but the caption under the abbreviations must not be what the root is
+   pinned TO. "Small-signal frequency response: gain and phase." is wider than
+   the whole rail, so it would force a horizontal scroll on a strip that has
+   room for its controls. `width: 0` takes the paragraph out of the root's
+   intrinsic width so the rail alone decides it; `min-width: 100%` hands the
+   paragraph that width back, so it wraps to two lines rather than scrolling. */
+.plotter-tabs > [data-slot="tabs"] > p {
+  width: 0;
+  min-width: 100%;
 }
 
 .analysis-mode-rail {
@@ -1464,7 +1505,12 @@ body {
   align-items: center;
   height: 32px;
   width: max-content;
-  max-width: 100%;
+  /* No `max-width: 100%`. It used to cap the pill at the strip's width, which
+     drew the rail's border and inset shadow through the middle of the STEP
+     tab as soon as the plotter got narrow - the tabs are `flex: none` and
+     spilled out of a box that had shrunk without them. `.plotter-tabs` scrolls
+     now, so the honest answer is that the rail keeps its size and the strip
+     moves. */
   background: var(--material-thin, var(--panel-3));
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -7259,16 +7305,22 @@ button.bottom-panel-head:focus-visible {
    sits on an opaque surface rather than a veil because a waveform read through
    a blurred schematic is not a measurement.
 ══════════════════════════════════════════════════════════════════════════════ */
-/* The centre region: the mode surface plus the drawer that floats over it.
-   Its only job is to be the drawer's containing block, so that "full width"
+/* The centre region: the mode surface plus the drawer, which either floats
+   over it or sits beside it.
+   Its first job is to be the drawer's containing block, so that "full width"
    means the width of the workspace and not the width of the window - the
    explorer, the parts rail and the assistant are outside it, and two of those
    are resizable, so no amount of `right: calc(...)` would have kept up. */
 .workspace-column {
   position: relative;
-  /* Queried by the results drawer, which sizes to this and not to the window.
+  /* NOT read by the drawer any more - see `.results-drawer`'s own container,
+     which is what the run-facts query below resolves against now. Kept
+     because the name is public API for any future workspace-scale rule and
+     because removing a container silently changes what such a rule would
+     resolve against.
      `inline-size` only - a block-size container would break the drawer's
-     percentage heights. */
+     percentage heights, which still ship for the schematic and the stacked
+     simulator fallback. */
   container: workspace / inline-size;
   flex: 1;
   /* The wider of the two floors its children declare (.sim-schematic-pane's
@@ -7279,12 +7331,50 @@ button.bottom-panel-head:focus-visible {
   flex-direction: column;
 }
 
+/* The simulator's split. A row, and nothing else changes: the drawer's own
+   dock modifier takes it out of `position: absolute` and into this row, and
+   the divider between them is a flex item too (see the override below).
+   Whether this class is on is decided in TypeScript by `resolveAnalysisPane`,
+   not by a container query - App has to inset the `position: fixed` inspector
+   by the pane width and cannot observe a container, so a query would give the
+   two an answer that disagrees in the band around the threshold. */
+.workspace-column--split {
+  flex-direction: row;
+}
+
 .workspace-column > .editor-shell,
 .workspace-column > .sim-schematic-pane {
   min-width: 0;
 }
 
+/* The handle is built for an absolutely-positioned edge strip inside a
+   positioned panel. In the split it is a column of its own between two panes,
+   so it goes back into flow; `position: relative` keeps its ::after hairline
+   anchored to it rather than to the workspace. */
+.workspace-column--split > .panel-resize-handle {
+  position: relative;
+  inset: auto;
+  flex: none;
+  align-self: stretch;
+}
+
 .results-drawer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--canvas-bg);
+  /* The drawer's own inline-size container. The run-facts strip below asks
+     "is there room for me", and the honest answer is about the DRAWER's width,
+     not the workspace's: docked right the drawer is a 280-560px pane inside a
+     workspace that may be 1200px wide, and asking the workspace would have
+     kept the run facts on screen in a head that has no room for them. Docked
+     bottom the drawer spans the workspace exactly, so the same 620px threshold
+     means what it always did. */
+  container: results-drawer / inline-size;
+}
+
+/* Docked bottom: floating over the mode surface, three heights. */
+.results-drawer--dock-bottom {
   position: absolute;
   /* Inset zero on three sides: the wrapper already ends where the side
      columns start, and `.shell-body` reserves the status bar with its own
@@ -7293,13 +7383,26 @@ button.bottom-panel-head:focus-visible {
   right: 0;
   bottom: 0;
   z-index: var(--z-drawer);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--canvas-bg);
   border-top: 1px solid var(--border);
   box-shadow: var(--elev-float);
   transition: height var(--motion-med) var(--ease-out);
+}
+
+/* Docked right: a real column in the split row, full height at every size.
+   No elevation and no float shadow - it is not over anything.
+
+   No border either: `.sim-schematic-pane` already carries `border-right`, and
+   the divider's own hairline lands on it, which is exactly how the Assistant's
+   edge reads. A second line 8px away would draw the gutter twice.
+
+   No transition: the width is a live drag, and animating it would make the
+   divider lag the pointer. */
+.results-drawer--dock-right {
+  position: relative;
+  flex: none;
+  width: var(--analysis-pane-w, 480px);
+  min-width: 0;
+  overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -7483,9 +7586,14 @@ button.bottom-panel-head:focus-visible {
    A container query, not a viewport one. The drawer stopped spanning the
    window when it moved inside `.workspace-column`; a 1440px window with the
    explorer, the parts rail and the assistant all open leaves it under 500px,
-   and a viewport media query cannot see that. `.workspace-column` carries the
-   container so the drawer's own `position: absolute` geometry is untouched. */
-@container workspace (max-width: 620px) {
+   and a viewport media query cannot see that.
+
+   The container is the DRAWER, not `.workspace-column`. It used to be the
+   workspace, which was the same measurement for as long as the drawer spanned
+   it. Docked right it is not: a 480px analysis pane inside a 1200px workspace
+   would have kept the run facts in a head that has no room for them, beside a
+   tab strip that is already scrolling. */
+@container results-drawer (max-width: 620px) {
   .results-drawer-info { display: none; }
 }
 
