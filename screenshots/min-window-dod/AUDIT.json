@@ -28,8 +28,8 @@
       "settings": true
     },
     "editorShell": {
-      "clientW": 358,
-      "scrollW": 358,
+      "clientW": 622,
+      "scrollW": 622,
       "overflowX": false
     },
     "editorToolbarScrollable": true,
@@ -79,15 +79,7 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
-    "dialogGeom": {
-      "t": 48,
-      "b": 588,
-      "h": 540,
-      "fits": true,
-      "canScroll": true,
-      "scrollH": 667,
-      "clientH": 538
-    }
+    "dialogGeom": null
   },
   {
     "label": "command-light",
@@ -132,8 +124,8 @@
       "settings": true
     },
     "editorShell": {
-      "clientW": 358,
-      "scrollW": 358,
+      "clientW": 622,
+      "scrollW": 622,
       "overflowX": false
     },
     "editorToolbarScrollable": true,
@@ -183,15 +175,7 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
-    "dialogGeom": {
-      "t": 48,
-      "b": 588,
-      "h": 540,
-      "fits": true,
-      "canScroll": true,
-      "scrollH": 667,
-      "clientH": 538
-    }
+    "dialogGeom": null
   },
   {
     "label": "command-dark",
