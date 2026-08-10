@@ -265,6 +265,7 @@ export function AssistantPanel({
   const [conversations, setConversations] = useState<AssistantConversation[]>(seed.conversations);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   const historyMenuRef = useRef<HTMLDivElement | null>(null);
+  const historyMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [input, setInput] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -441,14 +442,20 @@ export function AssistantPanel({
 
   // Closes the past-chats popover on Escape or a click/tap outside it -
   // there's no Radix Popover in play here (see AssistantPanel's header
-  // markup below), so both need to be wired up by hand.
+  // markup below), so both need to be wired up by hand. Escape also returns
+  // focus to the trigger. Without that explicit restoration, it can unmount
+  // the currently focused history button and strand keyboard users on the
+  // document body instead of at their previous tab-stop.
   useEffect(() => {
     if (!historyMenuOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       if (!historyMenuRef.current?.contains(event.target as Node)) setHistoryMenuOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setHistoryMenuOpen(false);
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setHistoryMenuOpen(false);
+      historyMenuTriggerRef.current?.focus();
     };
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
@@ -886,6 +893,7 @@ export function AssistantPanel({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    ref={historyMenuTriggerRef}
                     variant="outline"
                     size="icon-sm"
                     className="text-muted-foreground hover:text-foreground"

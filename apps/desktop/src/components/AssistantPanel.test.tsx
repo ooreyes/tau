@@ -1368,8 +1368,13 @@ describe("AssistantPanel conversation history", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
     expect(screen.getByRole("group", { name: "Past chats" })).toBeTruthy();
+    const historyItem = within(screen.getByRole("group", { name: "Past chats" }))
+      .getByText("What does R1 do?")
+      .closest("button")!;
+    historyItem.focus();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("group", { name: "Past chats" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Past chats" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
     expect(screen.getByRole("group", { name: "Past chats" })).toBeTruthy();
