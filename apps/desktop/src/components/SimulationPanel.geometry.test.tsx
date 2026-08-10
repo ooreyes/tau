@@ -22,7 +22,7 @@
  * from useMeasuredSize fails "measures before the first paint".
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { WaveformPlot } from "./SimulationPanel";
 import type { AnalysisResult, Trace } from "../simulation/linearTransient";
 import { defaultLayout } from "./plotPanes";
@@ -84,9 +84,14 @@ describe("scope viewBox is 1:1 with the rendered box", () => {
     stubLayout(1052, 260);
     const { container } = renderPlot();
 
-    // 1052 is the widest the plotter gets today (.scope-shell max-width 1080
-    // less its padding). Under the old fixed 340-unit viewBox this same box
-    // applied a 3.1x uniform scale to the entire drawing.
+    // 1052 was once the widest the plotter got (.scope-shell max-width 1080
+    // less its padding); docked as the simulator's right-hand analysis pane it
+    // is capped near 560 instead. The number stays because what is under test
+    // is the identity - viewBox equals the measured box, whatever that box is -
+    // and 1052 is the case that used to be wrong: under the old fixed 340-unit
+    // viewBox this box applied a 3.1x uniform scale to the entire drawing.
+    // This case stubs its own rect and never renders inside the real shell, so
+    // the pane's cap cannot reach it.
     expect(scope(container).getAttribute("viewBox")).toBe("0 0 1052 260");
   });
 
@@ -178,6 +183,80 @@ describe("scope viewBox is 1:1 with the rendered box", () => {
     expect(wide.first).toBeCloseTo(narrow.first, 2);
     expect(wide.last).toBeCloseTo(narrow.last, 2);
     expect(wide.halfRise).toBeCloseTo(narrow.halfRise, 2);
+  });
+
+  it("re-draws the trace when the width arrives from the ResizeObserver alone", () => {
+    // Every other case here stubs getBoundingClientRect *before* render, so the
+    // pre-paint layout effect in useMeasuredSize sees the real box and the very
+    // first path is already built at the final width. That ordering hides the
+    // bug this case exists for. ResultsDrawer keeps each tab mounted under
+    // `hidden` while the drawer sits at peek, so the layout effect measures a
+    // zero box and bails; the real width then arrives from the ResizeObserver
+    // only, which re-renders the pane but not its parent. Nothing the trace
+    // memo depended on used to change on that path, so the axis adopted 940
+    // while the cached path still spanned the 340 fallback - the reported
+    // "trace ends a quarter of the way across a 6 ms axis".
+    //
+    // So: leave the box unmeasured at mount (plain jsdom reports zero) and
+    // deliver exactly one observer entry. Shaped like the reported run: V1 at
+    // a flat 100 V DC through a DC motor, 248 samples over 6 ms.
+    const times = Array.from({ length: 248 }, (_, i) => (i / 247) * 0.006);
+    const trace: Trace = {
+      id: "n1", label: "V(out)", unit: "V", color: "var(--trace-cyan)",
+      values: times.map(() => 100),
+    };
+    const result = { ...tranResult(), times, traces: [trace] };
+    result.stats = { ...result.stats, sampleCount: 248, stopTime: 0.006, stepSize: times[1] };
+
+    const observers: { cb: ResizeObserverCallback; targets: Element[] }[] = [];
+    const original = Reflect.get(globalThis, "ResizeObserver");
+    Reflect.set(globalThis, "ResizeObserver", class {
+      #entry: { cb: ResizeObserverCallback; targets: Element[] };
+      constructor(cb: ResizeObserverCallback) {
+        this.#entry = { cb, targets: [] };
+        observers.push(this.#entry);
+      }
+      observe(el: Element) { this.#entry.targets.push(el); }
+      unobserve() {}
+      disconnect() {}
+    });
+
+    /** Last x the trace path actually draws to, in viewBox units. */
+    const lastTraceX = (container: HTMLElement) => {
+      const d = container.querySelector(".scope-trace")?.getAttribute("d") ?? "";
+      const xs = [...d.matchAll(/[ML] (-?[\d.]+) /g)].map((m) => Number(m[1]));
+      return xs[xs.length - 1];
+    };
+
+    try {
+      const { container } = render(
+        <WaveformPlot result={result} baseTraces={result.traces} netLabels={[]} paneLayout={defaultLayout(["n1"])} />,
+      );
+      // Unmeasured: fallback width, and the trace fills it. 340 - 46*2 - 2.5*2
+      // of band starting at 46 + 2.5.
+      expect(scope(container).getAttribute("viewBox")).toBe("0 0 340 260");
+      expect(lastTraceX(container)).toBeCloseTo(340 - PAD - GUTTER, 1);
+
+      const svg = scope(container);
+      const observer = observers.find((o) => o.targets.includes(svg));
+      if (!observer) throw new Error("scope svg was never observed");
+      act(() => {
+        observer.cb(
+          [{ target: svg, contentRect: { width: 940, height: 260 } } as unknown as ResizeObserverEntry],
+          {} as ResizeObserver,
+        );
+      });
+
+      // The axis moved; the assertion that matters is that the curve moved with
+      // it. Pinned at 891.5 rather than "greater than before" because the
+      // stale-width bug leaves it at exactly 291.5, and a loose bound would
+      // pass on any partial fix.
+      expect(scope(container).getAttribute("viewBox")).toBe("0 0 940 260");
+      expect(lastTraceX(container)).toBeCloseTo(940 - PAD - GUTTER, 1);
+    } finally {
+      if (original) Reflect.set(globalThis, "ResizeObserver", original);
+      else Reflect.deleteProperty(globalThis, "ResizeObserver");
+    }
   });
 
   it("falls back to the historical width when there is no layout to measure", () => {

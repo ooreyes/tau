@@ -2757,6 +2757,23 @@ function TranScopePane({
     },
     [plot, viewport.yMin, viewport.yMax],
   );
+  // `PLOT_WIDTH` is a dependency because for this memo the width is the x
+  // mapping, not layout: `tracePath` spends it on the time→pixel scale (and on
+  // the envelope decimator's column count), while the `<svg viewBox>` below
+  // and `PlotAxes` read it directly on every render. Leave it out and the two
+  // silently disagree - the axis relabels to the new width and the cached path
+  // keeps the old one, so the curve stops partway across its own frame.
+  //
+  // That is reachable, not theoretical. ResultsDrawer keeps every tab mounted
+  // under `hidden` while it sits at peek, so `useMeasuredSize`'s pre-paint
+  // layout effect sees a zero box and bails, and the first path is built at
+  // PLOT_WIDTH_FALLBACK. The real width then arrives from the ResizeObserver
+  // alone, which re-renders this pane but not the parent, so `plot` keeps
+  // identity, so `yRangeForTrace` keeps identity, and nothing else in this
+  // list moves. The width is the only dep that can carry that change.
+  //
+  // Keep the memo. The envelope decimation it wraps is real work on long runs;
+  // this is a missing dependency, not a reason to recompute on every render.
   const tracePaths = useMemo(
     () => paneTraces.map((trace) => {
       const y = yRangeForTrace(trace);
@@ -2765,7 +2782,7 @@ function TranScopePane({
         path: tracePath(trace, times, viewport.xMin, viewport.xMax, y.min, y.max, { width: PLOT_WIDTH, height: plotHeight }),
       };
     }),
-    [paneTraces, times, viewport.xMin, viewport.xMax, yRangeForTrace, plotHeight],
+    [paneTraces, times, viewport.xMin, viewport.xMax, yRangeForTrace, plotHeight, PLOT_WIDTH],
   );
   const selectedPaneTrace = activeTrace
     ? paneTraces.find((trace) => trace.id === activeTrace.id) ?? null
@@ -2785,7 +2802,11 @@ function TranScopePane({
       times,
     );
     if (Number.isFinite(fraction)) cursorTool.onCursorFractionChange(cursorTool.activeCursor, fraction);
-  }, [cursorTool, times, viewport]);
+    // Same width-is-the-mapping rule as `tracePaths` above: `plotClientXToFraction`
+    // divides by (PLOT_WIDTH - pad*2), so a stale width reports the pointer at
+    // the wrong time. On a measurement tool that is a wrong number, not a
+    // cosmetic glitch.
+  }, [cursorTool, times, viewport, PLOT_WIDTH]);
   const beginCursorDrag = useCallback((event: ReactPointerEvent<SVGRectElement>) => {
     if (!cursorTool?.activeCursor) return;
     event.preventDefault();
@@ -2837,7 +2858,9 @@ function TranScopePane({
     const screenX = PLOT_PAD
       + ((x - viewport.xMin) / (viewport.xMax - viewport.xMin)) * (PLOT_WIDTH - 2 * PLOT_PAD);
     setHover({ x: screenX, y: best.screenY, dataX: x, value: best.value, trace: best.trace });
-  }, [hoverEnabled, times, viewport, plotHeight, paneTraces, yRangeForTrace]);
+    // `PLOT_WIDTH` for the same reason as `glideFromPointer`: it sets both the
+    // client-x→time mapping and the marker's own screen x.
+  }, [hoverEnabled, times, viewport, plotHeight, paneTraces, yRangeForTrace, PLOT_WIDTH]);
   const hoverVisible = hover
     && hover.x >= PLOT_PAD && hover.x <= PLOT_WIDTH - PLOT_PAD
     && hover.y >= PLOT_PAD && hover.y <= plotHeight - PLOT_PAD;
