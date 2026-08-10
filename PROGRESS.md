@@ -1,5 +1,32 @@
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-10**
+
+Unit: **second production-hardening pass**. Six reviewed units are already
+pushed: complete Settings modality (`c509b78`), 30-Hz decorative current flow
+(`c7216ad`), recursive attached-library identifier normalization (`29879ff`),
+one Components accessibility landmark (`cf15f24`), stale document-navigation
+suppression (`de35897`), single-probe local-AI status (`9a47aa1`), and removal
+of two unused direct runtime dependencies (`15e9199`). The formerly stale red
+canonical claim is resolved by current command output: **82 imported / 81
+warning-clean / 79 deck-built / 79 op-converged**, capability **79 success / 3
+honest refusals / 0 deck-guard leaks / 0 failures**, substitutions 0.
+
+Current gates: typecheck and production build clean; frontend **4,008 passed / 8
+skipped**; Rust **89 passed / 20 ignored** plus all **19/19** real-ngspice tests;
+full differential parity green; both-theme 1440x900 design proof and 900x600
+minimum-window **12/12** green. Fresh Tau.app/DMG build, strict code signature,
+DMG checksum, nine-file arm64/macOS-11 deployment inspection, and packaged plus
+mounted-DMG 336-sample engine smokes are green.
+
+**SHIPPABLE? NO.** The named-device DoD remains honestly blocked at 48.1% by
+unavailable encrypted vendor models, and broad differential coverage remains
+incomplete even though every committed cell currently passes. Active work:
+probe one additional exact authored-analysis cell and audit keyboard focus plus
+resource lifecycles. Native title-bar interaction still needs an unlocked Mac.
+
+---
+
 **Status: DONE - 2026-08-10**
 
 Unit: **overnight product, precision, performance, and visual audit**. Native
