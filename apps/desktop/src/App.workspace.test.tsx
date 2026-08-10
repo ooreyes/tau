@@ -39,6 +39,7 @@ import App, { schematicDocumentSignature } from "./App";
 // commit the dialog.  App still uses the real lazy boundary in production.
 import { SettingsWindow } from "./settings/SettingsWindow";
 import { AssistantPanel } from "./components/AssistantPanel";
+import { SimulationPanel } from "./components/SimulationPanel";
 import {
   createConversation,
   saveConversationMessages,
@@ -57,6 +58,7 @@ const defaultRenameNode = useProject.getState().renameNode;
 
 void SettingsWindow;
 void AssistantPanel;
+void SimulationPanel;
 
 describe("schematicDocumentSignature", () => {
   it("ignores regenerated internal ids while retaining semantic edits", () => {

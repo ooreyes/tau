@@ -6,7 +6,6 @@ import "./styles/liveControls.css";
 import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
-import { SimulationPanel } from "./components/SimulationPanel";
 import { ComponentMeasurementsPanel } from "./components/ComponentMeasurementsPanel";
 import { formatEngineering } from "./simulation/quantity";
 import { ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/assistantPanelState";
@@ -180,6 +179,11 @@ const SettingsWindow = lazy(async () => ({
 /** Bode is only useful after a project is open and the user summons it. */
 const AssistantPanel = lazy(async () => ({
   default: (await import("./components/AssistantPanel")).AssistantPanel,
+}));
+
+/** Waveform controls only exist in Simulator, after a circuit is open. */
+const SimulationPanel = lazy(async () => ({
+  default: (await import("./components/SimulationPanel")).SimulationPanel,
 }));
 
 /**
@@ -2976,57 +2980,59 @@ function App() {
               />
             )}
             waveforms={mode !== "simulator" ? null : (
-            <AnalysisErrorBoundary>
-              <SimulationPanel
-                circuitTitle={documentTitle}
-                preferredMode={preferredAnalysis}
-                result={analysis}
-                opResult={opAnalysis}
-                acResult={acAnalysis}
-                dcResult={dcAnalysis}
-                tfResult={tfAnalysis}
-                noiseResult={noiseAnalysis}
-                stepResult={stepFamily}
-                stepDomain={stepDomain}
-                acStepFamily={acStepFamily}
-                dcStepFamily={dcStepFamily}
-                measurements={measurements}
-                fourier={fourier}
-                acMeasurements={acMeasurements}
-                dcMeasurements={dcMeasurements}
-                noiseMeasurements={noiseMeasurements}
-                options={effectiveAnalysisOptions}
-                optionsAuto={!optionsOverridden}
-                optionsSource={analysisOptionsSource}
-                resetOptionsTarget={authoredAnalysisOptions ? "document" : "automatic"}
-                lastRunDurationMs={lastTransientDurationMs}
-                documentSignature={currentSignature}
-                circuitFilePath={activeFilePath}
-                isRunning={analysisRunning}
-                runProgress={runProgress}
-                onOptionsChange={overrideAnalysisOptions}
-                onResetOptions={resetAnalysisOptions}
-                onRun={runAnalysis}
-                onRunOperatingPoint={runOperatingAnalysis}
-                onRunAcSweep={runAcAnalysis}
-                onRunDcSweep={runDcAnalysis}
-                onRunTf={runTfAnalysis}
-                onRunNoise={runNoiseAnalysis_}
-                onRunStep={runStepAnalysis}
-                onStop={stopAnalysis}
-                hasFreshResult={hasFreshResult}
-                dcSetup={dcSetup}
-                onDcSetupChange={setDcSetup}
-                tfSetup={tfSetup}
-                onTfSetupChange={setTfSetup}
-                noiseSetup={noiseSetup}
-                onNoiseSetupChange={setNoiseSetup}
-                stepSetupUi={stepSetupUi}
-                onStepSetupUiChange={setStepSetupUi}
-                onSchematicReadoutTime={setSchematicReadoutTime}
-                liveSchematicPlayback={currentVisualizer}
-              />
-            </AnalysisErrorBoundary>
+              <Suspense fallback={null}>
+                <AnalysisErrorBoundary>
+                  <SimulationPanel
+                    circuitTitle={documentTitle}
+                    preferredMode={preferredAnalysis}
+                    result={analysis}
+                    opResult={opAnalysis}
+                    acResult={acAnalysis}
+                    dcResult={dcAnalysis}
+                    tfResult={tfAnalysis}
+                    noiseResult={noiseAnalysis}
+                    stepResult={stepFamily}
+                    stepDomain={stepDomain}
+                    acStepFamily={acStepFamily}
+                    dcStepFamily={dcStepFamily}
+                    measurements={measurements}
+                    fourier={fourier}
+                    acMeasurements={acMeasurements}
+                    dcMeasurements={dcMeasurements}
+                    noiseMeasurements={noiseMeasurements}
+                    options={effectiveAnalysisOptions}
+                    optionsAuto={!optionsOverridden}
+                    optionsSource={analysisOptionsSource}
+                    resetOptionsTarget={authoredAnalysisOptions ? "document" : "automatic"}
+                    lastRunDurationMs={lastTransientDurationMs}
+                    documentSignature={currentSignature}
+                    circuitFilePath={activeFilePath}
+                    isRunning={analysisRunning}
+                    runProgress={runProgress}
+                    onOptionsChange={overrideAnalysisOptions}
+                    onResetOptions={resetAnalysisOptions}
+                    onRun={runAnalysis}
+                    onRunOperatingPoint={runOperatingAnalysis}
+                    onRunAcSweep={runAcAnalysis}
+                    onRunDcSweep={runDcAnalysis}
+                    onRunTf={runTfAnalysis}
+                    onRunNoise={runNoiseAnalysis_}
+                    onRunStep={runStepAnalysis}
+                    onStop={stopAnalysis}
+                    hasFreshResult={hasFreshResult}
+                    dcSetup={dcSetup}
+                    onDcSetupChange={setDcSetup}
+                    tfSetup={tfSetup}
+                    onTfSetupChange={setTfSetup}
+                    noiseSetup={noiseSetup}
+                    onNoiseSetupChange={setNoiseSetup}
+                    stepSetupUi={stepSetupUi}
+                    onStepSetupUiChange={setStepSetupUi}
+                    onSchematicReadoutTime={setSchematicReadoutTime}
+                    liveSchematicPlayback={currentVisualizer}
+                  />
+                </AnalysisErrorBoundary>
+              </Suspense>
             )}
           />
         )}

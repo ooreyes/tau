@@ -54,6 +54,7 @@ import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./project/defaultW
 // still renders the production `React.lazy` boundary, with its real module.
 import { SettingsWindow } from "./settings/SettingsWindow";
 import { AssistantPanel } from "./components/AssistantPanel";
+import { SimulationPanel } from "./components/SimulationPanel";
 import { useProject } from "./store/useProject";
 import { useSchematic } from "./store/useSchematic";
 
@@ -61,6 +62,7 @@ const defaultRenameNode = useProject.getState().renameNode;
 
 void SettingsWindow;
 void AssistantPanel;
+void SimulationPanel;
 
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
@@ -187,6 +189,16 @@ describe("shell inventory by app state", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Bode" }));
 
     expect(await screen.findByRole(SHELL.assistant.role, { name: SHELL.assistant.name })).toBeTruthy();
+  });
+
+  it("does not mount waveform controls until entering Simulator", async () => {
+    await openProject();
+
+    expect(screen.queryByRole("button", { name: "Toggle advanced settings" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
+
+    expect(await screen.findByRole("button", { name: "Toggle advanced settings" })).toBeTruthy();
   });
 
   it("in the simulator, replaces the canvas with the read-only overview", async () => {
