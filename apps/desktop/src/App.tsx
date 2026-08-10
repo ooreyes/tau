@@ -1475,7 +1475,13 @@ function App() {
     invalidateAnalysis();
     setMode("schematic");
     setFitSignal((n) => n + 1);
-    showNotice(options?.notice ?? `Opened ${title}`);
+    // A bare "Opened <file>" is not reported. The tab strip, the title bar and
+    // the drawing itself all just changed to say so, and a toast that restates
+    // what three visible surfaces already show is ink with no information in
+    // it - and it lands over the bottom-right of the instrument, which is
+    // where the trace legend and the measurement cards are. A notice with
+    // something to add (dropped parts, stranded terminals) still speaks.
+    if (options?.notice) showNotice(options.notice);
   }, [tabs, snapshotActive, loadCircuit, adoptDirectiveOptions, invalidateAnalysis, showNotice, components.length, wires.length]);
 
   const openSimFromProject = useCallback((path: string, title: string, json: string) => {

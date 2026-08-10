@@ -28,7 +28,19 @@ function Toaster({ className, theme = "dark", ...props }: ToasterProps) {
           description: "group-[.toast]:text-[var(--muted)]",
         },
       }}
-      position="bottom-right"
+      /*
+       * Bottom-CENTRE, not bottom-right.
+       *
+       * The right-hand corner is where Tau puts the things you are reading a
+       * number off: the trace legend, the measurement cards, the drawer's own
+       * controls. A notice that lands on top of those is covering the subject
+       * to talk about it. Centred, it sits over the schematic's empty middle
+       * ground, clears the status readout, and is out of the way of every
+       * instrument surface.
+       */
+      position="bottom-center"
+      offset="44px"
+      duration={3200}
       {...props}
     />
   );
