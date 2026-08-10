@@ -774,11 +774,8 @@ impl SpiceEngine {
                 (resample(values, target), None)
             } else if !info.complex_data.is_null() {
                 let values = unsafe { slice::from_raw_parts(info.complex_data, length) };
-                let kept = resample(values, target);
-                (
-                    kept.iter().map(|value| value.real).collect(),
-                    Some(kept.iter().map(|value| value.imag).collect()),
-                )
+                let (real, imaginary) = resample_complex(values, target);
+                (real, Some(imaginary))
             } else {
                 (Vec::new(), None)
             };
@@ -897,6 +894,43 @@ fn resample<T: Copy>(values: &[T], target: usize) -> Vec<T> {
             values[source.min(last)]
         })
         .collect()
+}
+
+/// Resample a complex ngspice vector directly into Tau's split transfer
+/// format. Building `Vec<NgComplex>` with [`resample`] and then mapping its
+/// components kept an otherwise unnecessary 16-byte temporary for every
+/// retained AC sample. Large AC sweeps can retain millions of samples, so
+/// write the two arrays in the one pass that the IPC result already requires.
+///
+/// Its index calculation intentionally matches [`resample`] exactly: every
+/// returned number remains an original solver sample and both endpoints stay
+/// present whenever reduction happens.
+fn resample_complex(values: &[NgComplex], target: usize) -> (Vec<f64>, Vec<f64>) {
+    let output_len = if target >= values.len() || values.len() < 2 || target < 2 {
+        values.len()
+    } else {
+        target
+    };
+    let mut real = Vec::with_capacity(output_len);
+    let mut imaginary = Vec::with_capacity(output_len);
+
+    if output_len == values.len() {
+        for value in values {
+            real.push(value.real);
+            imaginary.push(value.imag);
+        }
+        return (real, imaginary);
+    }
+
+    let last = values.len() - 1;
+    let span = (output_len - 1) as f64;
+    for index in 0..output_len {
+        let source = ((index as f64) * (last as f64) / span).round() as usize;
+        let value = values[source.min(last)];
+        real.push(value.real);
+        imaginary.push(value.imag);
+    }
+    (real, imaginary)
 }
 
 /** Where a result first stops being a number. Borrows the names it reports so
@@ -1786,11 +1820,11 @@ mod tests {
     use super::{
         deck_lines, engine_log_tail, fatal_engine_messages, library_file_name,
         missing_codemodel_message, non_finite_failure, read_bounded, record_engine_message,
-        resample, resampled_length, take_messages, transfer_keep_ratio, with_worker_engine_log,
-        worker_poll_interval, worth_reporting, CallbackState, SpiceEngine, SpiceRequest,
-        SpiceResult, SpiceVector, WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
-        MAX_ERROR_LOG_MESSAGES, MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH, WORKER_POLL_INTERVAL,
-        WORKER_POLL_RAMP,
+        resample, resample_complex, resampled_length, take_messages, transfer_keep_ratio,
+        with_worker_engine_log, worker_poll_interval, worth_reporting, CallbackState, NgComplex,
+        SpiceEngine, SpiceRequest, SpiceResult, SpiceVector, WorkerResponse, MAX_ENGINE_MESSAGES,
+        MAX_ENGINE_MESSAGE_BYTES, MAX_ERROR_LOG_MESSAGES, MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH,
+        WORKER_POLL_INTERVAL, WORKER_POLL_RAMP,
     };
 
     // libngspice owns process-global callback and circuit state. Cargo runs
@@ -1883,6 +1917,32 @@ mod tests {
         assert_eq!(plan(&lengths, MAX_TRANSFER_VALUES).unwrap(), lengths);
         let values: Vec<f64> = (0..240).map(|i| i as f64).collect();
         assert_eq!(resample(&values, 240), values);
+    }
+
+    #[test]
+    fn complex_resample_keeps_the_exact_real_and_imaginary_solver_samples() {
+        let values: Vec<NgComplex> = (0..10)
+            .map(|index| NgComplex {
+                real: index as f64,
+                imag: -(index as f64),
+            })
+            .collect();
+
+        // Compare every boundary behavior to the generic resampler. The split
+        // transfer must make exactly the same choice without first allocating
+        // a complex copy (target 3, for example, selects 0, 5, and 9).
+        for target in [0_usize, 1, 2, 3, 4, 9, 10, 16] {
+            let expected = resample(&values, target);
+            let (real, imaginary) = resample_complex(&values, target);
+            assert_eq!(
+                real,
+                expected.iter().map(|value| value.real).collect::<Vec<_>>()
+            );
+            assert_eq!(
+                imaginary,
+                expected.iter().map(|value| value.imag).collect::<Vec<_>>()
+            );
+        }
     }
 
     #[test]
