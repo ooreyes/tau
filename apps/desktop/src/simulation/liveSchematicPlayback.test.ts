@@ -3,8 +3,10 @@ import type { SchematicComponent, SchematicWire } from "../schematic/types";
 import { runTransientAnalysis } from "./linearTransient";
 import {
   LIVE_SCHEMATIC_LOOP_MS,
+  LIVE_SCHEMATIC_UPDATE_INTERVAL_MS,
   liveReadoutTime,
   shouldDriveLiveSchematicReadout,
+  shouldUpdateLiveSchematicFrame,
 } from "./liveSchematicPlayback";
 import { nearestSampleIndex, tranComponentCurrents, tranNetVoltages } from "./wireCurrentFlow";
 
@@ -36,6 +38,13 @@ describe("liveSchematicPlayback", () => {
     expect(
       shouldDriveLiveSchematicReadout({ liveEnabled: true, cursorsOpen: false, hasOkTransient: false }),
     ).toBe(false);
+  });
+
+  it("caps App-visible live readouts at thirty updates per second", () => {
+    expect(shouldUpdateLiveSchematicFrame(LIVE_SCHEMATIC_UPDATE_INTERVAL_MS - 0.01)).toBe(false);
+    expect(shouldUpdateLiveSchematicFrame(LIVE_SCHEMATIC_UPDATE_INTERVAL_MS)).toBe(true);
+    expect(shouldUpdateLiveSchematicFrame(100)).toBe(true);
+    expect(shouldUpdateLiveSchematicFrame(Number.NaN)).toBe(false);
   });
 
   it("mid-loop sample uses real PULSE voltages — not just the final sample", async () => {

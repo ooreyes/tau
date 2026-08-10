@@ -132,6 +132,7 @@ import type { CursorTraceInput } from "../simulation/cursors";
 import {
   liveReadoutTime,
   shouldDriveLiveSchematicReadout,
+  shouldUpdateLiveSchematicFrame,
 } from "../simulation/liveSchematicPlayback";
 import { resolveCssColorHex, sameCssColor } from "../lib/cssColor";
 import { parseRaw } from "../io/rawImport";
@@ -433,9 +434,14 @@ export function SimulationPanel({
 
     const times = result.times;
     const started = performance.now();
+    let lastPublished = started;
     let raf = 0;
+    onSchematicReadoutTime(liveReadoutTime(times, 0));
     const tick = (now: number) => {
-      onSchematicReadoutTime(liveReadoutTime(times, now - started));
+      if (shouldUpdateLiveSchematicFrame(now - lastPublished)) {
+        lastPublished = now;
+        onSchematicReadoutTime(liveReadoutTime(times, now - started));
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
