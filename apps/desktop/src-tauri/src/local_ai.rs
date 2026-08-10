@@ -135,6 +135,19 @@ impl Drop for LocalAiProcess {
 #[derive(Default)]
 pub struct LocalAiState(Mutex<Option<LocalAiProcess>>);
 
+/// The process facts that must be read while holding [`LocalAiState`]'s mutex.
+/// The loopback readiness check deliberately is not part of this snapshot: a
+/// healthy MLX server can take up to 400 ms to answer it, and Settings plus the
+/// assistant may poll status concurrently while a model is loading. Keeping
+/// that socket wait out of the process lock lets Stop acquire the lock and
+/// terminate the child promptly instead of waiting behind health checks.
+enum LocalAiStatusSnapshot {
+    Managed(ModelPreset),
+    Exited(ModelPreset, String),
+    InspectionError(ModelPreset, String),
+    NoManagedProcess,
+}
+
 fn home_dir() -> Option<PathBuf> {
     env::var_os("HOME")
         .filter(|value| !value.is_empty())
@@ -517,57 +530,80 @@ fn reject_unmanaged_listener(listening: bool) -> Result<(), String> {
     }
 }
 
-fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
+fn local_ai_status_snapshot(slot: &mut Option<LocalAiProcess>) -> LocalAiStatusSnapshot {
     if let Some(process) = slot.as_mut() {
         match process.child.try_wait() {
             Ok(Some(exit)) => {
                 let preset = process.preset.clone();
                 *slot = None;
-                return status_with(
-                    "error",
-                    false,
-                    Some(&preset),
-                    format!("The MLX server exited with {exit}."),
-                );
+                return LocalAiStatusSnapshot::Exited(preset, exit.to_string());
             }
             Ok(None) => {
-                return managed_listener_status(&process.preset, endpoint_is_listening());
+                return LocalAiStatusSnapshot::Managed(process.preset.clone());
             }
             Err(error) => {
-                return status_with(
-                    "error",
-                    true,
-                    Some(&process.preset),
-                    format!("Could not inspect the MLX server: {error}"),
+                return LocalAiStatusSnapshot::InspectionError(
+                    process.preset.clone(),
+                    error.to_string(),
                 );
             }
         }
     }
 
-    if endpoint_is_listening() {
-        return unmanaged_listener_status();
-    }
+    LocalAiStatusSnapshot::NoManagedProcess
+}
 
-    let installed = mlx_server_executable().is_some();
-    status_with(
-        "stopped",
-        false,
-        None,
-        if installed {
-            "On-device AI is installed. Choose Turn on to start."
-        } else {
-            "On-device AI is not set up yet. Choose Turn on — Tau will install it on this Mac."
-        },
-    )
+fn local_ai_status_from_snapshot(snapshot: LocalAiStatusSnapshot) -> LocalAiStatus {
+    match snapshot {
+        LocalAiStatusSnapshot::Exited(preset, exit) => status_with(
+            "error",
+            false,
+            Some(&preset),
+            format!("The MLX server exited with {exit}."),
+        ),
+        LocalAiStatusSnapshot::Managed(preset) => {
+            managed_listener_status(&preset, endpoint_is_listening())
+        }
+        LocalAiStatusSnapshot::InspectionError(preset, error) => status_with(
+            "error",
+            true,
+            Some(&preset),
+            format!("Could not inspect the MLX server: {error}"),
+        ),
+        LocalAiStatusSnapshot::NoManagedProcess => {
+            if endpoint_is_listening() {
+                return unmanaged_listener_status();
+            }
+
+            let installed = mlx_server_executable().is_some();
+            status_with(
+                "stopped",
+                false,
+                None,
+                if installed {
+                    "On-device AI is installed. Choose Turn on to start."
+                } else {
+                    "On-device AI is not set up yet. Choose Turn on — Tau will install it on this Mac."
+                },
+            )
+        }
+    }
+}
+
+fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
+    local_ai_status_from_snapshot(local_ai_status_snapshot(slot))
 }
 
 #[tauri::command]
 pub fn local_ai_status(state: State<'_, LocalAiState>) -> Result<LocalAiStatus, String> {
-    let mut slot = state
-        .0
-        .lock()
-        .map_err(|_| "The local AI process state is unavailable.".to_string())?;
-    Ok(local_ai_status_inner(&mut slot))
+    let snapshot = {
+        let mut slot = state
+            .0
+            .lock()
+            .map_err(|_| "The local AI process state is unavailable.".to_string())?;
+        local_ai_status_snapshot(&mut slot)
+    };
+    Ok(local_ai_status_from_snapshot(snapshot))
 }
 
 #[tauri::command]
@@ -794,6 +830,15 @@ mod tests {
         assert!(foreign_listener
             .detail
             .contains("will not send circuit context"));
+    }
+
+    #[test]
+    fn empty_process_slot_snapshots_without_running_a_health_check() {
+        let mut slot = None;
+        assert!(matches!(
+            local_ai_status_snapshot(&mut slot),
+            LocalAiStatusSnapshot::NoManagedProcess
+        ));
     }
 
     #[test]
