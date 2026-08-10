@@ -565,6 +565,11 @@ function App() {
   // ngspice runs outside React's lifecycle. A request version prevents a late
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
+  // Document-opening work can await sibling symbols, model libraries, or
+  // filesystem writes.  A later tab switch, a new circuit, or another file is
+  // a newer navigation request; a late answer from the older request has no
+  // permission to replace the live circuit.
+  const documentNavigationRef = useRef(0);
   // Live transient run's abort handle (web TS solver only - see
   // executeTransient). Deliberately NOT tied to analysisRequestRef: aborting
   // must let the in-flight run's own partial result still reach setAnalysis,
@@ -1655,6 +1660,7 @@ function App() {
   }, [tabs, snapshotActive, loadCircuit, adoptDirectiveOptions, invalidateAnalysis, showNotice, components.length, wires.length]);
 
   const openSimFromProject = useCallback((path: string, title: string, json: string) => {
+    documentNavigationRef.current += 1;
     try {
       const parsed = JSON.parse(json) as unknown;
       const doc = validateSchematicDocument(parsed);
@@ -1695,6 +1701,7 @@ function App() {
     // for a genuine .asc, whose own warnings come entirely from `result` below.
     extraWarnings: string[] = [],
   ) => {
+    const requestId = ++documentNavigationRef.current;
     try {
       const result = await importProjectAsc(text, {
         sourcePath: path,
@@ -1703,6 +1710,10 @@ function App() {
         pathExists: projectPathExists,
         readInstalledLtspiceText: async (id) => (await readInstalledLtspiceModel(id)).text,
       });
+      // Resolving a vendor hierarchy can take noticeably longer than opening a
+      // simple schematic.  Do not let the old result add a tab, warnings, or
+      // a toast after the user has already chosen a different file.
+      if (documentNavigationRef.current !== requestId) return;
       // Duplicate reference designators only failed later, at deck build,
       // far from the cause. Flag them at open time instead.
       const labelCounts = new Map<string, number>();
@@ -1755,6 +1766,7 @@ function App() {
         console.warn(`Imported ${title} with ${allWarnings.length} warning(s):`, allWarnings);
       }
     } catch (error) {
+      if (documentNavigationRef.current !== requestId) return;
       showNotice(userFacingErrorMessage(error, "Could not import .asc file."));
     }
   }, [openDocument, showNotice]);
@@ -1821,10 +1833,7 @@ function App() {
   };
 
   const createAssistantCircuit = useCallback(async (action: AssistantCreateAscAction) => {
-    // Latched before any await/branch below so the auto-run effect (keyed on
-    // the schematic store's directives) still fires whether this circuit ends
-    // up disk-backed or as a pathless scratchpad.
-    pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
+    const requestId = ++documentNavigationRef.current;
     if (!useProject.getState().rootPath) {
       throw new Error("Open or create a project folder before Bode creates a schematic.");
     }
@@ -1838,6 +1847,11 @@ function App() {
       await deleteProjectNode(path);
       throw error;
     }
+    if (documentNavigationRef.current !== requestId) return;
+    // Latch only for the circuit that actually became current.  An assistant
+    // request superseded while its disk write was pending must not auto-run on
+    // a later, unrelated edit.
+    pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
     // Open the Tau-native document (wires meet symbol pins). The ASC on disk
     // remains the durable interchange file; re-importing it here would attach
     // LTspice pin overrides and visually detach wires from Tau glyphs.
@@ -1851,6 +1865,7 @@ function App() {
   }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
 
   const applyAssistantCircuit = useCallback((action: AssistantApplyCurrentAscAction) => {
+    documentNavigationRef.current += 1;
     pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
     replaceCircuit({
       ...action.document,
@@ -2060,6 +2075,7 @@ function App() {
     const snap = snapshotActive(tabs);
     const target = snap.find((tab) => tab.id === id);
     if (!target) return;
+    documentNavigationRef.current += 1;
     setTabs(snap);
     setActiveId(id);
     const restored = target.doc ?? blankDocument();
@@ -2070,6 +2086,7 @@ function App() {
   }, [activeId, tabs, snapshotActive, restoreCircuit, adoptDirectiveOptions, invalidateAnalysis]);
 
   const startNewCircuit = useCallback(async () => {
+    const requestId = ++documentNavigationRef.current;
     const path = await createSchematicInRoot();
     if (!path) {
       showNotice(useProject.getState().error ?? "Could not create schematic.");
@@ -2085,6 +2102,7 @@ function App() {
     } catch {
       fingerprint = undefined;
     }
+    if (documentNavigationRef.current !== requestId) return;
     openDocument(blankDocument(), basename(path), path, [], {
       ...(fingerprint !== undefined ? { diskFingerprint: fingerprint } : {}),
     });
@@ -2101,6 +2119,7 @@ function App() {
       showNotice("Open or create a project folder before trying the RC example.");
       return;
     }
+    const requestId = ++documentNavigationRef.current;
     const meta = firstSuccessExampleMeta();
     const doc = firstSuccessExampleDocument();
     const path = await createSchematicInRoot(meta.filename);
@@ -2121,6 +2140,7 @@ function App() {
       showNotice(userFacingErrorMessage(error, "Could not write the RC Charging example."));
       return;
     }
+    if (documentNavigationRef.current !== requestId) return;
     openDocument(doc, basename(path), path, [], {
       diskFingerprint: diskContentFingerprint(exported.text),
       notice: `Loaded ${meta.name}. Press Run to simulate.`,
@@ -2185,6 +2205,7 @@ function App() {
       setConfirmCloseTabId(id);
       return;
     }
+    documentNavigationRef.current += 1;
     const remaining = snap.filter((tab) => tab.id !== id);
     if (remaining.length === 0) {
       const blank: OpenTab = { id: newTabId(), title: "untitled.asc", doc: blankDocument(), history: emptyHistory() };
@@ -2207,6 +2228,7 @@ function App() {
   }, [tabs, activeId, snapshotActive, restoreCircuit, invalidateAnalysis]);
 
   const clearScratchpad = useCallback(() => {
+    documentNavigationRef.current += 1;
     newCircuit();
     setTabs((prev) => prev.map((tab) => (
       tab.id === activeId
@@ -2296,6 +2318,7 @@ function App() {
 
   const restorePendingRecovery = useCallback(() => {
     if (!pendingRecovery) return;
+    documentNavigationRef.current += 1;
     const snap = pendingRecovery;
     setPendingRecovery(null);
     openDocument(snap.document, snap.title, snap.filePath, [], {

@@ -435,6 +435,54 @@ describe("App schematic workspace tools", () => {
     expect(useProject.getState().workspaceFiles[path].contents).toBe(contents);
   });
 
+  it("keeps a newer .sim open when an earlier ASC vendor-symbol lookup settles late", async () => {
+    const slowPath = `${DEFAULT_WORKSPACE_ID}/slow-vendor.asc`;
+    const latestPath = `${DEFAULT_WORKSPACE_ID}/latest.sim`;
+    const slowContents = [
+      "Version 4",
+      "SHEET 1 880 680",
+      // An unresolved vendor symbol makes the importer probe project and
+      // installed-library candidates asynchronously.  The simple second file
+      // completes while that work is still pending.
+      "SYMBOL Vendor/SlowPart 96 64 R0",
+      "SYMATTR InstName U1",
+      "TEXT 32 128 Left 2 !.op",
+      "",
+    ].join("\n");
+    const latestContents = JSON.stringify({
+      components: [{ id: "r1", kind: "resistor", x: 96, y: 64, rotation: 0, value: "1k", label: "R1" }],
+      wires: [],
+      netLabels: [],
+      probes: [],
+      directives: [".op"],
+    });
+    const slowFile = { path: slowPath, name: "slow-vendor.asc", contents: slowContents, kind: "asc" as const };
+    const latestFile = { path: latestPath, name: "latest.sim", contents: latestContents, kind: "sim" as const };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([slowFile, latestFile]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [slowPath]: slowFile, [latestPath]: latestFile },
+      error: null,
+      capability: "none",
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "slow-vendor.asc" }));
+    fireEvent.click(screen.getByRole("button", { name: "latest.sim" }));
+    await waitFor(() => expect(useSchematic.getState().components.map((component) => component.label)).toEqual(["R1"]));
+
+    // The old request completes through a bounded chain of promise-only
+    // filesystem probes.  Drain that chain rather than introducing a clock
+    // delay, then prove it never gets to replace the newer navigation.
+    await act(async () => {
+      for (let index = 0; index < 64; index += 1) await Promise.resolve();
+    });
+    expect(document.querySelector(".brand-file")?.textContent).toBe("latest.sim");
+    expect(useSchematic.getState().components.map((component) => component.label)).toEqual(["R1"]);
+  });
+
   it("updates one extended LTspice value slot without collapsing the others", async () => {
     const path = `${DEFAULT_WORKSPACE_ID}/opamp.asc`;
     const contents = [
