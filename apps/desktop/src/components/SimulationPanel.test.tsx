@@ -168,6 +168,24 @@ describe("SimulationPanel - no redundant Run button", { timeout: 20_000 }, () =>
     expect(handlers.onRun).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a cached answer instead of re-solving it, and still re-runs a stale one", () => {
+    // Every tab selection used to re-run. TRAN, OP, back to TRAN recomputed a
+    // transient that had not changed by so much as a wire, which on a real
+    // circuit is a visible stall to produce a result the app already holds.
+    // The guard is keyed on what the stored result was actually run against
+    // (document signature + installed libraries + that mode's setup), so it
+    // can only ever skip a run whose answer would be identical.
+    const fresh = new Set(["op"]);
+    const handlers = renderPanel({ hasFreshResult: (mode: string) => fresh.has(mode) });
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
+    expect(handlers.onRunOperatingPoint).not.toHaveBeenCalled();
+
+    // The pane still switched - skipping the solve is not skipping the tab.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Transient analysis (.tran)" }), { button: 0 });
+    expect(handlers.onRun).toHaveBeenCalledTimes(1);
+  });
+
   it("preserves the last result while moving between analysis modes", () => {
     const okResult = {
       ok: true,

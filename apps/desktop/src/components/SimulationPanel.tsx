@@ -241,6 +241,14 @@ interface SimulationPanelProps {
   onRunNoise: () => void | Promise<void>;
   onRunStep: () => void | Promise<void>;
   onStop: () => void;
+  /**
+   * Whether the app already holds this analysis's answer for the circuit as
+   * it stands. Lets a tab selection show a result instead of recomputing one
+   * that cannot have changed. Optional so every existing caller and test
+   * keeps working; absent means "assume nothing is cached", i.e. today's
+   * always-run behaviour.
+   */
+  hasFreshResult?: (mode: AnalysisMode) => boolean;
   dcSetup: DcSweepSpec;
   onDcSetupChange: (next: DcSweepSpec) => void;
   tfSetup: TfSpec;
@@ -351,6 +359,7 @@ export function SimulationPanel({
   onRunNoise,
   onRunStep,
   onStop,
+  hasFreshResult,
   dcSetup,
   onDcSetupChange,
   tfSetup,
@@ -1158,8 +1167,18 @@ export function SimulationPanel({
   // Selecting an analysis tab both switches the visible pane and kicks off
   // that analysis immediately - the one primary Run control lives in the top
   // toolbar; in here tab selection IS the run gesture.
+  //
+  // Unless the answer is already on hand. Every tab used to re-solve on
+  // selection, so TRAN, AC, back to TRAN recomputed a transient that had not
+  // changed by so much as a wire - on a real circuit, a visible stall to
+  // produce a result the app was already holding. `hasFreshResult` compares
+  // the document signature, the installed model libraries and this mode's own
+  // setup against what the stored result was actually run against, so the
+  // skip cannot serve a stale answer. Pressing Run still re-runs: selecting a
+  // mode means "show me this", Run means "do it again".
   const handleModeChange = (next: AnalysisMode) => {
     setMode(next);
+    if (hasFreshResult?.(next)) return;
     if (next === "tran") void onRun();
     else if (next === "op") void onRunOperatingPoint();
     else if (next === "ac") void onRunAcSweep();

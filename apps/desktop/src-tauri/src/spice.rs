@@ -48,7 +48,38 @@ const MAX_WORKER_INPUT_BYTES: usize = MAX_NETLIST_BYTES + 64 * 1024;
 const MAX_WORKER_OUTPUT_BYTES: usize = 256 * 1024 * 1024;
 const MAX_WORKER_STDERR_BYTES: usize = 64 * 1024;
 const WORKER_TIMEOUT: Duration = Duration::from_secs(120);
+/** What the wait between worker checks settles at once a run has proven itself
+ * long. By then the wall clock belongs to ngspice, so looking more often buys
+ * no latency a person could perceive and only costs wakeups. */
 const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(20);
+/** How Tau ramps up to that settled interval, as (poll this fast until the run
+ * has been going this long, interval to use while under it).
+ *
+ * One flat interval cannot serve both ends of the range this loop sees. An
+ * operating point, or a small `.tran`, is finished inside single-digit
+ * milliseconds; a flat 20 ms poll then adds ~10 ms of pure waiting to it on
+ * average, and a `.step` family pays that again for every member, so a
+ * 40-point sweep spends most of half a second noticing nothing. A 60 s
+ * transient at the other end cannot tell a 250 µs poll from a 20 ms one except
+ * in wasted wakeups.
+ *
+ * So the ramp spends wakeups only where they buy latency, then stops: 20
+ * checks over the first 5 ms, 15 more to 20 ms, 16 more to 100 ms — 51 before
+ * it settles, against the 5 a flat 20 ms poll would have spent over the same
+ * 100 ms. A long run therefore pays 46 extra wakeups once and polls exactly as
+ * it did before for the remaining minutes, while a 1 ms run is noticed within
+ * 250 µs instead of within 20 ms. Holding that fastest phase for the whole
+ * 120 s ceiling would have cost ~480,000 wakeups to buy the same 20 ms.
+ *
+ * These intervals are floors, not promises: `thread::sleep` overshoots by
+ * whatever the OS scheduler's granularity is. That is why the first phase is
+ * 250 µs and not 10 µs — under the scheduler's resolution the extra wakeups
+ * are charged and the latency is not won back. */
+const WORKER_POLL_RAMP: [(Duration, Duration); 3] = [
+    (Duration::from_millis(5), Duration::from_micros(250)),
+    (Duration::from_millis(20), Duration::from_millis(1)),
+    (Duration::from_millis(100), Duration::from_millis(5)),
+];
 const WORKER_ARG: &str = "--tau-spice-worker";
 const WORKER_RESPONSE_MARKER: &[u8] = b"TAU_SPICE_RESPONSE_V1:";
 
@@ -950,6 +981,20 @@ fn read_worker_request() -> Result<WorkerRequest, String> {
     Ok(worker)
 }
 
+/** How long to wait before checking a worker again, given how long its run has
+ * already taken. Walks `WORKER_POLL_RAMP` in order and falls through to the
+ * settled interval, so the wait only ever grows as a run gets longer, and is
+ * never zero — the not-ready path must sleep, or this loop becomes a spin
+ * competing with the solver it is waiting on. */
+fn worker_poll_interval(elapsed: Duration) -> Duration {
+    for (until, interval) in WORKER_POLL_RAMP {
+        if elapsed < until {
+            return interval;
+        }
+    }
+    WORKER_POLL_INTERVAL
+}
+
 fn run_spice_worker_process(
     request: WorkerRequest,
     cancellation: Arc<AtomicBool>,
@@ -1000,7 +1045,10 @@ fn run_spice_worker_process(
             let _ = child.kill();
             break (child.wait().ok(), Some("Simulation cancelled.".to_string()));
         }
-        if started.elapsed() >= timeout {
+        // One reading of the clock serves both decisions below: whether the run
+        // has outlived its limit, and how long to wait before looking again.
+        let elapsed = started.elapsed();
+        if elapsed >= timeout {
             let _ = child.kill();
             break (
                 child.wait().ok(),
@@ -1012,7 +1060,10 @@ fn run_spice_worker_process(
         }
         match child.try_wait() {
             Ok(Some(status)) => break (Some(status), None),
-            Ok(None) => thread::sleep(WORKER_POLL_INTERVAL),
+            // Cancellation and the timeout are re-tested on every one of these
+            // iterations, so a shorter wait early makes the Stop button more
+            // responsive too, never less.
+            Ok(None) => thread::sleep(worker_poll_interval(elapsed)),
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
@@ -1483,14 +1534,14 @@ fn fatal_engine_messages(state: &CallbackState) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::{io::Cursor, path::PathBuf, sync::Mutex};
+    use std::{io::Cursor, path::PathBuf, sync::Mutex, time::Duration};
 
     use super::{
         deck_lines, fatal_engine_messages, library_file_name, missing_codemodel_message,
         read_bounded, record_engine_message, resample, resampled_length, take_messages,
-        transfer_keep_ratio, worth_reporting, CallbackState, SpiceEngine, SpiceRequest,
-        WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES, MAX_TRANSFER_VALUES,
-        MAX_VECTOR_LENGTH,
+        transfer_keep_ratio, worker_poll_interval, worth_reporting, CallbackState, SpiceEngine,
+        SpiceRequest, WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
+        MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH, WORKER_POLL_INTERVAL, WORKER_POLL_RAMP,
     };
 
     // libngspice owns process-global callback and circuit state. Cargo runs
@@ -1516,6 +1567,65 @@ mod tests {
             .iter()
             .map(|length| resampled_length(*length, keep))
             .collect())
+    }
+
+    #[test]
+    fn a_short_run_is_noticed_promptly_and_a_long_one_still_costs_almost_nothing() {
+        // A zero interval anywhere in the ramp would turn the worker wait into
+        // a spin on the same machine that is trying to solve the circuit.
+        assert!(
+            WORKER_POLL_RAMP
+                .iter()
+                .all(|(_, interval)| *interval > Duration::ZERO),
+            "{WORKER_POLL_RAMP:?} would busy-wait"
+        );
+        // Phases have to ascend in both columns. A ramp that dipped back to a
+        // faster interval later would charge a long run for latency it cannot
+        // use, which is the whole thing this schedule exists to avoid.
+        assert!(
+            WORKER_POLL_RAMP
+                .windows(2)
+                .all(|pair| pair[0].0 < pair[1].0 && pair[0].1 <= pair[1].1),
+            "{WORKER_POLL_RAMP:?} is not monotonic"
+        );
+        assert!(WORKER_POLL_RAMP[WORKER_POLL_RAMP.len() - 1].1 <= WORKER_POLL_INTERVAL);
+
+        // The case the ramp exists for: a run that answers in ~1 ms is seen
+        // within a quarter of a millisecond rather than within 20 ms.
+        assert_eq!(
+            worker_poll_interval(Duration::from_millis(1)),
+            Duration::from_micros(250)
+        );
+        // Each boundary belongs to the slower phase, and past the ramp the
+        // wait is exactly the flat one a long run always had.
+        assert_eq!(
+            worker_poll_interval(Duration::from_millis(5)),
+            Duration::from_millis(1)
+        );
+        assert_eq!(
+            worker_poll_interval(Duration::from_millis(20)),
+            Duration::from_millis(5)
+        );
+        assert_eq!(
+            worker_poll_interval(Duration::from_millis(100)),
+            WORKER_POLL_INTERVAL
+        );
+        assert_eq!(
+            worker_poll_interval(Duration::from_secs(90)),
+            WORKER_POLL_INTERVAL
+        );
+
+        // The wakeup budget the ramp's comment claims, counted instead of
+        // asserted: 51 checks before it settles. A flat 20 ms poll would have
+        // spent 5 over the same span, so a multi-second run pays 46 extra
+        // wakeups once and nothing after that.
+        let mut elapsed = Duration::ZERO;
+        let mut wakeups = 0_usize;
+        while elapsed < Duration::from_millis(100) {
+            elapsed += worker_poll_interval(elapsed);
+            wakeups += 1;
+        }
+        assert_eq!(wakeups, 51);
     }
 
     #[test]

@@ -380,6 +380,23 @@ function App() {
    * gesture, and every one of those tabs calls through to a run below.
    */
   const [lastRunKind, setLastRunKind] = useState<RunKind>("tran");
+  /**
+   * The inputs each analysis was last run against, so selecting its tab can
+   * show the answer instead of recomputing it.
+   *
+   * Picking a mode in the analysis rail IS the run gesture (see
+   * `handleModeChange` in SimulationPanel), and nothing remembered what had
+   * already been answered - so TRAN, AC, back to TRAN re-solved a transient
+   * that had not changed by so much as a wire. On anything past a toy circuit
+   * that is a visible stall for a result the app is already holding.
+   *
+   * Keyed on the whole document signature plus the installed model libraries
+   * plus that mode's own setup, and recorded when the run STARTS rather than
+   * when it lands, so an edit made mid-run cannot be mistaken for the inputs
+   * that produced the result. Cleared wholesale by `invalidateAnalysis`.
+   */
+  const runInputsRef = useRef<Partial<Record<RunKind, string>>>({});
+  const analysisInputsKeyRef = useRef("");
   const [lastTransientDurationMs, setLastTransientDurationMs] = useState<number | null>(null);
   // Determinate while the web TS solver is reporting real fractions; null
   // (indeterminate bar) before the first callback and for the whole run when
@@ -653,6 +670,10 @@ function App() {
 
   const invalidateAnalysis = useCallback((state: "idle" | "stopped" = "idle") => {
     analysisRequestRef.current += 1;
+    // Every remembered answer goes with the results it described. See
+    // `runInputsRef`: a key surviving its result would let a later tab click
+    // skip a run and then find nothing to show.
+    runInputsRef.current = {};
     setAnalysisRunning(false);
     setAnalysis(null);
     setOpAnalysis(null);
@@ -721,6 +742,48 @@ function App() {
   );
 
   /**
+   * Everything outside a single mode's own setup that a result depends on.
+   *
+   * The document signature already covers components, wires, labels,
+   * directives and the document's embedded models; the installed libraries
+   * are app state rather than document state, so they are appended here.
+   */
+  const analysisInputsKey = useMemo(
+    () => `${currentSignature}\u0000${userModelLibraryNames.join("\u0001")}`,
+    [currentSignature, userModelLibraryNames],
+  );
+  const analysisSetupKey = useCallback((kind: RunKind) => {
+    switch (kind) {
+      case "tran": return JSON.stringify(effectiveAnalysisOptions);
+      case "dc": return JSON.stringify(dcSetup);
+      case "tf": return JSON.stringify(tfSetup);
+      case "noise": return JSON.stringify(noiseSetup);
+      case "step": return JSON.stringify(stepSetupUi);
+      default: return "";
+    }
+  }, [effectiveAnalysisOptions, dcSetup, tfSetup, noiseSetup, stepSetupUi]);
+  useEffect(() => {
+    analysisInputsKeyRef.current = analysisInputsKey;
+  }, [analysisInputsKey]);
+
+  /**
+   * Open a run: name the analysis, and record what it is being run against.
+   *
+   * Read through refs rather than taken as dependencies on purpose. Every one
+   * of the seven run callbacks below would otherwise have to carry the key and
+   * all five setup objects in its dependency array, and those callbacks are
+   * themselves dependencies of half the toolbar.
+   */
+  const beginRun = useCallback((kind: RunKind) => {
+    setLastRunKind(kind);
+    runInputsRef.current[kind] = `${analysisInputsKeyRef.current}\u0000${analysisSetupKeyRef.current(kind)}`;
+  }, []);
+  const analysisSetupKeyRef = useRef(analysisSetupKey);
+  useEffect(() => {
+    analysisSetupKeyRef.current = analysisSetupKey;
+  }, [analysisSetupKey]);
+
+  /**
    * The result the drawer is describing: the one the last run produced.
    *
    * Every surface below reads this rather than `analysis`, which is the
@@ -738,6 +801,31 @@ function App() {
       default: return analysis;
     }
   }, [lastRunKind, analysis, opAnalysis, acAnalysis, dcAnalysis, tfAnalysis, noiseAnalysis, stepFamily]);
+
+  /**
+   * Does this analysis already hold the answer for the circuit as it stands?
+   *
+   * Consulted by the analysis rail before it re-runs on a tab selection. The
+   * explicit Run control deliberately does NOT consult it: selecting a mode
+   * means "show me this", and pressing Run means "do it again".
+   */
+  const hasFreshResult = useCallback((kind: RunKind) => {
+    if (analysisRunning) return false;
+    const result =
+      kind === "op" ? opAnalysis
+      : kind === "ac" ? acAnalysis
+      : kind === "dc" ? dcAnalysis
+      : kind === "tf" ? tfAnalysis
+      : kind === "noise" ? noiseAnalysis
+      : kind === "step" ? stepFamily
+      : analysis;
+    if (!result) return false;
+    const key = `${analysisInputsKey}\u0000${analysisSetupKey(kind)}`;
+    return runInputsRef.current[kind] === key;
+  }, [
+    analysisRunning, analysisInputsKey, analysisSetupKey,
+    analysis, opAnalysis, acAnalysis, dcAnalysis, tfAnalysis, noiseAnalysis, stepFamily,
+  ]);
 
   /**
    * The two things the results drawer needs that only App can compute.
@@ -836,7 +924,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     const startedAt = Date.now();
     setAnalysisRunning(true);
-    setLastRunKind("tran");
+    beginRun("tran");
     setLastTransientDurationMs(null);
     setRunProgress(null); // indeterminate until the web solver's first onProgress call (native never gets one)
     const controller = new AbortController();
@@ -930,7 +1018,7 @@ function App() {
   const runOperatingAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
-    setLastRunKind("op");
+    beginRun("op");
     try {
       assertCurrentSimulationIntegrity();
       const result = resolveEngineResult(
@@ -950,7 +1038,7 @@ function App() {
   const runAcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
-    setLastRunKind("ac");
+    beginRun("ac");
     try {
       assertCurrentSimulationIntegrity();
       // An imported LTspice .ac directive is the user's analysis definition.
@@ -1020,7 +1108,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     const dc = analysesFromDirectives(directives).dc ?? dcSetup;
     setAnalysisRunning(true);
-    setLastRunKind("dc");
+    beginRun("dc");
     try {
       assertCurrentSimulationIntegrity();
       const schematic = {
@@ -1067,7 +1155,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     const tf = analysesFromDirectives(directives).tf ?? tfSetup;
     setAnalysisRunning(true);
-    setLastRunKind("tf");
+    beginRun("tf");
     try {
       assertCurrentSimulationIntegrity();
       // ngspice first, for the same reason as the DC sweep: the TS solver has
@@ -1093,7 +1181,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     const noise = analysesFromDirectives(directives).noise ?? noiseSetup;
     setAnalysisRunning(true);
-    setLastRunKind("noise");
+    beginRun("noise");
     try {
       assertCurrentSimulationIntegrity();
       // ngspice first: the TS solver has only resistor thermal noise and
@@ -1141,7 +1229,7 @@ function App() {
       userModelLibraryNames,
     };
     setAnalysisRunning(true);
-    setLastRunKind("step");
+    beginRun("step");
     try {
       assertCurrentSimulationIntegrity();
 
@@ -2839,6 +2927,7 @@ function App() {
                 onRunNoise={runNoiseAnalysis_}
                 onRunStep={runStepAnalysis}
                 onStop={stopAnalysis}
+                hasFreshResult={hasFreshResult}
                 dcSetup={dcSetup}
                 onDcSetupChange={setDcSetup}
                 tfSetup={tfSetup}
