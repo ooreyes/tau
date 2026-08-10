@@ -232,9 +232,9 @@ account and sign/notarize/ship.
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs
       with LTspice over a representative device and topology matrix.
-      **Partial (2026-08-05):** `scripts/differential-parity.sh` +
+      **Partial (2026-08-10):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=115 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=116 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -351,7 +351,10 @@ account and sign/notarize/ship.
       nRms=0; ≠ TwoTau/HalfSlope non-rational hollow) +
       Applications/AD8237.asc authored `.tran` (plaintext AD8237.lib INA +
       installed OpAmps .asy; v(vout)/v(n002) nRms≈1e-4; ≠ AD8233 ternary rewrite
-      wall / Draft6 AD823 encrypted ADI.lib / UOA2 Draft10).
+      wall / Draft6 AD823 encrypted ADI.lib / UOA2 Draft10) +
+      Educational/stepAC.asc complete authored `.step param C 50p 150p 50p`
+      family over `.ac` (50/100/150 pF expanded through Tau's deck path;
+      v(out) LTspice↔ngspice within 2% nRMS / 5% nMax for every member).
       Probed this session: Resources/help ASC exhausted; AD8233 same-deck fails
       LTspice on Tau `?→` rewrite of nested A-device B sources; SoftDiode Vp>0 /
       ISO7637 / TLINE / Chan / NIGBT / LT1001 left alone. Matrix still

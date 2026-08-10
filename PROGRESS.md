@@ -2,29 +2,32 @@
 
 **Status: DONE - 2026-08-10**
 
-Unit: **fifth production-hardening pass**. Aggregate `.meas FROM/TO` windows now
-insert piecewise-linearly interpolated endpoints before MAX/MIN/PP/AVG/RMS/INTEG
-evaluation (`3a9d2b5`). This prevents adaptive or resampled output from silently
-shrinking an authored interval to only the stored points strictly inside it; a
-focused ramp contract proves every aggregate, including trapezoidal integral and
-RMS. Native complex-vector resampling now writes real and imaginary outputs
-directly (`8169cf4`) with the same selected indices and endpoints, eliminating
-the temporary `Vec<NgComplex>` and up to **32 MiB** of avoidable peak transfer
-memory for a two-million-sample vector. A proposed native-spice lazy split was
-measured and rejected because it increased the main bundle rather than reducing
-it; the retained renderer remains **809.17 kB / 247.88 kB gzip**, about **13.4% /
-15.9%** below the pre-split baseline.
+Unit: **sixth production-hardening pass**. The native simulation worker now
+streams its marker+JSON response through a fixed 64 KiB buffer (`deb4f8b`) while
+preserving byte-identical protocol output. This removes the second response-sized
+serialization allocation: up to **255.94 MiB** at the existing 256 MiB transfer
+cap. Live schematic playback still follows the real waveform clock but publishes
+App-visible electrical readouts at most 30 times per second (`0577cc7`), cutting
+expensive annotation reconciliation by 50% on 60 Hz and 75% on 120 Hz displays.
+The assistant now parses custom-model storage only on mount or a real model/
+storage change, not on every streamed text delta (`b67c9da`).
 
-Current gates: typecheck and production build clean; frontend **4,013 passed / 8
-skipped**; Rust **91 passed / 20 ignored** plus all **19/19** real-ngspice tests;
-Rust fmt and Clippy clean. The current UI's both-theme 1440×900 design proof and
-900×600 minimum-window **12/12** proof remain green. A fresh Tau.app/DMG build,
-strict code signature, valid DMG checksum, nine-file arm64/macOS-11 deployment
-inspection, and packaged plus mounted-DMG 336-sample engine smokes all pass. The
-canonical **82/81/79/79**, capability **79/3/0/0**, zero-substitution and
-differential **115 pass / 5 sibling / 0 gap** proofs remain the current precision
-baseline. Fc.asc and the degenerate TLINE inverter remain documented upstream-
-simulator boundaries; neither was weakened into a partial or synthetic pass.
+Precision advanced to differential **116 pass / 5 sibling / 0 gap**: the full
+unmodified Educational/stepAC.asc authored C=50/100/150 pF `.step` + `.ac`
+family passes LTspice↔ngspice comparison (`338c5ac`). The minimum-window runner
+now explicitly closes Components for the plain schematic and opens/asserts it
+for `schematic-panels` (`c930873`), so the **12/12** 900×600 visual proof can no
+longer pass with the palette accidentally toggled away. Chrome exercised the
+900×600 empty state and Settings sheet; the reviewed screenshots are clean in
+both themes.
+
+Current gates: typecheck and production build clean; frontend **4,015 passed / 8
+skipped**; Rust **92 passed / 20 ignored** plus all **19/19** real-ngspice tests;
+Rust fmt and Clippy clean; differential **116/5/0** and minimum-window **12/12**
+green. A fresh Tau.app/DMG build, strict code signature, valid DMG checksum,
+nine-file arm64/macOS-11 deployment inspection, and packaged plus mounted-DMG
+336-sample engine smokes all pass. The canonical **82/81/79/79**, capability
+**79/3/0/0**, and zero-substitution proofs remain the current corpus baseline.
 
 **SHIPPABLE? NO.** The named-device DoD remains honestly blocked at 48.1% by
 unavailable encrypted vendor models, and broad differential coverage remains
@@ -18767,3 +18770,19 @@ evidence is kept in full here.
   signature, checksum, macOS-11 inspection, and 336-sample engine smokes from
   both bundle and mounted image. Named-device 48.1% and incomplete broad
   differential coverage still correctly keep the product not shippable.
+
+- 2026-08-10 - Completed a sixth reviewed production-hardening increment.
+  Streamed native worker serialization removes up to 255.94 MiB of duplicate
+  response memory while retaining exact protocol bytes. Live schematic
+  annotation reconciliation is capped at 30 Hz, and the assistant no longer
+  reparses custom-model storage on every streamed text delta. Differential
+  coverage now proves every 50/100/150 pF member of Educational/stepAC.asc and
+  reports 116 pass / five sibling / zero gap. The 900×600 visual gate now
+  deterministically proves the Components palette open in its panel state and
+  closed in its plain-canvas state. Evidence: 4,015 frontend tests passed /
+  eight skipped; build/typecheck and Rust fmt/Clippy clean; 92 ordinary and 19
+  real-ngspice Rust tests; differential 116/5/0; minimum-window 12/12; fresh
+  Tau.app/DMG signature, checksum, nine-file macOS-11 inspection, and 336-sample
+  engine smokes from both bundle and mounted image. Native interaction remained
+  blocked by the locked Mac; the autobuilder is still disabled. Named-device
+  48.1% and incomplete broad differential coverage keep Tau not shippable.
