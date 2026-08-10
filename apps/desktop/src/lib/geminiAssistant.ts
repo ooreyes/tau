@@ -19,26 +19,18 @@ import {
 import { createCloudAiFetch } from "./cloudAiFetch";
 import { cloudAiConsentRefusal } from "./cloudAiConsent";
 import {
+  GEMINI_DEFAULT_MODEL,
+  GEMINI_MODEL_PRESETS,
+  type GeminiModelPreset,
+} from "./geminiModels";
+import {
   OpenAiCompatibleAssistant,
   type ChatProviderProfile,
   type OpenAiCompatibleAssistantOptions,
 } from "./openAiCompatibleAssistant";
 
-export const GEMINI_MODEL_PRESETS = {
-  "gemini-2.5-flash": {
-    label: "Gemini 2.5 Flash",
-    model: "gemini-2.5-flash",
-    /** Free-tier eligible: the no-credit-card default for students. */
-    freeTier: true,
-  },
-  "gemini-2.5-pro": {
-    label: "Gemini 2.5 Pro",
-    model: "gemini-2.5-pro",
-    freeTier: false,
-  },
-} as const;
-
-export type GeminiModelPreset = keyof typeof GEMINI_MODEL_PRESETS;
+export { GEMINI_DEFAULT_MODEL, GEMINI_MODEL_PRESETS } from "./geminiModels";
+export type { GeminiModelPreset } from "./geminiModels";
 
 /** Google's OpenAI-compatibility shim. Pinned in the Tauri CSP connect-src
  *  historically; native desktop now routes via Rust so the renderer CSP no
@@ -47,8 +39,6 @@ const GEMINI_CHAT_COMPLETIONS_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 export const GEMINI_REQUEST_TIMEOUT_MS = 3 * 60_000;
-export const GEMINI_DEFAULT_MODEL: GeminiModelPreset = "gemini-2.5-flash";
-
 function resolveGeminiModel(model: string): string {
   if (model in GEMINI_MODEL_PRESETS) return GEMINI_MODEL_PRESETS[model as GeminiModelPreset].model;
   return model.replace(/^custom:/, "");

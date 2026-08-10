@@ -4,7 +4,7 @@ import {
   resetAssistantPreferences,
   saveAssistantPreferences,
 } from "./assistantPreferences";
-import { GEMINI_DEFAULT_MODEL } from "./geminiAssistant";
+import { GEMINI_DEFAULT_MODEL } from "./geminiModels";
 
 describe("assistant provider preferences", () => {
   beforeEach(() => {

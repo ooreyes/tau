@@ -16,7 +16,7 @@ import {
 import { userFacingErrorMessage } from "../lib/errorMessage";
 import { useHasAssistantApiKey } from "../lib/assistant";
 import { useHasGeminiApiKey } from "../lib/providerApiKey";
-import { GEMINI_MODEL_PRESETS } from "../lib/geminiAssistant";
+import { GEMINI_MODEL_PRESETS } from "../lib/geminiModels";
 import {
   saveAssistantPreferences,
   useAssistantPreferences,

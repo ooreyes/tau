@@ -34,7 +34,7 @@ Object.defineProperty(globalThis, "localStorage", {
 import { loadAiUsage, recordAiRequest } from "./aiUsage";
 import { loadAssistantPreferences, saveAssistantPreferences } from "./assistantPreferences";
 import { loadCloudAiConsent, saveCloudAiConsent } from "./cloudAiConsent";
-import { GEMINI_DEFAULT_MODEL } from "./geminiAssistant";
+import { GEMINI_DEFAULT_MODEL } from "./geminiModels";
 import { defaultLearningPathState, loadLearningPathState, saveLearningPathState } from "./learningPath";
 import { loadLocalAiSetupPreferences, saveLocalAiSetupPreferences } from "./localAiSetup";
 import {

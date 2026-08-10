@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LocalAiPresetInfo } from "./localAiRuntime";
-import { GEMINI_DEFAULT_MODEL } from "./geminiAssistant";
+import { GEMINI_DEFAULT_MODEL } from "./geminiModels";
 
 export type AssistantProviderChoice = "local-mlx" | "anthropic" | "gemini";
 
