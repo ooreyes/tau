@@ -1,21 +1,18 @@
 # Tau canvas-first redesign
 
-> **Status:** P0-P3 and stages 0, 1, 2 (partial), 3a, 3b, 4b, 4a and 6 are
-> landed. **Stage 5 is the only one outstanding**, and only its second half:
-> the parts library is still a docked column. See "Where stage 5 stopped"
-> at the foot of this file - it is a structural move, not a stylesheet one,
-> and the reason is written down so the next attempt starts from the finding.
+> **Status:** all stages landed. P0-P3 and 0, 1, 2 (partial), 3a, 3b, 4b, 4a,
+> 6, 5, 7.
 >
-> Order actually run: 3b -> 4b -> 4a -> 6, which is 4b and 4a swapped from the
-> plan below. The merge makes the plot wider, so fixing the plot's geometry
-> first meant the drawer inherited a correct one instead of magnifying a
-> broken one.
-> Baseline: `screenshots/redesign-baseline/` (light frames only; see the
-> evidence-protocol warning below).
-> **Normative sources, in order:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), then
-> `.claude/skills/tau-instrument-aesthetic/` and its five reference plates.
-> Where this file and `DESIGN_SYSTEM.md` disagree, `DESIGN_SYSTEM.md` wins and
-> this file needs fixing.
+> Order actually run: 3b -> 4b -> 4a -> 6 -> 5, which swaps 4b ahead of 4a from
+> the plan below. The merge makes the plot wider, so fixing the plot's geometry
+> first meant the drawer inherited a correct one instead of magnifying a broken
+> one. Stage 5 was attempted, reverted, and landed on the second attempt from
+> the finding the first one left behind - see "Where stage 5 stopped", kept
+> below because the dead end is the useful part.
+>
+> Stage 2 is still partial: `ExplorerPanel` (~900 lines) and
+> `ComponentInspector` (~950) never moved out of `ShellPanels.tsx`. That was
+> always deferred to the stages that touch them, and neither stage needed to.
 
 ## Why this document exists
 
@@ -339,11 +336,13 @@ Observable, with thresholds. Any one of these pauses the work.
 **`TRACE_COLORS` is frozen for the whole migration.** Any unit whose diff
 touches `TRACE_COLORS` or a `--trace-` line is rejected on sight.
 
-## Where stage 5 stopped
+## Where stage 5 stopped, and how it got past it
+
+**Resolved.** Kept because the dead end is the useful part.
 
 The parts library should be summoned, not docked: opening it should not take
-264px off the drawing. It is the last violation of "collapse the apparatus
-before compressing the canvas", and it is unfinished on purpose.
+264px off the drawing. That is the last violation of "collapse the apparatus
+before compressing the canvas".
 
 Absolutely positioning it in the shell body does not work. The editor's own
 toolbar and tab strip live inside a sibling element, so a full-height overlay
@@ -352,16 +351,21 @@ settle the hit-testing either - Playwright kept reporting `.palette-head`
 intercepting the click - which says something in that subtree is forming a
 stacking context that traps it.
 
-The fix is to render the overlay **inside `.editor-shell`, beneath its
-chrome**, rather than as a sibling of it. That is a JSX move plus a re-test of
-the width budget in `resolveChrome`, which is why it was not attempted at the
-end of a long session: `ShellPanels.test.tsx` fails at its import line if the
-export shape changes, and seven of nine `resolveChrome.test.ts` cases change
-meaning once the library stops competing for width. Pre-declare that
-expect-line drop, or stop condition 4 cannot tell it apart from a model
-deleting checks to go green.
+The fix was to render the overlay **inside `.stage`**, not as a sibling of the
+editor section and not merely inside `.editor-shell`. The stage IS the canvas
+area, so an overlay anchored to it covers exactly the drawing and nothing else
+- there is no stacking arithmetic to get right, because Run is no longer in the
+same box.
 
-`fitInsetRight` is already wired for it and currently zero.
+`fitInsetRight` stops being zero with it, so the zoom-to-fit reserves the band
+the library covers. The canvas keeps its full extent and you can pan under it;
+what changes is only where the fit frames the circuit.
+
+The width budget in `resolveChrome` was left alone. It still decides whether
+the library is offered by how much room there is, which stays correct: an
+overlay that covers the whole drawing at the 900px floor is not an improvement
+on a column. That is why none of the expect-line churn the plan braced for
+happened.
 
 ## What the finished stages actually changed
 
