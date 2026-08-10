@@ -148,7 +148,6 @@ Vite. The direct runtime dependencies, with the license each declares:
   @tauri-apps/api                  Apache-2.0 OR MIT
   @tauri-apps/plugin-dialog        MIT OR Apache-2.0
   @tauri-apps/plugin-fs            MIT OR Apache-2.0
-  @tauri-apps/plugin-opener        MIT OR Apache-2.0
   class-variance-authority         Apache-2.0
   clsx                             MIT
   lucide-react                     ISC
@@ -157,7 +156,6 @@ Vite. The direct runtime dependencies, with the license each declares:
   react-dom                        MIT
   tailwind-merge                   MIT
   tailwindcss                      MIT
-  zundo                            MIT
   zustand                          MIT
 
 Across the whole installed package tree, including build-time-only packages,
