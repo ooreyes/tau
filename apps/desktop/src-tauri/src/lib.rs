@@ -4,8 +4,8 @@ mod local_ai;
 mod ltspice_library;
 mod project_fs;
 mod spice;
-mod step_expand;
 pub mod staged_engine;
+mod step_expand;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]

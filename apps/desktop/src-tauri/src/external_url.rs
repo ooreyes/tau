@@ -67,7 +67,9 @@ mod tests {
         assert!(is_allowed_external_url(
             "https://console.anthropic.com/settings/keys"
         ));
-        assert!(is_allowed_external_url("https://aistudio.google.com/apikey"));
+        assert!(is_allowed_external_url(
+            "https://aistudio.google.com/apikey"
+        ));
 
         // A prefix check would pass these. A full match does not.
         assert!(!is_allowed_external_url(
@@ -88,7 +90,10 @@ mod tests {
         for url in ALLOWED_EXTERNAL_URLS {
             assert!(url.starts_with("https://"), "{url} is not https");
             // No shell metacharacters or newlines can reach the argv we build.
-            assert!(!url.contains(char::is_whitespace), "{url} contains whitespace");
+            assert!(
+                !url.contains(char::is_whitespace),
+                "{url} contains whitespace"
+            );
         }
         let unique: HashSet<_> = ALLOWED_EXTERNAL_URLS.iter().collect();
         assert_eq!(unique.len(), ALLOWED_EXTERNAL_URLS.len());

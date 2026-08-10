@@ -186,23 +186,21 @@ pub fn apply_member_to_deck(base_lines: &[String], member: &StepMember) -> Vec<S
         .collect();
 
     // Update existing `.param` / `.params` bindings; collect names still missing.
-    let mut missing: Vec<(String, f64)> = member
-        .params
-        .iter()
-        .map(|(k, v)| (k.clone(), *v))
-        .collect();
+    let mut missing: Vec<(String, f64)> =
+        member.params.iter().map(|(k, v)| (k.clone(), *v)).collect();
     for line in &mut out {
         let trimmed = line.trim();
         let bare = trimmed.trim_start_matches(['.', '!']);
         let lower = bare.to_ascii_lowercase();
-        if !(lower.starts_with("param ") || lower.starts_with("params ") || lower == "param" || lower == "params")
+        if !(lower.starts_with("param ")
+            || lower.starts_with("params ")
+            || lower == "param"
+            || lower == "params")
         {
             continue;
         }
         let mut rewritten = rewrite_param_line(trimmed, &member.params);
-        missing.retain(|(name, _)| {
-            !param_line_has_binding(&rewritten, name)
-        });
+        missing.retain(|(name, _)| !param_line_has_binding(&rewritten, name));
         // Preserve leading whitespace style by replacing the whole trimmed card.
         if let Some(pos) = line.find(trimmed) {
             let mut next = String::new();
@@ -229,7 +227,10 @@ pub fn apply_member_to_deck(base_lines: &[String], member: &StepMember) -> Vec<S
     let insert_at = out
         .iter()
         .position(|line| {
-            let bare = line.trim().trim_start_matches(['.', '!']).to_ascii_lowercase();
+            let bare = line
+                .trim()
+                .trim_start_matches(['.', '!'])
+                .to_ascii_lowercase();
             bare.starts_with("tran")
                 || bare.starts_with("ac")
                 || bare.starts_with("dc")
@@ -319,9 +320,7 @@ fn linear_values(start: f64, stop: f64, increment: f64) -> Vec<f64> {
     if count <= 0 || count as usize > MAX_STEP_POINTS {
         return Vec::new();
     }
-    (0..count)
-        .map(|k| start + (k as f64) * inc)
-        .collect()
+    (0..count).map(|k| start + (k as f64) * inc).collect()
 }
 
 fn log_values(start: f64, stop: f64, points_per: f64, base: f64) -> Vec<f64> {
@@ -379,8 +378,8 @@ pub fn parse_spice_float(token: &str) -> Option<f64> {
         "t" => 1e12,
         "g" => 1e9,
         "meg" => 1e6,
-                        "k" => 1e3,
-                        "mil" => 25.4e-6,
+        "k" => 1e3,
+        "mil" => 25.4e-6,
         "m" => 1e-3,
         "u" | "μ" => 1e-6,
         "n" => 1e-9,
@@ -461,6 +460,8 @@ mod tests {
             ..Default::default()
         };
         let deck = apply_member_to_deck(&lines, &member);
-        assert!(deck.iter().any(|l| l.contains("Rload=3000") || l.contains("rload=3000")));
+        assert!(deck
+            .iter()
+            .any(|l| l.contains("Rload=3000") || l.contains("rload=3000")));
     }
 }

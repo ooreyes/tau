@@ -639,9 +639,8 @@ impl SpiceEngine {
     }
 
     fn run_named_command(&mut self, command: &str) -> Result<(), String> {
-        let command = CString::new(command).map_err(|_| {
-            "ngspice command contains a NUL byte.".to_string()
-        })?;
+        let command = CString::new(command)
+            .map_err(|_| "ngspice command contains a NUL byte.".to_string())?;
         let command_status = unsafe { (self.api.command)(command.as_ptr() as *mut c_char) };
         if command_status != 0 {
             return Err(with_engine_messages(
@@ -3450,12 +3449,18 @@ R2 out 0 1k
             result.extra_plots.len(),
             1,
             "two temps → one extra + current; got extras {:?}",
-            result.extra_plots.iter().map(|p| &p.name).collect::<Vec<_>>()
+            result
+                .extra_plots
+                .iter()
+                .map(|p| &p.name)
+                .collect::<Vec<_>>()
         );
         let vout_at = |vectors: &[super::SpiceVector]| {
             vectors
                 .iter()
-                .find(|v| v.name.eq_ignore_ascii_case("out") || v.name.eq_ignore_ascii_case("v(out)"))
+                .find(|v| {
+                    v.name.eq_ignore_ascii_case("out") || v.name.eq_ignore_ascii_case("v(out)")
+                })
                 .and_then(|v| v.real.first().copied())
                 .unwrap_or_else(|| panic!("v(out) missing; msgs {:?}", result.messages))
         };
@@ -3544,8 +3549,14 @@ R2 out 0 1k
         for (&time, &value) in t.iter().zip(v.iter()) {
             worst = worst.max((value - (1.0 - (-time / 1e-3).exp())).abs());
         }
-        println!("ACCURACY rc_step max_abs_err = {worst:.3e} V over {} samples", t.len());
-        assert!(worst < 1e-4, "RC step deviates from 1-exp(-t/RC) by {worst:.3e} V");
+        println!(
+            "ACCURACY rc_step max_abs_err = {worst:.3e} V over {} samples",
+            t.len()
+        );
+        assert!(
+            worst < 1e-4,
+            "RC step deviates from 1-exp(-t/RC) by {worst:.3e} V"
+        );
     }
 
     #[test]
@@ -3598,7 +3609,11 @@ R2 out 0 1k
                 crossings.push(t[i - 1] + (t[i] - t[i - 1]) * (-prev) / (next - prev));
             }
         }
-        assert!(crossings.len() >= 4, "expected several ring cycles, got {}", crossings.len());
+        assert!(
+            crossings.len() >= 4,
+            "expected several ring cycles, got {}",
+            crossings.len()
+        );
         // The first three periods only, deliberately.
         //
         // This ring decays as exp(-5000t), so by ~1.3 ms it is down to tens of
@@ -3657,7 +3672,9 @@ R2 out 0 1k
         let mut engine = real_engine();
         let result = engine
             .run(SpiceRequest {
-                netlist: "RC lowpass\nV1 in 0 AC 1\nR1 in out 1k\nC1 out 0 1u\n.ac dec 20 1 100k\n.end".to_string(),
+                netlist:
+                    "RC lowpass\nV1 in 0 AC 1\nR1 in out 1k\nC1 out 0 1u\n.ac dec 20 1 100k\n.end"
+                        .to_string(),
             })
             .expect("ac sweep should solve");
         let freq = result
@@ -3678,8 +3695,14 @@ R2 out 0 1k
             let exact = 1.0 / (1.0 + (w * 1e3 * 1e-6).powi(2)).sqrt();
             worst_rel = worst_rel.max(((mag - exact) / exact).abs());
         }
-        println!("ACCURACY rc_lowpass_ac max_rel_err = {worst_rel:.3e} over {} points", freq.real.len());
-        assert!(worst_rel < 1e-6, "AC magnitude deviates from 1/sqrt(1+(wRC)^2) by {worst_rel:.3e} relative");
+        println!(
+            "ACCURACY rc_lowpass_ac max_rel_err = {worst_rel:.3e} over {} points",
+            freq.real.len()
+        );
+        assert!(
+            worst_rel < 1e-6,
+            "AC magnitude deviates from 1/sqrt(1+(wRC)^2) by {worst_rel:.3e} relative"
+        );
     }
 
     #[test]
@@ -3705,9 +3728,8 @@ R2 out 0 1k
             } else {
                 format!(".options rshunt={shunt}\n")
             };
-            let netlist = format!(
-                "divider\n{shunt_line}V1 in 0 1\nR1 in mid {r}\nR2 mid 0 {r}\n.op\n.end"
-            );
+            let netlist =
+                format!("divider\n{shunt_line}V1 in 0 1\nR1 in mid {r}\nR2 mid 0 {r}\n.op\n.end");
             match engine.run(SpiceRequest { netlist }) {
                 Ok(result) => {
                     let mid = scalar(&result, "mid");
@@ -3721,5 +3743,4 @@ R2 out 0 1k
             }
         }
     }
-
 }

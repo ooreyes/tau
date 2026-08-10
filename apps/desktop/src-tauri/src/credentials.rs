@@ -244,11 +244,7 @@ mod tests {
         )
         .is_ok());
         assert!(allowed_cloud_url("anthropic", "https://evil.example/v1/messages").is_err());
-        assert!(allowed_cloud_url(
-            "gemini",
-            "https://api.anthropic.com/v1/messages"
-        )
-        .is_err());
+        assert!(allowed_cloud_url("gemini", "https://api.anthropic.com/v1/messages").is_err());
         // OpenAI was a first-class provider when Settings had a three-provider
         // Model configuration page. Settings offers only Anthropic and Gemini
         // now (nothing in the assistant could actually use a saved OpenAI
@@ -270,7 +266,10 @@ mod tests {
         // Distinct entries: one provider's key must never overwrite another's.
         assert_eq!(
             accounts.len(),
-            accounts.iter().collect::<std::collections::HashSet<_>>().len()
+            accounts
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len()
         );
         // The set stays closed - an arbitrary id cannot name a keychain item.
         assert!(super::account_for("../../etc/passwd").is_err());
