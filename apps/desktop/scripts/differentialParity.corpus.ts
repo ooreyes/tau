@@ -25,6 +25,7 @@ import { decodeSchematicText, importAsc, makeSubcircuitResolver, parseAsy } from
 import { analysesFromDirectives } from "../src/io/directiveAnalysis";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
 import { buildParamScope, expandDirectiveLines } from "../src/simulation/paramScope";
+import { parseStepDirective } from "../src/simulation/paramStep";
 import { runMeasurements } from "../src/simulation/measure";
 import { compareWaveforms } from "../src/simulation/waveformCompare";
 import {
@@ -3551,6 +3552,73 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational 100W.asc complete authored octave .step V family ---
+    // The preceding 100 W cell deliberately exercises the schematic's nominal
+    // 1.44 V parameter.  This row proves each actual authored step member from
+    // 1 mV upward, preserving the imported VDMOS and discrete BJT model cards.
+    // Expansion is necessary because stock ngspice has no `.step` card support.
+    {
+      expect(existsSync(EDU_100W_ASC), `missing ${EDU_100W_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(EDU_100W_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const originalDirs = expandDirectiveLines(imported.directives);
+      const step = originalDirs.map(parseStepDirective).find((candidate) => candidate?.kind === "param" && /^V$/i.test(candidate.name ?? ""));
+      expect(step, "100W.asc must author a V parameter step").toBeTruthy();
+      const amplitudes = step?.values ?? [];
+      expect(amplitudes[0]).toBeCloseTo(1e-3, 12);
+      expect(amplitudes[amplitudes.length - 1]).toBeLessThanOrEqual(1.44);
+      expect(amplitudes.length).toBeGreaterThan(10);
+      const dirs = originalDirs.filter((directive) => !/^\.step\b/i.test(directive));
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "100W.asc must author .tran").toBeTruthy();
+      const memberNotes: string[] = [];
+      for (const amplitude of amplitudes) {
+        const memberDirs = [...dirs, `.param V=${amplitude}`];
+        const params = buildParamScope(memberDirs);
+        expect(Number(params.scope.V ?? params.scope.v)).toBeCloseTo(amplitude, 20);
+        const deck = buildSpiceDeck({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          directives: memberDirs,
+          params,
+        }, {
+          kind: "tran",
+          stopTime: parsed.tran!.stopTime,
+          steps: Math.max(parsed.tran!.steps ?? 240, 5000),
+          startTime: parsed.tran!.startTime,
+          maxStep: parsed.tran!.maxStep,
+        });
+        expect(deck.unresolvedSubckts ?? [], `100W V=${amplitude}`).toEqual([]);
+        expect(deck.modelSubstitutions ?? [], `100W V=${amplitude}`).toEqual([]);
+        expect(deck.netlist).toMatch(/\.model\s+IRFP240\s+VDMOS\b/i);
+        expect(deck.netlist).toMatch(/\.model\s+IRFP9240\s+VDMOS\b/i);
+        expect(deck.netlist).toMatch(/\.model\s+MJE340\s+NPN\b/i);
+        expect(deck.netlist).toMatch(/\.model\s+MJE350\s+PNP\b/i);
+        expect(deck.netlist).not.toMatch(/^\.step\b/im);
+        const result = runPairedBatch(`diff-edu-100w-family-v-${amplitude}`, deck.netlist, ["v(out)"]);
+        const lt = result.ltspice.get("v(out)")!;
+        const ng = result.ngspice.get("v(out)")!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `100W V=${amplitude} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `100W V=${amplitude} non-hollow`).toBeGreaterThan(amplitude);
+        memberNotes.push(
+          `V=${amplitude.toExponential(3)} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "step",
+        circuit: "edu-100w",
+        topology: "Educational 100W.asc IRFP240/IRFP9240 amp (.step oct V 1m…1.44; authored .tran; expanded)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- LTspice.app help ACstep.asc authored .ac list + .step C (≠ Educational stepAC) ---
     // Authored `.ac list 1Meg` (Tau lacks list) → same-deck dec 100k–10Meg stand-in like
     // stepnoise list→band. `.step oct param C 20p…` → first member C=20p via buildParamScope.
@@ -6316,6 +6384,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=116 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=117 sibling=5 gap=0/);
   }, 600_000);
 });
