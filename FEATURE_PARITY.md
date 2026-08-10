@@ -1097,8 +1097,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (`RISE/FALL/CROSS`, occurrence, `TD`). `runMeasurements` chains results by name
   through a scope seeded with `.param`/`.func`, matching deadtime.asc exactly;
   signals (`V(node)`, `V(a,b)`) resolve against trace ids/labels via the
-  expression engine. `App.tsx` memoizes them off the transient result and renders
-  a `MeasTable` in `SimulationPanel`. **AC-domain `.meas` now landed**
+  expression engine. Aggregate windows include piecewise-linearly interpolated
+  `FROM`/`TO` endpoints, so adaptive or resampled output cannot silently shrink
+  MAX/MIN/PP/AVG/RMS/INTEG to the saved points strictly inside the authored
+  interval. `App.tsx` memoizes them off the transient result and renders a
+  `MeasTable` in `SimulationPanel`. **AC-domain `.meas` now landed**
   (`simulation/measureAc.ts`): the measure core was generalized to an
   axis-agnostic `evaluateOnAxis` (time *or* frequency) and an AC compiler resolves
   `db()/mag()/ph()/re()/im()` (bare `V` ⇒ magnitude) and `V(a,b)` complex

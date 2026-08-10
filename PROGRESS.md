@@ -2,28 +2,29 @@
 
 **Status: DONE - 2026-08-10**
 
-Unit: **fourth production-hardening pass**. Canvas now loads only after a
-circuit opens (`6ae2f61`), and first-paint preference code imports a lightweight
-Gemini catalog instead of the cloud-assistant runtime/compiler (`5ebc78c`).
-Together they reduce the initial renderer from **934.05 to 808.79 kB (-13.4%)**
-and gzip from **294.67 to 247.80 kB (-15.9%)**. A dedicated contract proves the
-project-start screen does not fetch Canvas and the first New schematic does.
-Native local-AI install/repeated-start/Stop paths also perform passive status,
-child reaping, and loopback checks after releasing the process mutex (`4c54a41`).
-The visual runner now emulates reduced motion, proving Tau's static current-flow
-direction path and removing requestAnimationFrame phase noise from screenshots
-(`dc970f9`).
+Unit: **fifth production-hardening pass**. Aggregate `.meas FROM/TO` windows now
+insert piecewise-linearly interpolated endpoints before MAX/MIN/PP/AVG/RMS/INTEG
+evaluation (`3a9d2b5`). This prevents adaptive or resampled output from silently
+shrinking an authored interval to only the stored points strictly inside it; a
+focused ramp contract proves every aggregate, including trapezoidal integral and
+RMS. Native complex-vector resampling now writes real and imaginary outputs
+directly (`8169cf4`) with the same selected indices and endpoints, eliminating
+the temporary `Vec<NgComplex>` and up to **32 MiB** of avoidable peak transfer
+memory for a two-million-sample vector. A proposed native-spice lazy split was
+measured and rejected because it increased the main bundle rather than reducing
+it; the retained renderer remains **809.17 kB / 247.88 kB gzip**, about **13.4% /
+15.9%** below the pre-split baseline.
 
-Current gates: typecheck and production build clean; frontend **4,012 passed / 8
-skipped**; Rust **90 passed / 20 ignored** plus all **19/19** real-ngspice tests;
-both-theme 1440×900 design proof and 900×600 minimum-window **12/12** green.
-Fresh Tau.app/DMG build, strict code signature, DMG checksum, nine-file
-arm64/macOS-11 deployment inspection, and packaged plus mounted-DMG 336-sample
-engine smokes are green. The prior canonical **82/81/79/79**, capability
-**79/3/0/0**, zero-substitution and differential **115 pass / 5 sibling / 0
-gap** proofs remain the current precision baseline. Fc.asc was re-probed: its
-authored deck is exact, but ngspice aborts at 21.6334 µs on the capometer `res`
-node while LTspice completes, so no fake partial waveform was added.
+Current gates: typecheck and production build clean; frontend **4,013 passed / 8
+skipped**; Rust **91 passed / 20 ignored** plus all **19/19** real-ngspice tests;
+Rust fmt and Clippy clean. The current UI's both-theme 1440×900 design proof and
+900×600 minimum-window **12/12** proof remain green. A fresh Tau.app/DMG build,
+strict code signature, valid DMG checksum, nine-file arm64/macOS-11 deployment
+inspection, and packaged plus mounted-DMG 336-sample engine smokes all pass. The
+canonical **82/81/79/79**, capability **79/3/0/0**, zero-substitution and
+differential **115 pass / 5 sibling / 0 gap** proofs remain the current precision
+baseline. Fc.asc and the degenerate TLINE inverter remain documented upstream-
+simulator boundaries; neither was weakened into a partial or synthetic pass.
 
 **SHIPPABLE? NO.** The named-device DoD remains honestly blocked at 48.1% by
 unavailable encrypted vendor models, and broad differential coverage remains
@@ -18749,4 +18750,20 @@ evidence is kept in full here.
   tests green; both-theme design and minimum-window 12/12 proofs green; fresh
   Tau.app/DMG passed signature, checksum, macOS-11 inspection, and bundle plus
   mounted-image 336-sample smokes. Named-device 48.1% and incomplete broad
+  differential coverage still correctly keep the product not shippable.
+
+- 2026-08-10 - Completed a fifth reviewed production-hardening increment.
+  Aggregate transient measurement windows now interpolate their exact authored
+  FROM/TO boundaries before MAX/MIN/PP/AVG/RMS/INTEG evaluation, with a focused
+  analytic ramp proving extrema, average, integral, and RMS. Complex native
+  vector transfer now fills real/imaginary output arrays directly with identical
+  sample selection, removing a temporary allocation worth up to 32 MiB at the
+  two-million-sample cap. A native-spice lazy-import experiment was discarded
+  after measurement showed a bundle regression; the retained initial chunk is
+  809.17 kB / 247.88 kB gzip, still about 13.4% / 15.9% below baseline. Evidence:
+  typecheck and build clean; 4,013 frontend tests passed / eight skipped; Rust
+  fmt/Clippy, 91 ordinary and 19 real-ngspice tests green; current design and
+  minimum-window proofs remain green; a fresh Tau.app/DMG passed strict
+  signature, checksum, macOS-11 inspection, and 336-sample engine smokes from
+  both bundle and mounted image. Named-device 48.1% and incomplete broad
   differential coverage still correctly keep the product not shippable.
