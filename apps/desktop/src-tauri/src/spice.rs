@@ -2572,6 +2572,79 @@ M5  45 46 99 99 POX L=2E-6 W=0.98E-3
         assert_eq!(missing_codemodel_message(&lines, 0), None);
     }
 
+    /**
+     * The guard's cost, measured against the real engine rather than against
+     * hand-built vectors: every analysis Tau routinely runs has to pass
+     * through it untouched. A refusal that fires on a healthy solve would be
+     * far worse than the decode failure it replaces, because that failure at
+     * least only struck runs that were already lost.
+     *
+     * These decks also stand as the record of what the engine does with
+     * arithmetic that has no finite answer. ngspice saturates rather than
+     * overflowing - the divide-by-zero deck below returns ±1e32, not an
+     * infinity - which is why no live reproduction of the decode failure
+     * exists and why `non_finite_failure` is written as a boundary guard
+     * instead of as a handler for a known circuit.
+     */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn the_non_finite_guard_passes_every_healthy_analysis_the_real_engine_produces() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let decks = [
+            ("op", "Tau op\nV1 in 0 5\nR1 in out 1k\nR2 out 0 1k\n.op\n.end"),
+            (
+                "tran",
+                "Tau tran\nV1 in 0 PULSE(0 5 0 1u 1u 1m 2m)\nR1 in out 1k\nC1 out 0 1u\n.tran 10u 4m\n.end",
+            ),
+            (
+                "ac",
+                "Tau ac\nV1 in 0 AC 1\nR1 in out 1k\nC1 out 0 1u\n.ac dec 20 1 100k\n.end",
+            ),
+            (
+                "dc",
+                "Tau dc\nV1 in 0 0\nR1 in out 1k\nR2 out 0 1k\n.dc V1 0 5 0.1\n.end",
+            ),
+            (
+                "noise",
+                "Tau noise\nV1 in 0 AC 1\nR1 in out 10k\nC1 out 0 10n\n.noise V(out) V1 dec 10 1 1meg\n.end",
+            ),
+            // Arithmetic with no finite answer, reached three different ways.
+            // All three come back saturated, so all three must be accepted.
+            (
+                "divide by zero",
+                "Tau divzero\nV1 in 0 0\nB1 out 0 V=1/V(in)\nR1 out 0 1k\n.tran 1u 10u\n.end",
+            ),
+            (
+                "log of zero",
+                "Tau logzero\nV1 in 0 0\nB1 out 0 V=ln(V(in))\nR1 out 0 1k\n.op\n.end",
+            ),
+            (
+                "unstable laplace pole",
+                "Tau rhp\nV1 in 0 PULSE(0 1 1n 1n 1n 1 2)\nA1 in out xfer\n.model xfer s_xfer(num_coeff=[1] den_coeff=[-1e6 1] int_ic=[0] denormalized_freq=1)\nR1 out 0 1k\n.tran 1u 1m\n.end",
+            ),
+        ];
+        for (label, netlist) in decks {
+            let mut engine = SpiceEngine::load(vec![library.clone()]).expect("library loads");
+            let result = engine
+                .run(SpiceRequest {
+                    netlist: netlist.to_string(),
+                })
+                .unwrap_or_else(|error| panic!("{label} should solve: {error}"));
+            assert!(
+                !result.vectors.is_empty(),
+                "{label} produced no vectors at all"
+            );
+            assert_eq!(
+                non_finite_failure(&result),
+                None,
+                "{label} was refused by the non-finite guard"
+            );
+        }
+    }
+
     #[test]
     #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
     fn runs_an_operating_point_with_the_real_ngspice_library() {
