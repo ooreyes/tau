@@ -32,6 +32,12 @@ vi.mock("./lib/localAiRuntime", async (importOriginal) => ({
 }));
 
 import App, { schematicDocumentSignature } from "./App";
+// These assertions exercise the Settings surface after it is open; they do
+// not exercise Vite's code-splitting transport.  Preload the lazy module as
+// part of this test module so an unrelated worker's transform/load backlog
+// cannot consume the test's UI assertion budget before React gets a chance to
+// commit the dialog.  App still uses the real lazy boundary in production.
+import { SettingsWindow } from "./settings/SettingsWindow";
 import {
   createConversation,
   saveConversationMessages,
@@ -47,6 +53,8 @@ import { useProject } from "./store/useProject";
 import { useSchematic } from "./store/useSchematic";
 
 const defaultRenameNode = useProject.getState().renameNode;
+
+void SettingsWindow;
 
 describe("schematicDocumentSignature", () => {
   it("ignores regenerated internal ids while retaining semantic edits", () => {

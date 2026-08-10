@@ -49,10 +49,16 @@ import App from "./App";
 import { SHELL, SHELL_CONTROLS, type ShellSurface } from "./components/shellContract";
 import { simulationPreferences } from "./lib/simulationPreferences";
 import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./project/defaultWorkspace";
+// The shell assertion begins once Settings is visible.  Keep that assertion
+// independent of another worker's lazy-module transform/load backlog; this
+// still renders the production `React.lazy` boundary, with its real module.
+import { SettingsWindow } from "./settings/SettingsWindow";
 import { useProject } from "./store/useProject";
 import { useSchematic } from "./store/useSchematic";
 
 const defaultRenameNode = useProject.getState().renameNode;
+
+void SettingsWindow;
 
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
@@ -255,4 +261,3 @@ describe("placement assertions a grep cannot make", () => {
     }
   });
 });
-
