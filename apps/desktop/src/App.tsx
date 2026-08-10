@@ -22,7 +22,6 @@ import {
   type PendingExternalEdit,
 } from "./components/ExternalEditConflictDialog";
 import { LearningPathCoach } from "./components/LearningPathCoach";
-import { CommandPalette } from "./components/CommandPalette";
 import {
   clearAllUnsavedLocalState,
   clearUnsavedRecovery,
@@ -198,20 +197,22 @@ const Canvas = lazy(async () => ({
   default: (await import("./components/Canvas")).Canvas,
 }));
 
+/** The command catalogue is only needed after its explicit Search affordance. */
+const CommandPalette = lazy(async () => ({
+  default: (await import("./components/CommandPalette")).CommandPalette,
+}));
+
 function CanvasLoadingSurface() {
   return <div className="canvas" aria-hidden="true" />;
 }
 
 /**
- * Same treatment for the two modal editors below Settings. They need one extra
- * thing Settings did not: `React.lazy` fetches when its element is first
- * *rendered*, and both of these are rendered on every frame of the schematic —
- * closed, drawing nothing, but rendered — so simply making them lazy would
- * fetch both chunks during first paint and buy nothing at all. This latch
- * withholds the element until the dialog is first asked for, and then never
- * lets go: after that first open they are mounted for the rest of the session
- * exactly as they always were, so the Radix close transition and the form state
- * a user leaves behind between visits both behave identically.
+ * Same treatment for closed, user-summoned surfaces. `React.lazy` fetches when
+ * its element is first *rendered*, so simply making the command palette and
+ * modal editors lazy would still fetch their chunks during first paint. This
+ * latch withholds each element until its affordance is first asked for, then
+ * keeps it mounted for the session so close transitions and any retained form
+ * state behave exactly as before.
  */
 function useMountedOnceOpened(open: boolean): boolean {
   const [mounted, setMounted] = useState(open);
@@ -502,6 +503,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelLibrariesOpen, setModelLibrariesOpen] = useState(false);
   const [simulationSetupOpen, setSimulationSetupOpen] = useState(false);
+  const paletteMounted = useMountedOnceOpened(paletteOpen);
   const modelLibrariesMounted = useMountedOnceOpened(modelLibrariesOpen);
   const simulationSetupMounted = useMountedOnceOpened(simulationSetupOpen);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
@@ -3128,11 +3130,15 @@ function App() {
           }
         />
       )}
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        onOpenModelLibraries={() => setModelLibrariesOpen(true)}
-      />
+      <Suspense fallback={null}>
+        {paletteMounted && (
+          <CommandPalette
+            open={paletteOpen}
+            onClose={() => setPaletteOpen(false)}
+            onOpenModelLibraries={() => setModelLibrariesOpen(true)}
+          />
+        )}
+      </Suspense>
       {/* A boundary each, not one shared one: a second dialog suspending under
           a shared boundary would blank the first one back out and lose the
           state its user left in it. */}

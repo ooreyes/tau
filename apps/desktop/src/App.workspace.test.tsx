@@ -40,6 +40,7 @@ import App, { schematicDocumentSignature } from "./App";
 import { SettingsWindow } from "./settings/SettingsWindow";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { SimulationPanel } from "./components/SimulationPanel";
+import { CommandPalette } from "./components/CommandPalette";
 import {
   createConversation,
   saveConversationMessages,
@@ -59,6 +60,7 @@ const defaultRenameNode = useProject.getState().renameNode;
 void SettingsWindow;
 void AssistantPanel;
 void SimulationPanel;
+void CommandPalette;
 
 describe("schematicDocumentSignature", () => {
   it("ignores regenerated internal ids while retaining semantic edits", () => {
@@ -143,6 +145,20 @@ async function renderOpenProject() {
 }
 
 describe("App schematic workspace tools", () => {
+  it("loads the command palette when Search is explicitly requested", async () => {
+    await renderOpenProject();
+
+    // cmdk focuses its active row as the dialog mounts; jsdom does not expose
+    // the browser scrolling method the real surface calls.
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: () => {},
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByRole("dialog", { name: "Add component" })).toBeTruthy();
+  });
+
   it("mounts Components inside the schematic stage as a summoned surface", async () => {
     await renderOpenProject();
 
