@@ -290,22 +290,33 @@ export function extractCircuit(
     }
   }
 
-  const segments = wires.flatMap(wireSegments);
+  // Segments are cut once, per wire, and the per-wire counts kept. This loop
+  // used to call `wireSegments(wire)` a second time purely to learn how many
+  // segments the wire contributed, so every wire on the sheet was walked and
+  // its segment objects allocated twice.
+  const segments: Segment[] = [];
+  const segmentCounts: number[] = [];
+  for (const wire of wires) {
+    const segs = wireSegments(wire);
+    segmentCounts.push(segs.length);
+    for (const segment of segs) segments.push(segment);
+  }
   // Ideal wires short their endpoints. Resistive (non-ideal) wires do NOT -
   // they only contribute endpoints as DSU nodes so netAtPoint can resolve them;
   // spiceNetlist emits a series R between the endpoint nets.
   const idealSegmentIndexes: number[] = [];
   {
     let segIdx = 0;
-    for (const wire of wires) {
-      const segs = wireSegments(wire);
+    for (let w = 0; w < wires.length; w += 1) {
+      const wire = wires[w];
+      const count = segmentCounts[w];
       if (!isResistiveWire(wire)) {
-        for (let k = 0; k < segs.length; k += 1) idealSegmentIndexes.push(segIdx + k);
+        for (let k = 0; k < count; k += 1) idealSegmentIndexes.push(segIdx + k);
       } else {
         if (wire.points.length >= 1) dsu.add(wire.points[0]);
         if (wire.points.length >= 2) dsu.add(wire.points[wire.points.length - 1]);
       }
-      segIdx += segs.length;
+      segIdx += count;
     }
   }
   const breakpoints = segments.map((segment) => [segment.a, segment.b]);
@@ -347,7 +358,10 @@ export function extractCircuit(
     } else if (segment.a.x === segment.b.x) {
       pushBucket(verticalByX, segment.a.x, index);
     }
-    for (const endpoint of [segment.a, segment.b]) {
+    // `for (const endpoint of [segment.a, segment.b])` allocated a throwaway
+    // pair per segment, in a loop that runs once per segment on the sheet.
+    for (let end = 0; end < 2; end += 1) {
+      const endpoint = end === 0 ? segment.a : segment.b;
       let column = endpointIndexes.get(endpoint.x);
       if (column === undefined) {
         column = new Map<number, number[]>();
@@ -418,7 +432,9 @@ export function extractCircuit(
     for (let k = 0; k < count; k += 1) breakpoints[segmentsAtBuffer[k]].push(point);
   }
   for (const index of idealSegmentIndexes) {
-    for (const endpoint of [segments[index].a, segments[index].b]) {
+    const segment = segments[index];
+    for (let end = 0; end < 2; end += 1) {
+      const endpoint = end === 0 ? segment.a : segment.b;
       const count = segmentsAt(endpoint);
       for (let k = 0; k < count; k += 1) {
         const other = segmentsAtBuffer[k];
@@ -441,15 +457,32 @@ export function extractCircuit(
   // Nodes are visited in first-touch order, which is what the old parent-map
   // iteration gave us; each root's bucket therefore accumulates its points in
   // the same order as before, and that order is visible in `net.points`.
-  const rootToPoints = new Map<number, Point[]>();
+  //
+  // Bucketed into plain arrays indexed by root id rather than into a `Map`.
+  // A root IS a node id - a dense integer below `nodeCount` - so the map was
+  // hashing an integer to reach a slot an array addresses directly, once per
+  // node and once per pin. `survivingRoots` preserves the `Map`'s key order
+  // (first root to be reached), which is what the sort below is seeded with.
   const nodeCount = dsu.nodeCount;
+  const pointsByRoot: (Point[] | undefined)[] = new Array(nodeCount);
+  const survivingRoots: number[] = [];
   for (let node = 0; node < nodeCount; node += 1) {
-    pushBucket(rootToPoints, dsu.rootOf(node), dsu.pointAt(node));
+    const root = dsu.rootOf(node);
+    let bucket = pointsByRoot[root];
+    if (bucket === undefined) {
+      bucket = [];
+      pointsByRoot[root] = bucket;
+      survivingRoots.push(root);
+    }
+    bucket.push(dsu.pointAt(node));
   }
 
-  const rootToPins = new Map<number, ComponentPin[]>();
+  const pinsByRoot: (ComponentPin[] | undefined)[] = new Array(nodeCount);
   for (const pin of allPins) {
-    pushBucket(rootToPins, dsu.find(pin), pin);
+    const root = dsu.find(pin);
+    const bucket = pinsByRoot[root];
+    if (bucket === undefined) pinsByRoot[root] = [pin];
+    else bucket.push(pin);
   }
 
   // Held as a node id, so the emptiness test has to be an explicit null check:
@@ -461,9 +494,9 @@ export function extractCircuit(
   // Nets are ordered by their root's coordinate spelling, so materialise that
   // spelling once per surviving root instead of inside the comparator.
   const rootKeys = new Map<number, string>();
-  for (const root of rootToPoints.keys()) rootKeys.set(root, dsu.keyAt(root));
+  for (const root of survivingRoots) rootKeys.set(root, dsu.keyAt(root));
 
-  const sortedRoots = [...rootToPoints.keys()].sort((a, b) => {
+  const sortedRoots = survivingRoots.slice().sort((a, b) => {
     if (a === groundRoot) return -1;
     if (b === groundRoot) return 1;
     // Root keys are plain "<x>,<y>" coordinate strings (digits/comma/hyphen
@@ -516,8 +549,8 @@ export function extractCircuit(
     // spelling is only a defensive fallback, and it is the same string the
     // pre-interning code fell back to.
     id: rootToNetId.get(root) ?? rootKeys.get(root)!,
-    points: uniquePoints(rootToPoints.get(root) ?? []),
-    pins: rootToPins.get(root) ?? [],
+    points: uniquePoints(pointsByRoot[root] ?? []),
+    pins: pinsByRoot[root] ?? [],
     isGround: root === groundRoot,
     labelCount: rootLabelCount.get(root) ?? 0,
   }));
@@ -610,12 +643,6 @@ function between(value: number, a: number, b: number): boolean {
   return value >= Math.min(a, b) && value <= Math.max(a, b);
 }
 
-function pinsByPoint(pins: ComponentPin[]): Map<string, ComponentPin[]> {
-  const byPoint = new Map<string, ComponentPin[]>();
-  for (const pin of pins) pushBucket(byPoint, pointKey(pin), pin);
-  return byPoint;
-}
-
 /**
  * Distinct coordinates, in first-appearance order.
  *
@@ -688,10 +715,12 @@ function sanitizeNetName(text: string): string {
   return cleaned;
 }
 
-/** Coordinate identity as a map key, for the geometry indexes that are not the
- *  union-find. The DSU interns coordinates numerically instead (see
- *  `DisjointSet`); these callers stay on strings because their maps are built
- *  and thrown away once per extraction rather than probed per union. */
-function pointKey(point: Point): string {
-  return `${point.x},${point.y}`;
-}
+/* `pointKey` stood here: `` `${x},${y}` ``, the coordinate-identity key every
+ * index in this file used to share. Nothing needs it any more. The forest
+ * interns coordinates to integers (see `DisjointSet`), and the two geometry
+ * indexes that are not the forest - the segment endpoint index and
+ * `uniquePoints` - are two-level numeric maps, which discriminate identically
+ * because `Map` compares with SameValueZero. `DisjointSet.keyAt` still spells
+ * a coordinate out, but only for the handful of surviving roots the net sort
+ * compares, not once per point. `pinsByPoint` went the same way: inlined into
+ * the union pass that was its only caller. */
