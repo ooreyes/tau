@@ -247,9 +247,25 @@ async function audit(page, label) {
             return s.overflowX === "auto" || s.overflowX === "scroll";
           })()
         : null,
+      componentsRailOpen: Boolean(document.querySelector(".components-rail")),
       dialogGeom,
     };
   }, label);
+}
+
+/**
+ * The imported fixture may select a part, which intentionally opens the
+ * Components rail. Make the two schematic captures stateful rather than
+ * blindly toggling: the plain schematic proves an unobscured canvas, while
+ * schematic-panels proves the palette is usable at the size floor.
+ */
+async function setComponentsRailOpen(page, open) {
+  const rail = page.locator(".components-rail");
+  const isOpen = (await rail.count()) > 0;
+  if (isOpen !== open) {
+    await page.locator('.activity-rail button[aria-label="Components"]').click();
+  }
+  await rail.waitFor({ state: open ? "visible" : "detached", timeout: 10_000 });
 }
 
 async function main() {
@@ -309,13 +325,12 @@ async function main() {
       );
       await page.locator(".explorer-panel .tree-file").first().click();
       await page.waitForSelector(".stage .component", { timeout: 15_000 });
+      await setComponentsRailOpen(page, false);
       await page.waitForTimeout(200);
       await page.screenshot({ path: path.join(outDir, `schematic-${theme}-${minW}x${minH}.png`) });
       reports.push(await audit(page, `schematic-${theme}`));
 
-      await page.locator('.activity-rail button[aria-label="Components"]').click().catch(() => {});
-      await page.waitForTimeout(100);
-      await page.locator('.activity-rail button[aria-label="Assistant"]').click().catch(() => {});
+      await setComponentsRailOpen(page, true);
       await page.waitForTimeout(200);
       await page.screenshot({ path: path.join(outDir, `schematic-panels-${theme}-${minW}x${minH}.png`) });
       reports.push(await audit(page, `schematic-panels-${theme}`));
@@ -354,6 +369,10 @@ async function main() {
     const issues = [];
     if (r.pageOverflowX) issues.push("pageOverflowX");
     if (r.unreachable.length) issues.push(`unreachable=${r.unreachable.length}`);
+    if (r.label.startsWith("schematic-panels-") && !r.componentsRailOpen) issues.push("componentsRailNotOpen");
+    if (r.label.startsWith("schematic-") && !r.label.startsWith("schematic-panels-") && r.componentsRailOpen) {
+      issues.push("componentsRailLeaked");
+    }
     if (!r.essentials.toolbar) issues.push("toolbarOut");
     if (!r.essentials.statusbar) issues.push("statusbarOut");
     if (!r.essentials.settings) issues.push("settingsOut");

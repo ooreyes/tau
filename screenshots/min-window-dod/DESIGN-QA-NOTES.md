@@ -29,6 +29,11 @@ independent of the requestAnimationFrame phase at capture time.
 | dialog (Settings) | PASS — fits viewport, `overflow-y: auto` | PASS |
 | command | PASS | PASS |
 
+The two schematic captures are stateful: `schematic` closes the Components
+rail so the entire imported circuit is visible; `schematic-panels` then opens
+it and asserts the rail is present. This prevents a fixture-selected part from
+silently reversing the toggle and leaving the component-palette proof empty.
+
 ## Fixes in this unit
 
 1. **Settings sheet** (`ui/sheet.tsx`): `max-h-[calc(100vh-60px)]` + `overflow-y-auto` so Appearance / Circuit assistant / Workspace rows stay reachable (was ~669px tall with no scroll → Hugging Face / Import / Clear unreachable).

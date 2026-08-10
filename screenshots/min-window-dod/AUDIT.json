@@ -15,6 +15,7 @@
       "overflowX": false
     },
     "editorToolbarScrollable": null,
+    "componentsRailOpen": false,
     "dialogGeom": null
   },
   {
@@ -33,6 +34,7 @@
       "overflowX": false
     },
     "editorToolbarScrollable": true,
+    "componentsRailOpen": false,
     "dialogGeom": null
   },
   {
@@ -51,6 +53,7 @@
       "overflowX": false
     },
     "editorToolbarScrollable": true,
+    "componentsRailOpen": true,
     "dialogGeom": null
   },
   {
@@ -65,6 +68,7 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
+    "componentsRailOpen": false,
     "dialogGeom": null
   },
   {
@@ -79,6 +83,7 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
+    "componentsRailOpen": false,
     "dialogGeom": {
       "t": 0,
       "b": 600,
@@ -101,6 +106,7 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
+    "componentsRailOpen": false,
     "dialogGeom": null
   },
   {
@@ -119,6 +125,7 @@
       "overflowX": false
     },
     "editorToolbarScrollable": null,
+    "componentsRailOpen": false,
     "dialogGeom": null
   },
   {
@@ -137,6 +144,7 @@
       "overflowX": false
     },
     "editorToolbarScrollable": true,
+    "componentsRailOpen": false,
     "dialogGeom": null
   },
   {
@@ -155,6 +163,7 @@
       "overflowX": false
     },
     "editorToolbarScrollable": true,
+    "componentsRailOpen": true,
     "dialogGeom": null
   },
   {
@@ -169,6 +178,7 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
+    "componentsRailOpen": false,
     "dialogGeom": null
   },
   {
@@ -183,6 +193,7 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
+    "componentsRailOpen": false,
     "dialogGeom": {
       "t": 0,
       "b": 600,
@@ -205,6 +216,7 @@
     },
     "editorShell": null,
     "editorToolbarScrollable": null,
+    "componentsRailOpen": false,
     "dialogGeom": null
   }
 ]
