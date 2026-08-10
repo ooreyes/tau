@@ -155,6 +155,7 @@ export function Canvas({
   onActuate,
   fitSignal = 0,
   fitInsetBottom = 0,
+  onSelectionRect,
   currentVisualizer = false,
 }: {
   /** Last DC operating point; drives the current-flow visualizer. */
@@ -182,6 +183,18 @@ export function Canvas({
    * half the circuit behind the drawer the moment the simulator opened.
    */
   fitInsetBottom?: number;
+  /**
+   * Publishes the selection's bounding box in client coordinates, so the
+   * floating inspector can appear beside the part.
+   *
+   * Read off the rendered `<g>` rather than recomputed from the view
+   * transform. The transform is Canvas's own state and exporting it would
+   * mean every consumer reimplementing world-to-screen, including the pin
+   * offsets, the rotation and the import fit scale. The browser has already
+   * done that arithmetic; asking it is both shorter and impossible to get
+   * subtly wrong.
+   */
+  onSelectionRect?: (rect: { minX: number; minY: number; maxX: number; maxY: number } | null) => void;
   /** Current Mode: animated flow dots along the wires, from real branch
    *  currents. Defaults OFF and is opted into by the simulator only - it is a
    *  reading of a completed run, and an editor canvas showing moving current
@@ -1295,6 +1308,32 @@ export function Canvas({
       center,
     }));
   }, []);
+
+  // Publish where the selection is on screen. Runs after every commit that
+  // could move it: a new selection, an edit, a pan or a zoom.
+  useEffect(() => {
+    if (!onSelectionRect) return;
+    const el = svgRef.current;
+    if (!el) return;
+    const nodes = el.querySelectorAll<SVGGElement>("g.component.selected, g.wire-group.selected");
+    if (nodes.length === 0) {
+      onSelectionRect(null);
+      return;
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const node of nodes) {
+      const rect = node.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) continue;
+      minX = Math.min(minX, rect.left);
+      minY = Math.min(minY, rect.top);
+      maxX = Math.max(maxX, rect.right);
+      maxY = Math.max(maxY, rect.bottom);
+    }
+    onSelectionRect(Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null);
+  });
 
   // Re-frame when the size of the obstruction changes.
   //

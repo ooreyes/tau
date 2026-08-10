@@ -59,10 +59,13 @@ import {
   EditorTabs,
   EditorToolbar,
   ExplorerPanel,
+  ComponentInspector,
+  WireInspector,
 } from "./components/ShellPanels";
 import { ActivityRail } from "./components/shell/NavRail";
 import { BottomPanel } from "./components/drawer/DiagnosticsTab";
 import { ResultsDrawer } from "./components/drawer/ResultsDrawer";
+import { SelectionInspector } from "./components/inspector/SelectionInspector";
 import { ConfirmDialog, UnsavedChangesDialog } from "./components/ui/confirm";
 import { SettingsWindow } from "./settings/SettingsWindow";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
@@ -154,7 +157,7 @@ import {
 import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRun";
 import { technicalErrorDetails, userFacingErrorMessage } from "./lib/errorMessage";
 import { useSimulationPreferences } from "./lib/simulationPreferences";
-import { SHELL } from "./components/shellContract";
+import { SHELL, inspectorName } from "./components/shellContract";
 
 // The temporary browser workspace exists only inside the project store; fsBridge
 // helpers reach Tauri plugin-fs for anything that is not `web://`, which throws
@@ -240,6 +243,8 @@ function App() {
   const toolMode = useSchematic((s) => s.tool.mode);
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedCount = useSchematic((s) => (s.selectedId ? 1 : s.selectedIds.length));
+  const selectedIds = useSchematic((s) => s.selectedIds);
+  const selectedWireId = useSchematic((s) => s.selectedWireId);
   const select = useSchematic((s) => s.select);
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
@@ -372,6 +377,18 @@ function App() {
   const [resultsRaise, setResultsRaise] = useState(0);
   /** Pixels of canvas the results drawer is covering; see its onCoverChange. */
   const [drawerCover, setDrawerCover] = useState(0);
+  /** The selection's on-screen box, published by Canvas; see onSelectionRect. */
+  const [selectionRect, setSelectionRect] = useState<
+    { minX: number; minY: number; maxX: number; maxY: number } | null
+  >(null);
+  /**
+   * Dismissing the inspector must not deselect the part, so "closed" is its
+   * own state rather than an absence of selection. Keyed by what is selected,
+   * so choosing a different part brings it back.
+   */
+  const [inspectorClosedFor, setInspectorClosedFor] = useState<string | null>(null);
+  /** Bumped by the explicit keyboard command, never by a canvas selection. */
+  const [inspectorFocusSignal, setInspectorFocusSignal] = useState(0);
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
   const [partsOpen, setPartsOpen] = useState(true);
   const [fitSignal, setFitSignal] = useState(0);
@@ -684,7 +701,33 @@ function App() {
     return `${formatEngineering(stopTime, "s", 2)} \u00b7 ${sampleCount} samples`;
   }, [analysis, analysisRunning]);
 
-  const diagnosticsBadge = useMemo(() => {
+  /**
+   * What the floating inspector is describing.
+   *
+   * Document order, and `selectedId` folded into `selectedIds` as a
+   * belt-and-braces union, matching what the docked rail did before the panel
+   * moved to the selection.
+   */
+  const inspectedParts = useMemo(() => {
+    const ids = new Set<string>(selectedIds);
+    if (selectedId) ids.add(selectedId);
+    return components.filter((component) => ids.has(component.id));
+  }, [components, selectedIds, selectedId]);
+  const inspectedWire = useMemo(
+    () => wires.find((wire) => wire.id === selectedWireId) ?? null,
+    [wires, selectedWireId],
+  );
+  const inspectionKey = inspectedWire
+    ? `wire:${inspectedWire.id}`
+    : inspectedParts.map((part) => part.id).join(" ") || null;
+  const inspectorTitle = inspectedWire
+    ? "Wire properties"
+    : inspectedParts.length === 1
+      ? inspectorName(inspectedParts[0].label || inspectedParts[0].kind)
+      : `${inspectedParts.length} components`;
+  const inspectorOpen = Boolean(inspectionKey) && inspectionKey !== inspectorClosedFor;
+
+    const diagnosticsBadge = useMemo(() => {
     if (analysisRunning) return null;
     const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
     const failed = Boolean(analysis && !analysis.ok);
@@ -2524,6 +2567,34 @@ function App() {
             </section>
         )}
         {/*
+          * The inspector, at the selection rather than in a column.
+          *
+          * Rendered as a sibling of the canvas inside the shell body, so its
+          * client coordinates and the rect Canvas publishes are in the same
+          * space. Its obstacles are the two surfaces that can be under it: the
+          * results drawer, whose height the drawer itself measures, and the
+          * parts rail when it is open.
+          */}
+        {inspectorOpen && (inspectedParts.length > 0 || inspectedWire) && (
+          <SelectionInspector
+            anchor={selectionRect}
+            viewport={inspectorViewport}
+            obstacles={inspectorObstacles}
+            title={inspectorTitle}
+            focusSignal={inspectorFocusSignal}
+            onDismiss={() => setInspectorClosedFor(inspectionKey)}
+          >
+            {inspectedWire
+              ? <WireInspector wire={inspectedWire} />
+              : (
+                <ComponentInspector
+                  selected={inspectedParts}
+                  onOpenModelLibraries={() => setModelLibrariesOpen(true)}
+                />
+              )}
+          </SelectionInspector>
+        )}
+        {/*
           * One bottom surface for every result the app produces.
           *
           * It replaces three that each owned a slice of the window: the
@@ -2622,7 +2693,6 @@ function App() {
           <ComponentsRail
             focusSignal={componentFocusSignal}
             onNotice={showNotice}
-            onOpenModelLibraries={() => setModelLibrariesOpen(true)}
             resize={componentsRailResize}
             maxWidth={componentsRailResponsiveMax}
           />

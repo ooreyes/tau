@@ -2184,7 +2184,7 @@ export function ComponentInspector({
   );
 }
 
-function WireInspector({ wire }: { wire: SchematicWire }) {
+export function WireInspector({ wire }: { wire: SchematicWire }) {
   const setWireResistance = useSchematic((s) => s.setWireResistance);
   const beginChange = useSchematic((s) => s.beginChange);
   const editKeyRef = useRef<string | null>(null);
@@ -2226,14 +2226,12 @@ function WireInspector({ wire }: { wire: SchematicWire }) {
 export function ComponentsRail({
   focusSignal,
   onNotice,
-  onOpenModelLibraries,
   resize,
   maxWidth,
   embedded = false,
 }: {
   focusSignal: number;
   onNotice: (message: string) => void;
-  onOpenModelLibraries?: () => void;
   /** Width state is shell-owned so Explorer and this rail update in one render. */
   resize: ReturnType<typeof usePanelWidth>;
   /** Responsive ceiling supplied by the shell after reserving Explorer and the editor. */
@@ -2241,37 +2239,6 @@ export function ComponentsRail({
   /** When inside the shared right dock, the dock owns width and the resize handle. */
   embedded?: boolean;
 }) {
-  const selectedId = useSchematic((s) => s.selectedId);
-  const selectedIds = useSchematic((s) => s.selectedIds);
-  const selectedWireId = useSchematic((s) => s.selectedWireId);
-  const components = useSchematic((s) => s.components);
-  const wires = useSchematic((s) => s.wires);
-  // `selectedIds` is the whole selection and `selectedId` only survives a
-  // single one, so the panel reads the list and keeps the singleton as a
-  // belt-and-braces union. Document order, so the groups do not reshuffle as
-  // parts are added to the selection.
-  const selected = useMemo(() => {
-    const ids = new Set<string>(selectedIds);
-    if (selectedId) ids.add(selectedId);
-    return components.filter((component) => ids.has(component.id));
-  }, [components, selectedIds, selectedId]);
-  const selectedWire = wires.find((w) => w.id === selectedWireId) ?? null;
-  const [segment, setSegment] = useState<"properties" | "library">(
-    selected.length > 0 || selectedWire ? "properties" : "library",
-  );
-  const selectionKey = selected.map((component) => component.id).join(" ");
-
-  useEffect(() => {
-    if (selectionKey || selectedWire) setSegment("properties");
-  }, [selectionKey, selectedWire?.id]);
-
-  useEffect(() => {
-    // A blank sheet is the one state where Properties cannot help. Reset the
-    // persistent rail to Library whenever the active document becomes empty,
-    // including when switching from a populated tab to a new blank tab.
-    if (components.length === 0 && wires.length === 0) setSegment("library");
-  }, [components.length, wires.length]);
-
   const responsiveMaxWidth = Math.max(
     COMPONENTS_RAIL_WIDTH.minWidth,
     Math.min(COMPONENTS_RAIL_WIDTH.maxWidth, maxWidth ?? COMPONENTS_RAIL_WIDTH.maxWidth),
@@ -2300,38 +2267,20 @@ export function ComponentsRail({
           onKeyDown={resize.onKeyDown}
         />
       )}
-      <div className="components-rail-tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={segment === "properties"}
-          className={segment === "properties" ? "active" : undefined}
-          onClick={() => setSegment("properties")}
-        >
-          Properties
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={segment === "library"}
-          className={segment === "library" ? "active" : undefined}
-          onClick={() => setSegment("library")}
-        >
-          Library
-        </button>
-      </div>
+      {/*
+        * Just the parts library now.
+        *
+        * A "Properties | Library" segmented control stood here, which is two
+        * unrelated things crammed into one column to justify the column: the
+        * parts you might add, and the settings of the part you already have.
+        * Properties moved to the selection itself (inspector/), where you can
+        * read a resistor's value without looking 900px away from the resistor,
+        * and the segmented control went with it - there is nothing left to
+        * segment. The rail keeps its "Components" name because the thing it
+        * names, the place parts come from, has not changed.
+        */}
       <div className="components-rail-body">
-        {segment === "properties" ? (
-          selected.length > 0 ? (
-            <ComponentInspector selected={selected} onOpenModelLibraries={onOpenModelLibraries} />
-          ) : selectedWire ? (
-            <WireInspector wire={selectedWire} />
-          ) : (
-            <ComponentInspector selected={null} />
-          )
-        ) : (
-          <Palette focusSignal={focusSignal} onNotice={onNotice} />
-        )}
+        <Palette focusSignal={focusSignal} onNotice={onNotice} />
       </div>
     </aside>
   );
