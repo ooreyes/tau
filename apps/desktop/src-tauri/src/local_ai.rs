@@ -590,10 +590,6 @@ fn local_ai_status_from_snapshot(snapshot: LocalAiStatusSnapshot) -> LocalAiStat
     }
 }
 
-fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
-    local_ai_status_from_snapshot(local_ai_status_snapshot(slot))
-}
-
 #[tauri::command]
 pub fn local_ai_status(state: State<'_, LocalAiState>) -> Result<LocalAiStatus, String> {
     let snapshot = {
@@ -612,14 +608,22 @@ pub async fn install_local_ai_runtime(
 ) -> Result<LocalAiStatus, String> {
     require_apple_silicon()?;
 
-    {
+    let already_installed = {
         let mut slot = state
             .0
             .lock()
             .map_err(|_| "The local AI process state is unavailable.".to_string())?;
         if mlx_server_executable().is_some() {
-            return Ok(local_ai_status_inner(&mut slot));
+            Some(local_ai_status_snapshot(&mut slot))
+        } else {
+            None
         }
+    };
+    if let Some(snapshot) = already_installed {
+        // A ready-status read includes the loopback health check. The runtime
+        // was already present before this action, so it does not need to keep
+        // the process lock while that check waits for the server.
+        return Ok(local_ai_status_from_snapshot(snapshot));
     }
 
     let uv = ensure_uv()?;
@@ -629,11 +633,14 @@ pub async fn install_local_ai_runtime(
         .await
         .map_err(|error| format!("MLX LM install task failed: {error}"))??;
 
-    let mut slot = state
-        .0
-        .lock()
-        .map_err(|_| "The local AI process state is unavailable.".to_string())?;
-    Ok(local_ai_status_inner(&mut slot))
+    let snapshot = {
+        let mut slot = state
+            .0
+            .lock()
+            .map_err(|_| "The local AI process state is unavailable.".to_string())?;
+        local_ai_status_snapshot(&mut slot)
+    };
+    Ok(local_ai_status_from_snapshot(snapshot))
 }
 
 #[tauri::command]
@@ -662,7 +669,12 @@ pub fn start_local_ai(
         .map_err(|_| "The local AI process state is unavailable.".to_string())?;
 
     if slot.is_some() {
-        return Ok(local_ai_status_inner(&mut slot));
+        let snapshot = local_ai_status_snapshot(&mut slot);
+        drop(slot);
+        // A second Turn on must report the process Tau already owns, never
+        // replace it. Its health check is status-only, so release the lock
+        // before the bounded socket read.
+        return Ok(local_ai_status_from_snapshot(snapshot));
     }
     reject_unmanaged_listener(endpoint_is_listening())?;
 
@@ -710,11 +722,17 @@ pub fn start_local_ai(
 
 #[tauri::command]
 pub fn stop_local_ai(state: State<'_, LocalAiState>) -> Result<LocalAiStatus, String> {
-    let mut slot = state
-        .0
-        .lock()
-        .map_err(|_| "The local AI process state is unavailable.".to_string())?;
-    if let Some(mut process) = slot.take() {
+    let process = {
+        let mut slot = state
+            .0
+            .lock()
+            .map_err(|_| "The local AI process state is unavailable.".to_string())?;
+        // Clearing ownership under the lock makes a concurrent start observe
+        // the still-bound listener and refuse it; waiting for the child after
+        // release cannot create a second managed server.
+        slot.take()
+    };
+    if let Some(mut process) = process {
         process
             .child
             .kill()
