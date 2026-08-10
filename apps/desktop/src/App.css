@@ -5503,26 +5503,43 @@ body {
    to 208px, which drops the container query's threshold and the row sheds
    its description column rather than clipping the name (verified via
    design-shot at 900×600). */
-/* Still docked, deliberately, and this is the one place the canvas-first rule
-   is knowingly unfinished.
-
-   Making the library an overlay is right - opening it should not take 264px
-   off the drawing - but it cannot just be absolutely positioned in the shell
-   body. The editor's toolbar and tab strip live inside a sibling element, so a
-   full-height overlay lands on top of Run; raising the toolbar's z-index above
-   it did not settle the hit-testing either, which says something in that
-   subtree is forming a stacking context. The real fix is to render the overlay
-   inside the editor shell, beneath its chrome, and that is a structural move
-   rather than a stylesheet one. Left docked until it can be done and looked
-   at properly: a half-working overlay sitting on the Run button is worse than
-   a column that merely takes up room. */
-.shell-body > .palette,
-.shell-body > .components-rail {
+.shell-body > .palette {
   flex: none;
   width: 264px;
   border-left: 0.5px solid var(--border);
   border-right: 0;
   background: var(--panel);
+  backdrop-filter: none;
+}
+
+/* Summoned, not docked.
+
+   The parts library used to be a flex column of the shell, so opening it took
+   264px off the drawing - the last violation of "collapse the apparatus before
+   compressing the canvas". It is an overlay now, and it lives in the STAGE
+   rather than in the shell body, which is the part that took two attempts.
+
+   As a sibling of the editor section it had to span the full window height to
+   reach the canvas, which put it over the toolbar's Run button. Raising the
+   toolbar above it did not settle the hit-testing - something in that subtree
+   forms a stacking context - so the z-index route was a dead end. The stage IS
+   the canvas area, so an overlay anchored to it covers exactly the drawing and
+   nothing else, with no stacking arithmetic against chrome it was never meant
+   to reach.
+
+   Shadowed, because it is summoned: --elev-float says "this came from
+   somewhere and will go back", and persistent chrome deliberately has no
+   shadow token at all. */
+.stage > .components-rail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-summoned);
+  border-left: 0.5px solid var(--border);
+  border-right: 0;
+  background: var(--panel);
+  box-shadow: var(--elev-float);
   backdrop-filter: none;
 }
 

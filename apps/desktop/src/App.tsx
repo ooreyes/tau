@@ -2488,7 +2488,7 @@ function App() {
    * obstruction is the bug this pair of insets exists to prevent - it is what
    * put the circuit behind the results drawer at the 900x600 floor.
    */
-  const railCover = 0;
+  const railCover = componentsColumnOpen ? componentsRailResize.width : 0;
 
   /**
    * Where the inspector may go, and what it should stay off.
@@ -2696,6 +2696,27 @@ function App() {
                 onAskBode={openAssistant}
                 offerFirstSuccess={shouldOfferLearningPath(learningPath)}
                 onTryFirstSuccess={() => void startFirstSuccessExample()}
+              />
+            )}
+            {/*
+              * The parts library, over the drawing rather than beside it.
+              *
+              * Inside the stage, not the shell body, and that placement is the
+              * whole fix. As a sibling of the editor section it had to span the
+              * full height to reach the canvas, which put it on top of the
+              * toolbar's Run button; raising the toolbar's z-index above it did
+              * not settle the hit-testing, because something in that subtree
+              * forms a stacking context. The stage IS the canvas area, so an
+              * overlay in it covers exactly what it should and nothing else -
+              * no z-index arithmetic against chrome it was never meant to
+              * reach.
+              */}
+            {componentsColumnOpen && (
+              <ComponentsRail
+                focusSignal={componentFocusSignal}
+                onNotice={showNotice}
+                resize={componentsRailResize}
+                maxWidth={componentsRailResponsiveMax}
               />
             )}
           </main>
@@ -2944,15 +2965,6 @@ function App() {
           />
         )}
         </div>
-        {componentsColumnOpen && activeProjectFile && (
-          <ComponentsRail
-            focusSignal={componentFocusSignal}
-            onNotice={showNotice}
-            resize={componentsRailResize}
-            maxWidth={componentsRailResponsiveMax}
-            offsetRight={assistantOpen && projectRootPath ? effectiveAssistantWidth : 0}
-          />
-        )}
         {projectRootPath && assistantOpen && (
           <AssistantPanel
             memoryKey={projectRootPath}
