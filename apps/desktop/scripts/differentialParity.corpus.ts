@@ -5047,13 +5047,13 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     // --- Educational/dimmer.asc authored .tran + .step param Rdim ---
     // Lamp dimmer: on-schematic DIAC + TRIAC subckts (exact BJT latch models in
     // TEXT), SINE mains, Rdim gate timing, B-source LoadPower RC average.
-    // Expand `.step param Rdim list 1K…325K` for the solid-conduction members
-    // 1k/50k/100k (strip .step; bake each `.param Rdim=`) — same honest pattern
-    // as ct-step-loaded / steptemp. Probe v(loadpower) (non-hollow filtered
-    // power; span shrinks as dimmer closes). TRIAC gate/MT2 v(b) phase-skew and
-    // near-cutoff Rdim≥200k remain deferred (firing-edge miss). Tip pass=102 →
-    // **pass=103**. Left SoftDiodeRecovery / PowerAmp TIP / Staff EE / Settings /
-    // Fc / ISO7637 / EveryCircuit alone.
+    // Expand `.step param Rdim list 1K…325K` for 1k/50k/100k plus the first
+    // near-cutoff member at 200k (strip .step; bake each `.param Rdim=`) — same
+    // honest pattern as ct-step-loaded / steptemp. Probe v(loadpower)
+    // (non-hollow filtered power; span shrinks as the dimmer closes). TRIAC
+    // gate/MT2 v(b) phase-skew and the still-higher 250k–325k members remain
+    // deferred. The 200k member advances the matrix by one cell without
+    // changing the shared tolerances.
     {
       expect(existsSync(DIMMER_ASC), `missing ${DIMMER_ASC}`).toBe(true);
       const imported = importAsc(decodeSchematicText(readFileSync(DIMMER_ASC)));
@@ -5069,6 +5069,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         { label: "1k", ohms: 1e3, minSpan: 80 },
         { label: "50k", ohms: 50e3, minSpan: 70 },
         { label: "100k", ohms: 100e3, minSpan: 50 },
+        { label: "200k", ohms: 200e3, minSpan: 10 },
       ] as const;
       const memberNotes: string[] = [];
       for (const member of rdims) {
@@ -5125,7 +5126,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       cells.push({
         analysis: "tran",
         circuit: "dimmer",
-        topology: "Educational/dimmer.asc DIAC+TRIAC + Rdim step 1k/50k/100k (authored .tran 0.3; loadpower; gate v(b)/Rdim≥200k deferred)",
+        topology: "Educational/dimmer.asc DIAC+TRIAC + Rdim step 1k/50k/100k/200k (authored .tran 0.3; loadpower; gate v(b)/Rdim≥250k deferred)",
         status: "pass",
         note: memberNotes.join("; ") + " (TRIAC load-power)",
       });
