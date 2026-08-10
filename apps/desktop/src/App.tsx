@@ -4,7 +4,6 @@ import { Crosshair, Eye, EyeOff, Gauge, LockKeyhole, MousePointer2, Tag } from "
 import "./App.css";
 import "./styles/liveControls.css";
 import { Toolbar } from "./components/Toolbar";
-import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
 import { ComponentMeasurementsPanel } from "./components/ComponentMeasurementsPanel";
 import { formatEngineering } from "./simulation/quantity";
@@ -185,6 +184,23 @@ const AssistantPanel = lazy(async () => ({
 const SimulationPanel = lazy(async () => ({
   default: (await import("./components/SimulationPanel")).SimulationPanel,
 }));
+
+/**
+ * The schematic renderer is the heaviest interactive surface in the app, but
+ * the launch path is the project-start screen, where it cannot be seen or
+ * used. Keep it out of the first renderer chunk and fetch it only once the
+ * user opens, creates, or imports a circuit. The fallback preserves the
+ * canvas surface while the editor becomes interactive; it is deliberately
+ * decorative so it never creates a second landmark or an inert SVG in the
+ * accessibility tree.
+ */
+const Canvas = lazy(async () => ({
+  default: (await import("./components/Canvas")).Canvas,
+}));
+
+function CanvasLoadingSurface() {
+  return <div className="canvas" aria-hidden="true" />;
+}
 
 /**
  * Same treatment for the two modal editors below Settings. They need one extra
@@ -2774,15 +2790,17 @@ function App() {
               gives Escape a "return focus here" job, which needs a landmark to
               return to. See shellContract.ts. */}
           <main className="stage" aria-label={SHELL.canvas.name}>
-            <Canvas
-              op={opAnalysis}
-              tran={analysis}
-              readoutTime={schematicReadoutTime}
-              interactive
-              fitSignal={fitSignal}
-              fitInsetBottom={drawerCover}
-              onSelectionRect={setSelectionRect}
-            />
+            <Suspense fallback={<CanvasLoadingSurface />}>
+              <Canvas
+                op={opAnalysis}
+                tran={analysis}
+                readoutTime={schematicReadoutTime}
+                interactive
+                fitSignal={fitSignal}
+                fitInsetBottom={drawerCover}
+                onSelectionRect={setSelectionRect}
+              />
+            </Suspense>
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState
                 projectOpen
@@ -2919,17 +2937,19 @@ function App() {
                 </div>
               )}
               <div className="sim-schematic-canvas">
-                <Canvas
-                  op={opAnalysis}
-                  tran={analysis}
-                  readoutTime={schematicReadoutTime}
-                  interactive={false}
-                  onActuate={handleActuate}
-                  fitSignal={fitSignal}
-                  fitInsetBottom={drawerCover}
-                  onSelectionRect={setSelectionRect}
-                  currentVisualizer={currentVisualizer}
-                />
+                <Suspense fallback={<CanvasLoadingSurface />}>
+                  <Canvas
+                    op={opAnalysis}
+                    tran={analysis}
+                    readoutTime={schematicReadoutTime}
+                    interactive={false}
+                    onActuate={handleActuate}
+                    fitSignal={fitSignal}
+                    fitInsetBottom={drawerCover}
+                    onSelectionRect={setSelectionRect}
+                    currentVisualizer={currentVisualizer}
+                  />
+                </Suspense>
               </div>
             </section>
         )}

@@ -207,6 +207,10 @@ describe("App - the live readout follows the committed circuit, not the pointer"
     ]);
     expect(bandText()).toContain("50%");
 
+    // Canvas is fetched only after a circuit opens. Wait for the real
+    // interactive SVG, not the decorative Suspense surface, before exercising
+    // the drag contract.
+    await waitFor(() => expect(document.querySelector(".sim-schematic-canvas svg.canvas")).toBeTruthy());
     const svg = document.querySelector(".sim-schematic-canvas svg.canvas")!;
     fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0, pointerId: 7 });
     fireEvent.pointerMove(svg, { clientX: 10, clientY: 0, pointerId: 7 });
@@ -235,6 +239,7 @@ describe("App - operating a control keeps the result on screen", () => {
     const runResultShown = await screen.findByRole("button", { name: /Current Mode/ });
     expect(runResultShown).toBeTruthy();
 
+    await waitFor(() => expect(document.querySelector("svg.canvas")).toBeTruthy());
     const svg = document.querySelector("svg.canvas")!;
     fireEvent.pointerDown(svg, { button: 0, clientX: 0, clientY: 0 });
     fireEvent.pointerUp(svg, { button: 0, clientX: 0, clientY: 0 });
