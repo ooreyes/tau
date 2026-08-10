@@ -58,6 +58,10 @@ const MAX_ERROR_LOG_MESSAGES: usize = 24;
 const MAX_WORKER_INPUT_BYTES: usize = MAX_NETLIST_BYTES + 64 * 1024;
 const MAX_WORKER_OUTPUT_BYTES: usize = 256 * 1024 * 1024;
 const MAX_WORKER_STDERR_BYTES: usize = 64 * 1024;
+/** The worker streams a result through this fixed-size buffer instead of first
+ * materializing its complete JSON response. It bounds serialization overhead
+ * while still avoiding a syscall for every scalar in a large waveform. */
+const WORKER_RESPONSE_BUFFER_BYTES: usize = 64 * 1024;
 const WORKER_TIMEOUT: Duration = Duration::from_secs(120);
 /** What the wait between worker checks settles at once a run has proven itself
  * long. By then the wall clock belongs to ngspice, so looking more often buys
@@ -1235,15 +1239,27 @@ pub fn maybe_run_spice_worker() -> bool {
         Err(error) => failed(error),
     };
 
-    let encoded = serde_json::to_vec(&response).unwrap_or_else(|error| {
-        format!(r#"{{"result":null,"error":"Could not encode worker response: {error}"}}"#)
-            .into_bytes()
-    });
-    let mut stdout = std::io::stdout().lock();
-    let _ = stdout.write_all(WORKER_RESPONSE_MARKER);
-    let _ = stdout.write_all(&encoded);
-    let _ = stdout.flush();
+    // A large waveform is already resident in `response`. Keeping a second
+    // complete JSON `Vec` here doubled that answer's worker-side transfer
+    // memory immediately before it crossed the pipe. Stream it through a
+    // fixed buffer instead: the parent still owns its bounded response buffer,
+    // but the disposable worker needs only this 64 KiB serialization scratch.
+    let stdout = std::io::stdout().lock();
+    let mut stdout = std::io::BufWriter::with_capacity(WORKER_RESPONSE_BUFFER_BYTES, stdout);
+    let _ = write_worker_response(&mut stdout, &response);
     true
+}
+
+/** Write exactly the worker protocol marker followed by one JSON response.
+ *
+ * `WorkerResponse` contains only strings, finite samples (checked above), and
+ * finite-derived JSON primitives, so serde has no data-level failure mode at
+ * this boundary. A pipe write failure means the parent has gone away; there is
+ * no useful fallback response to send in that case. */
+fn write_worker_response<W: Write>(output: &mut W, response: &WorkerResponse) -> Result<(), ()> {
+    output.write_all(WORKER_RESPONSE_MARKER).map_err(|_| ())?;
+    serde_json::to_writer(&mut *output, response).map_err(|_| ())?;
+    output.flush().map_err(|_| ())
 }
 
 fn read_worker_request() -> Result<WorkerRequest, String> {
@@ -1821,10 +1837,11 @@ mod tests {
         deck_lines, engine_log_tail, fatal_engine_messages, library_file_name,
         missing_codemodel_message, non_finite_failure, read_bounded, record_engine_message,
         resample, resample_complex, resampled_length, take_messages, transfer_keep_ratio,
-        with_worker_engine_log, worker_poll_interval, worth_reporting, CallbackState, NgComplex,
-        SpiceEngine, SpiceRequest, SpiceResult, SpiceVector, WorkerResponse, MAX_ENGINE_MESSAGES,
-        MAX_ENGINE_MESSAGE_BYTES, MAX_ERROR_LOG_MESSAGES, MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH,
-        WORKER_POLL_INTERVAL, WORKER_POLL_RAMP,
+        with_worker_engine_log, worker_poll_interval, worth_reporting, write_worker_response,
+        CallbackState, NgComplex, SpiceEngine, SpiceRequest, SpiceResult, SpiceVector,
+        WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES, MAX_ERROR_LOG_MESSAGES,
+        MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH, WORKER_POLL_INTERVAL, WORKER_POLL_RAMP,
+        WORKER_RESPONSE_MARKER,
     };
 
     // libngspice owns process-global callback and circuit state. Cargo runs
@@ -2391,6 +2408,32 @@ M5  45 46 99 99 POX L=2E-6 W=0.98E-3
                 .expect("a response without engineLog still decodes");
         assert!(legacy.engine_log.is_empty());
         assert_eq!(legacy.error.as_deref(), Some("older worker"));
+    }
+
+    #[test]
+    fn streamed_worker_response_is_byte_identical_to_the_existing_protocol() {
+        let response = WorkerResponse {
+            result: Some(SpiceResult {
+                plot: "ac1".to_string(),
+                vectors: vec![SpiceVector {
+                    name: "v(out)".to_string(),
+                    real: vec![0.0, 1.25, -2.5],
+                    imaginary: Some(vec![3.0, -4.0, 5.0]),
+                }],
+                extra_plots: Vec::new(),
+                messages: vec!["Warning: exact bytes matter".to_string()],
+                library_path: "/tmp/libngspice.dylib".to_string(),
+            }),
+            error: None,
+            engine_log: Vec::new(),
+        };
+        let payload = serde_json::to_vec(&response).expect("response encodes");
+        let mut expected = WORKER_RESPONSE_MARKER.to_vec();
+        expected.extend_from_slice(&payload);
+
+        let mut streamed = Vec::new();
+        write_worker_response(&mut streamed, &response).expect("streamed response writes");
+        assert_eq!(streamed, expected);
     }
 
     /**
