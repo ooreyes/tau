@@ -6,6 +6,23 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
+/**
+ * Current flow is a decorative reading, not a sampled waveform. Rebuilding its
+ * SVG paths/dots at a ProMotion display's 120 Hz spends twice the CPU and
+ * battery for no useful extra information. Thirty visual updates a second
+ * keeps the motion legible while bounding the expensive flow-field walk and
+ * React reconciliation on large schematics.
+ */
+export const FLOW_UPDATE_INTERVAL_MS = 1000 / 30;
+
+/** The elapsed, capped animation advance to render, or null until the next
+ * visual frame is due. Exported so the cadence remains an explicit contract. */
+export function flowUpdateDeltaSeconds(elapsedMs: number): number | null {
+  if (elapsedMs < FLOW_UPDATE_INTERVAL_MS) return null;
+  // A resumed tab must not make dots jump through an arbitrarily large path.
+  return Math.min(64, elapsedMs) / 1000;
+}
+
 /** Live subscription to the OS reduced-motion preference. */
 function usePrefersReducedMotion(): boolean {
   return useSyncExternalStore(
@@ -50,7 +67,7 @@ export function OpCurrentFlowLayer({
   const [field, setField] = useState<FlowField>({ dots: [], arrows: [] });
   const phase = useRef(new Map<string, number>());
   const raf = useRef<number | undefined>(undefined);
-  const last = useRef(0);
+  const last = useRef<number | null>(null);
   const reducedMotion = usePrefersReducedMotion();
 
   const live = active && currents && currents.size > 0 ? currents : null;
@@ -73,13 +90,31 @@ export function OpCurrentFlowLayer({
       ));
       return;
     }
+    // Make the reading available immediately; subsequent fields advance at a
+    // bounded cadence below. This avoids turning a performance optimisation
+    // into an extra frame of perceived latency when Current Mode is enabled.
+    setField(flowFieldForWires(
+      wires, pinIndex, live, phase.current, 0, peakAbsCurrent(live),
+      terminals, labelPoints,
+    ));
+    last.current = null;
     const tick = (now: number) => {
-      const dtMs = Math.min(64, now - (last.current || now));
-      last.current = now;
-      setField(flowFieldForWires(
-        wires, pinIndex, live, phase.current, dtMs / 1000, peakAbsCurrent(live),
-        terminals, labelPoints,
-      ));
+      // requestAnimationFrame still schedules on the browser's paint cadence,
+      // but only every ~33 ms needs the O(wires × segments) geometry work and
+      // a React state update. That is a 50% reduction at 60 Hz and 75% on
+      // 120 Hz displays, without changing the simulated values.
+      if (last.current === null) {
+        last.current = now;
+      } else {
+        const dtSeconds = flowUpdateDeltaSeconds(now - last.current);
+        if (dtSeconds !== null) {
+          last.current = now;
+          setField(flowFieldForWires(
+            wires, pinIndex, live, phase.current, dtSeconds, peakAbsCurrent(live),
+            terminals, labelPoints,
+          ));
+        }
+      }
       raf.current = requestAnimationFrame(tick);
     };
     raf.current = requestAnimationFrame(tick);

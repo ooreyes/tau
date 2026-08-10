@@ -13,6 +13,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 
 import { Canvas } from "./Canvas";
+import { FLOW_UPDATE_INTERVAL_MS, flowUpdateDeltaSeconds } from "./OpCurrentFlowLayer";
 import { useSchematic } from "../store/useSchematic";
 import { runOperatingPoint } from "../simulation/operatingPoint";
 import { extractCircuit } from "../schematic/netlist";
@@ -63,6 +64,15 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+describe("Current Mode animation cadence", () => {
+  it("caps expensive field updates at 30 Hz while preserving elapsed motion", () => {
+    expect(flowUpdateDeltaSeconds(FLOW_UPDATE_INTERVAL_MS - 0.01)).toBeNull();
+    expect(flowUpdateDeltaSeconds(FLOW_UPDATE_INTERVAL_MS)).toBeCloseTo(1 / 30);
+    // A hidden/resumed window cannot advance the reading by an unbounded jump.
+    expect(flowUpdateDeltaSeconds(500)).toBeCloseTo(0.064);
+  });
 });
 
 const okOp = () =>
