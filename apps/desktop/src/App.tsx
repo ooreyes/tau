@@ -225,6 +225,19 @@ async function projectPathExists(path: string): Promise<boolean> {
 const LARGE_RUN_WEB_STEPS = 150_000;
 const LARGE_RUN_NATIVE_STEPS = 500_000;
 
+/**
+ * The preview solver is the product path in a browser, where paying its worker
+ * startup before the first Run keeps the interaction responsive. A packaged
+ * Tau app uses ngspice first, so it leaves that worker unspawned until a
+ * genuine fallback needs it.
+ */
+export function prewarmPreviewSolverForRuntime(
+  nativeNgspiceRuntime: boolean,
+  prewarm: () => void = prewarmSolverPool,
+): void {
+  if (!nativeNgspiceRuntime) prewarm();
+}
+
 /** One open editor tab. `doc` is the in-memory snapshot of its schematic; the
  *  active tab's live content is held in the store and snapshotted on switch. */
 interface OpenTab {
@@ -481,16 +494,13 @@ function App() {
   const [drawerCover, setDrawerCover] = useState(0);
 
   /**
-   * Boot one solver worker while the user is still reading the schematic.
-   *
-   * Workers are created on demand, so without this the first Run of a session
-   * pays for starting a thread and loading the solver into it before any
-   * arithmetic happens - on the one action the user is most likely to be
-   * timing. Mount is the right moment: it is seconds before any Run, and the
-   * cost is one idle thread that the pool would have created anyway.
+   * Warm the preview worker while a browser user is still reading the
+   * schematic. Packaged Tau starts with ngspice instead, so creating the
+   * preview worker at native-app mount would spend memory and CPU on a solver
+   * that is only a later fallback.
    */
   useEffect(() => {
-    prewarmSolverPool();
+    prewarmPreviewSolverForRuntime(isNativeSpiceRuntime());
   }, []);
   /** The selection's on-screen box, published by Canvas; see onSelectionRect. */
   const [selectionRect, setSelectionRect] = useState<
