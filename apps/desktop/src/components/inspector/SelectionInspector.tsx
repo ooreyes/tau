@@ -200,14 +200,27 @@ export function SelectionInspector({
       <div
         ref={panelRef}
         className={`selection-inspector selection-inspector--${placement.side}`}
-        // maxHeight from the viewport rather than a `70vh` in the stylesheet:
-        // the placement math has to agree with the rendered box, and only one
-        // of those two can know how much of the window the results drawer is
-        // currently covering.
+        /*
+         * maxHeight is measured from where the panel actually landed, not
+         * from the viewport's total height, and that is the difference
+         * between "usually fine" and "cannot overflow".
+         *
+         * The placement is computed against a height that arrives a commit
+         * late, so it can put the top lower than a full-height panel would
+         * fit under. Capping by the viewport's height still let the panel run
+         * off the bottom of the window at 900x600 - visible in the first
+         * u6-inspector capture. Capping by the distance from `top` to the
+         * viewport's own bottom edge is a statement the geometry cannot
+         * contradict: whatever the placement decided, the panel ends where
+         * the drawer begins.
+         *
+         * Not a `70vh` in the stylesheet, for the same reason: CSS cannot
+         * know how much of the window the results drawer is covering.
+         */
         style={{
           left: placement.x + offset.x,
           top: placement.y + offset.y,
-          maxHeight: Math.max(160, viewport.maxY - viewport.minY),
+          maxHeight: Math.max(160, viewport.maxY - (placement.y + offset.y)),
         }}
         // `dialog` without `aria-modal`: it names a surface a screen reader can
         // jump to, without the "everything else is inert" claim that would be
