@@ -33,6 +33,7 @@ import { runAcSweep, type AcOptions, type AcResult } from "./acSweep";
 import { runDcSweep, type DcSweepResult, type DcSweepSpec } from "./dcSweep";
 import {
   runSolverJob,
+  unpackSolverResult,
   type SolverJob,
   type SolverJobResult,
   type SolverJobSchematic,
@@ -129,8 +130,11 @@ function createWorker(): PooledWorker | null {
     slot.pending = null;
     if (message.type === "done") {
       anyWorkerSucceeded = true;
+      // Free the worker before rebuilding the arrays, so the slot is already
+      // handed to the next queued job by the time this task ends rather than
+      // sitting idle behind an unpack that has nothing to do with it.
       releaseWorker(slot);
-      pending.settle({ ok: true, result: message.result });
+      pending.settle({ ok: true, result: unpackSolverResult(message.result) });
     } else {
       releaseWorker(slot);
       pending.settle({ ok: false });

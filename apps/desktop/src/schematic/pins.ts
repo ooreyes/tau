@@ -1,6 +1,9 @@
 import { GATE_INPUTS_MAX, parseDigitalGate } from "../engine/digitalGateSpec";
 import type { ComponentKind, Point, Rotation, SchematicComponent } from "./types";
-import { GATE_OUT_Y, GATE_PAIR_Y, SOURCE_PIN_Y, gateComPoint, gateInputRows } from "./symbols";
+// From `symbolGeometry.ts`, not from `symbols.tsx`: the pin table is on the
+// netlist's import path and therefore on the solver worker's, and a worker
+// cannot load a React module (see the header of `symbolGeometry.ts`).
+import { GATE_OUT_Y, GATE_PAIR_Y, SOURCE_PIN_Y, gateComPoint, gateInputRows } from "./symbolGeometry";
 
 export interface LocalPin {
   id: string;

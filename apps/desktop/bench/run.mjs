@@ -15,7 +15,13 @@ import { chromium } from "playwright";
 const url = process.env.BENCH_URL ?? "http://localhost:1420/bench/index.html";
 const headless = process.argv.includes("--headless");
 
-const browser = await chromium.launch({ headless });
+// `channel: "chromium"` uses the full browser build rather than
+// `chrome-headless-shell`. The shell has no compositor, so it never schedules
+// `requestAnimationFrame` - and a frame clock that never ticks reports a
+// blocked main thread and an idle one identically. (On this machine the shell
+// binary is also killed on launch by Gatekeeper, which is how the difference
+// was noticed.)
+const browser = await chromium.launch({ headless, channel: "chromium" });
 const page = await browser.newPage();
 page.on("console", (message) => {
   if (message.type() === "error") console.error("[page error]", message.text());

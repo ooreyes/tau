@@ -38,14 +38,14 @@ import type { AssistantRunMetrics } from "./assistantProvider";
  * ever executes, so it is imported dynamically and lands in its own chunk
  * instead of in everything Tau parses before the schematic first paints.
  *
- * Two rules keep that free. The panel calls `preloadAssistantSdk()` when it
- * mounts, which is many seconds of typing before the first Send, so by the
- * time a request is dispatched the module is already resolved and
- * `streamAssistantReply` takes the warm branch and creates the stream in the
- * caller's own tick — exactly as it did when the import was static. Only a
- * send that beats the chunk (or skips the panel entirely) pays a module load,
- * and that path is still abortable: the handle is returned synchronously and
- * `userAborted` is checked again on the far side of the load.
+ * Two rules keep that free. The panel calls `preloadAssistantSdk()` as soon as
+ * it is on screen with Anthropic selected, which is a whole composing session
+ * before the first Send, so by the time a request is dispatched the module is
+ * already resolved and `streamAssistantReply` takes the warm branch and creates
+ * the stream in the caller's own tick — exactly as it did when the import was
+ * static. Only a send that beats the chunk (or skips the panel entirely) pays a
+ * module load, and that path is still abortable: the handle is returned
+ * synchronously and `userAborted` is checked again on the far side of the load.
  */
 type AnthropicSdk = typeof import("@anthropic-ai/sdk");
 let loadedSdk: AnthropicSdk | null = null;

@@ -81,8 +81,16 @@ function rcLadder(stages: number, sourceKind: "vsource" | "vac", sourceValue: st
 // Main-thread availability.
 // ---------------------------------------------------------------------------
 
+/**
+ * `portBlockedMs` is the headline, not `portMaxGapMs`. A peak is one sample and
+ * one hiccup from anything else on the machine lands in it; the total time the
+ * main thread spent inside tasks longer than a frame is the thing a user
+ * actually feels, and it averages the noise out instead of amplifying it.
+ * `portTicks` is the crudest and most tamper-proof reading of the three: how
+ * many times the thread came up for air at all.
+ */
 interface Blocking {
-  /** The headline: longest gap between two consecutive main-thread macrotasks. */
+  portBlockedMs: number;
   portMaxGapMs: number;
   portTicks: number;
   rafMaxGapMs: number;
@@ -92,16 +100,22 @@ interface Blocking {
   wallMs: number;
 }
 
+/** One frame at 60 Hz. A gap under this cost nobody anything. */
+const FRAME_MS = 16.7;
+
 async function whileWatchingTheMainThread<T>(body: () => Promise<T>): Promise<{ value: T; blocking: Blocking }> {
   let running = true;
 
   let portMax = 0;
+  let portBlocked = 0;
   let portTicks = 0;
   let portLast = performance.now();
   const channel = new MessageChannel();
   channel.port1.onmessage = () => {
     const now = performance.now();
-    portMax = Math.max(portMax, now - portLast);
+    const gap = now - portLast;
+    portMax = Math.max(portMax, gap);
+    if (gap > FRAME_MS) portBlocked += gap - FRAME_MS;
     portLast = now;
     portTicks += 1;
     if (running) channel.port2.postMessage(null);
@@ -133,7 +147,19 @@ async function whileWatchingTheMainThread<T>(body: () => Promise<T>): Promise<{ 
 
   const startedAt = performance.now();
   const value = await body();
-  const wallMs = performance.now() - startedAt;
+  const finishedAt = performance.now();
+  const wallMs = finishedAt - startedAt;
+
+  // Fold in the gap that is still open when the body returns. Without this a
+  // fully synchronous body - which is exactly what the old sequential family
+  // sweep is - reports a maximum gap of zero, because no ticker ever got to
+  // run and so no gap was ever *closed*. The thread was unavailable for the
+  // whole run; that has to be the number.
+  const trailing = finishedAt - portLast;
+  portMax = Math.max(portMax, trailing);
+  if (trailing > FRAME_MS) portBlocked += trailing - FRAME_MS;
+  rafMax = Math.max(rafMax, finishedAt - rafLast);
+  timerMax = Math.max(timerMax, finishedAt - timerLast);
 
   running = false;
   clearInterval(timer);
@@ -141,13 +167,23 @@ async function whileWatchingTheMainThread<T>(body: () => Promise<T>): Promise<{ 
   channel.port2.close();
   return {
     value,
-    blocking: { portMaxGapMs: portMax, portTicks, rafMaxGapMs: rafMax, rafTicks, timerMaxGapMs: timerMax, timerTicks, wallMs },
+    blocking: {
+      portBlockedMs: portBlocked,
+      portMaxGapMs: portMax,
+      portTicks,
+      rafMaxGapMs: rafMax,
+      rafTicks,
+      timerMaxGapMs: timerMax,
+      timerTicks,
+      wallMs,
+    },
   };
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
 const tidy = (b: Blocking): Blocking => ({
   ...b,
+  portBlockedMs: round(b.portBlockedMs),
   portMaxGapMs: round(b.portMaxGapMs),
   rafMaxGapMs: round(b.rafMaxGapMs),
   timerMaxGapMs: round(b.timerMaxGapMs),
@@ -157,6 +193,8 @@ const tidy = (b: Blocking): Blocking => ({
 /** Of several rounds, the one with the shortest wall time - the round least
  *  disturbed by whatever else the machine was doing. */
 const best = (rounds: Blocking[]): Blocking => tidy(rounds.reduce((a, b) => (b.wallMs < a.wallMs ? b : a)));
+const median = (values: number[]) => round([...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]);
+const medianBlocked = (rounds: Blocking[]) => median(rounds.map((r) => r.portBlockedMs));
 const worstGap = (rounds: Blocking[]) => round(Math.max(...rounds.map((r) => r.portMaxGapMs)));
 
 // ---------------------------------------------------------------------------
@@ -281,12 +319,28 @@ async function transientComparison() {
   preAborted.abort();
   const preAbortedResult = await runTransientAnalysisOffThread({ components, wires }, options, { signal: preAborted.signal });
 
+  // What crossing the thread boundary costs on its own. Handing a result back
+  // from a worker means the structured clone algorithm walks every sample, and
+  // the deserialising half of that walk happens on the main thread in one
+  // uninterruptible task - so it is the one thing the offload *adds* to the UI
+  // thread, and the only candidate for a residual hitch.
+  let cloneMs = 0;
+  let samples = 0;
+  if (onResult?.ok) {
+    samples = onResult.times.length * (1 + onResult.traces.length + onResult.currents.length);
+    const cloneStart = performance.now();
+    structuredClone(onResult);
+    cloneMs = round(performance.now() - cloneStart);
+  }
+
   return {
+    resultCloneMs: cloneMs,
+    resultSamples: samples,
     stages: TRANSIENT_STAGES,
     steps: TRANSIENT_STEPS,
     workerColdStartMs,
-    onThread: { best: best(onThread), worstGapMs: worstGap(onThread), rounds: onThread.map(tidy) },
-    offThread: { best: best(offThread), worstGapMs: worstGap(offThread), rounds: offThread.map(tidy) },
+    onThread: { best: best(onThread), medianBlockedMs: medianBlocked(onThread), worstGapMs: worstGap(onThread), rounds: onThread.map(tidy) },
+    offThread: { best: best(offThread), medianBlockedMs: medianBlocked(offThread), worstGapMs: worstGap(offThread), rounds: offThread.map(tidy) },
     identical: onResult && offResult ? sameTransient(onResult, offResult) : ["missing result"],
     contract: {
       progressTicks: progress.length,
@@ -353,8 +407,8 @@ async function familyComparison() {
   return {
     members: members.length,
     concurrency: solverConcurrency(),
-    sequential: { best: bestSequential, worstGapMs: worstGap(sequential), rounds: sequential.map(tidy) },
-    parallel: { best: bestParallel, worstGapMs: worstGap(parallel), rounds: parallel.map(tidy) },
+    sequential: { best: bestSequential, medianBlockedMs: medianBlocked(sequential), worstGapMs: worstGap(sequential), rounds: sequential.map(tidy) },
+    parallel: { best: bestParallel, medianBlockedMs: medianBlocked(parallel), worstGapMs: worstGap(parallel), rounds: parallel.map(tidy) },
     speedup: round(bestSequential.wallMs / bestParallel.wallMs),
     identical: problems,
     warnings: family?.warnings ?? [],

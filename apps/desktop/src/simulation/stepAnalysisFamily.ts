@@ -5,13 +5,32 @@
  * `stepFamily.ts` builds the analysis-agnostic {@link StepContext}s (one per
  * swept value, nested products included) and the transient family is assembled
  * directly in `App`. This module is the AC/DC counterpart: a small generic core
- * ({@link runStepFamily}) that re-runs *any* synchronous solver once per context
- * and collects the results, plus two concrete wrappers ({@link runAcStepFamily},
+ * ({@link runStepFamily}) that re-runs *any* solver once per context and
+ * collects the results, plus two concrete wrappers ({@link runAcStepFamily},
  * {@link runDcStepFamily}) that drive the interim TS `.ac`/`.dc` solvers.
  *
  * Keeping the core generic over the result shape (via `resultOk`) means the
  * exact same family logic serves the Bode sweep and the DC sweep - and stays
  * unit-testable against the real TS solvers with no native engine.
+ *
+ * **The members run concurrently.** A family is up to
+ * {@link MAX_FAMILY_MEMBERS} solves that share nothing: each has its own param
+ * scope and its own component list, and none can observe another. Running them
+ * one after another on the calling thread was never a correctness requirement,
+ * only what a `map` over a synchronous function happens to do, and it meant a
+ * 40-point sweep froze the window for the sum of all forty solves while seven
+ * of the machine's eight cores sat idle. The members are now dispatched
+ * together and the worker pool decides how many run at once.
+ *
+ * Two things that concurrency must not disturb, and does not:
+ *
+ * - **Order.** `members` is the plot's overlay order and the colour ramp is
+ *   assigned from it, so member *k* must be the *k*-th swept value however the
+ *   solves interleave. `Promise.all` resolves positionally, not by completion,
+ *   which is exactly that guarantee.
+ * - **Which warnings surface.** The family reports the *first ok member's*
+ *   warnings; "first" means first in sweep order, not first to finish, and it
+ *   is read off the ordered array after everything has settled.
  */
 
 import type { SchematicComponent, SchematicWire, NetLabel } from "../schematic/types";

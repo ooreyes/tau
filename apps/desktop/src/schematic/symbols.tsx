@@ -2,9 +2,24 @@ import { nativelyPlacedGateSpec, parseDigitalGate } from "../engine/digitalGateS
 import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { isSpdtThrowToNo, isStaticContactClosed } from "./kindGroups";
 import type { ComponentKind, Rotation } from "./types";
+import {
+  GATE_COM_Y,
+  GATE_OUT_Y,
+  GATE_PAIR_Y,
+  GRID,
+  SOURCE_PIN_Y,
+  gateBodyHalfHeight,
+  gateComPoint,
+  gateInputRows,
+} from "./symbolGeometry";
 
-/** World pixels per grid cell. Components span a few cells; pins land on grid. */
-export const GRID = 16;
+// The terminal geometry these symbols are drawn around now lives in
+// `symbolGeometry.ts`, so `pins.ts` - and through it the whole netlist and
+// solver stack, including the code that runs inside a Web Worker - can reach
+// it without importing a React module. Re-exported here because this file was
+// its home for the app's whole life and every other consumer still asks for it
+// by this path; see `symbolGeometry.ts` for why the split had to happen.
+export { GATE_COM_Y, GATE_OUT_Y, GATE_PAIR_Y, GRID, SOURCE_PIN_Y, gateBodyHalfHeight, gateComPoint, gateInputRows };
 
 /** One centered sine glyph shared by every sine-bearing schematic symbol.
  *  Keeping the path in one place prevents AC sources and modulators from
@@ -12,14 +27,13 @@ export const GRID = 16;
 export const CENTERED_SINE_PATH = "M -11 0 C -8 -9 -3 -9 0 0 S 8 9 11 0";
 
 /**
- * Shared independent-source body geometry. DC (vsource), AC (vac), pulse,
- * and current sources MUST use the same circle radius and pin extent so they
- * snap onto the same grid lines and read as the same size side-by-side.
- * LTspice voltage.asy uses a 64-unit diameter circle with pins 80 apart; Tau
- * keeps pins on the 16-unit grid at ±SOURCE_PIN_Y and a matching circle.
+ * Shared independent-source body radius. DC (vsource), AC (vac), pulse, and
+ * current sources MUST use the same circle radius so they read as the same
+ * size side-by-side; the matching pin extent is `SOURCE_PIN_Y`, which the pin
+ * table also needs and which therefore lives in `symbolGeometry.ts`. LTspice
+ * `voltage.asy` uses a 64-unit diameter circle with pins 80 apart.
  */
 export const SOURCE_CIRCLE_R = 15;
-export const SOURCE_PIN_Y = 32;
 
 /**
  * Amplifier (op-amp / comparator) body triangle.
@@ -119,19 +133,6 @@ const GATE_BACK_X = -24;
  * section is now the same size in the same place.
  */
 const GATE_NOSE_TIP_X = 24;
-/**
- * The natively placed gate's single output row: the body centreline, which is
- * where the nose points and where a one-input buffer's own input already sits.
- */
-export const GATE_OUT_Y = 0;
-/**
- * Rows LTspice's complementary output PAIR sits on (`Q` above, `_Q` below).
- *
- * Only an imported `.asy` has both, and only it is drawn with them. This is
- * also the body's minimum vertical reach, so a one-input gate keeps the same
- * nose as a two-input one instead of collapsing to a 16-unit blob.
- */
-export const GATE_PAIR_Y = 16;
 /** How far an OR/XOR back bulges into the body, and where the XOR's second arc sits. */
 const GATE_BACK_BULGE = 8;
 const GATE_XOR_ARC_X = -32;
@@ -139,66 +140,10 @@ const GATE_XOR_ARC_BULGE = 6;
 /** Inversion bubble radius, and the clear space a lead needs beside the body. */
 const GATE_BUBBLE_R = 3;
 
-/**
- * Input rows for an N-input gate: symmetric about the body centre, every row on
- * a multiple of {@link GRID}.
- *
- * At a 16-unit pitch an even bank would straddle the centre at ±8, which is off
- * the connection grid, so an even bank skips the centre row instead — the
- * classic gate layout, and the same "keep every terminal on the grid" rule
- * `subcircuitGeometry.verticalOffsets` applies to a subcircuit's pin bank.
- */
-export function gateInputRows(inputs: number): number[] {
-  const count = Math.max(1, Math.round(inputs));
-  if (count === 1) return [0];
-  const even = count % 2 === 0;
-  return Array.from({ length: count }, (_, index) => {
-    const step = index - (count - 1) / 2;
-    return (even ? (step > 0 ? Math.ceil(step) : Math.floor(step)) : step) * GRID;
-  });
-}
-
-/** Body half-height: enough to clear the input bank and LTspice's output pair. */
-export function gateBodyHalfHeight(inputs: number): number {
-  const reach = Math.max(GATE_PAIR_Y, ...gateInputRows(inputs).map(Math.abs));
-  return reach + 8;
-}
-
 /** x where the nose crosses height `y` — where a lead on that row starts. */
 function gateNoseCrossX(halfHeight: number, y: number): number {
   const centre = GATE_NOSE_TIP_X - halfHeight;
   return centre + Math.sqrt(Math.max(0, halfHeight * halfHeight - y * y));
-}
-
-/** Row the `com` reference sits on, whatever the gate's height. */
-export const GATE_COM_Y = 32;
-/** Where a short gate's reference drops from the floor. The floor runs from the
- *  back to `GATE_NOSE_TIP_X - halfHeight`, so x = 0 would hang off the end of a
- *  tall gate's floor; -16 is on the grid and on the floor of a short one. */
-const GATE_COM_FLOOR_X = -16;
-
-/**
- * Where the `com` reference terminal sits — on an IMPORTED gate only.
- *
- * A natively placed gate has no `com`: the deck refers every comparison and
- * every output to ground when the pin is absent, so the reference was a stub
- * off the bottom edge that read as a stray input and could not change any
- * result. What remains is the imported `.asy`, whose own symbol really does
- * carry the terminal, plus the kind's dictionary entry the importer maps
- * through (`schematic/pins.ts`).
- *
- * It follows the body, because the body grows with the input count and the
- * terminal has to stay on it AND inside the ±42 × ±40 preview. A short gate
- * (up to three inputs) drops its reference from the floor; a tall one has no
- * floor left under y = 32, so the reference leaves the nose on that row
- * instead. Both are on the 16 grid and both fit the preview - pinning the
- * reference at y = 48, as it was, put every gate 8 units outside it.
- */
-export function gateComPoint(inputs: number): { x: number; y: number } {
-  const half = gateBodyHalfHeight(inputs);
-  return half > GATE_COM_Y
-    ? { x: 32, y: GATE_COM_Y }
-    : { x: GATE_COM_FLOOR_X, y: GATE_COM_Y };
 }
 
 /** Radius of a circular arc spanning `2 * half` that bulges `depth` sideways. */

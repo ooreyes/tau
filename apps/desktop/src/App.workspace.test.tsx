@@ -603,6 +603,33 @@ describe("App schematic workspace tools", () => {
   });
 });
 
+describe("The modal editors are fetched the first time they are asked for", () => {
+  // Model libraries and Simulation setup are code-split, and a split dialog
+  // only earns its keep if App withholds the element until something opens it
+  // — a lazy component that is rendered closed on every frame fetches its
+  // chunk during first paint and saves nothing. That withholding is the part
+  // that can fail silently: a latch that never flips leaves a toolbar button
+  // which opens nothing at all, with no error anywhere. Each case therefore
+  // presses the real button and waits for the real dialog.
+  it("opens Model libraries from the schematic toolbar", async () => {
+    await renderOpenProject();
+
+    fireEvent.click(screen.getByRole("button", { name: "Model libraries" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Model libraries" });
+    expect(within(dialog).getByText(/Attached vendor SPICE model files/)).toBeTruthy();
+  });
+
+  it("opens Simulation setup from the schematic toolbar", async () => {
+    await renderOpenProject();
+
+    fireEvent.click(screen.getByRole("button", { name: "Simulation setup" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Simulation setup" });
+    expect(within(dialog).getByText(/Choose a common analysis/)).toBeTruthy();
+  });
+});
+
 describe("Settings is a surface in this window", () => {
   it("opens Settings over the schematic and closes it again, from every entry point", async () => {
     await renderOpenProject();

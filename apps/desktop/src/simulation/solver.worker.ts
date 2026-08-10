@@ -26,7 +26,7 @@
  * ~16 ms granularity the main-thread path always had.
  */
 
-import { runSolverJob, type SolverWorkerRequest, type SolverWorkerResponse } from "./solverJobs";
+import { packSolverResult, runSolverJob, type SolverWorkerRequest, type SolverWorkerResponse } from "./solverJobs";
 
 /**
  * The subset of `DedicatedWorkerGlobalScope` this file uses.
@@ -40,7 +40,7 @@ import { runSolverJob, type SolverWorkerRequest, type SolverWorkerResponse } fro
  * typed and fails loudly if either signature is ever misremembered.
  */
 interface DedicatedWorkerScope {
-  postMessage(message: SolverWorkerResponse): void;
+  postMessage(message: SolverWorkerResponse, transfer?: Transferable[]): void;
   addEventListener(type: "message", listener: (event: MessageEvent<SolverWorkerRequest>) => void): void;
 }
 
@@ -77,7 +77,11 @@ scope.addEventListener("message", (event) => {
   }).then(
     (result) => {
       active = null;
-      scope.postMessage({ type: "done", token, result });
+      // The samples move rather than being copied - see `packSolverResult`.
+      // Repacking costs this thread a pass over the arrays, which is exactly
+      // the trade being made: work here so the UI thread does none.
+      const { payload, transfer } = packSolverResult(result);
+      scope.postMessage({ type: "done", token, result: payload }, transfer);
     },
     (error: unknown) => {
       // The solvers catch their own failures and return an `ok: false` result,
