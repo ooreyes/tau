@@ -550,6 +550,47 @@ SYMATTR InstName D2`;
     expect(doc.warnings.filter((w) => /no Tau equivalent/i.test(w))).toHaveLength(0);
   });
 
+  it("uses a custom layout cell's sibling pin geometry instead of the stock primitive bank", () => {
+    // PAsystem SMcap has A/B at (0,-32)/(0,32), unlike cap.asy's
+    // (16,0)/(16,64). At R90 the sibling terminals must land on (32,0) and
+    // (-32,0) relative to the anchor; the stock cap bank would float both at
+    // y=16 and silently disconnect the authored circuit.
+    const source = `Version 4
+SHEET 1 880 680
+WIRE -32 -64 32 -64
+SYMBOL SMcap 0 -64 R90
+SYMATTR InstName C1
+SYMATTR Value 10n`;
+    const sibling = parseAsy(`Version 4
+SymbolType CELL
+PIN 0 -32 NONE 0
+PINATTR PinName A
+PINATTR SpiceOrder 1
+PIN 0 32 NONE 0
+PINATTR PinName B
+PINATTR SpiceOrder 2`);
+    const doc = importAsc(source, {
+      resolveSymbolMetadata: (type) => type.toLowerCase() === "smcap" ? sibling : null,
+    });
+    const c1 = doc.components.find((component) => component.label === "C1");
+    expect(c1?.pinOverride).toEqual([
+      { id: "a", label: "A", x: 32, y: -64 },
+      { id: "b", label: "B", x: -32, y: -64 },
+    ]);
+    expect(doc.warnings).toEqual([]);
+
+    const withoutSibling = importAsc(source);
+    expect(withoutSibling.components.some((component) => component.label === "C1")).toBe(false);
+    expect(withoutSibling.foreignSymbols).toHaveLength(1);
+    expect(withoutSibling.foreignSymbols[0]).toMatchObject({
+      type: "SMcap",
+      attrs: { InstName: "C1", Value: "10n" },
+    });
+    expect(withoutSibling.warnings).toEqual([
+      'Skipped C1: no Tau equivalent for LTspice symbol "SMcap".',
+    ]);
+  });
+
   it("imports a JFET carrying its model and D/G/S pins", () => {
     // njf J1 at (100,100) R0; njf.asy pins D(48,0)/G(0,64)/S(48,96) →
     // world (148,100)/(100,164)/(148,196).

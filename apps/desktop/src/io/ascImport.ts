@@ -1052,6 +1052,10 @@ export interface AscImportResult {
  * the bulk to the source (LTspice's convention) so the 4-node device still
  * resolves every terminal.
  */
+const METADATA_GEOMETRY_SYMBOLS = new Set([
+  "smcap", "mylarcap", "coaxcap7", "2n3904", "2n3906", "2n5458",
+]);
+
 function buildPinOverride(
   symbol: AscSymbol,
   kind: ComponentKind,
@@ -1063,6 +1067,15 @@ function buildPinOverride(
     : null;
   const key = ltPinKey(symbol.type);
   const curatedPins = key ? LTSPICE_PINS[key] : null;
+  const leaf = symbol.type.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
+  // These PAsystem cells are named after their electrical role/model, but
+  // their package/layout geometry is intentionally NOT the stock LTspice
+  // primitive geometry. The exact sibling `.asy` is therefore authoritative;
+  // falling back to `cap`/`npn`/`pnp`/`njf` moves the terminals off the
+  // authored conductors and produces a plausible-looking, disconnected deck.
+  // Without the sibling metadata, return no bank and let the importer warn /
+  // the blocked-save path retain the source rather than invent coordinates.
+  const requiresSymbolMetadata = METADATA_GEOMETRY_SYMBOLS.has(leaf);
   // A curated LTSPICE_PINS entry wins over the installed `.asy`. Below, a
   // non-subckt kind is mapped by POSITION against `getLocalPins(kind)`, and the
   // installed pins arrive in SpiceOrder - which is not Tau's local pin order.
@@ -1075,7 +1088,9 @@ function buildPinOverride(
   // (AD8029's sixth DISABLE port, instrumentation amps, FDAs), and the branch
   // below assigns p1..pN straight from SpiceOrder, so there is no positional
   // mismatch to correct and the installed symbol must stay authoritative.
-  const ltPins = kind === "subckt"
+  const ltPins = requiresSymbolMetadata
+    ? metadataPins
+    : kind === "subckt"
     ? (metadataPins ?? curatedPins)
     : (curatedPins ?? metadataPins);
   if (!ltPins) return null;
@@ -1934,6 +1949,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
   for (const symbol of doc.symbols) {
     const leaf = symbol.type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
     const symbolMetadata = options.resolveSymbolMetadata?.(symbol.type) ?? null;
+    const instName = symbol.attrs.InstName ?? "";
     if (leaf === "jumper") {
       // A jumper is a graphical net-tie (0 Ω short), not a SPICE device -
       // LTspice emits no netlist line for it. Import it as a wire between its
@@ -1958,6 +1974,28 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     }
     const tauKind = isComponentKind(symbol.attrs.TauKind) ? symbol.attrs.TauKind : null;
     const mappedKind = ltspiceTypeToKind(symbol.type);
+    const exactGeometryUnavailable = !tauKind
+      && METADATA_GEOMETRY_SYMBOLS.has(leaf)
+      && (!symbolMetadata?.pins.length
+        || !mappedKind
+        || symbolMetadata.pins.length !== getLocalPins(mappedKind).length);
+    if (exactGeometryUnavailable) {
+      // A stock Tau primitive is electrically the right *kind* but its native
+      // terminals are not these custom package terminals. Retain the original
+      // record as unsupported so simulationIntegrity refuses the whole run;
+      // warning and then solving with Tau's native pin bank would still be a
+      // silent topology substitution.
+      foreignSymbols.push({
+        type: symbol.type,
+        x: symbol.x,
+        y: symbol.y,
+        orientation: symbol.orientation,
+        attrs: { ...symbol.attrs },
+        ...(symbol.windows ? { windows: symbol.windows.map((window) => ({ ...window })) } : {}),
+      });
+      warnings.push(foreignSymbolWarning(instName, symbol.type));
+      continue;
+    }
     const installedPrefixX = symbolMetadata?.attrs.Prefix?.trim().toUpperCase() === "X"
       && (symbolMetadata?.pins.length ?? 0) > 0;
     // ASC may override `.asy` Prefix QN→X (PAsystem TIP121/TIP127) while the
@@ -1977,7 +2015,6 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       ?? (nonFivePinOpamp ? "subckt" : null)
       ?? mappedKind
       ?? (prefixX ? "subckt" : null);
-    const instName = symbol.attrs.InstName ?? "";
     if (!kind) {
       // No built-in kind: try resolving the symbol as a hierarchical block and
       // inline (flatten) its schematic. This is how LTspice instances a `.asc`
