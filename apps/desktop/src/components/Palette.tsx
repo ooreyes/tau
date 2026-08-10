@@ -19,6 +19,15 @@ const initialOpen = Object.fromEntries([
   ["__tools__", true] as const,
 ]);
 
+// The visual disclosure affordance is intentionally very quiet, but it still
+// needs to form a complete control relationship for a keyboard or screen-reader
+// user. These ids are derived from the stable catalog labels, rather than from
+// render order, so filtering or a future section reorder cannot make a stored
+// accessibility relationship point at the wrong list.
+function sectionListId(section: string) {
+  return `palette-section-${section.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
 export function Palette({ focusSignal }: { focusSignal: number; onNotice: (message: string) => void }) {
   const tool = useSchematic((s) => s.tool);
   const startPlacing = useSchematic((s) => s.startPlacing);
@@ -114,19 +123,21 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
             {sections.map((section) => {
               const items = paletteItemsForSection(section);
               const isOpen = openSections[section] !== false;
+              const listId = sectionListId(section);
               return (
                 <div className="palette-section" key={section}>
                   <button
                     className="palette-section-header"
                     onClick={() => toggleSection(section)}
                     aria-expanded={isOpen}
+                    aria-controls={isOpen ? listId : undefined}
                   >
                     <span className="palette-title">{section}</span>
                     <span className="palette-title-rule" aria-hidden="true" />
-                    <span className={`palette-chevron${isOpen ? " open" : ""}`}>›</span>
+                    <span className={`palette-chevron${isOpen ? " open" : ""}`} aria-hidden="true">›</span>
                   </button>
                   {isOpen && (
-                    <div className="palette-list">
+                    <div id={listId} className="palette-list">
                       {items.map((item) => (
                         <PaletteItem
                           key={item.id}
@@ -142,17 +153,19 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
             })}
 
             <div className="palette-section">
+              {/** See sectionListId above: the disclosure name must not include the decorative chevron. */}
               <button
                 className="palette-section-header"
                 onClick={() => toggleSection("__tools__")}
                 aria-expanded={openSections["__tools__"] !== false}
+                aria-controls={openSections["__tools__"] !== false ? sectionListId("tools") : undefined}
               >
                 <span className="palette-title">Tools</span>
                 <span className="palette-title-rule" aria-hidden="true" />
-                <span className={`palette-chevron${openSections["__tools__"] !== false ? " open" : ""}`}>›</span>
+                <span className={`palette-chevron${openSections["__tools__"] !== false ? " open" : ""}`} aria-hidden="true">›</span>
               </button>
               {openSections["__tools__"] !== false && (
-                <div className="palette-list">
+                <div id={sectionListId("tools")} className="palette-list">
                   <button
                     className={`palette-item${tool.mode === "wire" ? " active" : ""}`}
                     title="Draw wire - press W"

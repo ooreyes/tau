@@ -965,6 +965,23 @@ describe("ComponentsRail - responsive shell budget", () => {
     expect(screen.getByRole("separator", { name: "Resize properties panel" }).getAttribute("aria-valuemax")).toBe("208");
   });
 
+  it("keeps the dense palette disclosures fully named and programmatically tied to their lists", () => {
+    render(<Harness maxWidth={280} />);
+
+    const sources = screen.getByRole("button", { name: "Sources" });
+    const listId = sources.getAttribute("aria-controls");
+    expect(listId).toBe("palette-section-sources");
+    expect(document.getElementById(listId!)).toBeTruthy();
+    expect(sources.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(sources);
+    expect(sources.getAttribute("aria-expanded")).toBe("false");
+    // The controlled list is intentionally unmounted while collapsed, so do
+    // not leave a dangling aria-controls idref behind.
+    expect(sources.getAttribute("aria-controls")).toBeNull();
+    expect(document.getElementById(listId!)).toBeNull();
+  });
+
   it("delegates its width boundary to the shared dock when embedded", () => {
     render(<Harness maxWidth={340} embedded />);
     expect(screen.getByRole("complementary", { name: "Components" }).classList.contains("components-rail--embedded")).toBe(true);
