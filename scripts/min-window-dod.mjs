@@ -173,11 +173,27 @@ async function audit(page, label) {
 
       if (fullyOffY || (clippedByParent && parentRect && (r.bottom > parentRect.bottom || r.top < parentRect.top))) {
         if (scrollAncestor(el, "y")) continue;
-        unreachable.push({ why: "y-no-scroll", aria: String(aria).slice(0, 60) });
+        unreachable.push({
+          why: "y-no-scroll",
+          aria: String(aria).slice(0, 60),
+          slot: el.getAttribute("data-slot"),
+          rect: [r.left, r.top, r.right, r.bottom].map((value) => Math.round(value * 10) / 10),
+          clip: parentRect
+            ? [parentRect.left, parentRect.top, parentRect.right, parentRect.bottom].map((value) => Math.round(value * 10) / 10)
+            : null,
+        });
       }
       if (fullyOffX || (clippedByParent && parentRect && (r.right > parentRect.right || r.left < parentRect.left))) {
         if (scrollAncestor(el, "x")) continue;
-        unreachable.push({ why: "x-no-scroll", aria: String(aria).slice(0, 60) });
+        unreachable.push({
+          why: "x-no-scroll",
+          aria: String(aria).slice(0, 60),
+          slot: el.getAttribute("data-slot"),
+          rect: [r.left, r.top, r.right, r.bottom].map((value) => Math.round(value * 10) / 10),
+          clip: parentRect
+            ? [parentRect.left, parentRect.top, parentRect.right, parentRect.bottom].map((value) => Math.round(value * 10) / 10)
+            : null,
+        });
       }
     }
 
@@ -249,6 +265,9 @@ async function main() {
   await page.addInitScript(() => {
     try {
       delete window.showDirectoryPicker;
+      localStorage.setItem("tau.local-ai.setup.v1", JSON.stringify({ dismissed: true }));
+      localStorage.removeItem("tau.unsaved.recovery.v1");
+      localStorage.removeItem("tau.schematic.v1");
     } catch {
       /* ignore */
     }
@@ -258,8 +277,18 @@ async function main() {
   let fail = 0;
   try {
     for (const theme of ["light", "dark"]) {
-      await page.goto(DEV_URL, { waitUntil: "domcontentloaded" });
-      await page.evaluate((t) => localStorage.setItem("tau.ui.theme", t), theme);
+      // Clear the prior theme's imported-circuit recovery snapshot before the
+      // next app boot. Loading first would briefly mount the recovery alert;
+      // Escape is intentionally not a legal substitute for explicit Discard.
+      if (!page.url().startsWith(DEV_URL)) {
+        await page.goto(DEV_URL, { waitUntil: "domcontentloaded" });
+      }
+      await page.evaluate((t) => {
+        localStorage.setItem("tau.ui.theme", t);
+        localStorage.setItem("tau.local-ai.setup.v1", JSON.stringify({ dismissed: true }));
+        localStorage.removeItem("tau.unsaved.recovery.v1");
+        localStorage.removeItem("tau.schematic.v1");
+      }, theme);
       await page.emulateMedia({ colorScheme: theme });
       await page.goto(DEV_URL, { waitUntil: "networkidle" });
       await page.waitForSelector(".toolbar", { timeout: 15_000 });
@@ -294,8 +323,8 @@ async function main() {
       await page.screenshot({ path: path.join(outDir, `simulator-${theme}-${minW}x${minH}.png`) });
       reports.push(await audit(page, `simulator-${theme}`));
 
-      await page.locator('button[aria-label="Settings"]').first().click();
-      await page.waitForSelector('.settings-panel[role="dialog"], [data-slot="sheet-content"]', { timeout: 10_000 });
+      await page.locator('.toolbar button[aria-label="Settings"]:visible').click();
+      await page.getByRole("dialog", { name: "Settings" }).waitFor({ state: "visible", timeout: 10_000 });
       await page.waitForTimeout(150);
       await page.screenshot({ path: path.join(outDir, `dialog-${theme}-${minW}x${minH}.png`) });
       reports.push(await audit(page, `dialog-${theme}`));
@@ -303,7 +332,8 @@ async function main() {
       await page.waitForSelector('.settings-panel[role="dialog"]', { state: "detached", timeout: 10_000 }).catch(() => {});
 
       await page.locator('.activity-rail button[aria-label="Search"]').click();
-      await page.waitForSelector('.cmdk[role="dialog"]', { timeout: 10_000 });
+      await page.waitForSelector('[data-slot="command"]', { timeout: 10_000 });
+      await page.getByRole("dialog", { name: "Add component" }).waitFor({ state: "visible", timeout: 10_000 });
       await page.waitForTimeout(150);
       await page.screenshot({ path: path.join(outDir, `command-${theme}-${minW}x${minH}.png`) });
       reports.push(await audit(page, `command-${theme}`));

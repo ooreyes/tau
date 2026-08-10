@@ -89,13 +89,18 @@ async function ensureDevServer() {
 }
 
 async function shootTheme(page, theme) {
-  // Theme must be stamped on the app origin (not about:blank).
-  await page.goto(DEV_URL, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
+  // Theme must be stamped on the app origin (not about:blank). Reuse the
+  // current origin between themes so the next app boot cannot see the dirty
+  // recovery snapshot created by the preceding screenshot before we clear it.
+  if (!page.url().startsWith(DEV_URL)) {
+    await page.goto(DEV_URL, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
+  }
   await page.evaluate((nextTheme) => {
     try {
       localStorage.setItem("tau.ui.theme", nextTheme);
       localStorage.setItem("tau.local-ai.setup.v1", JSON.stringify({ dismissed: true }));
       localStorage.removeItem("tau.unsaved.recovery.v1");
+      localStorage.removeItem("tau.schematic.v1");
     } catch {
       /* private mode */
     }
@@ -103,8 +108,6 @@ async function shootTheme(page, theme) {
   await page.emulateMedia({ colorScheme: theme });
   await page.goto(DEV_URL, { waitUntil: "networkidle", timeout: NAV_TIMEOUT_MS });
   await page.waitForSelector(".toolbar", { timeout: STATE_TIMEOUT_MS });
-  // Dismiss any first-run / recovery dialog that still raced open.
-  await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `empty-${theme}-1440x900.png`) });
 
@@ -122,8 +125,14 @@ async function shootTheme(page, theme) {
   await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(outDir, `schematic-${theme}-1440x900.png`) });
 
-  await page.locator('button[aria-label="Settings"]').first().click();
-  await page.waitForSelector('[data-slot="sheet-content"], .settings-panel[role="dialog"]', {
+  // There are deliberately two Settings affordances (toolbar + activity
+  // rail). Pin this proof to the visible toolbar control instead of relying on
+  // DOM order, which can change as responsive chrome mounts/unmounts.
+  const settingsButton = page.locator('.toolbar button[aria-label="Settings"]:visible');
+  await settingsButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  await settingsButton.click();
+  await page.getByRole("dialog", { name: "Settings" }).waitFor({
+    state: "visible",
     timeout: STATE_TIMEOUT_MS,
   });
   const sheetSlot = await page.locator('[data-slot="sheet-content"]').count();
@@ -154,10 +163,20 @@ async function main() {
     ...(existsSync(SYSTEM_CHROME) ? { executablePath: SYSTEM_CHROME } : {}),
   });
   const page = await browser.newPage();
+  page.on("pageerror", (error) => console.error(`[design-system-dod] page error: ${error.message}`));
+  page.on("console", (message) => {
+    if (message.type() === "error") console.error(`[design-system-dod] browser error: ${message.text()}`);
+  });
   await page.setViewportSize(VIEWPORT);
   await page.addInitScript(() => {
     try {
       delete window.showDirectoryPicker;
+      // Run before Tau's module graph so the recovery offer cannot mount and
+      // block the visual proof. Clearing after boot races the autosave effect,
+      // which can recreate the same snapshot before a reload.
+      localStorage.setItem("tau.local-ai.setup.v1", JSON.stringify({ dismissed: true }));
+      localStorage.removeItem("tau.unsaved.recovery.v1");
+      localStorage.removeItem("tau.schematic.v1");
     } catch {
       /* ignore */
     }
