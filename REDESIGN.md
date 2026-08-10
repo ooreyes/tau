@@ -1,7 +1,15 @@
 # Tau canvas-first redesign
 
-> **Status:** P0-P3, stage 0, stage 1, stage 2 (partial) and stage 3a are
-> landed. Remaining: 3b, 4a, 4b, 6, 5, 7 in that corrected order.
+> **Status:** P0-P3 and stages 0, 1, 2 (partial), 3a, 3b, 4b, 4a and 6 are
+> landed. **Stage 5 is the only one outstanding**, and only its second half:
+> the parts library is still a docked column. See "Where stage 5 stopped"
+> at the foot of this file - it is a structural move, not a stylesheet one,
+> and the reason is written down so the next attempt starts from the finding.
+>
+> Order actually run: 3b -> 4b -> 4a -> 6, which is 4b and 4a swapped from the
+> plan below. The merge makes the plot wider, so fixing the plot's geometry
+> first meant the drawer inherited a correct one instead of magnifying a
+> broken one.
 > Baseline: `screenshots/redesign-baseline/` (light frames only; see the
 > evidence-protocol warning below).
 > **Normative sources, in order:** [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), then
@@ -330,3 +338,63 @@ Observable, with thresholds. Any one of these pauses the work.
 
 **`TRACE_COLORS` is frozen for the whole migration.** Any unit whose diff
 touches `TRACE_COLORS` or a `--trace-` line is rejected on sight.
+
+## Where stage 5 stopped
+
+The parts library should be summoned, not docked: opening it should not take
+264px off the drawing. It is the last violation of "collapse the apparatus
+before compressing the canvas", and it is unfinished on purpose.
+
+Absolutely positioning it in the shell body does not work. The editor's own
+toolbar and tab strip live inside a sibling element, so a full-height overlay
+lands on top of Run. Raising the toolbar's `z-index` above the overlay did not
+settle the hit-testing either - Playwright kept reporting `.palette-head`
+intercepting the click - which says something in that subtree is forming a
+stacking context that traps it.
+
+The fix is to render the overlay **inside `.editor-shell`, beneath its
+chrome**, rather than as a sibling of it. That is a JSX move plus a re-test of
+the width budget in `resolveChrome`, which is why it was not attempted at the
+end of a long session: `ShellPanels.test.tsx` fails at its import line if the
+export shape changes, and seven of nine `resolveChrome.test.ts` cases change
+meaning once the library stops competing for width. Pre-declare that
+expect-line drop, or stop condition 4 cannot tell it apart from a model
+deleting checks to go green.
+
+`fitInsetRight` is already wired for it and currently zero.
+
+## What the finished stages actually changed
+
+- **The plot's coordinate system is 1:1 with its rendered box** (4b). It was a
+  340-unit viewBox stretched to the panel width, so in the 1052px plotter every
+  tick label rendered at 3.1x and "TIME (S)" was the largest type in the
+  product. Heights are real pixels now.
+- **One results drawer** (4a) replaces the diagnostics strip, the telemetry
+  dock and the plotter column. Full width, over the canvas, three tabs, three
+  heights. Its peek state is a readout, which is why the restore orb is gone.
+- **The inspector is at the selection** (6), not 900px away in half of a
+  segmented column. Placement is `inspector/anchorPlacement.ts`; the four focus
+  rules are asserted in `SelectionInspector.test.tsx` and reversion-checked.
+- **The canvas fit reserves what floats over it.** `fitInsetBottom` and
+  `fitInsetRight`. Without the first, the circuit came up half-hidden behind
+  the drawer at 900x600 - and only at 900x600.
+- **Routine toasts are gone**, and the rest moved off the bottom-right, which
+  is where the trace legend and measurement cards live.
+
+## The lesson worth keeping
+
+Every bug found in these stages was found by looking at the floor, not at
+1440x900, and several were invisible to a green suite:
+
+- the trace drawing at 260px wide inside a 1052px plot, because `tracePath`
+  gained a `width` parameter in front of an optional `height` and two adjacent
+  `number` parameters is a bug that typechecks;
+- the circuit behind the drawer, because the fit measured the whole element;
+- the inspector clipped off the bottom of the window, because its measured
+  height arrives one commit after the placement is computed;
+- two infinite render loops, both presenting as "the panel never appears"
+  rather than as a crash.
+
+The first three were only visible at 900x600. The suite was green for all of
+them until a test was written that could see them, and each of those tests was
+then broken on purpose to confirm it went red.
