@@ -67,7 +67,11 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
   }, [focusSignal]);
 
   return (
-    <aside className="palette">
+    // ComponentsRail already supplies the named complementary landmark. This
+    // content is a panel within that landmark, not a second complementary
+    // region: an unlabelled nested <aside> makes screen-reader landmark
+    // navigation announce a duplicate, context-free "complementary" entry.
+    <div className="palette">
       <div className="palette-head">
         <span>Components</span>
       </div>
@@ -218,7 +222,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
           <em>⌞</em>
         </div>
       </div>
-    </aside>
+    </div>
   );
 }
 

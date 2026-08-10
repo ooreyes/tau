@@ -995,6 +995,14 @@ describe("ComponentsRail - responsive shell budget", () => {
     // contract test exists to catch.
     expect(screen.queryByText("No Selection")).toBeNull();
   });
+
+  it("keeps the components overlay to one named landmark", () => {
+    render(<Harness maxWidth={340} embedded />);
+
+    const landmarks = screen.getAllByRole("complementary");
+    expect(landmarks).toHaveLength(1);
+    expect(landmarks[0].getAttribute("aria-label")).toBe("Components");
+  });
 });
 
 describe("BottomPanel - errors tab states", () => {
