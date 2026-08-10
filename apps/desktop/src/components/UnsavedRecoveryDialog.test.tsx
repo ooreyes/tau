@@ -62,4 +62,56 @@ describe("UnsavedRecoveryDialog", () => {
     );
     expect(screen.getByText(/unsaved schematic “untitled\.asc”/)).toBeTruthy();
   });
+
+  it("does not discard or close the recovery copy when Escape is pressed", () => {
+    const onDiscard = vi.fn();
+    render(
+      <UnsavedRecoveryDialog
+        snapshot={snapshot()}
+        onRestore={vi.fn()}
+        onDiscard={onDiscard}
+      />,
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onDiscard).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+  });
+
+  it("does not discard or close the recovery copy when the backdrop is clicked", () => {
+    const onDiscard = vi.fn();
+    const { container } = render(
+      <UnsavedRecoveryDialog
+        snapshot={snapshot()}
+        onRestore={vi.fn()}
+        onDiscard={onDiscard}
+      />,
+    );
+
+    const overlay = container.ownerDocument.querySelector<HTMLElement>(
+      '[data-slot="dialog-overlay"]',
+    );
+    expect(overlay).toBeTruthy();
+    fireEvent.pointerDown(overlay!);
+    fireEvent.click(overlay!);
+
+    expect(onDiscard).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+  });
+
+  it("discards only when the explicit Discard action is chosen", () => {
+    const onDiscard = vi.fn();
+    render(
+      <UnsavedRecoveryDialog
+        snapshot={snapshot()}
+        onRestore={vi.fn()}
+        onDiscard={onDiscard}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(onDiscard).toHaveBeenCalledOnce();
+  });
 });

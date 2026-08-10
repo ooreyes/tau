@@ -31,11 +31,19 @@ export function UnsavedRecoveryDialog({
   const age = formatRecoveryAge(snapshot.savedAt);
 
   return (
-    <Dialog open onOpenChange={(next) => { if (!next) onDiscard(); }}>
+    <Dialog
+      open
+      // This is a destructive decision, not a dismissible notification. Keep
+      // the recovery copy until the user explicitly selects Restore or Discard.
+      onOpenChange={() => undefined}
+    >
       <DialogContent
         role="alertdialog"
         className="confirm-dialog"
         showCloseButton={false}
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           (event.currentTarget as HTMLElement)
