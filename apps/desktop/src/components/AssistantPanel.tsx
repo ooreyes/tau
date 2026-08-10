@@ -65,41 +65,12 @@ import {
   ASSISTANT_PROMPT_CHAR_LIMIT,
   type AssistantConversation,
 } from "../lib/assistantMemory";
-import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "@/components/ui/resizable";
+import { PanelResizeHandle, usePanelWidth } from "@/components/ui/resizable";
 import { BodeMascot } from "./BodeMascot";
+import { ASSISTANT_PANEL_WIDTH } from "./assistantPanelState";
 
-/** Docked at the far right of the simulator shell, same "edge=left widens"
- *  convention as the Components rail (panelResize.tsx). App.tsx calls
- *  usePanelWidth(this) itself and lifts the result up (not self-contained
- *  like TelemetryDock) - the responsive-floor effect needs to read the
- *  current width to keep the schematic/scope columns from being starved. */
-export const ASSISTANT_PANEL_WIDTH: PanelWidthConfig = {
-  storageKey: "tau.assistant.width",
-  defaultWidth: 340,
-  minWidth: 280,
-  maxWidth: 520,
-  edge: "left",
-};
-
-const OPEN_STORAGE_KEY = "tau.assistant.open";
-
-export function loadAssistantOpen(): boolean {
-  if (typeof localStorage === "undefined") return false;
-  try {
-    return localStorage.getItem(OPEN_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function saveAssistantOpen(open: boolean): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(OPEN_STORAGE_KEY, open ? "1" : "0");
-  } catch {
-    // Quota exceeded / private mode - the session keeps its in-memory state.
-  }
-}
+// Preserve the public state/config exports for isolated panel hosts and tests.
+export { ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./assistantPanelState";
 
 interface ChatMessage {
   id: string;

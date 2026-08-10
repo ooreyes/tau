@@ -38,6 +38,7 @@ import App, { schematicDocumentSignature } from "./App";
 // cannot consume the test's UI assertion budget before React gets a chance to
 // commit the dialog.  App still uses the real lazy boundary in production.
 import { SettingsWindow } from "./settings/SettingsWindow";
+import { AssistantPanel } from "./components/AssistantPanel";
 import {
   createConversation,
   saveConversationMessages,
@@ -55,6 +56,7 @@ import { useSchematic } from "./store/useSchematic";
 const defaultRenameNode = useProject.getState().renameNode;
 
 void SettingsWindow;
+void AssistantPanel;
 
 describe("schematicDocumentSignature", () => {
   it("ignores regenerated internal ids while retaining semantic edits", () => {
@@ -135,6 +137,7 @@ async function renderOpenProject() {
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
   await screen.findByRole("tab", { name: /untitled\.asc/ });
+  await screen.findByRole("complementary", { name: "Assistant" });
 }
 
 describe("App schematic workspace tools", () => {

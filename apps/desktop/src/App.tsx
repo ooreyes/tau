@@ -9,7 +9,7 @@ import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
 import { ComponentMeasurementsPanel } from "./components/ComponentMeasurementsPanel";
 import { formatEngineering } from "./simulation/quantity";
-import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/AssistantPanel";
+import { ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/assistantPanelState";
 import { usePanelWidth } from "./components/ui/resizable";
 import { Toaster, toast } from "./components/ui/sonner";
 import { Sheet, SheetContent, SheetTitle } from "./components/ui/sheet";
@@ -175,6 +175,11 @@ import { SHELL, inspectorName } from "./components/shellContract";
  */
 const SettingsWindow = lazy(async () => ({
   default: (await import("./settings/SettingsWindow")).SettingsWindow,
+}));
+
+/** Bode is only useful after a project is open and the user summons it. */
+const AssistantPanel = lazy(async () => ({
+  default: (await import("./components/AssistantPanel")).AssistantPanel,
 }));
 
 /**
@@ -3027,29 +3032,31 @@ function App() {
         )}
         </div>
         {projectRootPath && assistantOpen && (
-          <AssistantPanel
-            memoryKey={projectRootPath}
-            legacyMemoryKey={activeFilePath ?? documentTitle}
-            components={components}
-            wires={wires}
-            netLabels={netLabels}
-            probes={probes}
-            directives={directives}
-            params={params}
-            analysis={analysis}
-            opResult={opAnalysis}
-            acResult={acAnalysis}
-            dcResult={dcAnalysis}
-            fourier={fourier}
-            componentRows={componentRows}
-            measurements={measurements}
-            selectedId={selectedId}
-            resize={effectiveAssistantResize}
-            onCreateAsc={createAssistantCircuit}
-            onApplyCurrent={applyAssistantCircuit}
-            onOpenSettings={openSettingsSurface}
-            onClose={closeAssistant}
-          />
+          <Suspense fallback={null}>
+            <AssistantPanel
+              memoryKey={projectRootPath}
+              legacyMemoryKey={activeFilePath ?? documentTitle}
+              components={components}
+              wires={wires}
+              netLabels={netLabels}
+              probes={probes}
+              directives={directives}
+              params={params}
+              analysis={analysis}
+              opResult={opAnalysis}
+              acResult={acAnalysis}
+              dcResult={dcAnalysis}
+              fourier={fourier}
+              componentRows={componentRows}
+              measurements={measurements}
+              selectedId={selectedId}
+              resize={effectiveAssistantResize}
+              onCreateAsc={createAssistantCircuit}
+              onApplyCurrent={applyAssistantCircuit}
+              onOpenSettings={openSettingsSurface}
+              onClose={closeAssistant}
+            />
+          </Suspense>
         )}
       </div>
       <StatusBar mode={mode} result={analysis} title={documentTitle} />

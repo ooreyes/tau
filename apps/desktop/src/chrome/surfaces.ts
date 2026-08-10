@@ -15,7 +15,7 @@
  * the panel back. A surface that yields space is `visible: false` with a
  * reason, and its intent is untouched.
  */
-import { ASSISTANT_PANEL_WIDTH } from "@/components/AssistantPanel";
+import { ASSISTANT_PANEL_WIDTH } from "@/components/assistantPanelState";
 import { COMPONENTS_RAIL_WIDTH } from "@/components/ShellPanels";
 import type { PanelWidthConfig } from "@/components/ui/resizable";
 

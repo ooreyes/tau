@@ -53,12 +53,14 @@ import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./project/defaultW
 // independent of another worker's lazy-module transform/load backlog; this
 // still renders the production `React.lazy` boundary, with its real module.
 import { SettingsWindow } from "./settings/SettingsWindow";
+import { AssistantPanel } from "./components/AssistantPanel";
 import { useProject } from "./store/useProject";
 import { useSchematic } from "./store/useSchematic";
 
 const defaultRenameNode = useProject.getState().renameNode;
 
 void SettingsWindow;
+void AssistantPanel;
 
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
@@ -156,6 +158,7 @@ describe("shell inventory by app state", () => {
 
   it("with a schematic open, shows the editing shell and no simulator surfaces", async () => {
     await openProject();
+    await screen.findByRole(SHELL.assistant.role, { name: SHELL.assistant.name });
     // `emptySchematic` is here because the new circuit genuinely is empty: it
     // is the canvas's own placeholder, not a leftover from the no-project
     // state. It should disappear once the schematic has parts, and a stage
@@ -173,6 +176,17 @@ describe("shell inventory by app state", () => {
       // "where do I read what just happened" had two different answers.
       "resultsDrawer",
     ]);
+  });
+
+  it("does not mount Bode until it is opened, then renders the real assistant surface", async () => {
+    storage.set("tau.assistant.open", "0");
+    await openProject();
+
+    expect(screen.queryByRole(SHELL.assistant.role, { name: SHELL.assistant.name })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Bode" }));
+
+    expect(await screen.findByRole(SHELL.assistant.role, { name: SHELL.assistant.name })).toBeTruthy();
   });
 
   it("in the simulator, replaces the canvas with the read-only overview", async () => {
