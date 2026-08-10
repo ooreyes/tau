@@ -96,7 +96,29 @@ const WORKER_POLL_RAMP: [(Duration, Duration); 3] = [
     (Duration::from_millis(100), Duration::from_millis(5)),
 ];
 const WORKER_ARG: &str = "--tau-spice-worker";
-const WORKER_RESPONSE_MARKER: &[u8] = b"TAU_SPICE_RESPONSE_V1:";
+const WORKER_RESPONSE_MARKER: &[u8; 22] = b"TAU_SPICE_RESPONSE_V1:";
+
+/** Build the fallback table for the fixed worker marker at compile time. */
+const fn marker_failure_table<const N: usize>(marker: &[u8; N]) -> [usize; N] {
+    let mut table = [0_usize; N];
+    let mut index = 1_usize;
+    let mut prefix = 0_usize;
+    while index < N {
+        if marker[index] == marker[prefix] {
+            prefix += 1;
+            table[index] = prefix;
+            index += 1;
+        } else if prefix > 0 {
+            prefix = table[prefix - 1];
+        } else {
+            index += 1;
+        }
+    }
+    table
+}
+
+const WORKER_RESPONSE_MARKER_FAILURE: [usize; WORKER_RESPONSE_MARKER.len()] =
+    marker_failure_table(WORKER_RESPONSE_MARKER);
 
 type SendChar = unsafe extern "C" fn(*mut c_char, c_int, *mut c_void) -> c_int;
 type SendStat = unsafe extern "C" fn(*mut c_char, c_int, *mut c_void) -> c_int;
@@ -1401,19 +1423,16 @@ fn run_spice_worker_process(
             }
         ));
     }
-    let marker = stdout
-        .windows(WORKER_RESPONSE_MARKER.len())
-        .rposition(|window| window == WORKER_RESPONSE_MARKER)
-        .ok_or_else(|| {
-            format!(
-                "Tau's ngspice worker returned no structured response.{}",
-                if stderr.is_empty() {
-                    String::new()
-                } else {
-                    format!(" Worker diagnostics: {stderr}")
-                }
-            )
-        })?;
+    let marker = last_worker_response_marker(&stdout).ok_or_else(|| {
+        format!(
+            "Tau's ngspice worker returned no structured response.{}",
+            if stderr.is_empty() {
+                String::new()
+            } else {
+                format!(" Worker diagnostics: {stderr}")
+            }
+        )
+    })?;
     let payload = &stdout[marker + WORKER_RESPONSE_MARKER.len()..];
     let response: WorkerResponse = serde_json::from_slice(payload)
         .map_err(|error| format!("Tau's ngspice worker returned invalid data: {error}"))?;
@@ -1422,6 +1441,34 @@ fn run_spice_worker_process(
         (None, Some(error)) => Err(with_worker_engine_log(error, &response.engine_log)),
         _ => Err("Tau's ngspice worker returned an inconsistent response.".to_string()),
     }
+}
+
+/**
+ * Find the final worker protocol marker without making a slice comparison at
+ * every byte of its (potentially 256 MiB) response. The prior
+ * `windows(...).rposition(...)` has a 22-byte comparison for every candidate
+ * start, making its adversarial cost O(response_bytes × marker_bytes). This
+ * fixed-marker KMP scan returns the same *last* match in O(response_bytes),
+ * including non-UTF-8 ngspice preamble bytes.
+ */
+fn last_worker_response_marker(output: &[u8]) -> Option<usize> {
+    let mut matched = 0_usize;
+    let mut last_match = None;
+    for (index, byte) in output.iter().copied().enumerate() {
+        while matched > 0 && byte != WORKER_RESPONSE_MARKER[matched] {
+            matched = WORKER_RESPONSE_MARKER_FAILURE[matched - 1];
+        }
+        if byte == WORKER_RESPONSE_MARKER[matched] {
+            matched += 1;
+            if matched == WORKER_RESPONSE_MARKER.len() {
+                last_match = Some(index + 1 - WORKER_RESPONSE_MARKER.len());
+                // Continue through the failure state so overlapping markers
+                // still select their final occurrence, as rposition did.
+                matched = WORKER_RESPONSE_MARKER_FAILURE[matched - 1];
+            }
+        }
+    }
+    last_match
 }
 
 fn read_bounded<R: Read>(mut reader: R, limit: usize) -> Result<(Vec<u8>, bool), String> {
@@ -1834,14 +1881,14 @@ mod tests {
     use std::{io::Cursor, path::PathBuf, sync::Mutex, time::Duration};
 
     use super::{
-        deck_lines, engine_log_tail, fatal_engine_messages, library_file_name,
-        missing_codemodel_message, non_finite_failure, read_bounded, record_engine_message,
-        resample, resample_complex, resampled_length, take_messages, transfer_keep_ratio,
-        with_worker_engine_log, worker_poll_interval, worth_reporting, write_worker_response,
-        CallbackState, NgComplex, SpiceEngine, SpiceRequest, SpiceResult, SpiceVector,
-        WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES, MAX_ERROR_LOG_MESSAGES,
-        MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH, WORKER_POLL_INTERVAL, WORKER_POLL_RAMP,
-        WORKER_RESPONSE_MARKER,
+        deck_lines, engine_log_tail, fatal_engine_messages, last_worker_response_marker,
+        library_file_name, missing_codemodel_message, non_finite_failure, read_bounded,
+        record_engine_message, resample, resample_complex, resampled_length, take_messages,
+        transfer_keep_ratio, with_worker_engine_log, worker_poll_interval, worth_reporting,
+        write_worker_response, CallbackState, NgComplex, SpiceEngine, SpiceRequest, SpiceResult,
+        SpiceVector, WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
+        MAX_ERROR_LOG_MESSAGES, MAX_TRANSFER_VALUES, MAX_VECTOR_LENGTH, WORKER_POLL_INTERVAL,
+        WORKER_POLL_RAMP, WORKER_RESPONSE_MARKER,
     };
 
     // libngspice owns process-global callback and circuit state. Cargo runs
@@ -2385,6 +2432,37 @@ M5  45 46 99 99 POX L=2E-6 W=0.98E-3
         let (output, overflow) = read_bounded(Cursor::new(input), 1024).expect("reader succeeds");
         assert_eq!(output.len(), 1024);
         assert!(overflow);
+    }
+
+    #[test]
+    fn worker_marker_scan_keeps_the_exact_last_marker_semantics_for_any_bytes() {
+        let mut preamble_then_response = b"ngspice startup\xff\n".to_vec();
+        preamble_then_response.extend_from_slice(WORKER_RESPONSE_MARKER);
+        preamble_then_response.extend_from_slice(br#"{"result":null,"error":"none"}"#);
+
+        let mut repeated_marker = WORKER_RESPONSE_MARKER.to_vec();
+        repeated_marker.extend_from_slice(b"first response diagnostic ");
+        repeated_marker.extend_from_slice(WORKER_RESPONSE_MARKER);
+        repeated_marker.extend_from_slice(b"final response");
+
+        let mut near_match = b"no marker: TAU_SPICE_RESPONSE_V1".to_vec();
+        near_match.extend_from_slice(b"!\0\xff");
+
+        for output in [
+            Vec::new(),
+            preamble_then_response,
+            repeated_marker,
+            near_match,
+        ] {
+            let legacy = output
+                .windows(WORKER_RESPONSE_MARKER.len())
+                .rposition(|window| window == WORKER_RESPONSE_MARKER);
+            assert_eq!(
+                last_worker_response_marker(&output),
+                legacy,
+                "marker scan changed protocol framing for {output:?}"
+            );
+        }
     }
 
     #[test]
