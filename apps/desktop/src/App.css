@@ -4793,7 +4793,6 @@ body {
 .status-lamp--running .status-lamp-dot {
   background: var(--signal);
   box-shadow: 0 0 6px var(--signal-glow);
-  animation: status-lamp-pulse 1.1s var(--ease-in-out, ease-in-out) infinite;
 }
 
 .status-lamp--ok .status-lamp-dot {
@@ -4811,11 +4810,6 @@ body {
   box-shadow: 0 0 4px var(--signal-line);
 }
 
-@keyframes status-lamp-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.4; }
-}
-
 /* Run button's own lamp dot is neutral until Tau has evidence. Running,
    successful, and failed states below then supply the semantic hue. */
 .run-lamp-dot {
@@ -4828,7 +4822,7 @@ body {
 }
 
 .run-lamp-dot--running {
-  animation: status-lamp-pulse 1.1s var(--ease-in-out, ease-in-out) infinite;
+  background: var(--signal);
 }
 
 /* Run button status gradients - evidence-based color: green after a clean
@@ -6129,10 +6123,6 @@ body {
   --diagnostic-soft: var(--diagnostic-warning-soft);
   --diagnostic-line: var(--diagnostic-warning-line);
   --diagnostic-glow: var(--diagnostic-warning-glow);
-}
-
-.bottom-panel.is-running .bottom-panel-state {
-  animation: status-lamp-pulse 1.1s var(--ease-in-out, ease-in-out) infinite;
 }
 
 .bottom-panel.has-warning {
