@@ -2126,7 +2126,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // Ideal lossless transmission line: T N1 N2 N3 N4 Z0=.. TD=..
       // Port A = (a1,a2), port B = (b1,b2). Delay/impedance element - native
       // engine only (the linear TS MNA solver has no transmission-line stamp).
-      return [`${name} ${node("a1")} ${node("a2")} ${node("b1")} ${node("b2")} ${tlineDeckParams(component.value)}`];
+      return [`${name} ${node("a1")} ${node("a2")} ${node("b1")} ${node("b2")} ${tlineDeckParams(component.value, component.label.trim() || name)}`];
     }
     case "subckt": {
       if (importedSymbolLeaf(component) === "varistor") {

@@ -2343,6 +2343,19 @@ describe("transformerWindings", () => {
     expect(deck.netlist).toMatch(/L_T1_p \S+ \S+ 0\.002/);
     expect(deck.netlist).toMatch(/K_T1 L_T1_p L_T1_s 0\.95/);
   });
+
+  it("refuses an imported transmission line whose authored delay is malformed", () => {
+    expect(() => buildSpiceDeck(
+      {
+        components: [
+          component("ground", "", "", 0, 0),
+          component("tline", "T1", "Z0=75 Td=not-a-number", 0, 0),
+        ],
+        wires: [],
+      },
+      { kind: "op" },
+    )).toThrow(/Simulation refused: T1's TD value "not-a-number" must be a finite positive SPICE quantity\. No approximate or partial circuit was run\./);
+  });
 });
 
 describe("includedFileName", () => {
