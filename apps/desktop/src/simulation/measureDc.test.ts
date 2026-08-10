@@ -20,6 +20,17 @@ function dividerResult(): Extract<DcSweepResult, { ok: true }> {
   };
 }
 
+function descendingDividerResult(): Extract<DcSweepResult, { ok: true }> {
+  const sweep = [10, 8, 6, 4, 2, 0];
+  return {
+    ok: true,
+    source: "Vin",
+    sweep,
+    nets: [{ id: "out", label: "out", voltages: sweep.map((v) => v / 2), ground: false }],
+    warnings: [],
+  };
+}
+
 describe("dcResultToWaveform", () => {
   it("maps the sweep axis and net series onto a MeasWaveform", () => {
     const wf = dcResultToWaveform(dividerResult());
@@ -45,6 +56,26 @@ describe("runDcMeasurements", () => {
     const [r] = runDcMeasurements([".meas dc vat FIND V(out) AT=6"], dividerResult());
     expect(r.value).toBeCloseTo(3, 12); // V(out)=Vin/2 → at Vin=6, out=3
     expect(r.at).toBe(6);
+  });
+
+  it("matches LTspice measurements on a descending DC sweep", () => {
+    const result = descendingDividerResult();
+    const measured = runDcMeasurements([
+      ".meas dc vat FIND V(out) AT=5",
+      ".meas dc vmax MAX V(out) FROM=2.5 TO=7.5",
+      ".meas dc vmin MIN V(out) FROM=2.5 TO=7.5",
+      ".meas dc vavg AVG V(out) FROM=2.5 TO=7.5",
+      ".meas dc vint INTEG V(out) FROM=2.5 TO=7.5",
+      ".meas dc trip WHEN V(out)=3",
+    ], result);
+    expect(measured.map(({ name, value }) => [name, value])).toEqual([
+      ["vat", 2.5],
+      ["vmax", 3.75],
+      ["vmin", 1.25],
+      ["vavg", 2.5],
+      ["vint", 12.5],
+      ["trip", 6],
+    ]);
   });
 
   it("WHEN V(out)=<level> returns the swept-source value at the crossing", () => {

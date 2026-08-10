@@ -428,15 +428,22 @@ function windowPoints(
   const first = axis[0];
   const last = axis[axis.length - 1];
   if (!Number.isFinite(first) || !Number.isFinite(last)) return [];
-  const requestedFrom = from ?? first;
-  const requestedTo = to ?? last;
+  const axisMin = Math.min(first, last);
+  const axisMax = Math.max(first, last);
+  const requestedFrom = from ?? axisMin;
+  const requestedTo = to ?? axisMax;
   if (!Number.isFinite(requestedFrom) || !Number.isFinite(requestedTo)) return [];
-  const lo = Math.max(first, requestedFrom);
-  const hi = Math.min(last, requestedTo);
+  const lo = Math.max(axisMin, requestedFrom);
+  const hi = Math.min(axisMax, requestedTo);
   if (lo > hi) return [];
 
   const out: Array<{ x: number; value: number }> = [{ x: lo, value: interpAt(axis, expr, lo) }];
-  for (let i = 0; i < axis.length; i++) {
+  // Integrals are defined over the numeric FROM→TO interval even when a DC
+  // source was authored with a negative sweep step. Traverse reverse solver
+  // output backwards so the measurement points remain increasing in x.
+  const ascending = last >= first;
+  for (let offset = 0; offset < axis.length; offset++) {
+    const i = ascending ? offset : axis.length - 1 - offset;
     if (axis[i] > lo && axis[i] < hi) out.push({ x: axis[i], value: expr.at(i) });
   }
   if (hi > lo) out.push({ x: hi, value: interpAt(axis, expr, hi) });
@@ -446,14 +453,21 @@ function windowPoints(
 /** Linear interpolation of a compiled expression at an arbitrary axis position. */
 function interpAt(axis: number[], expr: CompiledExpr, x: number): number {
   if (axis.length === 0) return NaN;
-  if (x <= axis[0]) return expr.at(0);
-  if (x >= axis[axis.length - 1]) return expr.at(axis.length - 1);
-  // Binary search for the bracketing interval (axis is ascending).
+  const lastIndex = axis.length - 1;
+  const ascending = axis[lastIndex] >= axis[0];
+  if (ascending) {
+    if (x <= axis[0]) return expr.at(0);
+    if (x >= axis[lastIndex]) return expr.at(lastIndex);
+  } else {
+    if (x >= axis[0]) return expr.at(0);
+    if (x <= axis[lastIndex]) return expr.at(lastIndex);
+  }
+  // Binary search for the bracketing interval in either monotonic direction.
   let lo = 0;
-  let hi = axis.length - 1;
+  let hi = lastIndex;
   while (hi - lo > 1) {
     const mid = (lo + hi) >> 1;
-    if (axis[mid] <= x) lo = mid;
+    if (ascending ? axis[mid] <= x : axis[mid] >= x) lo = mid;
     else hi = mid;
   }
   const t0 = axis[lo];
