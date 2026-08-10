@@ -4241,7 +4241,6 @@ body {
 }
 
 .cmdk-input {
-  flex-shrink: 0;
   border: none;
   outline: none;
   background: transparent;
