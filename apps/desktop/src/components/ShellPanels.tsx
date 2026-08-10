@@ -2246,6 +2246,7 @@ export function ComponentsRail({
   resize,
   maxWidth,
   embedded = false,
+  offsetRight = 0,
 }: {
   focusSignal: number;
   onNotice: (message: string) => void;
@@ -2255,6 +2256,11 @@ export function ComponentsRail({
   maxWidth?: number;
   /** When inside the shared right dock, the dock owns width and the resize handle. */
   embedded?: boolean;
+  /**
+   * Pixels to leave clear on the right, so the overlay lands beside the
+   * assistant rather than on top of it. Zero when the assistant is closed.
+   */
+  offsetRight?: number;
 }) {
   const responsiveMaxWidth = Math.max(
     COMPONENTS_RAIL_WIDTH.minWidth,
@@ -2270,7 +2276,7 @@ export function ComponentsRail({
     <aside
       className={`components-rail${embedded ? " components-rail--embedded" : ""}`}
       aria-label="Components"
-      style={embedded ? undefined : { width: componentsWidth }}
+      style={embedded ? undefined : { width: componentsWidth, right: offsetRight }}
     >
       {!embedded && (
         <PanelResizeHandle

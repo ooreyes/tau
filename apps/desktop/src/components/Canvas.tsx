@@ -155,6 +155,7 @@ export function Canvas({
   onActuate,
   fitSignal = 0,
   fitInsetBottom = 0,
+  fitInsetRight = 0,
   onSelectionRect,
   currentVisualizer = false,
 }: {
@@ -183,6 +184,8 @@ export function Canvas({
    * half the circuit behind the drawer the moment the simulator opened.
    */
   fitInsetBottom?: number;
+  /** Same reservation along the right edge, for the summoned parts library. */
+  fitInsetRight?: number;
   /**
    * Publishes the selection's bounding box in client coordinates, so the
    * floating inspector can appear beside the part.
@@ -248,6 +251,8 @@ export function Canvas({
   // time the drawer is resized.
   const fitInsetBottomRef = useRef(fitInsetBottom);
   fitInsetBottomRef.current = fitInsetBottom;
+  const fitInsetRightRef = useRef(fitInsetRight);
+  fitInsetRightRef.current = fitInsetRight;
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const selectedWireIds = useSchematic((s) => s.selectedWireIds);
@@ -1282,6 +1287,11 @@ export function Canvas({
     // taller than the canvas degrades to "fit what is left" rather than
     // asking for a negative viewport.
     const visibleHeight = Math.max(120, r.height - Math.max(0, fitInsetBottomRef.current));
+    // The same reservation along the right edge, for the summoned parts
+    // library. `fitViewTransform` frames into the width it is given and
+    // returns a transform from the element's left, so the free space lands on
+    // the right - which is where the overlay is.
+    const visibleWidth = Math.max(160, r.width - Math.max(0, fitInsetRightRef.current));
     // Hierarchical imports pack flattened block bodies far right of the sheet
     // (ascImport places them from x = 1e6). Framing those makes a 1M-unit-wide
     // fit where the authored circuit is sub-pixel - the sheet looks EMPTY. Fit
@@ -1302,7 +1312,7 @@ export function Canvas({
     // text never touches (or clips at) the canvas edge.
     const framingBounds = circuitBoundsWithLabels(fitComponents, fitWires, fitShapes);
     if (!framingBounds) {
-      const empty = { x: r.width / 2, y: visibleHeight / 2, zoom: 1 };
+      const empty = { x: visibleWidth / 2, y: visibleHeight / 2, zoom: 1 };
       autoFitViewRef.current = empty;
       setView(empty);
       return;
@@ -1314,7 +1324,7 @@ export function Canvas({
           y: (topologyBounds.minY + topologyBounds.maxY) / 2,
         }
       : undefined;
-    const fitted = fitViewTransform(framingBounds, r.width, visibleHeight, {
+    const fitted = fitViewTransform(framingBounds, visibleWidth, visibleHeight, {
       minZoom: 0.25,
       // Fit, do not magnify. 5x was survivable while the canvas was a column
       // sharing the window; now that it is the window, a four-part RC filled
@@ -1400,7 +1410,7 @@ export function Canvas({
       fitView();
     });
     return () => cancelAnimationFrame(id);
-  }, [fitInsetBottom, fitView]);
+  }, [fitInsetBottom, fitInsetRight, fitView]);
 
   // Auto-fit when the document identity changes (open / new / tab switch).
   // Deliberately does NOT depend on components/wires - user pan is preserved

@@ -5494,13 +5494,30 @@ body {
    to 208px, which drops the container query's threshold and the row sheds
    its description column rather than clipping the name (verified via
    design-shot at 900×600). */
+/* Summoned, not docked.
+   The parts library used to be a flex column, so opening it took 264px off
+   the drawing - the canvas-first rule says collapse the apparatus before
+   compressing the canvas, and this was the largest remaining violation of it.
+   It is an overlay now: the schematic keeps its full width and the library
+   sits over the right edge of it.
+
+   Shadowed, because it is summoned. The two-tier rule (see .results-drawer)
+   gives --elev-float to anything that came from somewhere and will go back,
+   and withholds it from persistent chrome. `right` is set inline rather than
+   here: it has to clear the assistant when the assistant is open, and only
+   App knows how wide that is right now. */
 .shell-body > .palette,
 .shell-body > .components-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: var(--z-summoned);
   flex: none;
   width: 264px;
   border-left: 0.5px solid var(--border);
   border-right: 0;
   background: var(--panel);
+  box-shadow: var(--elev-float);
   backdrop-filter: none;
 }
 
@@ -5715,6 +5732,17 @@ body {
 
 .components-rail-body > .component-inspector .property-field {
   grid-template-columns: minmax(56px, 88px) minmax(0, 1fr);
+}
+
+/* Above the summoned parts library, which spans the shell body's full height.
+   The library is meant to cover the drawing, not the tools: with the toolbar
+   and the tab strip stacked over it - both opaque and full-width - the overlay
+   reads as starting below them, and Run stays clickable. Cheaper and steadier
+   than giving the overlay a `top` computed from two variable-height rows. */
+.editor-toolbar,
+.editor-tabs {
+  position: relative;
+  z-index: calc(var(--z-summoned) + 1);
 }
 
 .editor-toolbar {
