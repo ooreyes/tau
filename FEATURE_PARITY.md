@@ -838,17 +838,25 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - 🟡 Transmission lines (T, LTRA, UR) — **ideal lossless line `T` landed
   end-to-end.** New `tline` component kind (4-terminal 2-port: port A `a1/a2`,
   port B `b1/b2`), value carries LTspice's `Td=<s> Z0=<Ω>`. `engine/tlineSpec.ts`
-  parses the order-independent SI-suffixed value (robust fallback Z0=50/Td=1n on
-  malformed input) and `buildSpiceDeck` emits `T<name> a1 a2 b1 b2 Z0=.. TD=..`
+  parses the order-independent SI-suffixed value (50 Ω / 1 ns are UI defaults
+  only; a declared malformed or non-positive field refuses at deck build) and
+  `buildSpiceDeck` emits `T<name> a1 a2 b1 b2 Z0=.. TD=..`
   (ngspice-46 verified — delayed step response on a matched 75 Ω line). Wired
   through types/catalog (Electromechanical palette)/pins/symbol (tapered
   two-conductor glyph). **Import**: LTspice `tline` → `tline` with the four
   `.asy` pins (SpiceOrder I1,R1,I2,R2) banked in `LTSPICE_PINS`, and a missing
   `SYMATTR Value` adopts the `.asy` default `Td=50n Z0=50`. Real-file proof:
   `examples/Educational/TransmissionLineInverter.asc` imports both T1 (default)
-  and T2 (`Td=30n Z0=150`). **Native engine only** (the linear TS MNA solver has
-  no delay-element stamp — correctly excluded). 15 tests. **NEXT:** lossy line
-  (LTRA), `tline` UI param fields, TS-solver frequency-domain stamp.
+  and T2 (`Td=30n Z0=150`). **Parity boundary isolated 2026-08-10:** ordinary
+  matched and reversed-return lossless lines agree with LTspice in RMS
+  (nRMS ≤0.008; edge maxima are timestep interpolation), while the authored
+  inverter's degenerate second line (`T 0 0 out 0`) diverges persistently under
+  ngspice semantics (input/output nRMS≈0.277/0.134). Removing Tau options,
+  tightening maxstep, and reversing the comparison grid do not close it; no
+  topology rewrite is electrically honest. UHFpreamp remains the exact
+  steady-state T-line proof. **Native engine only** (the linear TS MNA solver
+  has no delay-element stamp — correctly excluded). 15 tests. **NEXT:** lossy
+  line (LTRA), `tline` UI param fields, TS-solver frequency-domain stamp.
 - 🟡 Coupled inductors `K` — **directive passthrough landed** (`engine/
   couplingDirectives.ts`): a document's on-canvas `K` TEXT directives
   (`K Lp Ls 1`, `K1 L1 L2 1`, `K3 L1 L2 .95`, the all-windings `K1 L1 L2 L3 L4 1`, parameterized
@@ -1897,8 +1905,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   plus Educational/**Vswitch.asc** authored `.tran` (continuous negative-`Vh`
   SW→B log-R rewrite; v(out)/v(in) nRms≈0.0001/0; `translateContinuousSwitchDeckLines`;
   ≠ SoftDiodeRecovery / ISO7637 spike / Fc) plus Educational/**dimmer.asc**
-  authored `.tran` (on-schematic DIAC+TRIAC; `.step Rdim` expanded 1k/50k/100k;
-  v(loadpower) nRms≈0.0003/0.011/0.008; gate v(b) + Rdim≥200k deferred;
+  authored `.tran` (on-schematic DIAC+TRIAC; `.step Rdim` expanded
+  1k/50k/100k/200k; v(loadpower) nRms≈0.0003/0.011/0.008/0.069; gate v(b) +
+  Rdim>200k deferred;
   ≠ SoftDiodeRecovery Vp>0 / PowerAmp / ct digital) plus
   Educational/**SoftDiodeRecovery.asc** authored `.tran` (`.model X D(tt/Vp/Cjo)`;
   `.step Vp` → Vp=0 member; v(n001) nRms≈0.0026 nMax≈0.095 span≈10.7; Vp>0
@@ -1928,7 +1937,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Draft10 UOA2 same-deck not landed. tip 65e05ce thrash
   corrected. phono/relax blocked. wavein (wavefile=) deferred. HalfSlope Laplace stripped;
   Vswitch continuous SW landed (pass=102); dimmer TRIAC load-power landed (pass=103;
-  gate/near-cutoff deferred); SoftDiodeRecovery Vp=0 landed (pass=104; Vp>0 deferred);
+  Rdim=200k near-cutoff added without a new row; gate and >200k deferred);
+  SoftDiodeRecovery Vp=0 landed (pass=104; Vp>0 deferred);
   PowerAmp TIP A=0.1 landed (pass=105); astable period-meas landed (pass=106;
   continuous phase deferred); PowerAmp A=0.2..0.7 landed (pass=107); NE555 period-meas landed (pass=108;
   continuous phase deferred); HandsFreeLayout landed (pass=109; ≠ Preamp ElectretMic); gr_del midnodes landed (pass=110; gd outs hollow deferred); PowerAmpLayout A=0.1 landed (pass=111; ≠ PowerAmp.asc 5m); Resources/sinh domain-safe DC landed (pass=112; authored ±1.01 poles deferred); PowerAmpLayout A=0.2..0.7 landed (pass=113; ≠ PowerAmp.asc 5m A-step); Documents/Draft8 Laplace dual-deck landed (pass=114); Applications/AD8237 plaintext `.lib` TRAN landed (pass=115; AD8233 ternary rewrite still fails LTspice);

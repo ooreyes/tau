@@ -313,8 +313,8 @@ account and sign/notarize/ship.
       Educational/Vswitch.asc authored `.tran` (continuous negative-Vh SW→B
       log-R rewrite; v(out)/v(in) nRms≈0.0001/0) +
       Educational/dimmer.asc authored `.tran` (on-schematic DIAC+TRIAC;
-      `.step Rdim` expanded 1k/50k/100k; v(loadpower) nRms≈0.0003/0.011/0.008;
-      gate v(b) + Rdim≥200k deferred) +
+      `.step Rdim` expanded 1k/50k/100k/200k; v(loadpower)
+      nRms≈0.0003/0.011/0.008/0.069; gate v(b) + Rdim>200k deferred) +
       Educational/SoftDiodeRecovery.asc authored `.tran` (`.model X D(tt/Vp/Cjo)`;
       `.step Vp` expanded Vp=0; v(n001) nRms≈0.0026; Vp>0 soft-recovery deferred) +
       Educational/PAsystem/PowerAmp.asc authored `.tran` (TIP121/TIP127 Prefix-X
