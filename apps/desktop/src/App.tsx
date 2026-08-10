@@ -2544,16 +2544,6 @@ function App() {
   const componentsColumnOpen = chrome.components.visible;
 
   /**
-   * Pixels of canvas anything is covering on the right. Zero today: the parts
-   * library is still a docked column, so the layout already reserves its
-   * width. Kept wired because the fit needs it the moment the library becomes
-   * the overlay it is meant to be, and a fit that silently ignores an
-   * obstruction is the bug this pair of insets exists to prevent - it is what
-   * put the circuit behind the results drawer at the 900x600 floor.
-   */
-  const railCover = componentsColumnOpen ? componentsRailResize.width : 0;
-
-  /**
    * Where the inspector may go, and what it should stay off.
    *
    * The viewport is the shell body inset by a gutter, less whatever the
@@ -2749,7 +2739,6 @@ function App() {
               interactive
               fitSignal={fitSignal}
               fitInsetBottom={drawerCover}
-              fitInsetRight={railCover}
               onSelectionRect={setSelectionRect}
             />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
@@ -2896,7 +2885,6 @@ function App() {
                   onActuate={handleActuate}
                   fitSignal={fitSignal}
                   fitInsetBottom={drawerCover}
-                  fitInsetRight={railCover}
                   onSelectionRect={setSelectionRect}
                   currentVisualizer={currentVisualizer}
                 />

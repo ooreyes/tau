@@ -130,7 +130,16 @@ async function renderOpenProject() {
 }
 
 describe("App schematic workspace tools", () => {
-  it("keeps Components and Assistant as simultaneous independently resizable columns", async () => {
+  it("mounts Components inside the schematic stage as a summoned surface", async () => {
+    await renderOpenProject();
+
+    const canvas = screen.getByRole("main", { name: "Schematic canvas" });
+    const componentsRail = screen.getByRole("complementary", { name: "Components" });
+    expect(canvas.contains(componentsRail)).toBe(true);
+    expect(componentsRail.parentElement).toBe(canvas);
+  });
+
+  it("keeps the Components overlay and Assistant independently resizable together", async () => {
     await renderOpenProject();
 
     expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();

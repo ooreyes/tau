@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { ComponentProps } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
@@ -467,6 +468,17 @@ describe("Canvas - simulator mutation boundary", () => {
 });
 
 describe("Canvas - simulator fit viewport", () => {
+  it("keeps only the bottom obstruction in the public fit contract", () => {
+    const supported: ComponentProps<typeof Canvas> = { fitInsetBottom: 120 };
+    expect(supported).toEqual({ fitInsetBottom: 120 });
+
+    const obsolete: ComponentProps<typeof Canvas> = {
+      // @ts-expect-error Components is a summoned overlay, never a fit reservation.
+      fitInsetRight: 264,
+    };
+    expect(obsolete).toEqual({ fitInsetRight: 264 });
+  });
+
   it("centers topology in the visible SVG and refits after its wrapper resizes", () => {
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
