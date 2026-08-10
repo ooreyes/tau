@@ -2,31 +2,33 @@
 
 **Status: DONE - 2026-08-10**
 
-Unit: **second production-hardening pass**. Ten reviewed units are pushed:
-complete Settings modality (`c509b78`), 30-Hz decorative current flow
-(`c7216ad`), recursive attached-library identifier normalization (`29879ff`),
-one Components accessibility landmark (`cf15f24`), stale document-navigation
-suppression (`de35897`), single-probe local-AI status (`9a47aa1`), removal of
-two unused direct runtime dependencies (`15e9199`), Past chats focus return
-(`6cf2621`), resize-listener teardown (`2825808`), and the authored dimmer
-near-cutoff point at Rdim=200k (`8ebd574`). The formerly stale red canonical
-claim is resolved by current command output: **82 imported / 81 warning-clean /
-79 deck-built / 79 op-converged**, capability **79 success / 3 honest refusals /
-0 deck-guard leaks / 0 failures**, substitutions 0.
+Unit: **third production-hardening pass**. Palette disclosures now expose clean
+names and valid expanded-state control relationships (`2583a1f`). Native local
+AI status snapshots the managed process under its mutex, then releases the lock
+before the potentially 400 ms loopback readiness probe (`5e35211`), so concurrent
+Settings/assistant polling cannot hold Stop behind network I/O. The 900×600
+proof now targets the current shared Settings Sheet and fails if geometry is not
+measured (`2e06acc`); both themes measure the full 900×600 viewport and all 12
+states remain green. TLINE differential isolation is recorded at `4634f01`:
+ordinary matched/reversed lossless lines agree in RMS, while the authored
+TransmissionLineInverter's degenerate `T 0 0 out 0` diverges between ngspice and
+LTspice semantics; options, maxstep, and comparison-grid probes rule out a Tau
+translation or resampling fix.
 
-Current gates: typecheck and production build clean; frontend **4,009 passed / 8
-skipped**; Rust **89 passed / 20 ignored** plus all **19/19** real-ngspice tests;
-full differential parity green at **115 pass / 5 sibling / 0 gap**; both-theme
-1440x900 design proof and 900x600 minimum-window **12/12** green. Fresh
-Tau.app/DMG build, strict code signature, DMG checksum, nine-file
-arm64/macOS-11 deployment inspection, and packaged plus mounted-DMG 336-sample
-engine smokes are green.
+Current gates: typecheck and production build clean; frontend **4,011 passed / 8
+skipped**; Rust **90 passed / 20 ignored** plus all **19/19** real-ngspice tests;
+900×600 minimum-window **12/12** green. Fresh Tau.app/DMG build, strict code
+signature, DMG checksum, nine-file arm64/macOS-11 deployment inspection, and
+packaged plus mounted-DMG 336-sample engine smokes are green. The prior canonical
+**82/81/79/79**, capability **79/3/0/0**, zero-substitution and differential
+**115 pass / 5 sibling / 0 gap** proofs remain the current precision baseline.
 
 **SHIPPABLE? NO.** The named-device DoD remains honestly blocked at 48.1% by
 unavailable encrypted vendor models, and broad differential coverage remains
 incomplete even though every committed cell currently passes. Native title-bar
 interaction still needs an unlocked Mac. Next: continue exact authored-analysis
-coverage without weakening fail-closed model handling.
+coverage without weakening fail-closed model handling; do not manufacture a
+TLINE inverter row across a proven simulator-semantic divergence.
 
 ---
 
@@ -18708,3 +18710,21 @@ evidence is kept in full here.
   plus 336-sample engine smokes from both the app bundle and mounted DMG. The
   scheduler remains disabled. Named-device exact fidelity at 48.1% and the open
   broad differential matrix still correctly keep the product not shippable.
+
+- 2026-08-10 - Completed a third reviewed production-hardening increment.
+  Palette disclosure buttons now have clean accessible names and valid
+  expanded-state `aria-controls` relationships. Native MLX status polling no
+  longer holds the managed-process mutex during its bounded loopback HTTP probe,
+  removing up to 400 ms of avoidable contention with Stop and concurrent UI
+  pollers. The minimum-window verifier's stale pre-Sheet selector was repaired;
+  it now fails if the current Settings Sheet is not measured, and all 12 light/
+  dark 900×600 states passed with the dialog geometry present. A raw-deck TLINE
+  investigation found ordinary matched/reversed lines aligned in RMS but
+  isolated the TransmissionLineInverter miss to LTspice/ngspice behavior for
+  the authored degenerate `T 0 0 out 0` element, not Tau's import, options,
+  timestep, or resampling; no inexact rewrite was added. Evidence: typecheck and
+  production build clean; 4,011 frontend tests passed / eight skipped; Rust fmt
+  and Clippy clean; 90 ordinary tests plus all 19 ignored real-ngspice tests;
+  fresh app/DMG strict signature, checksum, macOS-11 inspection, and 336-sample
+  engine smokes from both bundle and mounted image. Named-device 48.1% and the
+  still-open broad differential matrix keep the overall product not shippable.
