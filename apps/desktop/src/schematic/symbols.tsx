@@ -793,7 +793,10 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   pushButton: { minX: -18, minY: -22, maxX: 18, maxY: 3 },
   spdt: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   relay: { minX: -18, minY: -20, maxX: 18, maxY: 22 },
-  motor: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
+  // Same artwork as the bulb — an r = 14 glass with a glyph inside it — so it
+  // gets the bulb's box. It claimed ±16 while drawing ±14, and an over-declared
+  // body pushes labels and hit-testing away from a part that was never that big.
+  motor: { minX: -14, minY: -14, maxX: 14, maxY: 14 },
   transformer: { minX: -22, minY: -22, maxX: 22, maxY: 22 },
   ctTransformer: { minX: -22, minY: -28, maxX: 24, maxY: 28 },
   tline: { minX: -20, minY: -16, maxX: 20, maxY: 16 },
@@ -1514,9 +1517,33 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
     case "motor":
       return (
         <>
+          {/* IEC rotating machine: the letter M inside the machine circle.
+              What used to be here was not an M and could not have been. Its
+              apex sat at x = -2 against a bare vertical left upright and a
+              diagonal right leg, so mirroring the path did not reproduce it —
+              the same "upright then a run of steps" shape as the vpulse train
+              above, which is probably where it came from. It read as a
+              squiggle, and the bulb was redrawn (below) to escape a
+              resemblance the motor was not actually earning.
+
+              A capital M is its own mirror image, so this one is struck about
+              x = 0 and is therefore centred by construction rather than by
+              eye; ±6 are the only y values, so the same holds vertically. At
+              13 × 12 it fills a little under half the 28-unit glass, putting
+              its corners √(6.5² + 6²) = 8.85 from the centre — 2.80 units of
+              clear paint to the glass even at the 2.35 selected stroke, i.e.
+              more than one whole stroke, so the letter never crowds the
+              circle it names. `symbols.test.tsx` recomputes all of that
+              instead of trusting this comment.
+
+              Stroked rather than <text>, like the D-flop's D: only strokes
+              hold their width through the canvas zoom, pick up the selected
+              weight, turn accent in the inspector preview and go dashed in
+              the placement ghost. <text> here is for pin and part captions,
+              which are none of those things. */}
           <line x1={-32} y1={0} x2={-14} y2={0} />
           <circle cx={0} cy={0} r={14} />
-          <path d="M -6 5 L -6 -5 L -2 2 L 2 -5 L 6 5" fill="none" />
+          <path data-motor-glyph="M" d="M -6.5 6 L -6.5 -6 L 0 6 L 6.5 -6 L 6.5 6" />
           <line x1={14} y1={0} x2={32} y2={0} />
         </>
       );

@@ -29,9 +29,12 @@ const ROTATIONS: Rotation[] = [0, 90, 180, 270];
  *  it (plus its drop-shadow halo) once the part is picked. */
 const SELECTED_STROKE = 2.35;
 
-/** Kinds redrawn by items 3 and 4. */
+/** Kinds redrawn by items 3 and 4, plus the motor — redrawn later, but it
+ *  earns the same body/lead/preview guarantees, and it shares the bulb's
+ *  circle-plus-glyph artwork, so the two are best held to one standard. */
 const REDRAWN_KINDS: ComponentKind[] = [
   "bulb",
+  "motor",
   "potentiometer",
   "opamp",
   "comparator",
@@ -497,6 +500,64 @@ describe("passive redraws (item 3)", () => {
         ).toBeLessThanOrEqual(0.5);
       }
     }
+  });
+
+  // The mirror image of the bulb's rule. The lamp's filament must touch the
+  // glass; the motor's letter must not. Held together, the two symbols cannot
+  // drift back into looking like each other.
+  describe("the motor is a circled M", () => {
+    const motorGlyph = (): Seg[] => {
+      const tag = elementTags(render("motor"), "path")
+        .find((candidate) => attr(candidate, "data-motor-glyph") === "M");
+      expect(tag, "no motor glyph").toBeTruthy();
+      return pathSegments(attr(tag ?? "", "d") ?? "");
+    };
+    const glyphPoints = (): Pt[] => motorGlyph().flatMap((s) => [s.a, s.b]);
+
+    it("draws a glyph that is its own mirror image", () => {
+      // This is what makes it a letter rather than a squiggle. The old glyph
+      // failed it: apex at x = -2, one vertical leg and one diagonal one.
+      const key = (s: Seg) =>
+        [s.a, s.b].map((p) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`).sort().join("|");
+      const segments = motorGlyph();
+      const mirrored = segments.map((s) => ({
+        a: { x: -s.a.x, y: s.a.y },
+        b: { x: -s.b.x, y: s.b.y },
+      }));
+      expect(new Set(mirrored.map(key))).toEqual(new Set(segments.map(key)));
+    });
+
+    it("centres the M on the glass in both axes", () => {
+      const glass = elementTags(render("motor"), "circle")[0];
+      expect(numAttr(glass ?? "", "cx")).toBe(0);
+      expect(numAttr(glass ?? "", "cy")).toBe(0);
+      const box = boxOfSegments(motorGlyph());
+      expect(box.minX).toBeCloseTo(-box.maxX, 9);
+      expect(box.minY).toBeCloseTo(-box.maxY, 9);
+    });
+
+    it("is a five-point M: two full-height uprights and an apex on the axis", () => {
+      const points = glyphPoints();
+      const xs = [...new Set(points.map((p) => p.x))].sort((a, b) => a - b);
+      expect(xs, "an M has a left leg, an axial apex and a right leg").toHaveLength(3);
+      expect(xs[1], "the apex is off the circle's axis").toBe(0);
+      const box = boxOfSegments(motorGlyph());
+      for (const x of [xs[0], xs[2]]) {
+        const ys = points.filter((p) => p.x === x).map((p) => p.y);
+        expect(Math.min(...ys), `upright at x = ${x} is short at the top`).toBeCloseTo(box.minY, 9);
+        expect(Math.max(...ys), `upright at x = ${x} is short at the bottom`).toBeCloseTo(box.maxY, 9);
+      }
+    });
+
+    it("keeps the M clear of the glass by a whole selected stroke", () => {
+      const glass = elementTags(render("motor"), "circle")[0];
+      const r = numAttr(glass ?? "", "r");
+      for (const point of glyphPoints()) {
+        const paintedGap = (r - SELECTED_STROKE / 2) - (Math.hypot(point.x, point.y) + SELECTED_STROKE / 2);
+        expect(paintedGap, `(${point.x}, ${point.y}) crowds the glass`)
+          .toBeGreaterThanOrEqual(SELECTED_STROKE);
+      }
+    });
   });
 });
 
