@@ -59,6 +59,82 @@ describe("collectAutoResolutionInputs", () => {
   });
 });
 
+describe("collectAutoResolutionInputs — parts the deck expands into R/L/C", () => {
+  it("counts a DC motor's armature R and L", () => {
+    // The deck emits `motor` as series R + L (spiceNetlist `case "motor"`), so
+    // "10 1m" is 10 Ω / 1 mH → R_typ = 10 Ω and τ = L/R = 100 µs. Before the
+    // motor branch existed this circuit reported no time constant at all.
+    const inputs = collectAutoResolutionInputs([
+      part("vsource", "100", "V1"),
+      part("motor", "10 1m", "M1"),
+    ]);
+    expect(inputs.maxTauSeconds).toBeCloseTo(1e-4, 12);
+    expect(inputs.minTauSeconds).toBeCloseTo(1e-4, 12);
+    expect(inputs.maxSourceHz).toBe(0);
+  });
+
+  it("reads the motor pair through the emitter's parser, catalog defaults included", () => {
+    // `R=… L=…` and a garbage value both go through `motorArmature`, so the
+    // heuristic inherits its catalog defaults (10 Ω / 1 mH) rather than
+    // inventing a second interpretation of the same value string.
+    const keyed = collectAutoResolutionInputs([part("motor", "R=8 L=500u", "M1")]);
+    expect(keyed.maxTauSeconds).toBeCloseTo(500e-6 / 8, 12);
+
+    const garbage = collectAutoResolutionInputs([part("motor", "spin fast", "M1")]);
+    expect(garbage.maxTauSeconds).toBeCloseTo(1e-3 / 10, 12);
+  });
+
+  it("counts a relay coil as the resistor the deck emits", () => {
+    // Coil = 220 Ω is the only resistance, so R_typ = 220 and the 1 µF cap
+    // sees τ = 220 µs instead of the no-resistor fallback's 1 ms.
+    const inputs = collectAutoResolutionInputs([
+      part("relay", "220", "K1"),
+      part("capacitor", "1u", "C1"),
+    ]);
+    expect(inputs.maxTauSeconds).toBeCloseTo(220e-6, 12);
+
+    // Blank value → `relayCoilOhms`' 100 Ω catalog default, same as the deck.
+    const blank = collectAutoResolutionInputs([
+      part("relay", "", "K1"),
+      part("capacitor", "1u", "C1"),
+    ]);
+    expect(blank.maxTauSeconds).toBeCloseTo(100e-6, 12);
+  });
+
+  it("counts both transformer windings as inductances", () => {
+    // `1:2` → L1 = 10 mH default, L2 = L1·(Ns/Np)² = 40 mH. No resistors, so
+    // R_typ = 1 kΩ: τ = 10 µs and 40 µs.
+    const ratio = collectAutoResolutionInputs([part("transformer", "1:2", "T1")]);
+    expect(ratio.minTauSeconds).toBeCloseTo(1e-5, 12);
+    expect(ratio.maxTauSeconds).toBeCloseTo(4e-5, 12);
+
+    // Authored windings override the defaults through the same parser.
+    const authored = collectAutoResolutionInputs([part("transformer", "L1=2m L2=8m k=0.98", "T1")]);
+    expect(authored.minTauSeconds).toBeCloseTo(2e-6, 12);
+    expect(authored.maxTauSeconds).toBeCloseTo(8e-6, 12);
+  });
+
+  it("counts a center-tapped secondary as the L/4 half-windings the deck emits", () => {
+    // `1:4` → L1 = 10 mH, full secondary = 160 mH, but the deck emits two
+    // half-windings of L2/4 = 40 mH each (L ∝ N²). τ = 10 µs and 40 µs, not
+    // the 160 µs a full-secondary reading would claim.
+    const inputs = collectAutoResolutionInputs([part("ctTransformer", "1:4", "T1")]);
+    expect(inputs.minTauSeconds).toBeCloseTo(1e-5, 12);
+    expect(inputs.maxTauSeconds).toBeCloseTo(4e-5, 12);
+  });
+
+  it("skips a transformer whose winding field is malformed instead of throwing", () => {
+    // `transformerWindings` throws on `L1=oops`; auto mode must degrade to the
+    // defaults so the run itself can report the bad value.
+    const inputs = collectAutoResolutionInputs([
+      part("transformer", "L1=oops", "T1"),
+      part("resistor", "1k", "R1"),
+    ]);
+    expect(inputs.maxTauSeconds).toBe(0);
+    expect(inputs.minTauSeconds).toBe(0);
+  });
+});
+
 describe("autoTransientOptions", () => {
   it("falls back to the classic 6 ms / 240 defaults for a source-less, memory-less circuit", () => {
     expect(autoTransientOptions({ maxSourceHz: 0, minSourceHz: 0, maxTauSeconds: 0, minTauSeconds: 0 }))
@@ -123,6 +199,30 @@ describe("autoTransientOptions", () => {
     ]);
     expect(options.stopTime).toBeCloseTo(0.007, 9);
     expect(options.steps).toBe(448);
+  });
+
+  it("gives a DC-motor circuit a settling window instead of the 6 ms default", () => {
+    // 100 V DC into a "10 1m" motor is a first-order L/R step: τ = 1 mH/10 Ω =
+    // 100 µs, settled by 7·τ = 700 µs. The window has to get SHORTER than the
+    // 6 ms memory-less default, not longer - at 6 ms the whole inrush lives in
+    // the first 2% of the plot. Steps stay at the balanced floor of 240
+    // because the τ term only asks for ceil(700µ/100µ · 4) = 28.
+    const options = suggestTransientOptions([
+      part("vsource", "100", "V1"),
+      part("motor", "10 1m", "M1"),
+    ]);
+    expect(options.stopTime).toBeCloseTo(7e-4, 12);
+    expect(options.steps).toBe(240);
+    expect(options.stopTime).toBeLessThan(0.006);
+  });
+
+  it("gives a transformer circuit a window from its magnetizing inductance", () => {
+    // `1:2` with no resistors: L2 = 40 mH over R_typ = 1 kΩ → τ_max = 40 µs,
+    // window 7·40 µs = 280 µs. Steps: the τ_min term is ceil(280µ/10µ · 4) =
+    // 112, so the 240 floor still wins.
+    const options = suggestTransientOptions([part("transformer", "1:2", "T1")]);
+    expect(options.stopTime).toBeCloseTo(2.8e-4, 12);
+    expect(options.steps).toBe(240);
   });
 });
 

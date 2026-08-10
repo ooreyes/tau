@@ -1,3 +1,5 @@
+import { transformerWindings } from "../engine/spiceNetlist";
+import { motorArmature, relayCoilOhms } from "../schematic/kindGroups";
 import type { SchematicComponent } from "../schematic/types";
 import {
   type AnalysisOptions,
@@ -21,6 +23,34 @@ import { parseQuantity } from "./quantity";
  *   resistor values (1 kΩ when there are no resistors). This ignores the
  *   actual topology - a deliberate simplification; series/parallel structure
  *   would need per-node Thévenin resistances.
+ * - Composite parts count as the R/L/C the deck expands them into, read back
+ *   through the emitter's own parser so the heuristic and the netlist can
+ *   never disagree about what a part is: motor → armature R + L
+ *   (`motorArmature`), relay → coil R (`relayCoilOhms`), transformer and
+ *   ctTransformer → winding inductances (`transformerWindings`), bulb →
+ *   filament R (it shares the resistor branch, exactly as it shares the R
+ *   device in the deck).
+ * - NOT counted. A limitation is only documented if it is named, so each
+ *   remaining hole is listed here with the reason it stays open:
+ *   · `tline` - the deck emits a native lossless-line T device, not an R/L/C
+ *     expansion. Its `TD` is a propagation delay, not a settling exponential;
+ *     folding it into the τ pool would either collapse the window to
+ *     nanoseconds or invent a round-trip multiple that nothing measures.
+ *   · Static contacts (`switch` / `pushButton` / `spdt` left on a fixed
+ *     open/closed state) - the deck stands them in as 1 mΩ / 1 TΩ ideal
+ *     contacts. Those numbers describe the contact, not the circuit's
+ *     impedance, and either one would move the geometric mean by orders of
+ *     magnitude.
+ *   · `Rser=` / `Rpar=` / `Cpar=` parasitics on capacitor and inductor values
+ *     - the deck expands real companion elements for these, but only the
+ *     leading value token is read here. Milliohm ESRs pulled into the
+ *     geometric mean would drag R_typ far below any real load resistance and
+ *     inflate every RC τ in the circuit.
+ *   · Macromodel and model-card internals - the R/C inside `opamp`,
+ *     `comparator`, `timer555` and the digital parts, junction capacitances
+ *     on `.model` cards, and everything inside a `subckt` body. None of that
+ *     is reachable from a component value string, so it needs a different
+ *     mechanism (reading the built deck back), not a wider scan.
  * - Window: long enough to show 5 cycles of the SLOWEST periodic source and
  *   the settling of the slowest time constant (7·τ ≈ settle to <0.1%),
  *   whichever is longer.
@@ -117,6 +147,51 @@ export function collectAutoResolutionInputs(
     if (component.kind === "inductor") {
       const l = leadingQuantity(component.value, "H");
       if (Number.isFinite(l) && l > 0) taus.push({ kind: "L", value: l });
+      continue;
+    }
+    // Composite parts below are not primitives in the deck: `case "motor"` and
+    // its neighbours in ../engine/spiceNetlist.ts expand each one into ordinary
+    // R/L/C devices, so the circuit ngspice actually solves has time constants
+    // a kind-only scan never sees. Each branch therefore reads the values back
+    // through the *same* parser the emitter calls instead of re-parsing the
+    // value string - that is what keeps the heuristic pointed at the netlist
+    // rather than at a second, drifting interpretation of the same text.
+    if (component.kind === "motor") {
+      // A motor is series armature R + L, so 100 V DC into "10 1m" is a
+      // first-order L/R step with τ = 100 µs. Missing that made a DC-motor
+      // circuit look memoryless: it took the 6 ms default window and hid the
+      // entire inrush inside the first 2% of the plot.
+      const armature = motorArmature(component.value);
+      if (armature.resistance > 0) resistances.push(armature.resistance);
+      if (armature.inductance > 0) taus.push({ kind: "L", value: armature.inductance });
+      continue;
+    }
+    if (component.kind === "relay") {
+      // The coil is a plain resistor between COIL+/COIL-; the contact is a
+      // voltage-controlled switch, which carries no impedance of its own. The
+      // coil resistance is therefore the relay's whole contribution here.
+      const coil = relayCoilOhms(component.value);
+      if (coil > 0) resistances.push(coil);
+      continue;
+    }
+    if (component.kind === "transformer" || component.kind === "ctTransformer") {
+      // Both kinds emit coupled inductors: L1 plus either the full secondary
+      // or, center-tapped, two half-windings of L2/4 (L ∝ N²). Counting the
+      // winding inductances the way the standalone inductor branch counts L
+      // inherits that branch's topology blindness - coupling k is ignored, so
+      // this represents the magnetizing τ and not the faster leakage τ.
+      // `transformerWindings` throws on a malformed `L1=`/`L2=`/`k=` field;
+      // auto mode degrades to the defaults rather than blocking a run, and the
+      // run itself reports the bad value.
+      let windings: ReturnType<typeof transformerWindings>;
+      try {
+        windings = transformerWindings(component.value);
+      } catch {
+        continue;
+      }
+      if (windings.primary > 0) taus.push({ kind: "L", value: windings.primary });
+      const secondary = component.kind === "ctTransformer" ? windings.secondary / 4 : windings.secondary;
+      if (secondary > 0) taus.push({ kind: "L", value: secondary });
       continue;
     }
     let frequency: number | null = null;
