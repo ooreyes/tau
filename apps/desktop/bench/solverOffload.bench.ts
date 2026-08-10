@@ -39,6 +39,7 @@ import { runTransientAnalysis, type AnalysisResult } from "../src/simulation/lin
 import { runAcSweep, type AcOptions, type AcResult } from "../src/simulation/acSweep";
 import { runAcStepFamily } from "../src/simulation/stepAnalysisFamily";
 import { runTransientAnalysisOffThread, solverConcurrency } from "../src/simulation/solverPool";
+import { packSolverResult, unpackSolverResult } from "../src/simulation/solverJobs";
 import { EMPTY_SCOPE } from "../src/simulation/paramScope";
 import { parseStepDirective, type StepSpec } from "../src/simulation/paramStep";
 import type { SchematicComponent, SchematicWire } from "../src/schematic/types";
@@ -268,10 +269,10 @@ async function workerSmokeTest(): Promise<{ usable: boolean; detail: string }> {
 // The measurements.
 // ---------------------------------------------------------------------------
 
-const TRANSIENT_STAGES = 8;
-const TRANSIENT_STEPS = 20_000;
+const TRANSIENT_STAGES = 10;
+const TRANSIENT_STEPS = 100_000;
 const FAMILY_MEMBERS = 40;
-const ROUNDS = 3;
+const ROUNDS = 5;
 
 async function idleBaseline(): Promise<Blocking> {
   const { blocking } = await whileWatchingTheMainThread(
@@ -325,16 +326,31 @@ async function transientComparison() {
   // uninterruptible task - so it is the one thing the offload *adds* to the UI
   // thread, and the only candidate for a residual hitch.
   let cloneMs = 0;
+  let packMs = 0;
+  let unpackMs = 0;
   let samples = 0;
   if (onResult?.ok) {
     samples = onResult.times.length * (1 + onResult.traces.length + onResult.currents.length);
     const cloneStart = performance.now();
     structuredClone(onResult);
     cloneMs = round(performance.now() - cloneStart);
+
+    // What the two halves of the transferable path cost, so the wall-clock
+    // difference between an on-thread and an off-thread solve can be split
+    // into "marshalling" and "the worker thread ran the maths slower".
+    const scratch = structuredClone({ kind: "tran" as const, result: onResult });
+    const packStart = performance.now();
+    const { payload } = packSolverResult(scratch);
+    packMs = round(performance.now() - packStart);
+    const unpackStart = performance.now();
+    unpackSolverResult(payload);
+    unpackMs = round(performance.now() - unpackStart);
   }
 
   return {
     resultCloneMs: cloneMs,
+    resultPackMs: packMs,
+    resultUnpackMs: unpackMs,
     resultSamples: samples,
     stages: TRANSIENT_STAGES,
     steps: TRANSIENT_STEPS,
@@ -358,8 +374,8 @@ async function transientComparison() {
 }
 
 async function familyComparison() {
-  const { components, wires } = rcLadder(6, "vac", "1 1k", "{Rval}");
-  const acOptions: AcOptions = { startHz: 1, stopHz: 1e6, pointsPerDecade: 120 };
+  const { components, wires } = rcLadder(8, "vac", "1 1k", "{Rval}");
+  const acOptions: AcOptions = { startHz: 1, stopHz: 1e6, pointsPerDecade: 400 };
   const spec = parseStepDirective(`.step param Rval 1000 ${1000 + (FAMILY_MEMBERS - 1) * 10} 10`) as StepSpec;
 
   // The sequential reference is written out rather than recovered from a

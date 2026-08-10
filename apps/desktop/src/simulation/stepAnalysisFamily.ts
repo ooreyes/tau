@@ -41,8 +41,9 @@ import {
   nestedStepContexts,
   type StepContext,
 } from "./stepFamily";
-import { runAcSweep, type AcResult, type AcOptions } from "./acSweep";
-import { runDcSweep, type DcSweepResult, type DcSweepSpec } from "./dcSweep";
+import type { AcResult, AcOptions } from "./acSweep";
+import type { DcSweepResult, DcSweepSpec } from "./dcSweep";
+import { runAcSweepOffThread, runDcSweepOffThread } from "./solverPool";
 
 /** One member of an arbitrary-analysis step family: a swept value + its result. */
 export interface AnalysisFamilyMember<R> {
@@ -63,24 +64,29 @@ export interface AnalysisFamily<R> {
 }
 
 /**
- * Re-run a synchronous analysis once per `.step` context, collecting a family
- * of results. Generic over the analysis: the caller supplies a `run(ctx)`
- * closure (uses `ctx.params`/`ctx.components`) and a `resultOk`/`resultWarnings`
- * accessor pair so this stays result-shape-agnostic.
+ * Run an analysis once per `.step` context, collecting a family of results.
+ * Generic over the analysis: the caller supplies a `run(ctx)` closure (uses
+ * `ctx.params`/`ctx.components`) and a `resultOk`/`resultWarnings` accessor
+ * pair so this stays result-shape-agnostic.
+ *
+ * `run` may answer synchronously or with a promise. Every member is started
+ * before any is awaited, so a `run` that dispatches to a worker gets real
+ * parallelism while a `run` that computes inline behaves exactly as the old
+ * sequential `map` did - same solves, same order, same numbers.
  *
  * Multiple specs form LTspice's nested outer×inner product (via
  * {@link nestedStepContexts}); a single spec is the ordinary family; none yields
  * a clear `ok:false` message. Expansion errors (e.g. a `source` sweep naming an
  * absent component) surface as `ok:false` with the thrown message.
  */
-export function runStepFamily<R>(
+export async function runStepFamily<R>(
   specs: StepSpec[],
   baseParams: ParamScope,
   baseComponents: SchematicComponent[],
-  run: (ctx: StepContext) => R,
+  run: (ctx: StepContext) => R | Promise<R>,
   resultOk: (result: R) => boolean,
   resultWarnings: (result: R) => string[],
-): AnalysisFamily<R> {
+): Promise<AnalysisFamily<R>> {
   if (specs.length === 0) {
     return {
       ok: false,
@@ -103,14 +109,21 @@ export function runStepFamily<R>(
     };
   }
 
-  const members: AnalysisFamilyMember<R>[] = contexts.map((ctx) => ({
+  // `Promise.all` over the mapped contexts, not an awaiting loop: the loop
+  // would serialise the members again, one await at a time, and hand the pool
+  // a single job to chew on. Its resolution order is positional, so `members`
+  // is in sweep order no matter which solve finishes first.
+  const results = await Promise.all(contexts.map((ctx) => run(ctx)));
+  const members: AnalysisFamilyMember<R>[] = contexts.map((ctx, index) => ({
     label: ctx.label,
     value: ctx.value,
-    result: run(ctx),
+    result: results[index],
   }));
 
   // Surface the first successful member's warnings (they share a circuit shape,
-  // so a representative warning set is all the overlay needs).
+  // so a representative warning set is all the overlay needs). Read off the
+  // ordered array, so "first" stays first-in-the-sweep and never becomes
+  // first-to-return.
   const firstOk = members.find((m) => resultOk(m.result));
   return {
     ok: members.some((m) => resultOk(m.result)),
@@ -229,21 +242,22 @@ export interface FamilySchematic {
 
 /**
  * Run an AC (Bode) sweep once per `.step` value, producing a family of
- * frequency responses to overlay. Each context's params/components drive the
- * TS `runAcSweep`; the base wires/netLabels/couplings are shared.
+ * frequency responses to overlay. Each context's params/components drive
+ * `runAcSweep`, on a pool worker where there is one; the base
+ * wires/netLabels/couplings are shared.
  */
 export function runAcStepFamily(
   specs: StepSpec[],
   baseParams: ParamScope,
   schematic: FamilySchematic,
   options: AcOptions,
-): AnalysisFamily<AcResult> {
+): Promise<AnalysisFamily<AcResult>> {
   return runStepFamily(
     specs,
     baseParams,
     schematic.components,
     (ctx) =>
-      runAcSweep(
+      runAcSweepOffThread(
         {
           components: ctx.components,
           wires: schematic.wires,
@@ -269,13 +283,13 @@ export function runDcStepFamily(
   baseParams: ParamScope,
   schematic: Omit<FamilySchematic, "couplings">,
   dcSpec: DcSweepSpec,
-): AnalysisFamily<DcSweepResult> {
+): Promise<AnalysisFamily<DcSweepResult>> {
   return runStepFamily(
     specs,
     baseParams,
     schematic.components,
     (ctx) =>
-      runDcSweep(
+      runDcSweepOffThread(
         {
           components: ctx.components,
           wires: schematic.wires,

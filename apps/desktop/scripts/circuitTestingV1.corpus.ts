@@ -265,14 +265,14 @@ describe("Circuit_testing_v1", () => {
     nativeRun(file, imported, { kind: "dc", ...dc! });
   });
 
-  it("builds four distinct parameter-step transfer curves", () => {
+  it("builds four distinct parameter-step transfer curves", async () => {
     const file = "05_step_loaded_divider.asc";
     const imported = load(file);
     const dc = analysesFromDirectives(imported.directives).dc;
     const steps = runnableStepsFromDirectives(imported.directives);
     expect(dc).toBeDefined();
     expect(steps).toHaveLength(1);
-    const family = runDcStepFamily(
+    const family = await runDcStepFamily(
       steps,
       buildParamScope(imported.directives),
       {

@@ -80,7 +80,7 @@ import {
 // called directly: same signature, same progress stream, same abort semantics,
 // but the arithmetic no longer runs on the thread that has to paint it. The
 // pool falls back to an inline call wherever workers do not exist.
-import { runTransientAnalysisOffThread } from "./simulation/solverPool";
+import { prewarmSolverPool, runTransientAnalysisOffThread } from "./simulation/solverPool";
 import { runOperatingPoint, type OperatingPointResult } from "./simulation/operatingPoint";
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
 import { runDcSweep, type DcSweepResult, type DcSweepSpec } from "./simulation/dcSweep";
@@ -479,6 +479,19 @@ function App() {
   const [resultsRaise, setResultsRaise] = useState(0);
   /** Pixels of canvas the results drawer is covering; see its onCoverChange. */
   const [drawerCover, setDrawerCover] = useState(0);
+
+  /**
+   * Boot one solver worker while the user is still reading the schematic.
+   *
+   * Workers are created on demand, so without this the first Run of a session
+   * pays for starting a thread and loading the solver into it before any
+   * arithmetic happens - on the one action the user is most likely to be
+   * timing. Mount is the right moment: it is seconds before any Run, and the
+   * cost is one idle thread that the pool would have created anyway.
+   */
+  useEffect(() => {
+    prewarmSolverPool();
+  }, []);
   /** The selection's on-screen box, published by Canvas; see onSelectionRect. */
   const [selectionRect, setSelectionRect] = useState<
     { minX: number; minY: number; maxX: number; maxY: number } | null
@@ -1112,24 +1125,27 @@ function App() {
       } else if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
         const nativeFamily = await runNativeSteppedAcSweep(schematic, acSweep, specs);
         if (analysisRequestRef.current !== requestId) return;
-        setAcStepFamily(
-          nativeFamily
-            ?? runAcStepFamily(
-              specs,
-              params,
-              { components, wires, netLabels, couplings },
-              analysesFromDirectives(directives).ac ?? acSweep,
-            ),
-        );
-      } else {
-        setAcStepFamily(
-          runAcStepFamily(
+        // The TS family is now awaited (its members run across the worker
+        // pool), so the staleness check has to be repeated after it settles -
+        // a re-run started while forty sweeps were in flight must win.
+        const family = nativeFamily
+          ?? await runAcStepFamily(
             specs,
             params,
             { components, wires, netLabels, couplings },
             analysesFromDirectives(directives).ac ?? acSweep,
-          ),
+          );
+        if (analysisRequestRef.current !== requestId) return;
+        setAcStepFamily(family);
+      } else {
+        const family = await runAcStepFamily(
+          specs,
+          params,
+          { components, wires, netLabels, couplings },
+          analysesFromDirectives(directives).ac ?? acSweep,
         );
+        if (analysisRequestRef.current !== requestId) return;
+        setAcStepFamily(family);
       }
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
@@ -1180,12 +1196,14 @@ function App() {
       } else if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
         const nativeFamily = await runNativeSteppedDcSweep(schematic, dc, specs);
         if (analysisRequestRef.current !== requestId) return;
-        setDcStepFamily(
-          nativeFamily
-            ?? runDcStepFamily(specs, params, { components, wires, netLabels }, dc),
-        );
+        const family = nativeFamily
+          ?? await runDcStepFamily(specs, params, { components, wires, netLabels }, dc);
+        if (analysisRequestRef.current !== requestId) return;
+        setDcStepFamily(family);
       } else {
-        setDcStepFamily(runDcStepFamily(specs, params, { components, wires, netLabels }, dc));
+        const family = await runDcStepFamily(specs, params, { components, wires, netLabels }, dc);
+        if (analysisRequestRef.current !== requestId) return;
+        setDcStepFamily(family);
       }
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
@@ -1297,7 +1315,7 @@ function App() {
             return;
           }
         }
-        const family = runAcStepFamily(
+        const family = await runAcStepFamily(
           specs,
           params,
           { components, wires, netLabels, couplings },
@@ -1332,7 +1350,7 @@ function App() {
             return;
           }
         }
-        const family = runDcStepFamily(specs, params, { components, wires, netLabels }, dc);
+        const family = await runDcStepFamily(specs, params, { components, wires, netLabels }, dc);
         if (analysisRequestRef.current !== requestId) return;
         setDcStepFamily(family);
         setStepFamily({

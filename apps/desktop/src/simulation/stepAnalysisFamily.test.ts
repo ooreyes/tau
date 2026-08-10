@@ -31,17 +31,17 @@ interface Fake {
 const okFake = (): Fake => ({ ok: true, warnings: ["w"] });
 
 describe("runStepFamily - generic core", () => {
-  it("returns a clear message with no specs", () => {
-    const fam = runStepFamily<Fake>([], EMPTY_SCOPE, [], okFake, (r) => r.ok, (r) => r.warnings);
+  it("returns a clear message with no specs", async () => {
+    const fam = await runStepFamily<Fake>([], EMPTY_SCOPE, [], okFake, (r) => r.ok, (r) => r.warnings);
     expect(fam.ok).toBe(false);
     expect(fam.members).toEqual([]);
     expect(fam.message).toMatch(/\.step/);
   });
 
-  it("runs the closure once per swept value and labels each member", () => {
+  it("runs the closure once per swept value and labels each member", async () => {
     const spec = parseStepDirective(".step param G list 1 2 3")!;
     let calls = 0;
-    const fam = runStepFamily<Fake>(
+    const fam = await runStepFamily<Fake>(
       [spec],
       EMPTY_SCOPE,
       [],
@@ -61,22 +61,22 @@ describe("runStepFamily - generic core", () => {
     expect(fam.warnings).toEqual(["w"]); // from the first ok member
   });
 
-  it("surfaces a source-sweep expansion error as ok:false", () => {
+  it("surfaces a source-sweep expansion error as ok:false", async () => {
     const spec = parseStepDirective(".step Vmissing 0 5 1")!;
-    const fam = runStepFamily<Fake>([spec], EMPTY_SCOPE, [], okFake, (r) => r.ok, (r) => r.warnings);
+    const fam = await runStepFamily<Fake>([spec], EMPTY_SCOPE, [], okFake, (r) => r.ok, (r) => r.warnings);
     expect(fam.ok).toBe(false);
     expect(fam.message).toMatch(/Vmissing/);
     expect(fam.members).toEqual([]);
   });
 
-  it("refuses an oversized family before invoking the solver", () => {
+  it("refuses an oversized family before invoking the solver", async () => {
     const spec = {
       kind: "param" as const,
       name: "G",
       values: Array.from({ length: 257 }, (_, i) => i),
     };
     let calls = 0;
-    const fam = runStepFamily<Fake>(
+    const fam = await runStepFamily<Fake>(
       [spec],
       EMPTY_SCOPE,
       [],
@@ -89,10 +89,10 @@ describe("runStepFamily - generic core", () => {
     expect(calls).toBe(0);
   });
 
-  it("expands two specs into the nested Cartesian product", () => {
+  it("expands two specs into the nested Cartesian product", async () => {
     const outer = parseStepDirective(".step param A list 1 2")!;
     const inner = parseStepDirective(".step param B list 10 20")!;
-    const fam = runStepFamily<Fake>([outer, inner], EMPTY_SCOPE, [], okFake, (r) => r.ok, (r) => r.warnings);
+    const fam = await runStepFamily<Fake>([outer, inner], EMPTY_SCOPE, [], okFake, (r) => r.ok, (r) => r.warnings);
     expect(fam.members.map((m) => m.label)).toEqual([
       "A=1, B=10",
       "A=1, B=20",
@@ -101,9 +101,9 @@ describe("runStepFamily - generic core", () => {
     ]);
   });
 
-  it("reports ok:false when every member fails but still returns the members", () => {
+  it("reports ok:false when every member fails but still returns the members", async () => {
     const spec = parseStepDirective(".step param G list 1 2")!;
-    const fam = runStepFamily<Fake>(
+    const fam = await runStepFamily<Fake>(
       [spec],
       EMPTY_SCOPE,
       [],
@@ -114,6 +114,54 @@ describe("runStepFamily - generic core", () => {
     expect(fam.ok).toBe(false);
     expect(fam.members).toHaveLength(2);
     expect(fam.warnings).toEqual([]);
+  });
+
+  // The two invariants that survive running the members concurrently. Both are
+  // user-visible: `members` is the plot's overlay order and its colour ramp, and
+  // the family's warnings are the ones the panel shows above the curves.
+  it("keeps members in sweep order and takes the FIRST member's warnings when the solves settle backwards", async () => {
+    const spec = parseStepDirective(".step param G list 1 2 3")!;
+    const fam = await runStepFamily<Fake>(
+      [spec],
+      EMPTY_SCOPE,
+      [],
+      // The first swept value finishes last, so anything that collected
+      // results by completion would put G=3 at index 0 and report its warning
+      // as the family's.
+      (ctx) =>
+        new Promise<Fake>((resolve) =>
+          setTimeout(() => resolve({ ok: true, warnings: [`from G=${ctx.value}`] }), (4 - ctx.value) * 20),
+        ),
+      (r) => r.ok,
+      (r) => r.warnings,
+    );
+    expect(fam.members.map((m) => m.label)).toEqual(["G=1", "G=2", "G=3"]);
+    expect(fam.members.map((m) => m.value)).toEqual([1, 2, 3]);
+    expect(fam.warnings).toEqual(["from G=1"]);
+  });
+
+  it("starts every member before any of them finishes", async () => {
+    const spec = parseStepDirective(".step param G list 1 2 3 4")!;
+    let inFlight = 0;
+    let peak = 0;
+    await runStepFamily<Fake>(
+      [spec],
+      EMPTY_SCOPE,
+      [],
+      async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        inFlight -= 1;
+        return { ok: true, warnings: [] };
+      },
+      (r) => r.ok,
+      (r) => r.warnings,
+    );
+    // The old implementation mapped a synchronous solver over the contexts, so
+    // this peaked at one. Anything less than the whole family means the members
+    // are being serialised again and the pool would only ever see one job.
+    expect(peak).toBe(4);
   });
 });
 
@@ -158,9 +206,9 @@ function minFinalMagDb(result: AcResult): number {
 describe("runAcStepFamily", () => {
   const acOptions = { startHz: 10, stopHz: 100_000, pointsPerDecade: 20 };
 
-  it("re-runs the Bode sweep per step value, shifting the corner with R", () => {
+  it("re-runs the Bode sweep per step value, shifting the corner with R", async () => {
     const spec = parseStepDirective(".step param Rval list 1k 2k")!;
-    const fam = runAcStepFamily([spec], EMPTY_SCOPE, { components: rcLowpass(), wires: [] }, acOptions);
+    const fam = await runAcStepFamily([spec], EMPTY_SCOPE, { components: rcLowpass(), wires: [] }, acOptions);
 
     expect(fam.ok).toBe(true);
     expect(fam.members.map((m) => m.label)).toEqual(["Rval=1000", "Rval=2000"]);
@@ -173,8 +221,8 @@ describe("runAcStepFamily", () => {
     expect(minFinalMagDb(m1.result) - minFinalMagDb(m2.result)).toBeGreaterThan(4);
   });
 
-  it("carries a no-.step message through", () => {
-    const fam = runAcStepFamily([], EMPTY_SCOPE, { components: rcLowpass(), wires: [] }, acOptions);
+  it("carries a no-.step message through", async () => {
+    const fam = await runAcStepFamily([], EMPTY_SCOPE, { components: rcLowpass(), wires: [] }, acOptions);
     expect(fam.ok).toBe(false);
     expect(fam.message).toMatch(/\.step/);
   });
@@ -220,9 +268,9 @@ function midSeries(result: DcSweepResult, ratio: number): number[] | undefined {
 describe("runDcStepFamily", () => {
   const dcSpec = { source: "V1", start: 0, stop: 10, step: 2 };
 
-  it("re-runs the DC source sweep per step value, tracking the divider ratio", () => {
+  it("re-runs the DC source sweep per step value, tracking the divider ratio", async () => {
     const spec = parseStepDirective(".step param Rt list 1k 3k")!;
-    const fam = runDcStepFamily([spec], EMPTY_SCOPE, { components: steppedDivider(), wires: [] }, dcSpec);
+    const fam = await runDcStepFamily([spec], EMPTY_SCOPE, { components: steppedDivider(), wires: [] }, dcSpec);
 
     expect(fam.ok).toBe(true);
     expect(fam.members.map((m) => m.label)).toEqual(["Rt=1000", "Rt=3000"]);
@@ -232,10 +280,10 @@ describe("runDcStepFamily", () => {
     expect(midSeries(fam.members[1].result, 0.25)).toEqual([0, 0.5, 1, 1.5, 2, 2.5]);
   });
 
-  it("respects a base param scope shared across members", () => {
+  it("respects a base param scope shared across members", async () => {
     const base = buildParamScope([".param Rt=2k"]); // overridden by the step
     const spec = parseStepDirective(".step param Rt list 1k 3k")!;
-    const fam = runDcStepFamily([spec], base, { components: steppedDivider(), wires: [] }, dcSpec);
+    const fam = await runDcStepFamily([spec], base, { components: steppedDivider(), wires: [] }, dcSpec);
     expect(fam.ok).toBe(true);
     expect(midSeries(fam.members[0].result, 0.5)).toEqual([0, 1, 2, 3, 4, 5]);
   });
@@ -340,9 +388,9 @@ describe("acFamilyOverlaySeries", () => {
     expect(acFamilyOverlaySeries(fam)).toBeNull();
   });
 
-  it("composes with runAcStepFamily: one curve per step, more R = more rolloff", () => {
+  it("composes with runAcStepFamily: one curve per step, more R = more rolloff", async () => {
     const spec = parseStepDirective(".step param Rval list 1k 2k")!;
-    const fam = runAcStepFamily(
+    const fam = await runAcStepFamily(
       [spec],
       EMPTY_SCOPE,
       { components: rcLowpass(), wires: [] },
@@ -417,9 +465,9 @@ describe("dcFamilyOverlaySeries", () => {
     expect(dcFamilyOverlaySeries(fam)).toBeNull();
   });
 
-  it("composes with runDcStepFamily: one transfer curve per step value", () => {
+  it("composes with runDcStepFamily: one transfer curve per step value", async () => {
     const spec = parseStepDirective(".step param Rt list 1k 3k")!;
-    const fam = runDcStepFamily(
+    const fam = await runDcStepFamily(
       [spec],
       EMPTY_SCOPE,
       { components: steppedDivider(), wires: [] },

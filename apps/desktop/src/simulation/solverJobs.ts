@@ -138,16 +138,31 @@ export type SolverWorkerResponse =
  */
 const TRANSFERABLE_SERIES_MIN = 64;
 
-/** Recognise a numeric series. The whole array is checked rather than its
- *  first element: an `ExtractedNet`'s `points` is an array of objects and an
- *  empty array is neither, and guessing from element zero would be a rule that
- *  happens to hold today rather than one that is true. */
-function isNumberSeries(value: unknown[]): value is number[] {
-  if (value.length < TRANSFERABLE_SERIES_MIN) return false;
-  for (const item of value) {
-    if (typeof item !== "number") return false;
+/**
+ * Copy an array into a `Float64Array`, or return null when it turns out not to
+ * be a numeric series after all.
+ *
+ * Every element is type-checked rather than just the first: an
+ * `ExtractedNet`'s `points` is an array of objects, and inferring the whole
+ * array's type from element zero would be a rule that happens to hold today
+ * rather than one that is true. The check and the copy share a single indexed
+ * pass, and the copy is written by hand instead of with `Float64Array.from`,
+ * because `from` goes through the iterator protocol for anything iterable -
+ * and an array is iterable. On a 3.3-million-sample transient the tidy
+ * two-pass `for..of` + `from` version cost 119 ms; this costs a fraction of
+ * that, and it runs on the worker where every millisecond is still latency the
+ * user waits through.
+ */
+function toNumberSeries(value: unknown[]): Float64Array | null {
+  const length = value.length;
+  if (length < TRANSFERABLE_SERIES_MIN) return null;
+  const packed = new Float64Array(length);
+  for (let i = 0; i < length; i += 1) {
+    const item = value[i];
+    if (typeof item !== "number") return null;
+    packed[i] = item;
   }
-  return true;
+  return packed;
 }
 
 function packValue(value: unknown, seen: Set<object>, transfer: Transferable[]): unknown {
@@ -156,8 +171,8 @@ function packValue(value: unknown, seen: Set<object>, transfer: Transferable[]):
   seen.add(value);
 
   if (Array.isArray(value)) {
-    if (isNumberSeries(value)) {
-      const packed = Float64Array.from(value);
+    const packed = toNumberSeries(value);
+    if (packed) {
       transfer.push(packed.buffer);
       return packed;
     }
