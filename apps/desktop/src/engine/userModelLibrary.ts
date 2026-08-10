@@ -33,9 +33,9 @@ export interface UserModelLibraryRegistry {
   readonly models: ReadonlyMap<string, string>;
   /** Sanitized subckt name (lower-cased, via {@link sanitizeSubcktName}) ->
    *  its full `.subckt … .ends` block. The interior is preserved as the vendor
-   *  wrote it except for the LTspice-only constructs ngspice rejects, which are
-   *  rewritten in place (see {@link normalizeSubcktInterior}); everything
-   *  ngspice already accepts stays byte-for-byte. */
+   *  wrote it except for the LTspice-only constructs ngspice rejects and
+   *  subcircuit identifiers ngspice cannot parse, which are rewritten in place
+   *  (see {@link normalizeSubcktInterior}); everything else stays byte-for-byte. */
   readonly subckts: ReadonlyMap<string, string>;
 }
 
@@ -865,8 +865,124 @@ function normalizeSubcktInterior(block: string): string {
       return translateLtspiceOta(out, subcktName)
         .flatMap((translated) => translatePassiveParasitics(translated, subcktName));
     });
-  return translateIdealDiodeDeckLines(normalized)
-    .join("\n");
+  return normalizeSubcktIdentifiers(translateIdealDiodeDeckLines(normalized).join("\n"));
+}
+
+/**
+ * ngspice cannot use LTspice's permissive punctuation in a subcircuit name:
+ * an X line spelling `4-6-3_12V_StartingProfile` is parsed as a subtraction,
+ * not as the definition's name.  A library may carry that name in all three
+ * places below, so changing the instance alone (or just the header) creates a
+ * deck that parses but calls a non-existent model:
+ *
+ *   .subckt 4-6-3_12V_StartingProfile ...
+ *   Xprofile ... 4-6-3_12V_StartingProfile
+ *   .ends 4-6-3_12V_StartingProfile
+ *
+ * Normalize the complete recursive library text before it is ever emitted.
+ * The X-line parser deliberately mirrors `nestedXSubcktRefs`: the final
+ * positional token before `params:` or an assignment is the called subckt.
+ * This is line-gated, so ordinary component and behavioural text is never
+ * rewritten as if it named a subcircuit.
+ */
+function normalizeSubcktIdentifiers(block: string): string {
+  const collision = subcktIdentifierCollision(block);
+  const normalizedLines = block
+    .split("\n")
+    .map((line) => {
+      if (/^\s*[*;]/.test(line)) return line;
+      let out = line.replace(
+        /^(\s*\.subckt\s+)([^\s(]+)/i,
+        (_whole, prefix: string, name: string) => `${prefix}${sanitizeSubcktName(name)}`,
+      );
+      // `.ends` may omit its name.  When it supplies one, it must match the
+      // normalized header rather than resurrecting the original dashed form.
+      out = out.replace(
+        /^(\s*\.ends\s+)([^\s;]+)/i,
+        (_whole, prefix: string, name: string) => `${prefix}${sanitizeSubcktName(name)}`,
+      );
+      return out;
+    });
+  const normalized = normalizeXSubcktReferences(normalizedLines).join("\n");
+  if (!collision) return normalized;
+  return `${TAU_MODEL_REFUSAL_MARKER}${collision}\n${normalized}`;
+}
+
+/**
+ * Rewrite only the target token of each subcircuit X instance.  SPICE permits
+ * a long X card to continue on `+` physical lines, including a target that
+ * begins on the continuation; gather those lines as one logical card but
+ * replace only the target span in its original physical line.  Text after a
+ * semicolon remains a comment and is intentionally never inspected/replaced.
+ */
+function normalizeXSubcktReferences(lines: string[]): string[] {
+  for (let first = 0; first < lines.length; first += 1) {
+    if (!/^\s*X\S*/i.test(lines[first]!)) continue;
+
+    const physical = [first];
+    let next = first + 1;
+    while (next < lines.length && /^\s*\+/.test(lines[next]!)) {
+      physical.push(next);
+      next += 1;
+    }
+
+    const tokens: Array<{ line: number; start: number; text: string }> = [];
+    for (const lineIndex of physical) {
+      const line = lines[lineIndex]!;
+      const codeEnd = line.indexOf(";");
+      const code = codeEnd < 0 ? line : line.slice(0, codeEnd);
+      const lineTokens = [...code.matchAll(/\S+/g)];
+      for (let tokenIndex = 0; tokenIndex < lineTokens.length; tokenIndex += 1) {
+        const match = lineTokens[tokenIndex]!;
+        const text = match[0];
+        // The leading plus belongs to the continuation grammar, not the X
+        // card's node/model token list.
+        if (lineIndex !== first && tokenIndex === 0 && text === "+") continue;
+        if (match.index !== undefined) tokens.push({ line: lineIndex, start: match.index, text });
+      }
+    }
+    if (tokens.length < 2 || !/^X\S*/i.test(tokens[0]!.text)) {
+      first = next - 1;
+      continue;
+    }
+
+    let target: { line: number; start: number; text: string } | undefined;
+    for (let i = 1; i < tokens.length; i += 1) {
+      const token = tokens[i]!.text;
+      if (/^params:$/i.test(token) || token.includes("=")) break;
+      target = tokens[i];
+    }
+    if (target) {
+      const original = target.text;
+      const sanitized = sanitizeSubcktName(original);
+      if (sanitized !== original) {
+        const line = lines[target.line]!;
+        lines[target.line] = `${line.slice(0, target.start)}${sanitized}${line.slice(target.start + original.length)}`;
+      }
+    }
+    first = next - 1;
+  }
+  return lines;
+}
+
+/**
+ * Different LTspice names can collapse onto one ngspice-safe identifier
+ * (`a-b` and `a+b` both become `a_b`).  There is no exact choice at an X
+ * callsite after that collapse, so make the whole model an explicit refusal
+ * instead of accepting whichever definition happened to appear first.
+ */
+function subcktIdentifierCollision(block: string): string | null {
+  const originals = new Map<string, string>();
+  for (const match of block.matchAll(/^\s*\.subckt\s+([^\s(]+)/gim)) {
+    const name = match[1]!;
+    const key = sanitizeSubcktName(name).toLowerCase();
+    const previous = originals.get(key);
+    if (previous && previous.toLowerCase() !== name.toLowerCase()) {
+      return `subcircuit names "${previous}" and "${name}" collide after ngspice-safe normalization as "${sanitizeSubcktName(name)}".`;
+    }
+    originals.set(key, name);
+  }
+  return null;
 }
 
 /**
@@ -892,6 +1008,7 @@ function normalizeSubcktInterior(block: string): string {
 export function parseUserModelLibraries(texts: readonly string[]): UserModelLibraryRegistry {
   const models = new Map<string, string>();
   const subckts = new Map<string, string>();
+  const subcktOriginalNames = new Map<string, string>();
 
   for (const text of texts) {
     const rawLines = text.replace(/\r\n/g, "\n").split("\n");
@@ -923,7 +1040,20 @@ export function parseUserModelLibraries(texts: readonly string[]): UserModelLibr
         const name = /^\.subckt\s+([^\s(]+)/i.exec(trimmed)?.[1];
         if (name) {
           const key = sanitizeSubcktName(name).toLowerCase();
-          if (!subckts.has(key)) subckts.set(key, block);
+          const previous = subcktOriginalNames.get(key);
+          if (!previous) {
+            subckts.set(key, block);
+            subcktOriginalNames.set(key, name);
+          } else if (previous.toLowerCase() !== name.toLowerCase()) {
+            // The registry cannot retain two exact definitions under the one
+            // name ngspice accepts.  Preserve the first body only as context;
+            // the marker makes every resolver fail closed before native run.
+            const collision = `subcircuit names "${previous}" and "${name}" collide after ngspice-safe normalization as "${sanitizeSubcktName(name)}".`;
+            const existing = subckts.get(key) ?? "";
+            if (!existing.startsWith(TAU_MODEL_REFUSAL_MARKER)) {
+              subckts.set(key, `${TAU_MODEL_REFUSAL_MARKER}${collision}\n${existing}`);
+            }
+          }
         }
         continue;
       }

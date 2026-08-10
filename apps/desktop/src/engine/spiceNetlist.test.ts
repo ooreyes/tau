@@ -1310,6 +1310,45 @@ describe("buildSpiceDeck", () => {
     expect(deck.unresolvedSubckts).toEqual([]);
   });
 
+  it("emits an attached dashed hierarchy with matching sanitized headers, .ends, and nested X target", () => {
+    // Regression for the installed ISO16750 library: the top-level X line was
+    // sanitized while the raw attached text still declared/called dashed
+    // names, producing an ngspice-only unknown-subckt failure.
+    const profile: SchematicComponent = {
+      ...component("subckt", "U1", "profile-outer", 0, 0),
+      pinOverride: [
+        { id: "p1", label: "+", x: 0, y: 0 },
+        { id: "p2", label: "-", x: 0, y: 80 },
+      ],
+    };
+    const userModelLibraries = [[
+      ".subckt profile-outer + -",
+      "Xstart + - profile-child gain=2",
+      ".ends profile-outer",
+      ".subckt profile-child + -",
+      "Rchild + - 1k",
+      ".ends profile-child",
+    ].join("\n")];
+    const deck = buildSpiceDeck(
+      {
+        components: [profile],
+        wires: [],
+        netLabels: [{ id: "gnd", x: 0, y: 80, text: "0" }],
+        userModelLibraries,
+      },
+      { kind: "op" },
+    );
+
+    expect(deck.unresolvedSubckts).toEqual([]);
+    expect(deck.netlist).toMatch(/^XU1 \S+ 0 profile_outer$/m);
+    expect(deck.netlist).toContain(".subckt profile_outer + -");
+    expect(deck.netlist).toContain("Xstart + - profile_child gain=2");
+    expect(deck.netlist).toContain(".ends profile_outer");
+    expect(deck.netlist).toContain(".subckt profile_child + -");
+    expect(deck.netlist).toContain(".ends profile_child");
+    expect(deck.netlist).not.toMatch(/profile-(?:outer|child)/);
+  });
+
   it("emits a menu-selected five-terminal contract in exact SpiceOrder with named overrides", () => {
     const base = component("subckt", "X1", "deadtime dead=300n", 96, 192);
     const pins = buildSubcircuitPinOverride(base, ["vcc", "vee", "pwm", "gp", "gn"]);

@@ -72,7 +72,45 @@ describe("parseUserModelLibraries", () => {
       ".subckt my-block in out\nR1 in out 1k\n.ends my-block",
     ]);
     expect(registry.subckts.has("my_block")).toBe(true);
-    expect(resolveUserSubckt(registry, "my-block")).toContain(".subckt my-block in out");
+    const block = resolveUserSubckt(registry, "my-block");
+    expect(block).toContain(".subckt my_block in out");
+    expect(block).toContain(".ends my_block");
+  });
+
+  it("normalizes recursive dashed headers, .ends cards, and nested X calls as one closed name system", () => {
+    // This is the installed ISO16750 shape in miniature: the top-level
+    // instance is sanitized by spiceNetlist, but its user-attached library
+    // originally retained dashed names.  Header-only normalization still
+    // leaves the nested X call broken, so assert every executable spelling.
+    const registry = parseUserModelLibraries([
+      [
+        ".subckt profile-outer + -",
+        "Xstart + -",
+        "+ profile-child gain=2 ; profile-child stays a comment",
+        ".subckt profile-child + -",
+        "Rchild + - 1k",
+        ".ends profile-child",
+        ".ends profile-outer",
+      ].join("\n"),
+    ]);
+    const block = resolveUserSubckt(registry, "profile-outer")!;
+    expect(block).toContain(".subckt profile_outer + -");
+    expect(block).toContain("Xstart + -\n+ profile_child gain=2 ; profile-child stays a comment");
+    expect(block).toContain(".subckt profile_child + -");
+    expect(block).toContain(".ends profile_child");
+    expect(block).toContain(".ends profile_outer");
+    expect(block).toContain("; profile-child stays a comment");
+    expect(block).not.toMatch(/^\s*(?:\.subckt|\.ends|X\S*).*profile-/im);
+  });
+
+  it("refuses two distinct raw names that collide after ngspice-safe normalization", () => {
+    const registry = parseUserModelLibraries([
+      ".subckt gain-block 1 2\nR1 1 2 1k\n.ends gain-block",
+      ".subckt gain+block 1 2\nR2 1 2 2k\n.ends gain+block",
+    ]);
+    expect(() => resolveUserSubckt(registry, "gain-block")).toThrow(
+      /names "gain-block" and "gain\+block" collide after ngspice-safe normalization.*No approximate or partial circuit was run/i,
+    );
   });
 
   it("ignores comments, blank lines, and .include/.lib lines", () => {
