@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { laplaceTransfer, laplaceSourceLines } from "./laplace";
+import {
+  assertLaplaceAnalysisSupported,
+  classifyLaplaceTransfer,
+  LaplaceAnalysisRefusal,
+  LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE,
+  laplaceTransfer,
+  laplaceSourceLines,
+} from "./laplace";
 
 const E = { base: "E1", op: "out", on: "0", cp: "in", cn: "0", isCurrent: false, funcs: {} };
 
@@ -72,9 +79,76 @@ describe("laplaceSourceLines - non-rational DC fallback", () => {
     expect(r.lines).toEqual(["E_E1 out 0 in 0 2"]); // H(0) = 2/sqrt(1) = 2
   });
 
-  it("current source (G) always uses the DC fallback with G prefix", () => {
+  it("dynamic current source (G) has an H(0)-only rendering with G prefix", () => {
     const r = laplaceSourceLines({ ...E, isCurrent: true, transfer: "10/(1+.001*s)", scope: {} });
     expect(r.exact).toBe(false);
     expect(r.lines).toEqual(["G_E1 out 0 in 0 10"]);
+  });
+
+  it("constant current source (G) is exact for every analysis", () => {
+    const r = laplaceSourceLines({ ...E, isCurrent: true, transfer: "2m", scope: {} });
+    expect(r.exact).toBe(true);
+    expect(r.lines).toEqual(["G_E1 out 0 in 0 0.002"]);
+  });
+});
+
+describe("Laplace analysis support", () => {
+  const dynamicVoltage = classifyLaplaceTransfer({
+    transfer: "exp(-.001*s)", isCurrent: false, scope: {}, funcs: {},
+  });
+  const dynamicCurrent = classifyLaplaceTransfer({
+    transfer: "1/(1+.001*s)", isCurrent: true, scope: {}, funcs: {},
+  });
+
+  it.each(["op", "dc", "tf"] as const)("allows exact H(0) %s analysis", (analysis) => {
+    expect(() => assertLaplaceAnalysisSupported({
+      analysis, ref: "E1", sourceKind: "vcvs", transfer: "exp(-.001*s)", classification: dynamicVoltage,
+    })).not.toThrow();
+  });
+
+  it.each(["tran", "ac", "noise"] as const)("refuses a non-rational %s analysis before approximation", (analysis) => {
+    try {
+      assertLaplaceAnalysisSupported({
+        analysis, ref: "E1", sourceKind: "vcvs", transfer: "exp(-.001*s)", classification: dynamicVoltage,
+      });
+      expect.unreachable("dynamic Laplace should be refused");
+    } catch (error) {
+      expect(error).toBeInstanceOf(LaplaceAnalysisRefusal);
+      expect((error as LaplaceAnalysisRefusal).code).toBe(LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE);
+      const refusal = error as LaplaceAnalysisRefusal;
+      expect(refusal.diagnostic).toEqual({
+        code: LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE,
+        message: refusal.message,
+        ref: "E1",
+        sourceKind: "vcvs",
+        transfer: "exp(-.001*s)",
+        analysis,
+        dcGain: 1,
+        reason: "non-rational",
+      });
+      expect(refusal.message).toContain("No approximate or partial circuit was run.");
+    }
+  });
+
+  it("refuses a dynamic G source, while retaining its exact H(0) static path", () => {
+    expect(dynamicCurrent).toMatchObject({ kind: "dc-only", reason: "current-dynamic", dcGain: 1 });
+    expect(() => assertLaplaceAnalysisSupported({
+      analysis: "tf", ref: "G1", sourceKind: "vccs", transfer: "1/(1+.001*s)", classification: dynamicCurrent,
+    })).not.toThrow();
+    try {
+      assertLaplaceAnalysisSupported({
+        analysis: "ac", ref: "G1", sourceKind: "vccs", transfer: "1/(1+.001*s)", classification: dynamicCurrent,
+      });
+      expect.unreachable("dynamic G source should be refused");
+    } catch (error) {
+      expect(error).toMatchObject({
+        diagnostic: {
+          sourceKind: "vccs",
+          reason: "current-dynamic",
+          dcGain: 1,
+          analysis: "ac",
+        },
+      });
+    }
   });
 });

@@ -40,7 +40,7 @@ import { optionsLineFromDirectives } from "./spiceOptions";
 import { solverOptionOverrides } from "../lib/simulationPreferences";
 import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes, definedSubcktNames } from "./modelDirectives";
 import { couplingLinesFromDirectives } from "./couplingDirectives";
-import { laplaceTransfer, laplaceSourceLines } from "./laplace";
+import { assertLaplaceAnalysisSupported, classifyLaplaceTransfer, laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductorRefusalMessage, isCoreInductor } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
 import { idealJunctionModel, IDEAL_SENSE_PREFIX, isIdealSenseSourceName } from "./idealModels";
@@ -241,11 +241,45 @@ export type BuildSpiceDeckOptions = {
   /**
    * Emit LTspice-native `E … Laplace=H(s)` (params expanded to numbers) instead
    * of ngspice XSPICE `s_xfer`. Default **false** (Tau ngspice path). Pass
-   * **true** for dual-deck LTspice comparison of rational Laplace VCVS sources.
-   * Non-rational / G-source Laplace still follow the DC-gain fallback.
+   * **true** for dual-deck LTspice comparison of VCVS sources. LTspice owns
+   * their realization in that mode, including non-rational transfer functions.
    */
   emitNativeLaplace?: boolean;
 };
+
+/**
+ * Reject only the analysis/source combinations whose deck would otherwise
+ * replace H(s) with H(0). This runs before circuit extraction and native
+ * execution, so a rejected request never produces a partial deck.
+ */
+function assertLaplaceDeckSupport(
+  components: readonly SchematicComponent[],
+  analysis: SpiceAnalysis["kind"],
+  params: ParamScope,
+  emitNativeLaplace: boolean,
+): void {
+  for (const component of components) {
+    if (component.kind !== "vcvs" && component.kind !== "vccs") continue;
+    const transfer = laplaceTransfer(component.value);
+    if (transfer === null) continue;
+    // This option intentionally writes the authored E source for LTspice; Tau
+    // does not realize it as H(0), so its non-rational behavior remains native.
+    if (component.kind === "vcvs" && emitNativeLaplace) continue;
+    const classification = classifyLaplaceTransfer({
+      transfer,
+      isCurrent: component.kind === "vccs",
+      scope: params.scope,
+      funcs: params.funcs,
+    });
+    assertLaplaceAnalysisSupported({
+      analysis,
+      ref: component.label.trim() || (component.kind === "vcvs" ? "E source" : "G source"),
+      sourceKind: component.kind,
+      transfer,
+      classification,
+    });
+  }
+}
 
 export function buildSpiceDeck(
   schematic: Schematic,
@@ -284,6 +318,7 @@ export function buildSpiceDeck(
   const components = leaveSteppedBraces
     ? resolveComponentValuesLeavingUnknown(prepared, bakeScope)
     : resolveComponentValues(prepared, paramScope);
+  assertLaplaceDeckSupport(components, analysis.kind, bakeScope, options.emitNativeLaplace === true);
   const circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
   if (components.length === 0) throw new Error("Place components before running analysis.");
   if (!circuit.groundNetId) throw new Error("Add a ground symbol so node voltages have a reference.");
@@ -1324,13 +1359,6 @@ export function unresolvedLibraryWarning(file: string): string {
   return `Could not resolve the library file ${file}, so its models and subcircuits are not part of this run. Attach the file under Model Libraries to use its definitions.`;
 }
 
-/** An LTspice `Laplace=H(s)` that no rational polynomial can express, run as
- *  its DC gain. The magnitude is right at DC and wrong everywhere else, so the
- *  user has to be told which number they are looking at. */
-export function laplaceApproximationWarning(ref: string, transfer: string, dcGain: number): string {
-  return `${ref}'s Laplace transfer "${transfer}" is not a rational polynomial, so Tau ran it as its constant DC gain H(0) = ${formatEngineering(dcGain)}. Its frequency response is not simulated: treat any gain or phase from this run as valid at DC only.`;
-}
-
 /** LTspice's `load`/`load2` current-source flags clamp the source so it cannot
  *  push current backwards. ngspice has no equivalent, and the ideal source Tau
  *  emits instead will conduct in both directions. */
@@ -1935,7 +1963,8 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
     }
     case "vcvs": {
       // A `Laplace=H(s)` value is a continuous transfer function, not a gain;
-      // realize it as an XSPICE s_xfer (rational) or its DC gain (otherwise).
+      // realize it as an XSPICE s_xfer (rational) or its DC gain for the
+      // static analyses already accepted by assertLaplaceDeckSupport().
       // Dual-deck LTspice comparison may request native `E … Laplace=…`.
       const transfer = laplaceTransfer(component.value);
       if (transfer !== null) {
@@ -1949,9 +1978,6 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
           op: node("op"), on: node("on"), cp: node("cp"), cn: node("cn"),
           transfer, isCurrent: false, scope: params.scope, funcs: params.funcs,
         });
-        if (!realized.exact) {
-          warnings.push(laplaceApproximationWarning(component.label.trim() || name, transfer, realized.dcGain ?? 0));
-        }
         return realized.lines;
       }
       // VCVS (E): E op on cp cn gain  →  V(op,on) = gain·V(cp,cn)
@@ -1965,11 +1991,6 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
           op: node("op"), on: node("on"), cp: node("cp"), cn: node("cn"),
           transfer, isCurrent: true, scope: params.scope, funcs: params.funcs,
         });
-        // Every current-source Laplace takes the DC-gain path: s_xfer is a
-        // voltage-in/voltage-out code model, so a G source has no exact form.
-        if (!realized.exact) {
-          warnings.push(laplaceApproximationWarning(component.label.trim() || name, transfer, realized.dcGain ?? 0));
-        }
         return realized.lines;
       }
       // VCCS (G): G op on cp cn gm  →  I(op→on) = gm·V(cp,cn)

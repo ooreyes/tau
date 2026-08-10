@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import { buildSpiceDeck, type SpiceAnalysis } from "./spiceNetlist";
+import { LaplaceAnalysisRefusal, LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE } from "./laplace";
 import { buildParamScope } from "../simulation/paramScope";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 
@@ -170,6 +171,21 @@ describe("deck structure - behavioral B-source", () => {
 describe("deck structure - Laplace E source", () => {
   // vcvs local pins: cp(-32,-16) cn(-32,16) op(32,-16) on(32,16).
   const Vcvs = (x: number, y: number, v: string, l = "E1") => mk("vcvs", x, y, v, l);
+  const Vccs = (x: number, y: number, v: string, l = "G1") => mk("vccs", x, y, v, l);
+  const laplaceSchematic = (source: SchematicComponent) => ({
+    components: [source, GND(-32, 16), GND(32, 16)],
+    wires: [],
+  });
+
+  function expectDynamicRefusal(source: SchematicComponent, analysis: SpiceAnalysis) {
+    try {
+      buildSpiceDeck(laplaceSchematic(source), analysis);
+      expect.unreachable("dynamic Laplace analysis should be refused before deck construction");
+    } catch (error) {
+      expect(error).toBeInstanceOf(LaplaceAnalysisRefusal);
+      expect((error as LaplaceAnalysisRefusal).code).toBe(LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE);
+    }
+  }
 
   it("realizes a rational Laplace=H(s) as an s_xfer A-device", () => {
     const deck = buildSpiceDeck(
@@ -203,6 +219,36 @@ describe("deck structure - Laplace E source", () => {
     expect(deck.netlist).not.toContain("s_xfer");
   });
 
+  it.each([
+    { kind: "tran", stopTime: 1e-3, steps: 10 },
+    { kind: "ac", startHz: 10, stopHz: 1e3, pointsPerDecade: 10 },
+    { kind: "noise", output: { node: "n001" }, source: "V1", startHz: 10, stopHz: 1e3, pointsPerDecade: 10 },
+  ] as SpiceAnalysis[])("refuses a non-rational E source for .$kind before native execution", (analysis) => {
+    expectDynamicRefusal(Vcvs(0, 0, "Laplace=exp(-.001*s)", "E1"), analysis);
+  });
+
+  it("keeps exact rational E sources available to dynamic analyses", () => {
+    const deck = buildSpiceDeck(
+      laplaceSchematic(Vcvs(0, 0, "Laplace=1/(1+.001*s)", "E1")),
+      { kind: "ac", startHz: 10, stopHz: 1e3, pointsPerDecade: 10 },
+    );
+    expect(deck.netlist).toContain("s_xfer");
+  });
+
+  it("keeps exact H(0) G behavior for OP/DC/TF and refuses dynamic G analyses", () => {
+    const source = Vccs(0, 0, "Laplace=10/(1+.001*s)", "G1");
+    for (const analysis of [
+      { kind: "op" },
+      { kind: "dc", source: "V1", start: 0, stop: 1, step: 0.1 },
+      { kind: "tf", output: { kind: "voltage" as const, node: "n001" }, source: "V1" },
+    ] as SpiceAnalysis[]) {
+      const deck = buildSpiceDeck(laplaceSchematic(source), analysis);
+      expect(deck.netlist).toMatch(/^G_G1 \S+ \S+ \S+ \S+ 10$/m);
+      expect(deck.circuit.warnings).not.toContain(expect.stringMatching(/Laplace/));
+    }
+    expectDynamicRefusal(source, { kind: "tran", stopTime: 1e-3, steps: 10 });
+  });
+
   it("emits LTspice-native E Laplace= when emitNativeLaplace is set", () => {
     const params = buildParamScope([".param A0=10 wp1=1000"]);
     const deck = buildSpiceDeck(
@@ -221,6 +267,15 @@ describe("deck structure - Laplace E source", () => {
     expect(deck.netlist).toMatch(/^E1 \S+ \S+ \S+ \S+ Laplace=10\/\(1\+s\/1000\)$/m);
     expect(deck.netlist).not.toContain("s_xfer");
     expect(deck.netlist).not.toMatch(/^A_E1\b/m);
+  });
+
+  it("leaves non-rational E behavior to the LTspice-native dual-deck mode", () => {
+    const deck = buildSpiceDeck(
+      laplaceSchematic(Vcvs(0, 0, "Laplace=exp(-.001*s)", "E1")),
+      { kind: "ac", startHz: 10, stopHz: 1e3, pointsPerDecade: 10 },
+      { emitNativeLaplace: true },
+    );
+    expect(deck.netlist).toMatch(/^E1 \S+ \S+ \S+ \S+ Laplace=exp\(-\.001\*s\)$/m);
   });
 });
 

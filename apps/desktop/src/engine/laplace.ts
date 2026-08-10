@@ -13,9 +13,9 @@
  *
  * Two cases can't be a finite rational polynomial in s - transport delay
  * `exp(-T*s)` and fractional/root responses `sqrt(1+τ*s)` (LTspice's own
- * TwoTau/HalfSlope demos). For those we fall back to the DC gain H(0): a plain
- * constant-gain source. That is *exact* for an operating point (s=0) and a
- * reasonable low-frequency stand-in elsewhere, so the deck always builds.
+ * TwoTau/HalfSlope demos). Tau can use their DC gain H(0) exactly for static
+ * analyses, but must refuse dynamic analyses rather than silently simulate a
+ * different transfer function.
  */
 import { parse, evaluateExpression, type Scope, type FuncDef } from "../simulation/expr";
 
@@ -191,12 +191,99 @@ function fmt(x: number): string {
 
 export interface LaplaceLines {
   lines: string[];
-  /** true when realized exactly as a rational `s_xfer`; false when DC-gain fallback. */
+  /** true when realized exactly; false when rendered as its DC-only gain. */
   exact: boolean;
-  /** The constant H(0) the source was reduced to. Present only when `exact` is
-   *  false, so the caller can name the number the user is actually looking at
-   *  instead of reporting the approximation without its value. */
+  /** The constant H(0) used for an OP/DC/TF-only source. */
   dcGain?: number;
+}
+
+export type LaplaceClassification =
+  | { kind: "constant"; gain: number }
+  | { kind: "voltage-rational"; numerator: number[]; denominator: number[] }
+  | { kind: "dc-only"; dcGain: number; reason: "non-rational" | "current-dynamic" };
+
+export const LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE = "deck.refused.laplace.dynamic_transfer" as const;
+export type LaplaceSourceKind = "vcvs" | "vccs";
+
+export interface LaplaceRefusalDiagnostic {
+  code: typeof LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE;
+  message: string;
+  ref: string;
+  sourceKind: LaplaceSourceKind;
+  transfer: string;
+  analysis: "tran" | "op" | "ac" | "dc" | "tf" | "noise";
+  dcGain: number;
+  reason: "non-rational" | "current-dynamic";
+}
+
+/** A deck-build refusal with the same user-facing form as other simulation refusals. */
+export class LaplaceAnalysisRefusal extends Error {
+  readonly code = LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE;
+  readonly diagnostic: Readonly<LaplaceRefusalDiagnostic>;
+
+  constructor(diagnostic: LaplaceRefusalDiagnostic) {
+    super(diagnostic.message);
+    this.name = "LaplaceAnalysisRefusal";
+    this.diagnostic = Object.freeze(diagnostic);
+  }
+}
+
+/**
+ * Classify a Laplace transfer independently of deck-node rendering. This keeps
+ * the preflight policy and the emitted circuit on exactly the same semantics.
+ */
+export function classifyLaplaceTransfer(args: {
+  transfer: string;
+  isCurrent: boolean;
+  scope: Scope;
+  funcs: Record<string, FuncDef>;
+}): LaplaceClassification {
+  const { transfer, isCurrent, scope, funcs } = args;
+  const tree = parse(transfer);
+  try {
+    const rat = toRational(tree, scope, funcs);
+    const numerator = polyTrim(rat.num);
+    const denominator = polyTrim(rat.den);
+    if (numerator.length === 1 && denominator.length === 1) {
+      return { kind: "constant", gain: numerator[0] / denominator[0] };
+    }
+    if (!isCurrent) return { kind: "voltage-rational", numerator, denominator };
+    const dcGain = evaluateExpression(transfer, { ...scope, s: 0 }, funcs);
+    if (!Number.isFinite(dcGain)) throw new Error(`Laplace transfer "${transfer}" has no finite DC gain.`);
+    return { kind: "dc-only", dcGain, reason: "current-dynamic" };
+  } catch (error) {
+    if (!(error instanceof NonRationalError)) throw error;
+    const dcGain = evaluateExpression(transfer, { ...scope, s: 0 }, funcs);
+    if (!Number.isFinite(dcGain)) throw new Error(`Laplace transfer "${transfer}" has no finite DC gain.`);
+    return { kind: "dc-only", dcGain, reason: "non-rational" };
+  }
+}
+
+/** Reject a dynamic analysis when Tau would otherwise reduce H(s) to H(0). */
+export function assertLaplaceAnalysisSupported(args: {
+  analysis: "tran" | "op" | "ac" | "dc" | "tf" | "noise";
+  ref: string;
+  sourceKind: LaplaceSourceKind;
+  transfer: string;
+  classification: LaplaceClassification;
+}): void {
+  const { analysis, ref, sourceKind, transfer, classification } = args;
+  if (classification.kind !== "dc-only" || analysis === "op" || analysis === "dc" || analysis === "tf") return;
+  const capability = classification.reason === "non-rational"
+    ? "is not a finite rational transfer"
+    : "is a dynamic current-controlled transfer Tau cannot realize exactly";
+  const message = `Simulation refused: ${ref}'s Laplace transfer "${transfer}" ${capability} for .${analysis}. `
+    + "Tau only supports its exact H(0) DC gain for .op, .dc, and .tf. No approximate or partial circuit was run.";
+  throw new LaplaceAnalysisRefusal({
+    code: LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE,
+    message,
+    ref,
+    sourceKind,
+    transfer,
+    analysis,
+    dcGain: classification.dcGain,
+    reason: classification.reason,
+  });
 }
 
 /**
@@ -204,9 +291,9 @@ export interface LaplaceLines {
  * `isCurrent=true`) source whose value is a `Laplace=H(s)` spec.
  *
  * Voltage sources realize a rational H(s) with an XSPICE `s_xfer` A-device
- * (coefficients emitted highest-power-first, ngspice's convention). Anything
- * non-rational - or any current source - falls back to the DC gain H(0) as a
- * plain constant-gain controlled source so the deck always builds.
+ * (coefficients emitted highest-power-first, ngspice's convention). Constant
+ * E/G sources are exact controlled sources. A `dc-only` result is emitted as
+ * H(0), after the deck preflight has restricted it to OP/DC/TF analyses.
  */
 export function laplaceSourceLines(args: {
   base: string;
@@ -220,37 +307,27 @@ export function laplaceSourceLines(args: {
   funcs: Record<string, FuncDef>;
 }): LaplaceLines {
   const { base, op, on, cp, cn, transfer, isCurrent, scope, funcs } = args;
-  const tree = parse(transfer);
-
-  // A rational *voltage* transfer maps directly onto s_xfer.
-  if (!isCurrent) {
-    try {
-      const rat = toRational(tree, scope, funcs);
-      const num = polyTrim(rat.num);
-      const den = polyTrim(rat.den);
-      // Pure gain (no dynamics) - emit a plain VCVS, no code model needed.
-      if (num.length === 1 && den.length === 1) {
-        return { lines: [`E_${base} ${op} ${on} ${cp} ${cn} ${fmt(num[0] / den[0])}`], exact: true };
-      }
-      const numList = [...num].reverse().map(fmt).join(" ");
-      const denList = [...den].reverse().map(fmt).join(" ");
-      const model = `XF_${base}`;
-      return {
-        lines: [
-          `A_${base} %vd(${cp} ${cn}) %vd(${op} ${on}) ${model}`,
-          `.model ${model} s_xfer(num_coeff=[${numList}] den_coeff=[${denList}])`,
-        ],
-        exact: true,
-      };
-    } catch (e) {
-      if (!(e instanceof NonRationalError)) throw e;
-      // fall through to DC-gain fallback
-    }
+  const classification = classifyLaplaceTransfer({ transfer, isCurrent, scope, funcs });
+  if (classification.kind === "constant") {
+    const prefix = isCurrent ? "G" : "E";
+    return { lines: [`${prefix}_${base} ${op} ${on} ${cp} ${cn} ${fmt(classification.gain)}`], exact: true };
   }
-
-  // DC-gain fallback: H(0). Exact for an operating point; valid stand-in elsewhere.
-  const gain = evaluateExpression(transfer, { ...scope, s: 0 }, funcs);
-  if (!Number.isFinite(gain)) throw new Error(`Laplace transfer "${transfer}" has no finite DC gain.`);
+  if (classification.kind === "voltage-rational") {
+    const numList = [...classification.numerator].reverse().map(fmt).join(" ");
+    const denList = [...classification.denominator].reverse().map(fmt).join(" ");
+    const model = `XF_${base}`;
+    return {
+      lines: [
+        `A_${base} %vd(${cp} ${cn}) %vd(${op} ${on}) ${model}`,
+        `.model ${model} s_xfer(num_coeff=[${numList}] den_coeff=[${denList}])`,
+      ],
+      exact: true,
+    };
+  }
   const prefix = isCurrent ? "G" : "E";
-  return { lines: [`${prefix}_${base} ${op} ${on} ${cp} ${cn} ${fmt(gain)}`], exact: false, dcGain: gain };
+  return {
+    lines: [`${prefix}_${base} ${op} ${on} ${cp} ${cn} ${fmt(classification.dcGain)}`],
+    exact: false,
+    dcGain: classification.dcGain,
+  };
 }

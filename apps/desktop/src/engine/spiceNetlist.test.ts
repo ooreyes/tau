@@ -7,9 +7,9 @@ import {
   transformerWindings,
   unresolvedLibraryWarning,
   unresolvedSubcktMessage,
-  laplaceApproximationWarning,
   clampedLoadSourceWarning,
 } from "./spiceNetlist";
+import { LaplaceAnalysisRefusal, LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE } from "./laplace";
 import { buildParamScope } from "../simulation/paramScope";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 import { CATALOG } from "../schematic/catalog";
@@ -2481,19 +2481,25 @@ describe("unresolvable .include/.lib directives", () => {
 describe("constructs the engine cannot reproduce are never answered silently", () => {
   const grounded = component("ground", "", "", 0, 0);
 
-  it("names the DC gain a non-rational Laplace source was reduced to", () => {
+  it("refuses a non-rational dynamic Laplace source before it can be reduced to DC gain", () => {
     const e = component("vcvs", "E1", "Laplace=2*exp(-.001*s)/(1+.001*s)", 128, 128);
-    const deck = buildSpiceDeck({ components: [grounded, e], wires: [] }, { kind: "ac", startHz: 1, stopHz: 1e6, pointsPerDecade: 10 });
-    expect(deck.circuit.warnings).toContain(
-      laplaceApproximationWarning("E1", "2*exp(-.001*s)/(1+.001*s)", 2),
-    );
-    expect(deck.circuit.warnings.join(" ")).toMatch(/valid at DC only/);
+    expect(() => buildSpiceDeck(
+      { components: [grounded, e], wires: [] },
+      { kind: "ac", startHz: 1, stopHz: 1e6, pointsPerDecade: 10 },
+    )).toThrow(LaplaceAnalysisRefusal);
+    try {
+      buildSpiceDeck({ components: [grounded, e], wires: [] }, { kind: "ac", startHz: 1, stopHz: 1e6, pointsPerDecade: 10 });
+    } catch (error) {
+      expect((error as LaplaceAnalysisRefusal).code).toBe(LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE);
+    }
   });
 
-  it("warns for a current-source Laplace, which has no exact realization at all", () => {
+  it("refuses a dynamic current-source Laplace instead of using H(0) in AC", () => {
     const g = component("vccs", "G1", "Laplace=10/(1+.001*s)", 128, 128);
-    const deck = buildSpiceDeck({ components: [grounded, g], wires: [] }, { kind: "ac", startHz: 1, stopHz: 1e6, pointsPerDecade: 10 });
-    expect(deck.circuit.warnings.some((w) => w.startsWith("G1's Laplace transfer"))).toBe(true);
+    expect(() => buildSpiceDeck(
+      { components: [grounded, g], wires: [] },
+      { kind: "ac", startHz: 1, stopHz: 1e6, pointsPerDecade: 10 },
+    )).toThrow("No approximate or partial circuit was run.");
   });
 
   it("leaves an exactly realized rational Laplace source unwarned", () => {

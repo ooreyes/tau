@@ -24,6 +24,7 @@ import { primaryBranches } from "../simulation/operatingPoint";
 import { currentProbeTraces } from "../simulation/currentProbe";
 import { parseStepDirective } from "../simulation/paramStep";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
+import { LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE } from "./laplace";
 
 const component = (
   kind: SchematicComponent["kind"],
@@ -59,6 +60,17 @@ const acExcitedSchematic = () => ({
   ...rcSchematic(),
   components: rcSchematic().components.map((component) =>
     component.label === "V1" ? { ...component, value: "5 AC 1" } : component),
+});
+
+const delayedLaplaceAcSchematic = () => ({
+  components: [
+    component("vac", "v1", "V1", "0 1 1k", -128, 32),
+    component("vcvs", "e1", "E1", "Laplace=exp(-.001*s)", 0, 0),
+    component("ground", "g1", "", "", -128, 64),
+    component("ground", "g2", "", "", -32, 16),
+    component("ground", "g3", "", "", 32, 16),
+  ],
+  wires: [],
 });
 
 /** A deliberately direct LED drive used to verify retained device current. */
@@ -122,6 +134,32 @@ describe("native ngspice adapter", () => {
     expect(isNativeSpiceRuntime()).toBe(false);
 
     await expect(runNativeTransient(rcSchematic(), { stopTime: 0.002, steps: 200 })).resolves.toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a dynamic non-rational Laplace transfer before calling native ngspice", async () => {
+    enableNativeRuntime();
+
+    try {
+      await runNativeAcSweep(delayedLaplaceAcSchematic(), {
+        startHz: 10, stopHz: 1e3, pointsPerDecade: 10,
+      });
+      expect.unreachable("dynamic non-rational Laplace transfer should be refused");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE,
+        diagnostic: {
+          code: LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE,
+          ref: "E1",
+          sourceKind: "vcvs",
+          transfer: "exp(-.001*s)",
+          analysis: "ac",
+          dcGain: 1,
+          reason: "non-rational",
+        },
+      });
+    }
+
     expect(invoke).not.toHaveBeenCalled();
   });
 
