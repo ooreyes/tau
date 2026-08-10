@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import {
@@ -29,7 +29,10 @@ Object.defineProperty(globalThis, "localStorage", {
   } as Storage,
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 beforeEach(() => localStorage.clear());
 
 const config = (over: Partial<PanelWidthConfig> = {}): PanelWidthConfig => ({
@@ -147,6 +150,19 @@ describe("usePanelWidth drag behavior", () => {
     fireEvent.pointerUp(window, { pointerId: 1 });
     fireEvent.pointerMove(window, { clientX: 200, pointerId: 1 });
     expect(panelWidth()).toBe(264); // released - moves no longer resize
+  });
+
+  it("removes window drag listeners if its panel unmounts mid-gesture", () => {
+    const remove = vi.spyOn(window, "removeEventListener");
+    const { unmount } = render(<Harness cfg={config({ edge: "left" })} />);
+    fireEvent.pointerDown(screen.getByRole("separator"), { button: 0, clientX: 400, pointerId: 1 });
+
+    unmount();
+
+    const removed = remove.mock.calls.map(([type]) => type);
+    expect(removed).toContain("pointermove");
+    expect(removed).toContain("pointerup");
+    expect(removed).toContain("pointercancel");
   });
 
   it("resizes and persists via arrow keys (separator keyboard support)", () => {

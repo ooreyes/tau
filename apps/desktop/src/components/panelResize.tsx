@@ -60,6 +60,18 @@ export function usePanelWidth(config: PanelWidthConfig) {
   configRef.current = config;
   const widthRef = useRef(width);
   widthRef.current = width;
+  // Pointer moves/up events are listened for on `window`, rather than the
+  // narrow separator, so a fast drag remains responsive after leaving the
+  // handle. Keep their disposer in a ref because a panel can disappear while
+  // that gesture is still in flight (closing a rail, changing workspaces, or
+  // unmounting a lazy panel). Without this, the three window listeners retain
+  // this hook and can update an unmounted component until a later pointer-up.
+  const stopDragRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => {
+    stopDragRef.current?.();
+    stopDragRef.current = null;
+  }, []);
 
   const applyWidth = useCallback((next: number) => {
     const cfg = configRef.current;
@@ -80,6 +92,10 @@ export function usePanelWidth(config: PanelWidthConfig) {
     (event: ReactPointerEvent<HTMLElement>) => {
       if (event.button !== 0) return;
       event.preventDefault();
+      // Pointer capture normally makes a second pointerdown impossible, but
+      // clean up defensively for browsers that lose capture during a panel
+      // transition before delivering pointercancel.
+      stopDragRef.current?.();
       const cfg = configRef.current;
       const vertical = cfg.edge === "top" || cfg.edge === "bottom";
       const target = event.currentTarget;
@@ -100,15 +116,20 @@ export function usePanelWidth(config: PanelWidthConfig) {
         applyWidth(startWidth + delta);
       };
       const onUp = () => {
+        stopDrag();
+        setDragging(false);
+        savePanelWidth(cfg.storageKey, widthRef.current);
+      };
+      const stopDrag = () => {
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
-        setDragging(false);
-        savePanelWidth(cfg.storageKey, widthRef.current);
+        if (stopDragRef.current === stopDrag) stopDragRef.current = null;
       };
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
       window.addEventListener("pointercancel", onUp);
+      stopDragRef.current = stopDrag;
     },
     [applyWidth],
   );
