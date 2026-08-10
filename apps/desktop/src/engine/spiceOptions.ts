@@ -14,12 +14,27 @@ export const DEFAULT_OPTIONS: Record<string, string> = {
   reltol: "1e-4",
   abstol: "1e-12",
   vntol: "1e-7",
-  // A 1 TΩ resistor from every node to ground. ngspice (unlike LTspice) throws a
+  // A resistor from every node to ground. ngspice (unlike LTspice) throws a
   // fatal "singular matrix" the moment any node lacks a DC path to ground - a
   // floating op-amp input, an AC-coupled stage, an ideal-transformer winding.
-  // rshunt gives every node a negligible DC return so those circuits solve; at
-  // 1e12 Ω its effect on real node voltages is below measurement noise. The
-  // document can override or disable it.
+  // rshunt gives every node a negligible DC return so those circuits solve.
+  //
+  // This is the FLOOR, not the value: `shuntForMaxResistance` raises it for
+  // high-impedance circuits. The comment here used to claim that 1e12 Ω was
+  // "below measurement noise" full stop, and that is only true while the
+  // circuit's own resistances are far below it. Measured against a 1:1
+  // divider, whose answer is exactly 0.5 V for any R:
+  //
+  //     R = 1 k     0.500000000 V     error 2.5e-10 V
+  //     R = 1 Meg   0.499999750 V     error 2.5e-7 V
+  //     R = 1 G     0.499750125 V     error 0.05 %
+  //     R = 1 T     0.333333333 V     error 33 %
+  //
+  // The error is 0.5·R/rshunt, so it is the RATIO that has to stay large, not
+  // the shunt. An electrometer or photodiode front end sits exactly where the
+  // fixed value fails worst - and those are among the circuits rshunt was
+  // added to rescue in the first place. The document can still override or
+  // disable it.
   rshunt: "1e12",
   // 1 mΩ in series with every inductor - LTspice's own documented default
   // (an inductor without an explicit Rser gets 1 mΩ; Control Panel → Hacks).
@@ -72,6 +87,43 @@ export function mergeOptionsLine(userOptions: Record<string, string>): string {
   return `.options ${parts.join(" ")}`;
 }
 
+/** Smallest shunt Tau will emit: today's value, so a circuit whose resistances
+ *  are all well under a megohm gets exactly the deck it got before. */
+const RSHUNT_FLOOR = 1e12;
+/** Largest shunt Tau will emit.
+ *
+ *  Not arbitrary. Past roughly 1e18 the shunt stops being a usable DC return
+ *  and the thing it exists to prevent comes back: at 1e21 an AC-coupled node
+ *  that should settle to 0 V solved to 0.99 V instead - a floating node
+ *  reported as a confident wrong answer, which is worse than the singular
+ *  matrix. 1e18 was clean on the same circuit. */
+const RSHUNT_CEILING = 1e18;
+/** How far above the circuit's own impedance the shunt should sit. The error
+ *  a shunt introduces is 0.5·R/rshunt, so 1e6 buys about 5e-7 relative - two
+ *  orders below any tolerance an engineer reads a node voltage to. */
+const RSHUNT_RATIO = 1e6;
+
+/**
+ * The shunt to hang off every node, given the largest resistance in the
+ * circuit.
+ *
+ * Rounded up to a whole decade so the emitted deck stays something a person
+ * can read and diff, and clamped at both ends (see the constants above).
+ * Below about a megohm this returns the historical `1e12` unchanged, so the
+ * decks that already solve keep solving with the deck they already had.
+ */
+export function shuntForMaxResistance(maxResistanceOhms: number): string {
+  if (!Number.isFinite(maxResistanceOhms) || maxResistanceOhms <= 0) {
+    return `1e${Math.log10(RSHUNT_FLOOR)}`;
+  }
+  const wanted = Math.min(RSHUNT_CEILING, Math.max(RSHUNT_FLOOR, maxResistanceOhms * RSHUNT_RATIO));
+  const decade = Math.min(
+    Math.log10(RSHUNT_CEILING),
+    Math.max(Math.log10(RSHUNT_FLOOR), Math.ceil(Math.log10(wanted))),
+  );
+  return `1e${decade}`;
+}
+
 /**
  * Convenience: parse a document's directives and produce the merged `.options`
  * line.
@@ -86,6 +138,13 @@ export function mergeOptionsLine(userOptions: Record<string, string>): string {
 export function optionsLineFromDirectives(
   directives: ReadonlyArray<string>,
   userDefaults: Record<string, string> = {},
+  maxResistanceOhms?: number,
 ): string {
-  return mergeOptionsLine({ ...userDefaults, ...parseOptionsDirectives(directives) });
+  // The scaled shunt goes in at the DEFAULT layer, underneath both the user's
+  // Settings and the document's own `.options`. A schematic that pins rshunt
+  // was authored to simulate that way and still wins.
+  const scaled: Record<string, string> = maxResistanceOhms === undefined
+    ? {}
+    : { rshunt: shuntForMaxResistance(maxResistanceOhms) };
+  return mergeOptionsLine({ ...scaled, ...userDefaults, ...parseOptionsDirectives(directives) });
 }

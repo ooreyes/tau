@@ -27,6 +27,7 @@ import { validateAssistantProposalBeforeApply } from "../lib/assistantNgspiceVal
 import {
   ASSISTANT_MODEL_LABEL,
   compactAssistantHistory,
+  preloadAssistantSdk,
   streamAssistantReply,
   useHasAssistantApiKey,
   type AssistantChatMessage,
@@ -319,6 +320,19 @@ export function AssistantPanel({
   const [localAiBusy, setLocalAiBusy] = useState(false);
   const [localAiNotice, setLocalAiNotice] = useState<string | null>(null);
   const autoEnsureKeyRef = useRef<string | null>(null);
+
+  // The Anthropic SDK lives in its own chunk so it stays out of what Tau
+  // parses at launch (see lib/assistant.ts). Pull it in as soon as the panel
+  // is on screen with Anthropic selected — that is a whole composing session
+  // ahead of the first Send, so the send path finds it already resolved and
+  // dispatches in the same tick as the click, exactly as a static import did.
+  useEffect(() => {
+    if (preferences.provider !== "anthropic") return;
+    void preloadAssistantSdk().catch(() => {
+      // Nothing to report yet: a real send retries the load and surfaces the
+      // failure on the transcript's own error path.
+    });
+  }, [preferences.provider]);
 
   useEffect(() => {
     if (preferences.provider !== "local-mlx") {

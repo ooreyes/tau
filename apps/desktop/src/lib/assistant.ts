@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import {
   APPLY_CURRENT_ASC_TOOL,
   parseAssistantActions,
@@ -31,6 +31,44 @@ import {
   type AssistantOperationContext,
 } from "./assistantOperations";
 import type { AssistantRunMetrics } from "./assistantProvider";
+
+/**
+ * The Anthropic SDK is ~150 KB of node-targeted transport, retry, and
+ * credential-chain code that only a user who actually talks to the assistant
+ * ever executes, so it is imported dynamically and lands in its own chunk
+ * instead of in everything Tau parses before the schematic first paints.
+ *
+ * Two rules keep that free. The panel calls `preloadAssistantSdk()` when it
+ * mounts, which is many seconds of typing before the first Send, so by the
+ * time a request is dispatched the module is already resolved and
+ * `streamAssistantReply` takes the warm branch and creates the stream in the
+ * caller's own tick — exactly as it did when the import was static. Only a
+ * send that beats the chunk (or skips the panel entirely) pays a module load,
+ * and that path is still abortable: the handle is returned synchronously and
+ * `userAborted` is checked again on the far side of the load.
+ */
+type AnthropicSdk = typeof import("@anthropic-ai/sdk");
+let loadedSdk: AnthropicSdk | null = null;
+let sdkLoad: Promise<AnthropicSdk> | null = null;
+
+export function preloadAssistantSdk(): Promise<AnthropicSdk> {
+  if (loadedSdk) return Promise.resolve(loadedSdk);
+  if (!sdkLoad) {
+    sdkLoad = import("@anthropic-ai/sdk").then(
+      (module) => {
+        loadedSdk = module;
+        return module;
+      },
+      (error: unknown) => {
+        // A chunk fetch that failed once (offline, evicted cache) must not
+        // poison every later send with the same rejected promise.
+        sdkLoad = null;
+        throw error;
+      },
+    );
+  }
+  return sdkLoad;
+}
 
 /** Exact model id - no date suffix. Keep every call site pointed at this
  *  one constant so a future model bump is a one-line change.
@@ -320,17 +358,21 @@ function parseCloudActions(content: readonly unknown[]): ParsedCloudActions {
   return { actions, rejected, rejectedToolUses };
 }
 
-function classifyAssistantError(error: unknown): AssistantError {
-  if (error instanceof Anthropic.AuthenticationError) {
+/** Takes the loaded SDK explicitly rather than reaching for a module-level
+ * binding: the error classes only exist once the chunk has resolved, and every
+ * call site here is already inside a live request, which by definition has
+ * one. */
+function classifyAssistantError(sdk: AnthropicSdk, error: unknown): AssistantError {
+  if (error instanceof sdk.default.AuthenticationError) {
     return { kind: "auth", message: "Authentication failed. Check your API key in Settings." };
   }
-  if (error instanceof Anthropic.RateLimitError) {
+  if (error instanceof sdk.default.RateLimitError) {
     return { kind: "rate_limit", message: "Rate limited - try again shortly." };
   }
-  if (error instanceof Anthropic.APIConnectionError) {
+  if (error instanceof sdk.default.APIConnectionError) {
     return { kind: "network", message: "Couldn't reach Anthropic. Check your connection and try again." };
   }
-  if (error instanceof Anthropic.APIError) {
+  if (error instanceof sdk.default.APIError) {
     return error.status !== undefined && error.status >= 500
       ? { kind: "network", message: "Anthropic's assistant service is temporarily unavailable. Retry shortly." }
       : { kind: "unknown", message: "Anthropic rejected the assistant request. Retry once; if it repeats, update Tau." };
@@ -369,17 +411,6 @@ export function streamAssistantReply(
     }));
     return handle;
   }
-  // Match the SDK's own fetch ceiling to Tau's larger mutation ceiling. The
-  // SDK defaults to ten minutes, which would otherwise undercut Tau's
-  // progress-aware twelve-minute build budget. In Tauri the placeholder
-  // `apiKey` is never sent — createCloudAiFetch strips auth headers and Rust
-  // attaches the keychain credential on the allowlisted HTTPS call.
-  const client = new Anthropic({
-    apiKey,
-    dangerouslyAllowBrowser: true,
-    timeout: ASSISTANT_REQUEST_TIMEOUT_MS,
-    ...(nativeProxy ? { fetch: createCloudAiFetch("anthropic") } : {}),
-  });
   let userAborted = false;
   let activeStream: { abort: () => void } | null = null;
   let clearActiveDeadline = () => {};
@@ -448,6 +479,8 @@ export function streamAssistantReply(
   }, requestTimeoutMs);
 
   const run = (
+    sdk: AnthropicSdk,
+    client: Anthropic,
     messages: Anthropic.MessageParam[],
     operationsRemaining: number,
     repairsRemaining: number,
@@ -467,7 +500,7 @@ export function streamAssistantReply(
           messages,
         });
       } catch (error) {
-        finishWithError(classifyAssistantError(error));
+        finishWithError(classifyAssistantError(sdk, error));
         return null;
       }
     })();
@@ -558,7 +591,7 @@ export function streamAssistantReply(
               }],
             },
           ];
-          run(continuedMessages, operationsRemaining - 1, repairsRemaining);
+          run(sdk, client, continuedMessages, operationsRemaining - 1, repairsRemaining);
           return;
         }
 
@@ -580,7 +613,7 @@ export function streamAssistantReply(
               content: `Tau rejected the prior logical circuit plan: ${rejected.error}. Regenerate one complete corrected ${TAU_CIRCUIT_PLAN_TOOL_NAME} call for the user's same request. Return no ASC or coordinates.`,
             },
           ];
-          run(repairMessages, operationsRemaining, repairsRemaining - 1);
+          run(sdk, client, repairMessages, operationsRemaining, repairsRemaining - 1);
           return;
         }
         finishWithReply({
@@ -593,12 +626,40 @@ export function streamAssistantReply(
         if (userAborted || terminal || requestSettled) return; // Stop/timeout already handled.
         requestSettled = true;
         clearDeadline();
-        finishWithError(classifyAssistantError(error));
+        finishWithError(classifyAssistantError(sdk, error));
       });
   };
 
+  // Match the SDK's own fetch ceiling to Tau's larger mutation ceiling. The
+  // SDK defaults to ten minutes, which would otherwise undercut Tau's
+  // progress-aware twelve-minute build budget. In Tauri the placeholder
+  // `apiKey` is never sent — createCloudAiFetch strips auth headers and Rust
+  // attaches the keychain credential on the allowlisted HTTPS call.
+  const begin = (sdk: AnthropicSdk): void => {
+    if (userAborted || terminal) return;
+    const client = new sdk.default({
+      apiKey,
+      dangerouslyAllowBrowser: true,
+      timeout: ASSISTANT_REQUEST_TIMEOUT_MS,
+      ...(nativeProxy ? { fetch: createCloudAiFetch("anthropic") } : {}),
+    });
+    run(sdk, client, initialMessages, 4, 1);
+  };
+
   handlers.onProgress?.("connecting");
-  run(initialMessages, 4, 1);
+  if (loadedSdk) {
+    begin(loadedSdk);
+  } else {
+    void preloadAssistantSdk().then(begin, () => {
+      // The chunk itself never carries a credential, so there is nothing to
+      // redact here — but keep the wording generic anyway, in line with the
+      // rest of this file's refusal to reflect transport detail at the user.
+      finishWithError({
+        kind: "network",
+        message: "Tau couldn't load the Anthropic client. Check your connection and try again.",
+      });
+    });
+  }
 
   return {
     abort: () => {

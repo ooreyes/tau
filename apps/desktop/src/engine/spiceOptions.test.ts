@@ -4,6 +4,7 @@ import {
   parseOptionsDirectives,
   mergeOptionsLine,
   optionsLineFromDirectives,
+  shuntForMaxResistance,
 } from "./spiceOptions";
 
 describe("parseOptionsDirectives", () => {
@@ -60,6 +61,38 @@ describe("mergeOptionsLine", () => {
     expect(line).not.toContain("reltol=1e-4");
     // Other defaults are still present.
     expect(line).toContain("gmin=1e-12");
+  });
+
+  it("scales the node shunt to the circuit's own impedance", () => {
+    // The shunt's error on a node voltage is 0.5·R/rshunt, so what has to stay
+    // large is the RATIO. Pinned at 1e12 a 1:1 divider built from 1 TΩ legs
+    // read 0.333 V instead of 0.5 - a 33% error, measured against the real
+    // engine in spice.rs's `accuracy_high_impedance_divider_*` test.
+    //
+    // Below a megohm nothing moves: those decks already solve and must keep
+    // the exact deck they had.
+    expect(shuntForMaxResistance(1e3)).toBe("1e12");
+    expect(shuntForMaxResistance(1e6)).toBe("1e12");
+    // Above it, the shunt follows the circuit up, a decade at a time.
+    expect(shuntForMaxResistance(1e7)).toBe("1e13");
+    expect(shuntForMaxResistance(1e9)).toBe("1e15");
+    expect(shuntForMaxResistance(1e12)).toBe("1e18");
+    // ...but stops at 1e18. Beyond that the shunt is too weak to be a DC
+    // return and a floating node solves to a confident wrong answer (0.99 V
+    // where 0 V was correct, at 1e21).
+    expect(shuntForMaxResistance(1e15)).toBe("1e18");
+    expect(shuntForMaxResistance(Number.POSITIVE_INFINITY)).toBe("1e12");
+    expect(shuntForMaxResistance(0)).toBe("1e12");
+    expect(shuntForMaxResistance(Number.NaN)).toBe("1e12");
+  });
+
+  it("keeps the scaled shunt underneath Settings and the document", () => {
+    // Precedence is the whole point of the three-way merge: a schematic that
+    // pins rshunt was authored to simulate that way.
+    expect(optionsLineFromDirectives([], {}, 1e12)).toContain("rshunt=1e18");
+    expect(optionsLineFromDirectives([], { rshunt: "1e14" }, 1e12)).toContain("rshunt=1e14");
+    expect(optionsLineFromDirectives([".options rshunt=1e9"], { rshunt: "1e14" }, 1e12))
+      .toContain("rshunt=1e9");
   });
 
   it("includes a default rshunt the document can override (floating-node DC path)", () => {

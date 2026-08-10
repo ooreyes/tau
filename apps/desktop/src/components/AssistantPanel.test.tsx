@@ -120,6 +120,7 @@ import {
   ASSISTANT_STALL_TIMEOUT_MS,
   ASSISTANT_REQUEST_TIMEOUT_MS,
   compactAssistantHistory,
+  preloadAssistantSdk,
   saveAssistantApiKey,
   streamAssistantReply,
 } from "../lib/assistant";
@@ -192,7 +193,15 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-beforeEach(() => {
+beforeEach(async () => {
+  // The Anthropic SDK is a lazy chunk, and AssistantPanel preloads it the
+  // moment it mounts with Anthropic selected. Every case below therefore
+  // starts from the same state a real user is in by the time they press Send:
+  // module already resolved, so the request goes out in the click's own tick.
+  // Doing this here rather than per-test also keeps the file order-independent
+  // — without it, whichever case happened to run first would be the only one
+  // paying for the load. The cold path has its own cases at the bottom.
+  await preloadAssistantSdk();
   localStorage.clear();
   saveAssistantApiKey("");
   saveCloudAiConsent({ consented: true });
@@ -1411,5 +1420,95 @@ describe("AssistantPanel conversation history", () => {
     expect(saved[0]).toMatchObject({ role: "user", content: "What does R1 do?" });
     expect(saved[1]).toMatchObject({ role: "assistant", content: "R1 sets the gain." });
     expect(listConversations("flush.asc")).toHaveLength(1);
+  });
+
+  // A send can beat the panel's preload — the user switches to Anthropic and
+  // hits Send in the same breath, or the chunk request is slow. These cases
+  // reset the module registry to get an assistant module whose SDK chunk has
+  // genuinely never been loaded, which the warm beforeEach above cannot
+  // produce. They must not render: a reset registry hands back a second React
+  // instance, and only the plain streamAssistantReply seam is under test here.
+  describe("with a cold SDK chunk", () => {
+    async function coldAssistant() {
+      vi.resetModules();
+      return import("../lib/assistant");
+    }
+
+    it("still dispatches the request once the chunk arrives", async () => {
+      const cold = await coldAssistant();
+      cold.saveAssistantApiKey("test-key");
+      const onDone = vi.fn();
+      const onError = vi.fn();
+
+      const handle = cold.streamAssistantReply("Circuit context", [{ role: "user", content: "Explain R1" }], {
+        onDelta: vi.fn(),
+        onDone,
+        onError,
+      });
+      // The abort handle is the contract callers depend on, and it exists
+      // before the chunk does - AssistantPanel stores it into a ref on this
+      // very line and Stop has to work from the next paint onward.
+      expect(typeof handle.abort).toBe("function");
+
+      await waitFor(() => expect(streams).toHaveLength(1));
+      expect(streamRequests[0]).toEqual(expect.objectContaining({ model: "claude-sonnet-5" }));
+      await act(async () => {
+        streams[0].resolve("R1 sets the gain.");
+        await streams[0].finalMessage();
+      });
+      expect(onError).not.toHaveBeenCalled();
+      expect(onDone).toHaveBeenCalledWith(expect.objectContaining({ text: "R1 sets the gain." }));
+    });
+
+    it("opens no request at all when the user stops before the chunk resolves", async () => {
+      const cold = await coldAssistant();
+      cold.saveAssistantApiKey("test-key");
+      const onDone = vi.fn();
+      const onError = vi.fn();
+
+      cold.streamAssistantReply("Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+        onDelta: vi.fn(),
+        onDone,
+        onError,
+      }).abort();
+
+      await cold.preloadAssistantSdk();
+      await act(async () => {});
+      // Nothing reached Anthropic, and a user-initiated stop stays silent.
+      expect(streams).toHaveLength(0);
+      expect(onDone).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it("reports a failed chunk load generically instead of leaving the composer waiting forever", async () => {
+      vi.resetModules();
+      vi.doMock("@anthropic-ai/sdk", () => {
+        throw new Error("Failed to fetch dynamically imported module: /assets/anthropic-abc123.js");
+      });
+      try {
+        const cold = await import("../lib/assistant");
+        cold.saveAssistantApiKey("test-key");
+        const onError = vi.fn();
+
+        cold.streamAssistantReply("Circuit context", [{ role: "user", content: "Explain R1" }], {
+          onDelta: vi.fn(),
+          onDone: vi.fn(),
+          onError,
+        });
+
+        await waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+        expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+          kind: "network",
+          message: expect.stringMatching(/couldn't load the Anthropic client/i),
+        }));
+        // Same rule as every other transport failure in this file: the module
+        // path and the loader's own words never reach the failure card.
+        expect(JSON.stringify(onError.mock.calls)).not.toContain("assets/anthropic");
+        expect(streams).toHaveLength(0);
+      } finally {
+        vi.doUnmock("@anthropic-ai/sdk");
+        vi.resetModules();
+      }
+    });
   });
 });

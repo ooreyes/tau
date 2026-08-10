@@ -366,7 +366,26 @@ export function buildSpiceDeck(
 
   // Settings' solver tolerances sit under the document's own `.options`,
   // so a schematic that pins a tolerance still simulates its own way.
-  const lines = ["Tau generated circuit", optionsLineFromDirectives(flatDirectives, solverOptionOverrides())];
+  //
+  // The largest resistance on the sheet is passed so the node-to-ground shunt
+  // can scale with the circuit instead of sitting at a fixed 1 TΩ - see
+  // `shuntForMaxResistance`. Unparseable values (behavioural expressions,
+  // unresolved `{params}`) are skipped rather than guessed at: a shunt chosen
+  // from a misread resistance would be worse than the floor.
+  let maxResistanceOhms = 0;
+  for (const component of components) {
+    if (component.kind !== "resistor" && component.kind !== "bulb") continue;
+    try {
+      const ohms = Math.abs(parseQuantity(component.value, "Ω"));
+      if (Number.isFinite(ohms) && ohms > maxResistanceOhms) maxResistanceOhms = ohms;
+    } catch {
+      /* behavioural or parameterised resistance - not a number we can scale to */
+    }
+  }
+  const lines = [
+    "Tau generated circuit",
+    optionsLineFromDirectives(flatDirectives, solverOptionOverrides(), maxResistanceOhms),
+  ];
   const usedKinds = new Set(components.map((component) => component.kind));
   const needsModels = ["diode", "led", "zener", "photodiode", "nmos", "pmos", "njf", "pjf", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind))
     || components.some((component) =>

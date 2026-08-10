@@ -42,6 +42,26 @@ describe("buildSpiceDeck", () => {
     }
   });
 
+  it("raises the node shunt for a high-impedance sheet, and leaves ordinary ones alone", () => {
+    // The node-to-ground shunt is only invisible while it is far above the
+    // circuit's own impedance. Pinned at 1e12 a 1 TΩ divider read 0.333 V
+    // where the mathematics says 0.5 - measured against the real engine in
+    // spice.rs's `accuracy_high_impedance_divider_exposes_the_rshunt_default`.
+    const grounded = component("ground", "", "", 0, 0);
+    const deckFor = (ohms: string) =>
+      buildSpiceDeck(
+        { components: [grounded, component("resistor", "R1", ohms, 128, 128)], wires: [] },
+        { kind: "op" },
+      ).netlist;
+
+    // An everyday sheet keeps exactly the deck it had before this existed.
+    expect(deckFor("1k")).toContain("rshunt=1e12");
+    expect(deckFor("470k")).toContain("rshunt=1e12");
+    // An electrometer-class one does not.
+    expect(deckFor("1g")).toContain("rshunt=1e15");
+    expect(deckFor("1t")).toContain("rshunt=1e18");
+  });
+
   it("emits a named vendor op-amp as its exact attached five-pin subcircuit", () => {
     const vendor: SchematicComponent = {
       ...component("opamp", "U1", "OP07 LT1001", 0, 0),

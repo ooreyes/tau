@@ -3470,4 +3470,256 @@ R2 out 0 1k
             "temp=77 should give divider 0.4 V; got {second}"
         );
     }
+
+    // ── Numerical accuracy against closed-form solutions ───────────────────
+    //
+    // "Accurate" for a circuit simulator does not mean "agrees with another
+    // simulator" - that only propagates whatever the other one gets wrong. It
+    // means agrees with the mathematics. Every circuit below has an exact
+    // closed-form answer an engineer can derive on paper, so the assertions
+    // are absolute error against truth rather than a golden file.
+    //
+    // These carry the same `#[ignore]` as the other real-engine tests: they
+    // need the bundled libngspice. Run them with
+    //   TAU_NGSPICE_LIB=build/ngspice-stage/lib/libngspice.dylib \
+    //     cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml accuracy_ -- --ignored --nocapture
+
+    #[cfg(test)]
+    fn real_engine() -> SpiceEngine {
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        SpiceEngine::load(vec![library]).expect("ngspice library should load")
+    }
+
+    /// The samples of `name`, paired with the run's own time/sweep vector.
+    #[cfg(test)]
+    fn series(result: &SpiceResult, name: &str) -> (Vec<f64>, Vec<f64>) {
+        let sweep = result
+            .vectors
+            .iter()
+            .find(|v| {
+                v.name.eq_ignore_ascii_case("time")
+                    || v.name.eq_ignore_ascii_case("frequency")
+                    || v.name.eq_ignore_ascii_case("v-sweep")
+            })
+            .unwrap_or_else(|| panic!("no sweep vector in {:?}", names(result)));
+        let signal = result
+            .vectors
+            .iter()
+            .find(|v| v.name.eq_ignore_ascii_case(name))
+            .unwrap_or_else(|| panic!("no vector {name} in {:?}", names(result)));
+        (sweep.real.clone(), signal.real.clone())
+    }
+
+    #[cfg(test)]
+    fn names(result: &SpiceResult) -> Vec<&str> {
+        result.vectors.iter().map(|v| v.name.as_str()).collect()
+    }
+
+    #[cfg(test)]
+    fn scalar(result: &SpiceResult, name: &str) -> f64 {
+        result
+            .vectors
+            .iter()
+            .find(|v| v.name.eq_ignore_ascii_case(name))
+            .and_then(|v| v.real.first())
+            .copied()
+            .unwrap_or_else(|| panic!("no scalar {name} in {:?}", names(result)))
+    }
+
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn accuracy_rc_step_matches_the_exponential() {
+        // Vc(t) = 1 - exp(-t/RC), R = 1k, C = 1u, tau = 1 ms exactly.
+        let _guard = real_engine_test_guard();
+        let mut engine = real_engine();
+        let result = engine
+            .run(SpiceRequest {
+                netlist: "RC step\nV1 in 0 PULSE(0 1 0 1p 1p 1 2)\nR1 in out 1k\nC1 out 0 1u\n.tran 10u 5m uic\n.end".to_string(),
+            })
+            .expect("rc step should solve");
+        let (t, v) = series(&result, "out");
+        let mut worst: f64 = 0.0;
+        for (&time, &value) in t.iter().zip(v.iter()) {
+            worst = worst.max((value - (1.0 - (-time / 1e-3).exp())).abs());
+        }
+        println!("ACCURACY rc_step max_abs_err = {worst:.3e} V over {} samples", t.len());
+        assert!(worst < 1e-4, "RC step deviates from 1-exp(-t/RC) by {worst:.3e} V");
+    }
+
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn accuracy_rlc_ringing_matches_the_damped_sinusoid() {
+        // Series RLC step, underdamped, checked against the physics an
+        // engineer actually reads off the plot: the ring frequency and the
+        // decay envelope.
+        //
+        //   alpha = R/2L,  w0 = 1/sqrt(LC),  wd = sqrt(w0^2 - alpha^2)
+        //
+        // NOT a max-absolute-error bound against the closed form, and the
+        // reason is worth recording. Measured that way the deviation is about
+        // 5 mV on a 1 V step, and it gets LARGER with finer sampling (2.1 mV
+        // at 1 us output, 5.0 mV at 50 ns) - which is backwards for truncation
+        // error. The finer grid is not less accurate, it is merely landing
+        // nearer the true extrema that the coarse grid stepped over. What is
+        // actually there is trapezoidal phase dispersion, which shifts the
+        // discrete natural frequency by about (wd*h)^2/12 and so accumulates
+        // as a growing phase offset over the ~10 cycles in this window.
+        // Tightening trtol does not move it (checked at 7, 1 and 0.5), which
+        // confirms it is dispersion rather than local error control.
+        //
+        // Frequency and damping are the invariants that dispersion does not
+        // corrupt, they are what the engineer is reading, and they hold to
+        // parts in 1e3 - so those are what this pins.
+        //
+        // `rseries=0` because Tau's default hangs 1 mOhm on every inductor
+        // (LTspice parity, see DEFAULT_OPTIONS); left on, this test would be
+        // measuring that option rather than the integrator.
+        let _guard = real_engine_test_guard();
+        let mut engine = real_engine();
+        let result = engine
+            .run(SpiceRequest {
+                netlist: "RLC ringing\n.options rseries=0\nV1 in 0 PULSE(0 1 0 1p 1p 1 2)\nR1 in a 10\nL1 a out 1m\nC1 out 0 1u\n.tran 200n 2m uic\n.end".to_string(),
+            })
+            .expect("rlc ringing should solve");
+        let (t, v) = series(&result, "out");
+        let (r, l, c) = (10.0_f64, 1e-3_f64, 1e-6_f64);
+        let alpha = r / (2.0 * l);
+        let w0 = 1.0 / (l * c).sqrt();
+        let wd = (w0 * w0 - alpha * alpha).sqrt();
+
+        // Upward zero crossings of (Vc - 1), linearly interpolated. The ring
+        // is about the 1 V final value, so that is the axis.
+        let mut crossings: Vec<f64> = Vec::new();
+        for i in 1..t.len() {
+            let (prev, next) = (v[i - 1] - 1.0, v[i] - 1.0);
+            if prev < 0.0 && next >= 0.0 {
+                crossings.push(t[i - 1] + (t[i] - t[i - 1]) * (-prev) / (next - prev));
+            }
+        }
+        assert!(crossings.len() >= 4, "expected several ring cycles, got {}", crossings.len());
+        // The first three periods only, deliberately.
+        //
+        // This ring decays as exp(-5000t), so by ~1.3 ms it is down to tens of
+        // microvolts and the crossings stop being a measurement of anything -
+        // the observed intervals run 201.25, 201.40, 201.80, 202.95, 206.34,
+        // 220.32 us, i.e. exact early and drifting badly once the amplitude
+        // approaches the solver's own noise. Averaging all of them reported a
+        // 2.2% frequency error that is an artefact of the estimator, not of
+        // the engine. Over the first three cycles, where there is signal to
+        // measure, the period is right to parts in 1e4.
+        const RING_CYCLES: usize = 3;
+        let periods: f64 = (crossings[RING_CYCLES] - crossings[0]) / RING_CYCLES as f64;
+        let measured_wd = 2.0 * std::f64::consts::PI / periods;
+        let wd_err = (measured_wd - wd).abs() / wd;
+
+        // Envelope decay between the first and last cycle: |Vc-1| at the peak
+        // of cycle n falls as exp(-alpha t), so the log ratio over a known
+        // time span recovers alpha.
+        let peak_between = |lo: f64, hi: f64| -> f64 {
+            let mut best: f64 = 0.0;
+            for (&tt, &vv) in t.iter().zip(v.iter()) {
+                if tt >= lo && tt <= hi {
+                    best = best.max((vv - 1.0).abs());
+                }
+            }
+            best
+        };
+        let first = peak_between(crossings[0], crossings[1]);
+        let last = peak_between(crossings[RING_CYCLES - 1], crossings[RING_CYCLES]);
+        let span = crossings[RING_CYCLES - 1] - crossings[0];
+        let measured_alpha = (first / last).ln() / span;
+        let alpha_err = (measured_alpha - alpha).abs() / alpha;
+
+        println!(
+            "ACCURACY rlc_ringing wd: exact {wd:.2} measured {measured_wd:.2} rad/s (rel {wd_err:.2e}); \
+             alpha: exact {alpha:.1} measured {measured_alpha:.1} 1/s (rel {alpha_err:.2e}); \
+             {RING_CYCLES} of {} usable cycles",
+            crossings.len() - 1
+        );
+        // These bound the ESTIMATOR plus the engine, and the estimator is the
+        // looser of the two. The raw crossing intervals come out at 201.25 us
+        // against an exact 201.22, i.e. the engine reproduces the period to
+        // 1.5e-4; the frequency figure below is worse only because it averages
+        // three intervals, and the damping figure is worse again because
+        // reading an envelope off discrete peaks is a coarse way to recover an
+        // exponent. Tightened only with a better estimator, never by loosening
+        // the circuit.
+        assert!(wd_err < 3e-3, "ring frequency off by {wd_err:.2e} relative");
+        assert!(alpha_err < 3e-2, "damping off by {alpha_err:.2e} relative");
+    }
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn accuracy_rc_lowpass_ac_matches_the_transfer_function() {
+        // |H| = 1/sqrt(1 + (w R C)^2). R = 1k, C = 1u => f_3dB = 159.15 Hz.
+        let _guard = real_engine_test_guard();
+        let mut engine = real_engine();
+        let result = engine
+            .run(SpiceRequest {
+                netlist: "RC lowpass\nV1 in 0 AC 1\nR1 in out 1k\nC1 out 0 1u\n.ac dec 20 1 100k\n.end".to_string(),
+            })
+            .expect("ac sweep should solve");
+        let freq = result
+            .vectors
+            .iter()
+            .find(|v| v.name.eq_ignore_ascii_case("frequency"))
+            .expect("frequency vector");
+        let out = result
+            .vectors
+            .iter()
+            .find(|v| v.name.eq_ignore_ascii_case("out"))
+            .expect("out vector");
+        let imag = out.imaginary.as_ref().expect("ac result should be complex");
+        let mut worst_rel: f64 = 0.0;
+        for ((&f, &re), &im) in freq.real.iter().zip(out.real.iter()).zip(imag.iter()) {
+            let mag = (re * re + im * im).sqrt();
+            let w = 2.0 * std::f64::consts::PI * f;
+            let exact = 1.0 / (1.0 + (w * 1e3 * 1e-6).powi(2)).sqrt();
+            worst_rel = worst_rel.max(((mag - exact) / exact).abs());
+        }
+        println!("ACCURACY rc_lowpass_ac max_rel_err = {worst_rel:.3e} over {} points", freq.real.len());
+        assert!(worst_rel < 1e-6, "AC magnitude deviates from 1/sqrt(1+(wRC)^2) by {worst_rel:.3e} relative");
+    }
+
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn accuracy_high_impedance_divider_exposes_the_rshunt_default() {
+        // A plain 1:1 divider reads 0.5 V for any R, in the mathematics. Tau
+        // forces `rshunt=1e12` onto every deck (DEFAULT_OPTIONS), which hangs
+        // 1 TOhm from every node to ground; its comment claims the effect is
+        // "below measurement noise". That is true at kOhm and false as the
+        // source impedance approaches the shunt. This test measures where.
+        let _guard = real_engine_test_guard();
+        let mut engine = real_engine();
+        for (label, r, shunt) in [
+            ("1k   default", "1k", "1e12"),
+            ("1meg default", "1meg", "1e12"),
+            ("1g   default", "1g", "1e12"),
+            ("1t   default", "1t", "1e12"),
+            ("1g   no-shunt", "1g", "0"),
+            ("1t   no-shunt", "1t", "0"),
+        ] {
+            let shunt_line = if shunt == "0" {
+                String::new()
+            } else {
+                format!(".options rshunt={shunt}\n")
+            };
+            let netlist = format!(
+                "divider\n{shunt_line}V1 in 0 1\nR1 in mid {r}\nR2 mid 0 {r}\n.op\n.end"
+            );
+            match engine.run(SpiceRequest { netlist }) {
+                Ok(result) => {
+                    let mid = scalar(&result, "mid");
+                    println!(
+                        "ACCURACY divider R={label}: V(mid) = {mid:.9} V, error = {:.3e} V ({:.4}%)",
+                        mid - 0.5,
+                        (mid - 0.5).abs() / 0.5 * 100.0
+                    );
+                }
+                Err(error) => println!("ACCURACY divider R={label}: FAILED: {error}"),
+            }
+        }
+    }
+
 }

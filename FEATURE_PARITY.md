@@ -1721,6 +1721,31 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `Meg` for mega and maps any-case `M` to milli; values it can't represent
   (`1mil`) survive round-trip as raw text instead of being corrupted.
   Hand-computed tests cover the `1MHz` and `1F`-is-femto gotchas.
+- ✅ **Accuracy measured against closed-form truth, and one real defect fixed**
+  (2026-08-10) — `src-tauri/src/spice.rs`, tests named `accuracy_*`, run with
+  `TAU_NGSPICE_LIB=build/ngspice-stage/lib/libngspice.dylib cargo test
+  --manifest-path apps/desktop/src-tauri/Cargo.toml accuracy_ -- --ignored`.
+  Four circuits with exact hand-derivable answers, asserted as absolute error
+  against the mathematics rather than against a golden file or another
+  simulator: RC step vs `1-exp(-t/RC)` (**2.95e-6 V** max over 539 samples),
+  RC lowpass AC vs `1/sqrt(1+(wRC)^2)` (**3.7e-16** relative — machine
+  precision), series-RLC step vs the damped sinusoid (ring frequency to
+  **1.3e-3**, damping to **1.7e-2**, both estimator-limited: the raw crossing
+  interval is 201.25 µs against an exact 201.22), and a high-impedance
+  divider.
+  - **The defect:** `DEFAULT_OPTIONS.rshunt` was pinned at `1e12` with a
+    comment claiming the effect was "below measurement noise". The error is
+    `0.5·R/rshunt`, so that holds only while the circuit is far below the
+    shunt. A 1:1 divider reads 0.5 V for any R; Tau returned 0.499750 V at
+    1 GΩ (0.05%) and **0.333 V at 1 TΩ (33%)** — silently wrong, on exactly
+    the electrometer/photodiode front ends rshunt was added to rescue.
+  - **The fix:** `shuntForMaxResistance` scales the shunt to the sheet's
+    largest resistance at a 1e6 ratio, floored at the historical `1e12` and
+    capped at `1e18`. Both bounds are measured, not chosen: below ~1 MΩ the
+    deck is byte-identical to before (the acceptance corpus tops out at 100k,
+    so nothing in it moves), and at `1e21` an AC-coupled node that should
+    settle to 0 V solved to 0.99 V instead — a floating node reported as a
+    confident wrong answer, which is worse than the singular matrix.
 - ⬜ Match LTspice's defaults/timestep/convergence for waveform-level agreement
   - 🟡 **Numeric agreement tooling landed** (`simulation/waveformCompare.ts`):
     `compareWaveforms(testT,testV, refT,refV)` resamples a reference series

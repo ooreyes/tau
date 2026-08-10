@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import { Crosshair, Eye, EyeOff, Gauge, LockKeyhole, MousePointer2, Tag } from "lucide-react";
 import "./App.css";
@@ -18,8 +18,6 @@ import { SURFACES } from "./chrome/surfaces";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
-import { ModelLibrariesDialog } from "./components/ModelLibrariesDialog";
-import { SimulationSetupDialog } from "./components/SimulationSetupDialog";
 import { UnsavedRecoveryDialog } from "./components/UnsavedRecoveryDialog";
 import {
   ExternalEditConflictDialog,
@@ -67,7 +65,6 @@ import { BottomPanel } from "./components/drawer/DiagnosticsTab";
 import { ResultsDrawer } from "./components/drawer/ResultsDrawer";
 import { SelectionInspector } from "./components/inspector/SelectionInspector";
 import { ConfirmDialog, UnsavedChangesDialog } from "./components/ui/confirm";
-import { SettingsWindow } from "./settings/SettingsWindow";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { useRuntimeModelLibraries } from "./store/useRuntimeModelLibraries";
 import { CATALOG } from "./schematic/catalog";
@@ -76,10 +73,14 @@ import { extractCircuit } from "./schematic/netlist";
 import {
   enforceMinimumTransientSteps,
   MAX_TRANSIENT_STEPS,
-  runTransientAnalysis,
   type AnalysisOptions,
   type AnalysisResult,
 } from "./simulation/linearTransient";
+// The preview transient solve goes through the worker pool rather than being
+// called directly: same signature, same progress stream, same abort semantics,
+// but the arithmetic no longer runs on the thread that has to paint it. The
+// pool falls back to an inline call wherever workers do not exist.
+import { runTransientAnalysisOffThread } from "./simulation/solverPool";
 import { runOperatingPoint, type OperatingPointResult } from "./simulation/operatingPoint";
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
 import { runDcSweep, type DcSweepResult, type DcSweepSpec } from "./simulation/dcSweep";
@@ -158,6 +159,48 @@ import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRu
 import { technicalErrorDetails, userFacingErrorMessage } from "./lib/errorMessage";
 import { useSimulationPreferences } from "./lib/simulationPreferences";
 import { SHELL, inspectorName } from "./components/shellContract";
+
+/**
+ * Settings is a whole second surface — seven pages, a provider catalog, usage
+ * accounting — and none of it is on the path to a schematic first painting, so
+ * it is fetched the first time somebody actually opens it rather than parsed
+ * at launch.
+ *
+ * Its Suspense boundary deliberately sits OUTSIDE `DialogContent`: while the
+ * chunk is in flight there must be no half-built modal in the accessibility
+ * tree, only nothing, so that "a dialog named Settings exists" and "its pages
+ * are in it" stay the single observable event they have always been. The
+ * `Dialog` root above the boundary stays mounted either way, which is what
+ * preserves the close transition and the `onCloseAutoFocus` focus return.
+ */
+const SettingsWindow = lazy(async () => ({
+  default: (await import("./settings/SettingsWindow")).SettingsWindow,
+}));
+
+/**
+ * Same treatment for the two modal editors below Settings. They need one extra
+ * thing Settings did not: `React.lazy` fetches when its element is first
+ * *rendered*, and both of these are rendered on every frame of the schematic —
+ * closed, drawing nothing, but rendered — so simply making them lazy would
+ * fetch both chunks during first paint and buy nothing at all. This latch
+ * withholds the element until the dialog is first asked for, and then never
+ * lets go: after that first open they are mounted for the rest of the session
+ * exactly as they always were, so the Radix close transition and the form state
+ * a user leaves behind between visits both behave identically.
+ */
+function useMountedOnceOpened(open: boolean): boolean {
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
+  return mounted;
+}
+
+const ModelLibrariesDialog = lazy(async () => ({
+  default: (await import("./components/ModelLibrariesDialog")).ModelLibrariesDialog,
+}));
+
+const SimulationSetupDialog = lazy(async () => ({
+  default: (await import("./components/SimulationSetupDialog")).SimulationSetupDialog,
+}));
 
 // The temporary browser workspace exists only inside the project store; fsBridge
 // helpers reach Tauri plugin-fs for anything that is not `web://`, which throws
@@ -421,6 +464,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelLibrariesOpen, setModelLibrariesOpen] = useState(false);
   const [simulationSetupOpen, setSimulationSetupOpen] = useState(false);
+  const modelLibrariesMounted = useMountedOnceOpened(modelLibrariesOpen);
+  const simulationSetupMounted = useMountedOnceOpened(simulationSetupOpen);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
   const [savingCloseTab, setSavingCloseTab] = useState(false);
@@ -952,7 +997,7 @@ function App() {
         setRunState(nativeResult.ok ? "complete" : "error");
         return;
       }
-      const result = await runTransientAnalysis(
+      const result = await runTransientAnalysisOffThread(
         { components, wires, netLabels, params, couplings },
         options,
         { onProgress, signal: controller.signal },
@@ -1340,7 +1385,7 @@ function App() {
         const native = await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }, effectiveAnalysisOptions);
         const result = native
           ? withEngine(native, "ngspice")
-          : withEngine(await runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions), "preview");
+          : withEngine(await runTransientAnalysisOffThread({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions), "preview");
         if (analysisRequestRef.current !== requestId) return;
         const memberEngine: SimulationEngine = native ? "ngspice" : "preview";
         familyEngine = members.length === 0 ? memberEngine : familyEngine === memberEngine ? familyEngine : undefined;
@@ -3015,8 +3060,19 @@ function App() {
         onClose={() => setPaletteOpen(false)}
         onOpenModelLibraries={() => setModelLibrariesOpen(true)}
       />
-      <ModelLibrariesDialog open={modelLibrariesOpen} onOpenChange={setModelLibrariesOpen} />
-      <SimulationSetupDialog open={simulationSetupOpen} onOpenChange={setSimulationSetupOpen} />
+      {/* A boundary each, not one shared one: a second dialog suspending under
+          a shared boundary would blank the first one back out and lose the
+          state its user left in it. */}
+      <Suspense fallback={null}>
+        {modelLibrariesMounted && (
+          <ModelLibrariesDialog open={modelLibrariesOpen} onOpenChange={setModelLibrariesOpen} />
+        )}
+      </Suspense>
+      <Suspense fallback={null}>
+        {simulationSetupMounted && (
+          <SimulationSetupDialog open={simulationSetupOpen} onOpenChange={setSimulationSetupOpen} />
+        )}
+      </Suspense>
       <LocalAiSetupDialog onReady={() => showNotice("Local AI is ready on this Mac.")} />
       {pendingRecovery && (
         <UnsavedRecoveryDialog
@@ -3034,24 +3090,26 @@ function App() {
         />
       )}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent
-          showCloseButton={false}
-          overlayClassName="bg-transparent"
-          className="tau-settings-route top-0 left-0 max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-transparent p-0 shadow-none"
-          onCloseAutoFocus={(event) => {
-            // See settingsOpenerRef above: there is no Dialog.Trigger for
-            // Radix to return focus to on its own.
-            event.preventDefault();
-            settingsOpenerRef.current?.focus();
-          }}
-        >
-          {/* Radix requires a Title for the dialog's accessible name; visually
-              hidden so the rendered surface matches today's design exactly.
-              Text must stay exactly "Settings" - App.workspace.test.tsx
-              queries getByRole("dialog", { name: "Settings" }). */}
-          <DialogTitle className="sr-only">Settings</DialogTitle>
-          <SettingsWindow onClose={() => setSettingsOpen(false)} />
-        </DialogContent>
+        <Suspense fallback={null}>
+          <DialogContent
+            showCloseButton={false}
+            overlayClassName="bg-transparent"
+            className="tau-settings-route top-0 left-0 max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-transparent p-0 shadow-none"
+            onCloseAutoFocus={(event) => {
+              // See settingsOpenerRef above: there is no Dialog.Trigger for
+              // Radix to return focus to on its own.
+              event.preventDefault();
+              settingsOpenerRef.current?.focus();
+            }}
+          >
+            {/* Radix requires a Title for the dialog's accessible name; visually
+                hidden so the rendered surface matches today's design exactly.
+                Text must stay exactly "Settings" - App.workspace.test.tsx
+                queries getByRole("dialog", { name: "Settings" }). */}
+            <DialogTitle className="sr-only">Settings</DialogTitle>
+            <SettingsWindow onClose={() => setSettingsOpen(false)} />
+          </DialogContent>
+        </Suspense>
       </Dialog>
       {confirmClearOpen && (
         <ConfirmDialog
