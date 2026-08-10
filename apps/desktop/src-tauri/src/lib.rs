@@ -1,5 +1,6 @@
 mod credentials;
 mod external_url;
+mod live_spice;
 mod local_ai;
 mod ltspice_library;
 mod project_fs;
@@ -20,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(local_ai::LocalAiState::default())
         .manage(spice::NativeSpiceState::default())
+        .manage(live_spice::LiveSpiceState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
             credentials::has_assistant_api_key,
@@ -39,12 +41,24 @@ pub fn run() {
             project_fs::move_project_entry,
             external_url::open_external_url,
             spice::simulate_spice,
-            spice::cancel_spice
+            spice::cancel_spice,
+            live_spice::start_live_spice,
+            live_spice::poll_live_spice,
+            live_spice::alter_live_spice,
+            live_spice::halt_live_spice,
+            live_spice::live_spice_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
+/** Both isolated ngspice hosts, tried before Tauri starts.
+ *
+ * `main` asks this one question, so a new worker kind is added here rather than
+ * by teaching the binary entry point about a second argv marker. The bounded
+ * worker answers one request and exits; the live worker serves a free-running
+ * session until its parent's stdin closes. Neither can match the other's
+ * marker, so the order is arbitrary. */
 pub fn maybe_run_spice_worker() -> bool {
-    spice::maybe_run_spice_worker()
+    spice::maybe_run_spice_worker() || live_spice::maybe_run_live_spice_worker()
 }
