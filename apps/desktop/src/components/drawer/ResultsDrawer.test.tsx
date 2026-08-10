@@ -10,9 +10,12 @@
  *
  * The rules being pinned, and why each is a bug rather than a preference:
  *
- * - A collapsed surface is unmounted, never translated off-screen. A hidden
- *   panel that stays in the accessibility tree makes `getByRole` ambiguous
- *   and lets a screen-reader user tab into something nobody can see.
+ * - A collapsed or inactive panel is out of the ACCESSIBILITY TREE, never
+ *   merely translated off-screen: one that stays in the tree makes `getByRole`
+ *   ambiguous and lets a screen-reader user tab into something nobody can see.
+ * - ...but it stays MOUNTED. Unmounting would satisfy the rule above and
+ *   destroy the analysis panel's cursors, typed expressions and imported
+ *   reference data every time someone glanced at Measurements.
  * - Escape only collapses the drawer when focus is inside it. Canvas-focused
  *   Escape has to keep meaning "cancel the current tool", and a document-level
  *   listener that does not check silently takes that over.
@@ -37,6 +40,23 @@ function renderDrawer(overrides: Partial<Parameters<typeof ResultsDrawer>[0]> = 
 }
 
 const drawer = () => screen.getByRole("complementary", { name: RESULTS_DRAWER_NAME });
+
+/**
+ * The text of whichever tab panel is actually on screen.
+ *
+ * Every offered panel stays mounted so SimulationPanel does not lose the
+ * thirty-odd pieces of state no store owns (typed expressions, cursors, trace
+ * colours, imported reference data) on a click to Measurements and back. The
+ * ones not showing carry `hidden`, which computes to `display: none` and takes
+ * them out of the accessibility tree - that is the rule, and it is why these
+ * assertions go through roles and the `hidden` attribute rather than through
+ * `queryByText`, which happily finds a `display: none` node.
+ */
+const shownBody = () =>
+  [...document.querySelectorAll<HTMLElement>(".results-drawer-body")]
+    .filter((panel) => !panel.hidden)
+    .map((panel) => panel.textContent)
+    .join("|");
 
 describe("results drawer - the readout that survives a collapse", () => {
   it("states what happened and what it cost, in one line", () => {
@@ -76,11 +96,13 @@ describe("results drawer - the readout that survives a collapse", () => {
 });
 
 describe("results drawer - heights", () => {
-  it("unmounts its body at peek rather than hiding it", () => {
+  it("takes its body out of the accessibility tree at peek", () => {
     renderDrawer({ preferredHeight: "peek" });
-    // Not `toBeVisible`: a translated-off-screen panel passes that and still
-    // sits in the accessibility tree. Absence is the assertion.
-    expect(screen.queryByText("Waveform control")).toBeNull();
+    // Not `toBeVisible`, and not "is it in the DOM": a translated-off-screen
+    // panel passes both and is still fully exposed to a screen reader. What
+    // has to be true is that nothing in there is reachable.
+    expect(screen.queryByRole("button", { name: "Waveform control" })).toBeNull();
+    expect(shownBody()).toBe("");
     expect(drawer().className).toContain("results-drawer--peek");
   });
 
@@ -91,14 +113,14 @@ describe("results drawer - heights", () => {
     expect(size().getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(size());
     expect(drawer().className).toContain("results-drawer--half");
-    expect(screen.getByText("Waveform control")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Waveform control" })).toBeTruthy();
     expect(size().getAttribute("aria-expanded")).toBe("true");
 
     fireEvent.click(size());
     expect(drawer().className).toContain("results-drawer--full");
     fireEvent.click(size());
     expect(drawer().className).toContain("results-drawer--peek");
-    expect(screen.queryByText("Waveform control")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Waveform control" })).toBeNull();
   });
 
   it("adopts what the mode wants when the mode changes", () => {
@@ -109,7 +131,7 @@ describe("results drawer - heights", () => {
     const { rerender } = render(
       <ResultsDrawer status="idle" preferredHeight="peek" preferredTab="errors" errors={<div>Diagnostics</div>} />,
     );
-    expect(screen.queryByText("Diagnostics")).toBeNull();
+    expect(shownBody()).toBe("");
 
     rerender(
       <ResultsDrawer
@@ -120,7 +142,7 @@ describe("results drawer - heights", () => {
         errors={<div>Diagnostics</div>}
       />,
     );
-    expect(screen.getByText("Plots")).toBeTruthy();
+    expect(shownBody()).toBe("Plots");
     expect(drawer().className).toContain("results-drawer--half");
   });
 
@@ -137,7 +159,7 @@ describe("results drawer - heights", () => {
         errors={<div>X1: subcircuit instance not imported</div>}
       />,
     );
-    expect(screen.getByText("X1: subcircuit instance not imported")).toBeTruthy();
+    expect(shownBody()).toContain("X1: subcircuit instance not imported");
     expect(drawer().className).toContain("results-drawer--half");
   });
 
@@ -153,7 +175,7 @@ describe("results drawer - heights", () => {
     );
     // The count is on the Errors tab either way. Yanking someone off their
     // plots mid-run to show a warning they can already see is worse.
-    expect(screen.getByText("Waveform control")).toBeTruthy();
+    expect(shownBody()).toBe("Waveform control");
     expect(screen.getByRole("tab", { name: /Errors/ }).textContent).toContain("2");
   });
 
@@ -188,41 +210,79 @@ describe("results drawer - tabs", () => {
     // worse than an absent one: it reads as a broken feature.
     renderDrawer({ waveforms: null, measurements: null });
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Errors"]);
-    expect(screen.getByText("Diagnostics")).toBeTruthy();
+    expect(shownBody()).toBe("Diagnostics");
   });
 
   it("falls back to a real tab when the active one stops being offered", () => {
     const { rerender } = renderDrawer({ preferredTab: "waveforms" });
-    expect(screen.getByText("Waveform control")).toBeTruthy();
+    expect(shownBody()).toBe("Waveform control");
 
     // Leaving the simulator drops Waveforms. A stale `tab` would leave an
     // empty body under a tab strip that no longer contains it.
     rerender(
       <ResultsDrawer status="complete" preferredHeight="half" waveforms={null} errors={<div>Diagnostics</div>} />,
     );
-    expect(screen.getByText("Diagnostics")).toBeTruthy();
+    expect(shownBody()).toBe("Diagnostics");
     expect(screen.getAllByRole("tab")).toHaveLength(1);
   });
 
   it("switches body with the tab", () => {
     renderDrawer();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Measurements" }), { button: 0 });
-    expect(screen.getByText("Measurement rows")).toBeTruthy();
-    expect(screen.queryByText("Waveform control")).toBeNull();
+    expect(shownBody()).toBe("Measurement rows");
+    expect(screen.queryByRole("button", { name: "Waveform control" })).toBeNull();
+  });
+
+  it("keeps the panel it switched away from, node for node", () => {
+    // The whole reason the inactive panels are hidden rather than removed.
+    // SimulationPanel owns about thirty pieces of state no store holds -
+    // expression traces the user typed, cursor positions, per-trace colours,
+    // reference `.raw` data imported from disk. Same node means same React
+    // instance means all of it survived the round trip.
+    renderDrawer();
+    const waveforms = screen.getByRole("button", { name: "Waveform control" });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Measurements" }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Waveforms" }), { button: 0 });
+    expect(screen.getByRole("button", { name: "Waveform control" })).toBe(waveforms);
+  });
+
+  it("opens onto the tab that was clicked, from peek", () => {
+    // The strip stays legible at peek, badge and all, so clicking Errors on
+    // the strength of that badge has to do something. It used to move the
+    // underline and nothing else.
+    renderDrawer({ preferredHeight: "peek" });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Errors" }), { button: 0 });
+    expect(drawer().className).toContain("results-drawer--half");
+    expect(shownBody()).toBe("Diagnostics");
+  });
+
+  it("points each tab at its own panel, and each panel back at its tab", () => {
+    // One shared id used to go to all three, naming an element that stopped
+    // existing the moment the drawer collapsed. `aria-controls` has to
+    // resolve, and a tab has to control a tabpanel.
+    renderDrawer();
+    for (const label of ["Waveforms", "Measurements", "Errors"]) {
+      const tab = screen.getByRole("tab", { name: new RegExp(`^${label}`) });
+      const panel = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+      expect(panel, `${label} controls nothing`).not.toBeNull();
+      expect(panel!.getAttribute("role")).toBe("tabpanel");
+      expect(panel!.getAttribute("aria-labelledby")).toBe(tab.id);
+    }
   });
 });
 
 describe("results drawer - Escape belongs to whatever holds focus", () => {
   it("collapses to peek when Escape arrives with focus inside", () => {
     renderDrawer();
-    const control = screen.getByText("Waveform control");
+    const control = screen.getByRole("button", { name: "Waveform control" });
     control.focus();
     expect(document.activeElement).toBe(control);
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(drawer().className).toContain("results-drawer--peek");
-    // Peek unmounts the body, so focus has to be moved deliberately or the
-    // browser drops it to <body> and the next Tab restarts from the top.
+    // Peek hides the body, so focus has to be moved deliberately or it sits
+    // on a `display: none` node, the browser drops it to <body>, and the next
+    // Tab restarts from the top of the document.
     expect(drawer().contains(document.activeElement)).toBe(true);
   });
 
@@ -236,7 +296,7 @@ describe("results drawer - Escape belongs to whatever holds focus", () => {
       // Still open. On the canvas, Escape cancels the current tool; a drawer
       // that swallowed it would take that away from every schematic gesture.
       expect(drawer().className).toContain("results-drawer--half");
-      expect(screen.getByText("Waveform control")).toBeTruthy();
+      expect(shownBody()).toBe("Waveform control");
     } finally {
       outside.remove();
     }
@@ -244,7 +304,7 @@ describe("results drawer - Escape belongs to whatever holds focus", () => {
 
   it("does not act on an Escape another surface already handled", () => {
     renderDrawer();
-    screen.getByText("Waveform control").focus();
+    screen.getByRole("button", { name: "Waveform control" }).focus();
     const event = new KeyboardEvent("keydown", { key: "Escape", cancelable: true, bubbles: true });
     event.preventDefault();
     document.dispatchEvent(event);

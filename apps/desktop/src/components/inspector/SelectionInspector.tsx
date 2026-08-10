@@ -81,24 +81,65 @@ export function SelectionInspector({
       : { width: rect.width, height: rect.height }));
   }, [title, children]);
 
+  /**
+   * Keyed by value, not by identity.
+   *
+   * `viewport` and `obstacles` are computed by the caller and are therefore
+   * fresh objects on every render. Depending on them by reference makes this
+   * callback change every render, which makes the placement effect below fire
+   * every render, which sets state, which renders again: an infinite loop. It
+   * did not present as one either - the settle timer throttled it into a
+   * silent busy-loop that merely made the test run hang.
+   */
+  const geometryKey = JSON.stringify([size, viewport, obstacles]);
+  const geometryRef = useRef({ size, viewport, obstacles });
+  geometryRef.current = { size, viewport, obstacles };
   const compute = useCallback(
-    (from: Rect) => placeInspector({ anchor: from, panel: size, viewport, obstacles }),
-    [size, viewport, obstacles],
+    (from: Rect) => {
+      const current = geometryRef.current;
+      return placeInspector({
+        anchor: from,
+        panel: current.size,
+        viewport: current.viewport,
+        obstacles: current.obstacles,
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [geometryKey],
   );
 
-  // First placement is immediate - waiting 120ms to show a panel someone just
-  // asked for reads as lag. Only *re*-placement settles.
+  /**
+   * When to re-place, and when to wait.
+   *
+   * The settle delay exists for one case: the anchor moving, because a pan or
+   * a zoom moves it continuously and a panel that re-places on every frame
+   * chases the cursor across the screen. Everything else re-places at once.
+   *
+   * That distinction is load-bearing, not a nicety. The panel's own measured
+   * height arrives one commit after it first renders, so debouncing a
+   * size-only change means the first placement is computed against the
+   * fallback height - and at the 900x600 floor that put a 420px panel at a
+   * top of 190 in a viewport that ends at 530, i.e. clipped off the bottom of
+   * the window. It looked fine at 1440, where there was slack to absorb it.
+   */
   const anchorKey = anchor ? `${anchor.minX},${anchor.minY},${anchor.maxX},${anchor.maxY}` : null;
+  const placedAnchorRef = useRef<string | null>(null);
   useEffect(() => {
     if (!anchor) {
       setSettled(null);
+      placedAnchorRef.current = null;
       return;
     }
-    if (!settled) {
+    const place = () => {
+      placedAnchorRef.current = anchorKey;
       setSettled({ anchor, placement: compute(anchor) });
+    };
+    // New selection, or the panel resized under an unchanged one: now.
+    if (placedAnchorRef.current === null || placedAnchorRef.current === anchorKey) {
+      place();
       return;
     }
-    const timer = setTimeout(() => setSettled({ anchor, placement: compute(anchor) }), SETTLE_MS);
+    const timer = setTimeout(place, SETTLE_MS);
     return () => clearTimeout(timer);
     // `settled` is deliberately absent: including it would restart the timer
     // on its own result and the panel would never stop re-placing.
@@ -159,7 +200,15 @@ export function SelectionInspector({
       <div
         ref={panelRef}
         className={`selection-inspector selection-inspector--${placement.side}`}
-        style={{ left: placement.x + offset.x, top: placement.y + offset.y }}
+        // maxHeight from the viewport rather than a `70vh` in the stylesheet:
+        // the placement math has to agree with the rendered box, and only one
+        // of those two can know how much of the window the results drawer is
+        // currently covering.
+        style={{
+          left: placement.x + offset.x,
+          top: placement.y + offset.y,
+          maxHeight: Math.max(160, viewport.maxY - viewport.minY),
+        }}
         // `dialog` without `aria-modal`: it names a surface a screen reader can
         // jump to, without the "everything else is inert" claim that would be
         // false and, worse, acted on.
@@ -172,7 +221,9 @@ export function SelectionInspector({
             type="button"
             className="selection-inspector-close"
             aria-label={`Close ${title}`}
-            onClick={onDismiss}
+            // Wrapped, not passed directly: `onDismiss` takes nothing, and
+            // handing it a click event invites someone to start reading one.
+            onClick={() => onDismiss()}
           >
             <X size={12} strokeWidth={2} aria-hidden="true" />
           </button>

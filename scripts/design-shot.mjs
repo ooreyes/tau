@@ -83,6 +83,7 @@ const SHELL = {
   navRail: { role: "navigation", name: "Workspace sections" },
   explorer: { role: "complementary", name: "Project explorer" },
   componentsRail: { role: "complementary", name: "Components" },
+  selectionInspector: { role: "dialog", name: "properties" },
   settings: { role: "dialog", name: "Settings" },
   circuitOverview: { role: "region", name: "Circuit overview" },
   commandPalette: { role: "dialog", name: "Add component" },
@@ -365,12 +366,15 @@ async function shootViewport(page, viewport, theme) {
   const firstComponent = canvas.locator(".component").first();
   await firstComponent.click({ force: true });
   // Hard wait: "inspector" means a selected component's properties are
-  // visible, not merely that something got selected, so the actual property
-  // group (aria-label `${designator} properties` - see shellContract.ts's
-  // inspectorName()) inside the componentsRail dock must appear or the run
-  // fails rather than screenshotting the "No Selection" placeholder.
-  const componentsRail = page.getByRole(SHELL.componentsRail.role, { name: SHELL.componentsRail.name });
-  await componentsRail.getByRole("region", { name: INSPECTOR_NAME_PATTERN }).first()
+  // visible, not merely that something got selected, so the run fails rather
+  // than screenshotting an empty canvas.
+  //
+  // The state is the same concept it always was and keeps its filename, which
+  // is the join key with every capture taken before this. What changed is
+  // where it lives: the properties used to be a `region` inside the
+  // componentsRail dock, and are now a floating `dialog` at the part itself
+  // (shellContract.ts's `selectionInspector` / `inspectorName()`).
+  await page.getByRole(SHELL.selectionInspector.role, { name: INSPECTOR_NAME_PATTERN }).first()
     .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `inspector-${theme}-${viewport.name}.png`), fullPage: true });
@@ -480,8 +484,14 @@ async function shootViewport(page, viewport, theme) {
   if (await page.getByRole("textbox", { name: "Value" }).count()) {
     throw new Error("native subcircuit exposed a raw Value/X syntax field");
   }
-  if (await page.locator(".subckt-pin-label").allTextContents().then((labels) => labels.join(",")) !== "vcc,vee,pwm,gp,gn") {
-    throw new Error("native subcircuit canvas did not render all named terminals in SpiceOrder");
+  // Scoped to the canvas, which is what "subcircuit canvas" always meant. The
+  // bare selector used to be unambiguous only by accident: the right-hand rail
+  // showed Properties whenever a part was selected, so the parts library - and
+  // the pin labels on its symbol previews - was not on screen at the same
+  // time. The library is always up now, and it renders 70-odd of them.
+  const pinLabels = await page.locator("svg.canvas .subckt-pin-label").allTextContents();
+  if (pinLabels.join(",") !== "vcc,vee,pwm,gp,gn") {
+    throw new Error(`native subcircuit canvas did not render all named terminals in SpiceOrder (got "${pinLabels.join(",")}")`);
   }
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `subcircuit-${theme}-${viewport.name}.png`), fullPage: true });

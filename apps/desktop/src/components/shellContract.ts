@@ -44,11 +44,25 @@ export const SHELL = {
   /** Project file tree. */
   explorer: { role: "complementary", name: "Project explorer" },
   /**
-   * Right dock holding the inspector and the parts library behind a segmented
-   * control. Stage 5 splits it, and this entry goes away with it: the two
-   * halves become `partsPalette` and `selectionInspector` below.
+   * The parts library. It used to hold the inspector too, behind a
+   * "Properties | Library" segmented control - two unrelated things sharing
+   * one column to justify the column. The inspector moved to the selection
+   * (see `inspectorName`), and the rail keeps its name because the thing it
+   * names, the place parts come from, did not change. Stage 5 makes it
+   * summoned rather than docked; the name survives that too.
    */
   componentsRail: { role: "complementary", name: "Components" },
+  /**
+   * The properties panel, floating at the selection.
+   *
+   * `dialog` with no `aria-modal`, deliberately: it names a surface assistive
+   * tech can jump to without the "everything else is inert" claim, which
+   * would be false and would make the canvas unreachable for as long as
+   * anything is selected. Its name comes from `inspectorName`, and the
+   * property-group `<section>` inside it now goes unnamed when there is only
+   * one part, because the two were colliding under one accessible name.
+   */
+  selectionInspector: { role: "dialog", name: "properties" },
   /** Bode, the circuit assistant. */
   assistant: { role: "complementary", name: "Assistant" },
   /** Full-surface Settings, a real modal since it moved to ui/dialog. */
@@ -104,7 +118,14 @@ export const SHELL = {
  */
 export const PLANNED = {} as const satisfies Record<string, ShellSurface>;
 
-/** Inspector name for a given designator, e.g. `R1 properties`. */
+/**
+ * Inspector name for a given designator, e.g. `R1 properties`.
+ *
+ * Named for what it inspects, not "Properties": the latter tells a
+ * screen-reader user nothing about which part they are about to edit, and
+ * with the panel now appearing next to the part, the name is the only thing
+ * carrying that association for someone who cannot see the adjacency.
+ */
 export function inspectorName(designator: string): string {
   return `${designator} properties`;
 }

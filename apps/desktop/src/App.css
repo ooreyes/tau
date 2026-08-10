@@ -259,8 +259,10 @@
      would have mispositioned the moment the status readout changed height. */
   --toolbar-height: 44px;
   --status-bar-height: 28px;
-  /* The nav rail's width. Anything that spans the shell but must not cover
-     the rail (the results drawer) offsets by this rather than repeating 52. */
+  /* The nav rail's width, for anything that has to reason about it without
+     measuring. The rail itself is the only consumer today: the results drawer
+     used to offset by this and now lives inside `.workspace-column`, which
+     starts past the rail on its own. */
   --rail-width: 52px;
 }
 
@@ -1275,58 +1277,20 @@ body {
   border-radius: var(--r-2xs);
 }
 
-/* Plotter header */
-.plotter-header {
-  flex-shrink: 0;
-  min-height: 45px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
-  border-bottom: 1px solid var(--border);
-}
-
-/* Braun-style micro-label - shares the same rule as the palette/explorer/
-   Assistant section captions (search this file for ".plotter-kicker" further
-   down in the shared micro-label selector group). */
-.plotter-kicker {
-  margin-bottom: 2px;
-}
-
-.plotter-title {
-  font-size: var(--fs-title);
-  font-weight: 600;
-  color: var(--cream);
-  letter-spacing: -0.2px;
-  line-height: 1;
-}
-
-.plotter-live {
-  height: var(--row-h-dense);
-  padding: 0 var(--sp-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--muted);
-  background: transparent;
-  font: 600 var(--fs-caption) var(--font-mono);
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  transition: color var(--motion-med) var(--spring),
-    background var(--motion-med) var(--spring),
-    border-color var(--motion-med) var(--spring);
-}
+/* The plotter header - `.plotter-header`, `.plotter-kicker`, `.plotter-title`
+   and the `.plotter-live` state pill - is gone. It stacked "Analysis" over
+   "Transient scope" directly above a tab strip whose active tab already reads
+   TRAN, above a caption that already says what TRAN plots; the drawer names
+   the surface once, in its landmark. The error boundary was the last thing
+   still drawing this chrome and now renders the message alone.
+   (`.plotter-kicker` also appeared in the shared micro-label group further
+   down; removed there too, since nothing sets the class any more.) */
 
 /* ── Dashboard status strip ─────────────────────────────────
-   The panel's single status voice, under the analysis tabs: a semantic lamp
-   + mono state word + last-run figures. Retheme: the state WORD stays
-   --muted in every state (running/complete/error/idle) - only the small lamp
-   dot carries color, so the strip reads as an instrument readout, not a
-   colored sentence. */
+   What is left of the panel's own status voice, under the analysis tabs: the
+   run's figures and the engine that produced them. The lamp and the state
+   word moved to the results drawer's head, which is the line that stays
+   readable when this panel is collapsed away. */
 .plotter-status {
   flex: none;
   display: flex;
@@ -1336,21 +1300,12 @@ body {
   min-width: 0;
 }
 
-.plotter-status-lamp {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--faint);
-}
-
-.plotter-status-state {
-  flex: none;
-  font: 600 var(--fs-caption) var(--font-mono);
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  color: var(--muted);
-}
+/* `.plotter-status-lamp` and `.plotter-status-state` stood here, with the
+   `--running`/`--complete`/`--error` modifiers that coloured them and the
+   `live-pulse` keyframes that made the running one breathe. The lamp and the
+   state word moved to the results drawer's head, which is the line that stays
+   readable when this panel is collapsed; nothing here matched them any more.
+   The drawer's own lamp is `.results-drawer-lamp`. */
 
 .plotter-status-info {
   font: 400 var(--fs-caption) var(--font-mono);
@@ -1382,35 +1337,6 @@ body {
   color: var(--diagnostic-warning-text);
   border-color: var(--diagnostic-warning-line);
   background: var(--diagnostic-warning-soft);
-}
-
-.plotter-status--running .plotter-status-lamp {
-  background: var(--signal);
-  box-shadow: 0 0 0 0 var(--signal-glow);
-  animation: live-pulse 1.4s var(--ease-out) infinite;
-}
-
-.plotter-status--complete .plotter-status-lamp {
-  background: var(--success);
-}
-
-.plotter-status--error .plotter-status-lamp {
-  background: var(--danger);
-  box-shadow: 0 0 0 3px var(--danger-soft);
-}
-
-.plotter-status--error .plotter-status-info {
-  color: var(--muted);
-}
-
-@keyframes live-pulse {
-  0%   { box-shadow: 0 0 0 0 var(--signal-glow); opacity: 1; }
-  70%  { box-shadow: 0 0 0 5px transparent; opacity: 0.6; }
-  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .plotter-status--running .plotter-status-lamp { animation: none; }
 }
 
 /* ── Run-in-progress overlay (Fix 3) ──────────────────────────────────────
@@ -4501,12 +4427,11 @@ body {
 
 /* The "maximize the analysis panel" escape hatch is gone with the panel: the
    drawer's own peek/half/full control does that job, and it does it without
-   a fixed-position layer over the whole window. */
-.plotter-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
+   a fixed-position layer over the whole window. `.plotter-actions`, the row
+   that held it alongside Stop and Export, went with the panel header - Stop
+   and the size control are the drawer's now, and Export sits with the mode
+   rail as `.plotter-export`. */
+
 /* ── Net labels (named nodes) ──────────────────────────── */
 /* Drawn under component ref/value labels; softer so collisions don't win. */
 .net-label-layer {
@@ -5073,7 +4998,6 @@ body {
 
 .explorer-head > span,
 .palette-head > span,
-.plotter-kicker,
 .assistant-kicker,
 .result-list h3,
 .symbol-preview > span {
@@ -7180,6 +7104,109 @@ button.bottom-panel-head:focus-visible {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   SELECTION INSPECTOR - the properties panel, at the part
+   Was the left half of a segmented right-hand column: selecting a resistor
+   meant reading its value 900px away from the resistor. It is a summoned
+   surface, so it takes --elev-float and a real edge, unlike the veiled
+   persistent chrome (see the note above .results-drawer).
+══════════════════════════════════════════════════════════════════════════════ */
+.selection-inspector {
+  position: fixed;
+  z-index: var(--z-inspector);
+  width: 300px;
+  /* No max-height here: the component sets it from the viewport it was
+     placed against, because the stylesheet cannot know how much of the
+     window the results drawer is covering right now. */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-float);
+  overflow: hidden;
+}
+
+/* No transition on left/top. The placement already settles for 120ms before
+   it moves, and animating a panel that is chasing a part reads as lag rather
+   than as motion with a reason. */
+.selection-inspector-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 28px;
+  padding: 0 var(--sp-1) 0 var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.selection-inspector-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selection-inspector-close {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.selection-inspector-close:hover {
+  color: var(--text);
+  background: var(--overlay-hover-faint);
+}
+
+.selection-inspector-close:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.selection-inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-4) transparent;
+}
+
+/* The corner-dock leader. One hairline and a 2.5px dot on the part, because a
+   detached panel with no leader is just a panel that happens to be nearby.
+   No arrowhead: it identifies, it does not point. */
+.selection-inspector-leader {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: var(--z-inspector);
+  overflow: visible;
+}
+
+.selection-inspector-leader line {
+  stroke: var(--accent-line);
+  stroke-width: 1;
+}
+
+.selection-inspector-leader circle {
+  fill: var(--accent-line);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    RESULTS DRAWER - the one bottom surface
    Replaces three: the schematic's diagnostics strip, the simulator's telemetry
    dock, and the analysis plotter's right-hand column. Over the canvas, not
@@ -7194,11 +7221,39 @@ button.bottom-panel-head:focus-visible {
    sits on an opaque surface rather than a veil because a waveform read through
    a blurred schematic is not a measurement.
 ══════════════════════════════════════════════════════════════════════════════ */
+/* The centre region: the mode surface plus the drawer that floats over it.
+   Its only job is to be the drawer's containing block, so that "full width"
+   means the width of the workspace and not the width of the window - the
+   explorer, the parts rail and the assistant are outside it, and two of those
+   are resizable, so no amount of `right: calc(...)` would have kept up. */
+.workspace-column {
+  position: relative;
+  /* Queried by the results drawer, which sizes to this and not to the window.
+     `inline-size` only - a block-size container would break the drawer's
+     percentage heights. */
+  container: workspace / inline-size;
+  flex: 1;
+  /* The wider of the two floors its children declare (.sim-schematic-pane's
+     280px), so a child can never be forced past the wrapper's own edge. */
+  min-width: 280px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-column > .editor-shell,
+.workspace-column > .sim-schematic-pane {
+  min-width: 0;
+}
+
 .results-drawer {
   position: absolute;
-  left: var(--rail-width);
+  /* Inset zero on three sides: the wrapper already ends where the side
+     columns start, and `.shell-body` reserves the status bar with its own
+     padding, so the wrapper's bottom edge IS the top of the status bar. */
+  left: 0;
   right: 0;
-  bottom: var(--status-bar-height);
+  bottom: 0;
   z-index: var(--z-drawer);
   display: flex;
   flex-direction: column;
@@ -7226,9 +7281,15 @@ button.bottom-panel-head:focus-visible {
 
 /* Deliberately short of the top. A drawer that covers its own subject is a
    page. 180px is roughly the smallest circuit still worth looking at, and it
-   is the figure the 900x600 floor was sized against. */
+   is the figure the 900x600 floor was sized against.
+
+   Percentages resolve against `.workspace-column`, which already excludes the
+   toolbar and the status bar - so the reserve is a plain subtraction. It used
+   to subtract `--toolbar-height` from a percentage of the whole window while
+   sitting `--status-bar-height` off the bottom, which double-counted the
+   toolbar and dropped the status bar: 152px of circuit survived, not 180. */
 .results-drawer--full {
-  height: calc(100% - var(--toolbar-height) - 180px);
+  height: calc(100% - 180px);
 }
 
 .results-drawer-head {
@@ -7241,12 +7302,20 @@ button.bottom-panel-head:focus-visible {
 }
 
 /* Run state. Same lamp semantics as the toolbar transport and the status
-   readout: colour is state, never mode. */
+   readout: colour is state, never mode.
+
+   The readout is the only part of the head allowed to shrink. The tabs are
+   navigation and the size control is the way back out, so both keep their
+   width and this truncates instead - it used to be the other way round by
+   omission, and a failure message in a narrow workspace painted straight
+   over the tab strip. */
 .results-drawer-status {
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   min-width: 0;
+  overflow: hidden;
 }
 
 .results-drawer-lamp {
@@ -7262,6 +7331,7 @@ button.bottom-panel-head:focus-visible {
 .results-drawer-status--error .results-drawer-lamp { background: var(--danger); }
 
 .results-drawer-state {
+  flex: none;
   font-size: var(--fs-micro);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
@@ -7279,9 +7349,17 @@ button.bottom-panel-head:focus-visible {
   text-overflow: ellipsis;
 }
 
+/* The tab strip and its Radix root never shrink: they are how you get to the
+   other two surfaces, and a half-eaten "Measur…" is not a control. */
+.results-drawer-tabs-root {
+  flex: none;
+  min-width: 0;
+}
+
 /* Tabs sit on the substrate: no track and no box. The active one is the single
    accent this module gets, and one hairline under it is enough to say which. */
 .results-drawer-tabs {
+  flex: none;
   display: flex;
   align-items: stretch;
   gap: var(--sp-1);
@@ -7335,6 +7413,7 @@ button.bottom-panel-head:focus-visible {
 .results-drawer-badge--warning { color: var(--signal); }
 
 .results-drawer-actions {
+  flex: none;
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -7349,9 +7428,26 @@ button.bottom-panel-head:focus-visible {
   overflow: hidden;
 }
 
-/* At the 900x600 floor the run facts are the first thing to go: the lamp and
-   the state word still say what happened, and the tabs must stay reachable. */
-@media (max-width: 1000px) {
+/* Load-bearing, not defensive. Every tab body stays mounted so the analysis
+   panel keeps its cursors, expression traces and imported reference data
+   across a tab switch (see ResultsDrawer.tsx), and `hidden` is what takes the
+   inactive ones out of the accessibility tree. The `display: flex` above is an
+   author rule and would otherwise beat the UA sheet's `[hidden] {display:none}`
+   outright - author always wins over UA, specificity does not enter into it -
+   so all three panels would render stacked on top of each other. */
+.results-drawer-body[hidden] {
+  display: none;
+}
+
+/* The run facts are the first thing to go when there is no room: the lamp and
+   the state word still say what happened, and the tabs must stay reachable.
+
+   A container query, not a viewport one. The drawer stopped spanning the
+   window when it moved inside `.workspace-column`; a 1440px window with the
+   explorer, the parts rail and the assistant all open leaves it under 500px,
+   and a viewport media query cannot see that. `.workspace-column` carries the
+   container so the drawer's own `position: absolute` geometry is untouched. */
+@container workspace (max-width: 620px) {
   .results-drawer-info { display: none; }
 }
 

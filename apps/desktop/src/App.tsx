@@ -237,6 +237,31 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
 // the failure still came from whichever solver the run reached for.
 const attemptedEngine = (): SimulationEngine => (isNativeSpiceRuntime() ? "ngspice" : "preview");
 
+/** The seven analyses, in the vocabulary the analysis mode rail uses. */
+type RunKind = "tran" | "op" | "ac" | "dc" | "tf" | "noise" | "step";
+
+/** What the drawer head calls each one when there are no figures to quote. */
+const RUN_KIND_LABEL: Record<RunKind, string> = {
+  tran: "Transient",
+  op: "Operating point",
+  ac: "AC sweep",
+  dc: "DC sweep",
+  tf: "Transfer function",
+  noise: "Noise analysis",
+  step: "Step sweep",
+};
+
+/**
+ * The part of a result every analysis shares, which is all the drawer head and
+ * the Errors tab read. Seven concrete result types, one common shape: `ok`,
+ * a failure `message`, and the run's warnings.
+ */
+export interface RunOutcome {
+  ok: boolean;
+  message?: string;
+  warnings?: readonly string[];
+}
+
 function App() {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -340,6 +365,21 @@ function App() {
   const [acStepFamily, setAcStepFamily] = useState<AnalysisFamily<AcResult> | null>(null);
   const [dcStepFamily, setDcStepFamily] = useState<AnalysisFamily<DcSweepResult> | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
+  /**
+   * Which of the seven analyses last ran, so a single readout can describe it.
+   *
+   * The results drawer's head is the one line that stays on screen when the
+   * drawer is collapsed, and it was reading `analysis` - the transient result
+   * - no matter what had actually run. A completed AC sweep therefore reported
+   * "No analysis yet" beside its own plot, and a failed one could report a
+   * previous transient's green "Complete · 6 ms · 241 samples".
+   *
+   * Recorded at each run's entry rather than inferred from which result object
+   * is newest, because "newest" is unanswerable once two of them are non-null.
+   * It tracks the analysis rail exactly: selecting a mode there IS the run
+   * gesture, and every one of those tabs calls through to a run below.
+   */
+  const [lastRunKind, setLastRunKind] = useState<RunKind>("tran");
   const [lastTransientDurationMs, setLastTransientDurationMs] = useState<number | null>(null);
   // Determinate while the web TS solver is reporting real fractions; null
   // (indeterminate bar) before the first callback and for the whole run when
@@ -389,6 +429,8 @@ function App() {
   const [inspectorClosedFor, setInspectorClosedFor] = useState<string | null>(null);
   /** Bumped by the explicit keyboard command, never by a canvas selection. */
   const [inspectorFocusSignal, setInspectorFocusSignal] = useState(0);
+  /** Shell-body box in client coordinates, measured alongside its width. */
+  const [shellBox, setShellBox] = useState({ minX: 0, minY: 0, maxX: 0, maxY: 0 });
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
   const [partsOpen, setPartsOpen] = useState(true);
   const [fitSignal, setFitSignal] = useState(0);
@@ -679,12 +721,33 @@ function App() {
   );
 
   /**
+   * The result the drawer is describing: the one the last run produced.
+   *
+   * Every surface below reads this rather than `analysis`, which is the
+   * transient and only the transient. See `lastRunKind` for what went wrong
+   * when they did not.
+   */
+  const activeAnalysis = useMemo<RunOutcome | null>(() => {
+    switch (lastRunKind) {
+      case "op": return opAnalysis;
+      case "ac": return acAnalysis;
+      case "dc": return dcAnalysis;
+      case "tf": return tfAnalysis;
+      case "noise": return noiseAnalysis;
+      case "step": return stepFamily;
+      default: return analysis;
+    }
+  }, [lastRunKind, analysis, opAnalysis, acAnalysis, dcAnalysis, tfAnalysis, noiseAnalysis, stepFamily]);
+
+  /**
    * The two things the results drawer needs that only App can compute.
    *
    * `resultsSummary` is the whole readout when the drawer is collapsed, so it
-   * has to say what happened without the plots: the run's span and how many
-   * points it took, or the error's own message. Two facts, not the plotter's
-   * five - a peek strip is a glance, and the detail is one click away.
+   * has to say what happened without the plots: for a transient, the run's
+   * span and how many points it took; for the others, which analysis this
+   * was, since a sweep has no single span to quote. Or the error's own
+   * message. Two facts, not the plotter's five - a peek strip is a glance,
+   * and the detail is one click away.
    *
    * `diagnosticsBadge` is the same count the Errors tab renders, hoisted so it
    * is legible with the drawer shut. It mirrors BottomPanel's own arithmetic
@@ -695,11 +758,14 @@ function App() {
    */
   const resultsSummary = useMemo(() => {
     if (analysisRunning) return undefined;
-    if (!analysis) return undefined;
-    if (!analysis.ok) return analysis.message;
-    const { stopTime, sampleCount } = analysis.stats;
-    return `${formatEngineering(stopTime, "s", 2)} \u00b7 ${sampleCount} samples`;
-  }, [analysis, analysisRunning]);
+    if (!activeAnalysis) return undefined;
+    if (!activeAnalysis.ok) return activeAnalysis.message ?? RUN_KIND_LABEL[lastRunKind];
+    if (lastRunKind === "tran" && analysis?.ok) {
+      const { stopTime, sampleCount } = analysis.stats;
+      return `${formatEngineering(stopTime, "s", 2)} \u00b7 ${sampleCount} samples`;
+    }
+    return RUN_KIND_LABEL[lastRunKind];
+  }, [activeAnalysis, analysis, analysisRunning, lastRunKind]);
 
   /**
    * What the floating inspector is describing.
@@ -727,14 +793,14 @@ function App() {
       : `${inspectedParts.length} components`;
   const inspectorOpen = Boolean(inspectionKey) && inspectionKey !== inspectorClosedFor;
 
-    const diagnosticsBadge = useMemo(() => {
+  const diagnosticsBadge = useMemo(() => {
     if (analysisRunning) return null;
     const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
-    const failed = Boolean(analysis && !analysis.ok);
-    const count = (failed ? 1 : 0) + (analysis?.warnings?.length ?? 0) + notices.length;
+    const failed = Boolean(activeAnalysis && !activeAnalysis.ok);
+    const count = (failed ? 1 : 0) + (activeAnalysis?.warnings?.length ?? 0) + notices.length;
     if (count === 0) return null;
     return { text: String(count), tone: failed ? ("error" as const) : ("warning" as const) };
-  }, [analysis, analysisRunning, activeFilePath, importWarningsByPath]);
+  }, [activeAnalysis, analysisRunning, activeFilePath, importWarningsByPath]);
 
   // Prefer ngspice `.meas ac` printout when present (P1.6).
   const acMeasurements = useMemo<MeasResult[]>(() => {
@@ -770,6 +836,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     const startedAt = Date.now();
     setAnalysisRunning(true);
+    setLastRunKind("tran");
     setLastTransientDurationMs(null);
     setRunProgress(null); // indeterminate until the web solver's first onProgress call (native never gets one)
     const controller = new AbortController();
@@ -863,6 +930,7 @@ function App() {
   const runOperatingAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
+    setLastRunKind("op");
     try {
       assertCurrentSimulationIntegrity();
       const result = resolveEngineResult(
@@ -882,6 +950,7 @@ function App() {
   const runAcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
+    setLastRunKind("ac");
     try {
       assertCurrentSimulationIntegrity();
       // An imported LTspice .ac directive is the user's analysis definition.
@@ -951,6 +1020,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     const dc = analysesFromDirectives(directives).dc ?? dcSetup;
     setAnalysisRunning(true);
+    setLastRunKind("dc");
     try {
       assertCurrentSimulationIntegrity();
       const schematic = {
@@ -997,6 +1067,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     const tf = analysesFromDirectives(directives).tf ?? tfSetup;
     setAnalysisRunning(true);
+    setLastRunKind("tf");
     try {
       assertCurrentSimulationIntegrity();
       // ngspice first, for the same reason as the DC sweep: the TS solver has
@@ -1022,6 +1093,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     const noise = analysesFromDirectives(directives).noise ?? noiseSetup;
     setAnalysisRunning(true);
+    setLastRunKind("noise");
     try {
       assertCurrentSimulationIntegrity();
       // ngspice first: the TS solver has only resistor thermal noise and
@@ -1069,6 +1141,7 @@ function App() {
       userModelLibraryNames,
     };
     setAnalysisRunning(true);
+    setLastRunKind("step");
     try {
       assertCurrentSimulationIntegrity();
 
@@ -1839,7 +1912,10 @@ function App() {
     openDocument(blankDocument(), basename(path), path, [], {
       ...(fingerprint !== undefined ? { diskFingerprint: fingerprint } : {}),
     });
-    setResultsRaise((n) => n + 1);
+    // No raise here. This replaced `setGraphOpen(true)`, which was a no-op
+    // reset of a simulator-only panel; bumping the shared drawer's raise
+    // counter is not, and it lifted an empty "No analysis yet" drawer over
+    // the blank canvas of a schematic that had not been run.
     showNotice(`Created ${basename(path)}`);
   }, [createSchematicInRoot, openDocument, showNotice]);
 
@@ -1875,7 +1951,10 @@ function App() {
     });
     setLearningPath(startLearningPath());
     setLearningPathCoachHidden(false);
-    setResultsRaise((n) => n + 1);
+    // No raise here. This replaced `setGraphOpen(true)`, which was a no-op
+    // reset of a simulator-only panel; bumping the shared drawer's raise
+    // counter is not, and it lifted an empty "No analysis yet" drawer over
+    // the blank canvas of a schematic that had not been run.
   }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
 
   const dismissLearningPathCoach = useCallback(() => {
@@ -1977,7 +2056,10 @@ function App() {
     invalidateAnalysis();
     setMode("schematic");
     setConfirmClearOpen(false);
-    setResultsRaise((n) => n + 1);
+    // No raise here. This replaced `setGraphOpen(true)`, which was a no-op
+    // reset of a simulator-only panel; bumping the shared drawer's raise
+    // counter is not, and it lifted an empty "No analysis yet" drawer over
+    // the blank canvas of a schematic that had not been run.
     showNotice("Schematic cleared.");
   }, [activeId, newCircuit, invalidateAnalysis, showNotice]);
 
@@ -2229,6 +2311,16 @@ function App() {
         return;
       }
       if (e.metaKey || e.ctrlKey) return; // leave other OS / app shortcuts alone
+      // The inspector's keyboard entry point, and the reason it is a separate
+      // gesture from selecting: a canvas selection deliberately does NOT move
+      // focus, or `r` would type the letter r into a value field instead of
+      // rotating the part. This is how a keyboard user reaches the fields.
+      if (e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        setInspectorClosedFor(null);
+        setInspectorFocusSignal((value) => value + 1);
+        return;
+      }
       if (mode !== "schematic") return; // place-shortcuts (R/C/L/V/…) are schematic-only edits
 
       const entry = CATALOG.find((c) => c.hotkey === e.key.toLowerCase());
@@ -2250,10 +2342,18 @@ function App() {
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width;
       if (typeof width === "number") setShellWidth(width);
+      // The same observation answers "where may a floating surface go": the
+      // shell body's own box, in client coordinates, which is the space the
+      // selection rect Canvas publishes is measured in.
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0) {
+        setShellBox({ minX: rect.left, minY: rect.top, maxX: rect.right, maxY: rect.bottom });
+      }
     });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
 
   // A `scopeWidth` state, a responsive clamp for it, and a `--scope-w` custom
   // property used to live here. Nothing read any of it: no CSS rule in the repo
@@ -2285,6 +2385,35 @@ function App() {
     },
   });
   const componentsColumnOpen = chrome.components.visible;
+
+  /**
+   * Where the inspector may go, and what it should stay off.
+   *
+   * The viewport is the shell body inset by a gutter, less whatever the
+   * results drawer is covering along the bottom - the drawer floats, so
+   * nothing in the layout reserves that band and the inspector would happily
+   * place itself underneath it. The rail is an obstacle rather than an inset
+   * because it is narrow enough that overlapping it is sometimes the least
+   * bad option, and the placement kernel is allowed to make that call.
+   */
+  const inspectorViewport = useMemo(() => ({
+    minX: shellBox.minX + 8,
+    minY: shellBox.minY + 8,
+    maxX: shellBox.maxX - 8,
+    maxY: Math.max(shellBox.minY + 8, shellBox.maxY - drawerCover - 8),
+  }), [shellBox, drawerCover]);
+
+  const inspectorObstacles = useMemo(
+    () => (componentsColumnOpen
+      ? [{
+        minX: shellBox.maxX - componentsRailResize.width,
+        minY: shellBox.minY,
+        maxX: shellBox.maxX,
+        maxY: shellBox.maxY,
+      }]
+      : []),
+    [componentsColumnOpen, componentsRailResize.width, shellBox],
+  );
   const explorerColumnOpen = chrome.explorer.visible;
   const effectiveAssistantWidth = chrome.assistant.width ?? assistantResize.width;
   const componentsRailResponsiveMax = chrome.components.maxWidth!;
@@ -2370,6 +2499,22 @@ function App() {
             maxWidth={explorerResponsiveMax}
           />
         )}
+        {/*
+          * The workspace column: whichever mode surface is up, plus the
+          * results drawer that floats over it.
+          *
+          * The wrapper exists so the drawer has something to be absolute
+          * inside. Anchored to `.shell-body` it spanned the whole window
+          * minus the nav rail, which meant that at half height it also
+          * covered the bottom of the explorer, the parts rail and the
+          * assistant - and the assistant pins its composer to the bottom of
+          * its column, so the only way to talk to Bode disappeared behind a
+          * waveform. Offsetting by each column's width in CSS is not
+          * available: two of the three are user-resizable. Making the centre
+          * region the drawer's containing block excludes all of them by
+          * construction, at any width.
+          */}
+        <div className="workspace-column">
         {mode === "schematic" && !activeProjectFile && (
           <section
             className="editor-shell"
@@ -2437,6 +2582,7 @@ function App() {
               interactive
               fitSignal={fitSignal}
               fitInsetBottom={drawerCover}
+              onSelectionRect={setSelectionRect}
             />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState
@@ -2561,6 +2707,7 @@ function App() {
                   onActuate={handleActuate}
                   fitSignal={fitSignal}
                   fitInsetBottom={drawerCover}
+                  onSelectionRect={setSelectionRect}
                   currentVisualizer={currentVisualizer}
                 />
               </div>
@@ -2612,7 +2759,7 @@ function App() {
           */}
         {activeProjectFile && (
           <ResultsDrawer
-            status={analysisRunning ? "running" : analysis ? (analysis.ok ? "complete" : "error") : "idle"}
+            status={analysisRunning ? "running" : activeAnalysis ? (activeAnalysis.ok ? "complete" : "error") : "idle"}
             statusLine={resultsSummary}
             onStop={stopAnalysis}
             raiseSignal={resultsRaise}
@@ -2622,7 +2769,7 @@ function App() {
             errorBadge={diagnosticsBadge}
             errors={
               <BottomPanel
-                result={analysis}
+                result={activeAnalysis}
                 isRunning={analysisRunning}
                 notices={activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : []}
               />
@@ -2689,6 +2836,7 @@ function App() {
             )}
           />
         )}
+        </div>
         {componentsColumnOpen && activeProjectFile && (
           <ComponentsRail
             focusSignal={componentFocusSignal}

@@ -230,6 +230,19 @@ export function Canvas({
   componentsRef.current = components;
   wiresRef.current = wires;
   ascShapesRef.current = ascShapes;
+  /**
+   * The camera, and the camera the last auto-fit chose.
+   *
+   * `fitView` stores the exact object it hands to `setView`, so comparing the
+   * two by identity answers "has the user moved since we framed this?" - every
+   * pan, zoom and wheel handler writes a fresh object. That question is what
+   * lets the drawer-inset effect re-frame after the first cover measurement
+   * without also re-framing on the stream of intermediate heights a drawer
+   * animation produces.
+   */
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const autoFitViewRef = useRef<View | null>(null);
   // Same reason as the geometry refs above: `fitView` must stay identity-
   // stable, or the auto-fit effect re-fires and stomps the user's pan every
   // time the drawer is resized.
@@ -1289,7 +1302,9 @@ export function Canvas({
     // text never touches (or clips at) the canvas edge.
     const framingBounds = circuitBoundsWithLabels(fitComponents, fitWires, fitShapes);
     if (!framingBounds) {
-      setView({ x: r.width / 2, y: visibleHeight / 2, zoom: 1 });
+      const empty = { x: r.width / 2, y: visibleHeight / 2, zoom: 1 };
+      autoFitViewRef.current = empty;
+      setView(empty);
       return;
     }
     const topologyBounds = circuitBounds(fitComponents, fitWires, undefined, fitShapes);
@@ -1299,24 +1314,40 @@ export function Canvas({
           y: (topologyBounds.minY + topologyBounds.maxY) / 2,
         }
       : undefined;
-    setView(fitViewTransform(framingBounds, r.width, visibleHeight, {
+    const fitted = fitViewTransform(framingBounds, r.width, visibleHeight, {
       minZoom: 0.25,
       // Fit, do not magnify. 5x was survivable while the canvas was a column
       // sharing the window; now that it is the window, a four-part RC filled
       // 1400px and the symbols read as a cartoon rather than a schematic.
       maxZoom: 2,
       center,
-    }));
+    });
+    // Remember the camera we chose, by identity. Every other writer of `view`
+    // produces a fresh object, so `viewRef.current === autoFitViewRef.current`
+    // is an exact test for "nobody has panned or zoomed since the last fit" -
+    // which is what the inset effect below needs and cannot get any other way.
+    autoFitViewRef.current = fitted;
+    setView(fitted);
   }, []);
 
   // Publish where the selection is on screen. Runs after every commit that
   // could move it: a new selection, an edit, a pan or a zoom.
+  //
+  // No dependency array on purpose - the rect depends on rendered layout, not
+  // on any value this component can list. That makes the guard below
+  // load-bearing rather than an optimisation: the consumer stores what it is
+  // told, which re-renders this canvas, which runs this effect again. Sending
+  // a freshly-allocated object every time is an infinite loop, and it presents
+  // as "the inspector never appears" rather than as a crash.
+  const publishedRectRef = useRef<string | null>(null);
   useEffect(() => {
     if (!onSelectionRect) return;
     const el = svgRef.current;
     if (!el) return;
     const nodes = el.querySelectorAll<SVGGElement>("g.component.selected, g.wire-group.selected");
     if (nodes.length === 0) {
+      if (publishedRectRef.current === null) return;
+      publishedRectRef.current = null;
       onSelectionRect(null);
       return;
     }
@@ -1332,7 +1363,13 @@ export function Canvas({
       maxX = Math.max(maxX, rect.right);
       maxY = Math.max(maxY, rect.bottom);
     }
-    onSelectionRect(Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null);
+    const next = Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+    const signature = next
+      ? `${Math.round(next.minX)},${Math.round(next.minY)},${Math.round(next.maxX)},${Math.round(next.maxY)}`
+      : null;
+    if (signature === publishedRectRef.current) return;
+    publishedRectRef.current = signature;
+    onSelectionRect(next);
   });
 
   // Re-frame when the size of the obstruction changes.
@@ -1344,20 +1381,31 @@ export function Canvas({
   // there, because at 1440 the slack happened to cover the mistake, which is
   // exactly the kind of bug that ships.
   //
-  // It does re-frame on a manual drawer resize, and so stomps a pan. That is
-  // the right trade here: resizing the drawer IS a request to change how much
-  // circuit you can see, and the alternative is leaving the part you just
-  // uncovered off-screen.
+  // Only while the camera is still the one the last fit chose. The cover is
+  // reported by a ResizeObserver on an element with a CSS height transition,
+  // so a single drawer open streams dozens of intermediate values through
+  // here - and re-framing on each of them dragged the editor camera back to
+  // zoom-to-fit mid-edit every time the drawer raised itself for a run or an
+  // import warning. Guarding on "nobody has moved the camera since" keeps the
+  // case this exists for (the measurement landing after the mount fit) and
+  // drops the case it broke.
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
-    const id = requestAnimationFrame(() => fitView());
+    if (autoFitViewRef.current !== null && viewRef.current !== autoFitViewRef.current) return;
+    const id = requestAnimationFrame(() => {
+      // Re-checked inside the frame: a pan between scheduling and painting is
+      // a whole gesture's worth of time at 60Hz.
+      if (autoFitViewRef.current !== null && viewRef.current !== autoFitViewRef.current) return;
+      fitView();
+    });
     return () => cancelAnimationFrame(id);
   }, [fitInsetBottom, fitView]);
 
   // Auto-fit when the document identity changes (open / new / tab switch).
   // Deliberately does NOT depend on components/wires - user pan is preserved
-  // across edits; ⌂ and fitSignal are the only re-fit triggers in schematic mode.
+  // across edits; ⌂, fitSignal and a first cover measurement on an unmoved
+  // camera are the only re-fit triggers in schematic mode.
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;

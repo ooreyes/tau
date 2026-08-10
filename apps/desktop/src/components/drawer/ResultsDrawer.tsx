@@ -41,9 +41,27 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
  *
  * Escape collapses to `peek` ONLY when focus is inside the drawer. Canvas
  * Escape has to keep meaning "cancel the current tool", and a document-level
- * listener that does not check would silently take that over. The drawer also
- * refuses to collapse while it contains focus, so a keyboard user cannot land
- * on a control that then disappears under them.
+ * listener that does not check would silently take that over. When it does
+ * collapse it hands focus to the size control first, so a keyboard user is
+ * never left standing on a control that just went `display: none`.
+ *
+ * ## Why every tab stays mounted
+ *
+ * Only the active panel is shown, but all of them are rendered, hidden with
+ * the `hidden` attribute rather than removed. Not a detail: SimulationPanel
+ * holds about thirty pieces of state that no store owns - expression traces
+ * the user typed, cursor positions, per-trace colour overrides, manual axis
+ * limits, and reference `.raw`/`.plt` data imported from disk. Rendering only
+ * the active tab threw all of that away on a click to Measurements and back,
+ * and on every collapse, including the one Escape performs.
+ *
+ * `hidden` is the mechanism because the requirement it has to satisfy is an
+ * accessibility one, not a visual one: a surface nobody can see must be out
+ * of the accessibility tree, or `getByRole` goes ambiguous and a screen-reader
+ * user can tab into something that is not on screen. `hidden` computes to
+ * `display: none`, which removes the subtree outright - unlike the
+ * translate-off-screen trick the note at the top of App.shellContract.test.tsx
+ * warns about, which leaves it fully exposed.
  */
 
 export type DrawerHeight = "peek" | "half" | "full";
@@ -53,6 +71,13 @@ export type DrawerTab = "waveforms" | "measurements" | "errors";
 export const RESULTS_DRAWER_NAME = "Results";
 
 const HEIGHT_ORDER: readonly DrawerHeight[] = ["peek", "half", "full"];
+
+/* A tab and its panel point at each other by id. Both derived from the one
+ * `useId`, because `aria-controls` must resolve to an element that exists -
+ * a single shared id broke that the moment the body it named stopped being
+ * rendered. */
+const tabId = (base: string, tab: DrawerTab) => `${base}-tab-${tab}`;
+const bodyId = (base: string, tab: DrawerTab) => `${base}-panel-${tab}`;
 
 interface TabSpec {
   value: DrawerTab;
@@ -174,8 +199,15 @@ export function ResultsDrawer({
   // empty workspace opens the first schematic and produces the warnings in
   // the same commit, so the drawer's very first render already has them.
   const seenBadgeRef = useRef<string | null>(null);
+  // Synced in an effect, not assigned in the render body. A render React
+  // discards - StrictMode's double invoke, or a concurrent render that is
+  // interrupted - must not be able to write the value the badge effect below
+  // reads. Declared first so it is already current when that effect runs on
+  // the same commit.
   const heightRef = useRef(height);
-  heightRef.current = height;
+  useEffect(() => {
+    heightRef.current = height;
+  }, [height]);
   useEffect(() => {
     if (badgeKey === seenBadgeRef.current) return;
     seenBadgeRef.current = badgeKey;
@@ -189,11 +221,14 @@ export function ResultsDrawer({
     if (!el || !onCoverChange) return;
     const report = () => onCoverChange(el.getBoundingClientRect().height);
     report();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(report);
-    observer.observe(el);
+    // The observer is optional; the cleanup is not. Returning early when
+    // ResizeObserver is missing skipped the `onCoverChange(0)` below, so an
+    // unmounted drawer left the canvas reserving a band for a surface that is
+    // no longer on screen.
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(report);
+    observer?.observe(el);
     return () => {
-      observer.disconnect();
+      observer?.disconnect();
       onCoverChange(0);
     };
   }, [onCoverChange]);
@@ -211,8 +246,8 @@ export function ResultsDrawer({
       if (!containsFocus() || height === "peek") return;
       event.preventDefault();
       setHeight("peek");
-      // Peek unmounts the body, so focus has to leave first or it lands on a
-      // detached node and the browser drops it to <body>.
+      // Peek hides the body, so focus has to leave first or it sits on a
+      // `display: none` node and the browser drops it to <body>.
       rootRef.current?.querySelector<HTMLElement>(".results-drawer-size")?.focus();
     };
     document.addEventListener("keydown", onKeyDown);
@@ -247,14 +282,26 @@ export function ResultsDrawer({
         </span>
 
         {offered.length > 0 && (
-          <Tabs value={active?.value} onValueChange={(next) => setTab(next as DrawerTab)}>
+          <Tabs
+            className="results-drawer-tabs-root"
+            value={active?.value}
+            onValueChange={(next) => {
+              setTab(next as DrawerTab);
+              // Picking a tab is a request to read it. The strip is legible at
+              // peek - that is the point of peek - so it was possible to click
+              // Errors on the strength of its badge and have nothing happen
+              // but the underline move.
+              setHeight((current) => (current === "peek" ? "half" : current));
+            }}
+          >
             <TabsList aria-label="Results" className="results-drawer-tabs">
               {offered.map((spec) => (
                 <TabsTrigger
                   key={spec.value}
                   className="results-drawer-tab"
                   value={spec.value}
-                  aria-controls={panelId}
+                  id={tabId(panelId, spec.value)}
+                  aria-controls={bodyId(panelId, spec.value)}
                 >
                   {spec.label}
                   {spec.badge && (
@@ -293,7 +340,7 @@ export function ResultsDrawer({
                 className="results-drawer-size text-muted-foreground hover:text-foreground"
                 onClick={cycleHeight}
                 aria-expanded={!collapsed}
-                aria-controls={panelId}
+                aria-controls={active ? bodyId(panelId, active.value) : undefined}
                 aria-label={`Resize results (${height})`}
               >
                 {collapsed
@@ -308,14 +355,25 @@ export function ResultsDrawer({
         </div>
       </div>
 
-      {/* Unmounted, not hidden. A collapsed surface that is merely translated
-          off-screen stays in the accessibility tree and makes `getByRole`
-          ambiguous; see the note at the top of App.shellContract.test.tsx. */}
-      {!collapsed && active && (
-        <div className="results-drawer-body" id={panelId}>
-          {active.content}
+      {/* Every offered tab renders; `hidden` decides which one is on screen.
+          `hidden` computes to `display: none`, which takes the subtree out of
+          the accessibility tree outright - so a collapsed drawer is still
+          invisible to `getByRole` and untabbable, which is the actual rule the
+          note at the top of App.shellContract.test.tsx sets. What it does NOT
+          do is destroy the panel's state; see "Why every tab stays mounted"
+          above for why that difference is the whole reason. */}
+      {offered.map((spec) => (
+        <div
+          key={spec.value}
+          className="results-drawer-body"
+          id={bodyId(panelId, spec.value)}
+          role="tabpanel"
+          aria-labelledby={tabId(panelId, spec.value)}
+          hidden={collapsed || spec.value !== active?.value}
+        >
+          {spec.content}
         </div>
-      )}
+      ))}
     </aside>
   );
 }

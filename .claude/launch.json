@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["-C", "apps/desktop", "exec", "vite", "--port", "5199"],
       "port": 5199
+    },
+    {
+      "name": "tau-web-alt2",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "apps/desktop", "exec", "vite", "--port", "5233"],
+      "port": 5233
     }
   ]
 }

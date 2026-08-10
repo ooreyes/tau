@@ -971,20 +971,29 @@ describe("ComponentsRail - responsive shell budget", () => {
     expect(screen.queryByRole("separator", { name: "Resize properties panel" })).toBeNull();
   });
 
-  it("opens Library by default and returns there whenever the active sheet becomes empty", () => {
+  it("is the parts library, and does not become a properties panel when a part is selected", () => {
+    // The "Properties | Library" segmented control this used to assert is
+    // gone. It was two unrelated things sharing one column - the parts you
+    // might add, and the settings of the part you already have - and the
+    // selection's properties now appear at the selection (inspector/), so
+    // there is nothing left to segment. The rail always shows the library.
     render(<Harness maxWidth={340} embedded />);
-    expect(screen.getByRole("tab", { name: "Library" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByPlaceholderText("Filter")).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Library" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Properties" })).toBeNull();
 
     act(() => useSchematic.setState({
       components: [{ id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" }],
       selectedId: "r-1",
       selectedIds: ["r-1"],
     }));
-    expect(screen.getByRole("tab", { name: "Properties" }).getAttribute("aria-selected")).toBe("true");
-
-    act(() => useSchematic.setState({ components: [], selectedId: null, selectedIds: [] }));
-    expect(screen.getByRole("tab", { name: "Library" }).getAttribute("aria-selected")).toBe("true");
+    // Selecting a part must not swap the library out from under someone who
+    // is placing parts, which is exactly what the segmented control did.
     expect(screen.getByPlaceholderText("Filter")).toBeTruthy();
+    // And the properties are not here, so they cannot be here AND at the
+    // selection: two live surfaces under one name is the failure the shell
+    // contract test exists to catch.
+    expect(screen.queryByText("No Selection")).toBeNull();
   });
 });
 

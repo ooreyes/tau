@@ -1541,9 +1541,12 @@ function componentHeadline(component: SchematicComponent): string {
 function ComponentPropertyGroup({
   component,
   onOpenModelLibraries,
+  groupCount = 1,
 }: {
   component: SchematicComponent;
   onOpenModelLibraries?: () => void;
+  /** How many groups are on screen; see the aria-label note below. */
+  groupCount?: number;
 }) {
   const selected = component;
   const entry = CATALOG_BY_KIND[selected.kind];
@@ -1742,7 +1745,20 @@ function ComponentPropertyGroup({
   const headline = componentHeadline(selected);
 
   return (
-    <section className="property-group" aria-label={`${selected.label || title} properties`}>
+    /*
+     * Named only when there are several parts to tell apart.
+     *
+     * The floating inspector's own dialog is called `R1 properties`, and this
+     * section used to be called the same thing unconditionally - two live
+     * nodes under one accessible name, which makes `getByRole` ambiguous and
+     * is exactly the "old and new are both mounted" signature the shell
+     * contract test watches for. With one part the dialog has already said
+     * whose properties these are; with several, each group has to.
+     */
+    <section
+      className="property-group"
+      aria-label={groupCount > 1 ? `${selected.label || title} properties` : undefined}
+    >
       <button
         type="button"
         className="property-group-header"
@@ -2177,6 +2193,7 @@ export function ComponentInspector({
         <ComponentPropertyGroup
           key={part.id}
           component={part}
+          groupCount={parts.length}
           onOpenModelLibraries={onOpenModelLibraries}
         />
       ))}

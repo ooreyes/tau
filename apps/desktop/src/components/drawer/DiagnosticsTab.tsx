@@ -11,7 +11,7 @@
  * of the frozen shell contract and must survive the fold.
  */
 import { useEffect, useState } from "react";
-import type { AnalysisResult } from "../../simulation/linearTransient";
+import type { RunOutcome } from "../../App";
 
 export function BottomPanel({
   result,
@@ -19,7 +19,15 @@ export function BottomPanel({
   notices = [],
 }: {
   mode?: "schematic" | "simulator";
-  result: AnalysisResult | null;
+  /**
+   * The last run's outcome, whichever analysis produced it.
+   *
+   * Typed as the shape all seven share rather than as `AnalysisResult`: this
+   * used to take the transient specifically, so a failed AC sweep or noise run
+   * left the Errors tab reporting "No issues" next to its own failure. Nothing
+   * here ever needed more than `ok`, the message and the warnings.
+   */
+  result: RunOutcome | null;
   isRunning?: boolean;
   /** Document-level warnings independent of a run (e.g. ASC import warnings -
    *  previously console-only, so "Opened with 2 warning(s)" was a dead end). */
@@ -28,7 +36,7 @@ export function BottomPanel({
   // A live run supersedes the previous result's diagnostics. Keeping stale
   // success/error classes during a rerun would contradict the amber Run state.
   const messages = isRunning ? [] : [
-    ...(result && !result.ok ? [result.message] : []),
+    ...(result && !result.ok && result.message ? [result.message] : []),
     ...(result?.warnings ?? []),
     ...notices,
   ];
