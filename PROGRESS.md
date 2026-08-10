@@ -2,6 +2,49 @@
 
 **Status: DONE - 2026-08-10**
 
+Unit: **overnight product, precision, performance, and visual audit**. Native
+ngspice now derives the declared macOS 11.0 floor and the release gate inspects
+every packaged Mach-O. Precision tightened in three places: dynamic Laplace
+analyses refuse an H(0)-only approximation; malformed/non-positive transmission
+line Z0/TD values refuse instead of defaulting; and custom PAsystem layout cells
+use their exact sibling `.asy` pins. Missing sibling geometry is retained as an
+unsupported foreign symbol so simulation refuses rather than silently wiring a
+stock primitive. This also repaired the HandsFreeLayout differential regression
+introduced by `474a6b9`; the complete `scripts/differential-parity.sh` gate is
+green again.
+
+The native app no longer prewarms the 86.9-kB browser preview worker. Bode and
+the waveform workspace are deferred until summoned, reducing the initial JS
+from 1,174,919 to 933,209 bytes (-20.6%) and gzip from 355,414 to about 291,100
+(-18.1%). Settled status indicators no longer animate continuously. Recovery
+requires an explicit Restore or Discard decision. Settings again uses the
+shared Sheet primitive; command search remains inside a 900-px window; Camera
+Fit ignores the overlaid Components rail. Responsive screenshot proof is green
+in both themes at 1440x900 and 12/12 states at the declared 900x600 minimum.
+
+Gates on the final tree: typecheck clean; 243 frontend files passed and 2 were
+skipped, with 4,002 tests passed / 8 skipped; production web build clean; Rust
+fmt and Clippy clean; Rust 87/87 ordinary tests plus all 19 ignored real-ngspice
+tests passed earlier in this audit. Fresh `tauri build` produced Tau.app and
+`Tau_1.0.0_aarch64.dmg`; strict codesign and DMG checksum passed; the app and
+mounted DMG each contain nine arm64 Mach-O entries at macOS 11.0 and each
+bundled-engine smoke returned 336 samples spanning 0..5 V. Chrome exercised the
+responsive web UI, Settings themes, controls, and focus return. Native Computer
+Use was attempted twice but the Mac stayed locked, so traffic-light placement
+and drag-region interaction still require an unlocked visual check. The
+scheduled autobuilder remains explicitly disabled for the night.
+
+**SHIPPABLE? NO.** Named-device exact fidelity remains 48.1%, below the 95%
+DoD threshold because unavailable encrypted vendor models cannot be honestly
+substituted. The current differential corpus passes, but the broader authored-
+analysis matrix remains incomplete. Next: perform the unlocked native title-bar
+interaction check, then continue high-value differential cells without weakening
+fail-closed behavior.
+
+---
+
+**Status: DONE - 2026-08-10**
+
 Unit: **the native title bar merges into the app's own header** (`4d2a81e`).
 The macOS window carried two bars - a native strip whose only content was the
 word "Tau", sitting directly above a header already reading "tau · <file>".
@@ -18600,3 +18643,18 @@ evidence is kept in full here.
   The gate now requires zero hard failures. Next: reduce the explicit vendor-
   symbol/subcircuit refusals and replace synthetic OP proof with authored-
   analysis differential results.
+
+- 2026-08-10 - Completed an overnight production audit across native
+  compatibility, electrical precision, startup/idle cost, responsive UI, and
+  recovery safety. Initial JS fell 20.6% (gzip 18.1%); the native preview worker
+  no longer prewarms; settled lamps are static. Exact custom `.asy` geometry
+  repaired HandsFreeLayout and missing geometry now refuses. Dynamic Laplace
+  and malformed TLINE approximations also refuse. Settings/command/recovery and
+  both-theme 1440x900 plus 12/12 minimum-window states are proven. Final evidence:
+  4,002 frontend tests, green differential corpus, clean typecheck/build, prior
+  clean fmt/Clippy plus 87 ordinary and 19 native-engine Rust tests, fresh app
+  and DMG with nine macOS-11 arm64 Mach-O files, valid signature/checksum, and
+  two 336-sample packaged-engine smokes. Chrome interaction passed; native
+  Computer Use remained blocked by the locked Mac. Scheduler intentionally
+  disabled. Named-device 48.1% and the still-incomplete broad matrix keep the
+  product correctly marked not shippable.
