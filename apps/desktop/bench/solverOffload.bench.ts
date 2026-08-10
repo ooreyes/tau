@@ -446,6 +446,7 @@ async function main() {
   (window as unknown as { __benchReport: unknown }).__benchReport = report;
   const out = document.getElementById("out");
   if (out) out.textContent = JSON.stringify(report, null, 2);
+  document.title = "Tau solver offload bench - done";
 }
 
 void main();

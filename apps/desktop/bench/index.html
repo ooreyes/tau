@@ -5,7 +5,17 @@
     <title>Tau solver offload bench</title>
   </head>
   <body>
-    <pre id="out">loading…</pre>
+    <!-- The run takes a couple of minutes: it repeats a 40-member sweep and a
+         100k-step transient enough times to see past this machine's noise.
+         Says so, because a page reading "loading…" for two minutes is
+         indistinguishable from a hung one - which is exactly how it was first
+         reported. `run.mjs` waits on `window.__benchReport`, not on this text. -->
+    <pre id="out">Running the solver-offload bench. This takes a couple of minutes - it
+repeats each measurement enough times to see past machine noise, and it
+deliberately does the slow sequential baseline too.
+
+The page updates once, with the full JSON report, when it finishes; the
+tab title changes to "done" at the same moment.</pre>
     <script type="module" src="./solverOffload.bench.ts"></script>
   </body>
 </html>
