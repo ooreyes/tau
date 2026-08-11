@@ -45,8 +45,8 @@ export function parseOpampOutputLimits(value: string): { min: number; max: numbe
       return fallback;
     }
   };
-  const min = read(["vmin", "vlow", "min"], DEFAULT_OPAMP_VMIN);
-  const max = read(["vmax", "vhigh", "max"], DEFAULT_OPAMP_VMAX);
+  const min = read(["vmin", "vlow", "vlo", "min"], DEFAULT_OPAMP_VMIN);
+  const max = read(["vmax", "vhigh", "vhi", "max"], DEFAULT_OPAMP_VMAX);
   return min < max ? { min, max } : { min: DEFAULT_OPAMP_VMIN, max: DEFAULT_OPAMP_VMAX };
 }
 

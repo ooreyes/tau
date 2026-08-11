@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_OPAMP_AVOL, parseOpampAvol, railClampedOpampLine } from "./opampSpec";
+import {
+  DEFAULT_OPAMP_AVOL,
+  DEFAULT_OPAMP_VMAX,
+  DEFAULT_OPAMP_VMIN,
+  boundedOpampLine,
+  parseOpampAvol,
+  parseOpampOutputLimits,
+  railClampedOpampLine,
+} from "./opampSpec";
 
 describe("parseOpampAvol", () => {
   it("reads Avol with an SI suffix from the UniversalOpamp2 spec", () => {
@@ -22,6 +30,20 @@ describe("parseOpampAvol", () => {
     expect(parseOpampAvol("Avol=banana")).toBe(DEFAULT_OPAMP_AVOL);
     expect(parseOpampAvol("Avol=0")).toBe(DEFAULT_OPAMP_AVOL);
     expect(parseOpampAvol("Avol=-3k")).toBe(DEFAULT_OPAMP_AVOL);
+  });
+});
+
+describe("generic op-amp defaults", () => {
+  it("keeps the bounded generic model defaults explicit and finite", () => {
+    expect(parseOpampAvol("ideal")).toBe(DEFAULT_OPAMP_AVOL);
+    expect(parseOpampOutputLimits("ideal")).toEqual({ min: DEFAULT_OPAMP_VMIN, max: DEFAULT_OPAMP_VMAX });
+    expect(boundedOpampLine("B_U1", "out", "vp", "vn", DEFAULT_OPAMP_AVOL, DEFAULT_OPAMP_VMIN, DEFAULT_OPAMP_VMAX))
+      .toContain("0+15*tanh(1000000");
+  });
+
+  it("keeps legacy output-limit aliases readable", () => {
+    expect(parseOpampOutputLimits("Min=-5 Max=5")).toEqual({ min: -5, max: 5 });
+    expect(parseOpampOutputLimits("Vlo=-3 Vhi=4")).toEqual({ min: -3, max: 4 });
   });
 });
 

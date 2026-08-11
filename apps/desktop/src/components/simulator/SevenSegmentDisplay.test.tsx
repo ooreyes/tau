@@ -61,6 +61,13 @@ describe("seven-segment node decoding", () => {
     expect(sevenSegmentPolarityFromValue("common cathode")).toBe("cathode");
   });
 
+  it("treats polarity as a direction, not the absolute segment/common delta", () => {
+    const pattern = SEVEN_SEGMENT_DIGIT_PATTERNS[4];
+    const activeLow = voltagesFor(pattern, 5, 0);
+    expect(activeSevenSegmentSegments(activeLow, 5, { polarity: "cathode" })).toEqual([]);
+    expect(activeSevenSegmentSegments(activeLow, 5, { polarity: "anode" })).toEqual(pattern);
+  });
+
   it("keeps a blank display distinct from an unavailable result", () => {
     const blank = deriveSevenSegmentDisplayState(voltagesFor([], 0, 5), 0);
     const unavailable = deriveSevenSegmentDisplayState(undefined, undefined);

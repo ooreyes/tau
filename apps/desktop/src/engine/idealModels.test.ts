@@ -192,8 +192,15 @@ describe("deck emission", () => {
     }, { kind: "op" });
     const cards = deck.netlist.split("\n").filter((line) => /^\.model TAU_ZENER_IDEAL/.test(line));
     expect(cards).toHaveLength(2);
-    expect(cards.join("\n")).toContain("TAU_ZENER_IDEAL_5V1_FWD_0V7");
-    expect(cards.join("\n")).toContain("TAU_ZENER_IDEAL_12V");
+    const fiveVolt = cards.find((line) => line.includes("TAU_ZENER_IDEAL_5V1_FWD_0V7"));
+    const twelveVolt = cards.find((line) => line.includes("TAU_ZENER_IDEAL_12V_FWD_0V7"));
+    expect(fiveVolt).toBeDefined();
+    expect(twelveVolt).toBeDefined();
+    for (const [card, breakdown] of [[fiveVolt, "5.1"], [twelveVolt, "12"]] as const) {
+      expect(card).toMatch(/\b(?:D|sidiode)\(/i);
+      expect(card).toContain("Vfwd=0.7");
+      expect(card).toContain(`Vrev=${breakdown}`);
+    }
   });
 
   it("keeps same-breakdown zeners separate when forward drops differ", () => {

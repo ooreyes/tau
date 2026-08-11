@@ -917,10 +917,11 @@ describe("Canvas - simulator seven-segment reflection", () => {
     value: "",
     label: "U1",
   };
+  const commonAnodeDisplay = { ...display, value: "common anode" };
 
-  function displayCircuit(): { circuit: ExtractedCircuit; entry: ExtractedCircuit["components"][number] } {
-    const circuit = extractCircuit([display], [], []);
-    const entry = circuit.components.find(({ component }) => component.id === display.id);
+  function displayCircuit(component = display): { circuit: ExtractedCircuit; entry: ExtractedCircuit["components"][number] } {
+    const circuit = extractCircuit([component], [], []);
+    const entry = circuit.components.find(({ component: extracted }) => extracted.id === component.id);
     if (!entry) throw new Error("seven-segment fixture did not extract its component");
     return { circuit, entry };
   }
@@ -929,8 +930,9 @@ describe("Canvas - simulator seven-segment reflection", () => {
     activeSegments: readonly SevenSegmentSegment[],
     commonVoltage: number,
     activeVoltage: number,
+    component = display,
   ) {
-    const { circuit, entry } = displayCircuit();
+    const { circuit, entry } = displayCircuit(component);
     const active = new Set(activeSegments);
     const voltageByNet = new Map<string, number>();
     for (const segment of SEVEN_SEGMENT_SEGMENTS) {
@@ -995,12 +997,12 @@ describe("Canvas - simulator seven-segment reflection", () => {
   });
 
   it("shows common-anode active-low nodes without changing the schematic", () => {
-    useSchematic.setState({ components: [display], wires: [], netLabels: [] });
-    const { result } = operatingPointFor(SEVEN_SEGMENT_DIGIT_PATTERNS[3], 5, 0);
+    useSchematic.setState({ components: [commonAnodeDisplay], wires: [], netLabels: [] });
+    const { result } = operatingPointFor(SEVEN_SEGMENT_DIGIT_PATTERNS[3], 5, 0, commonAnodeDisplay);
     render(<Canvas interactive={false} op={result} />);
 
     expect(screen.getByTestId("seven-segment-display").getAttribute("data-digit")).toBe("3");
-    expect(useSchematic.getState().components[0].value).toBe("");
+    expect(useSchematic.getState().components[0].value).toBe("common anode");
   });
 
   it("tracks a live transient sample when the schematic readout moves", () => {

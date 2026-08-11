@@ -15,6 +15,13 @@ import {
 } from "./params";
 import { CATALOG } from "./catalog";
 import { parseModulator } from "../engine/modulatorSpec";
+import {
+  DEFAULT_OPAMP_AVOL,
+  DEFAULT_OPAMP_VMAX,
+  DEFAULT_OPAMP_VMIN,
+  parseOpampAvol,
+  parseOpampOutputLimits,
+} from "../engine/opampSpec";
 
 describe("MOSFET param encode/decode", () => {
   it("round-trips model + W/L/KP/VTO", () => {
@@ -421,6 +428,20 @@ describe("generic model-backed parameter schemas", () => {
     });
     expect(encodeParams("opamp", { model: "ideal", gain: "2Meg", vmin: "-5", vmax: "5" }))
       .toBe("ideal Gain=2Meg Vmin=-5 Vmax=5");
+  });
+
+  it("keeps displayed generic op-amp defaults aligned with the bounded model", () => {
+    const fields = paramFields("opamp", "ideal");
+    const values = decodeParams("opamp", "ideal");
+    expect(values).toEqual({ model: "ideal", gain: "1Meg", vmin: "-15", vmax: "15" });
+    expect(parseOpampAvol(`Gain=${values.gain}`)).toBe(DEFAULT_OPAMP_AVOL);
+    expect(parseOpampOutputLimits(`Vmin=${values.vmin} Vmax=${values.vmax}`)).toEqual({
+      min: DEFAULT_OPAMP_VMIN,
+      max: DEFAULT_OPAMP_VMAX,
+    });
+    expect(fields.find((field) => field.key === "gain")).toMatchObject({ min: 1, max: 1e12 });
+    expect(fields.find((field) => field.key === "vmin")).toMatchObject({ min: -1e3, max: 1e3 });
+    expect(fields.find((field) => field.key === "vmax")).toMatchObject({ min: -1e3, max: 1e3 });
   });
 
   it("rejects invalid enum, numeric, and cross-field drafts before the document layer", () => {
