@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useRef } from "react";
 import { Activity, CircuitBoard, MessageSquare, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -78,7 +79,39 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
           ? "Error"
           : runState === "stopped"
             ? "Stopped"
-            : "";
+    : "";
+
+  const handleTitlebarMouseDown = (event: ReactMouseEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, input, select, textarea, [role=button], .mode-toggle")) return;
+
+    const now = Date.now();
+    const previous = lastTitlebarMouseDownRef.current;
+    const isDoubleClick = event.detail >= 2 || (previous !== null && now - previous <= 500);
+    if (isDoubleClick) {
+      lastTitlebarMouseDownRef.current = null;
+      suppressNativeDoubleClickRef.current = true;
+      void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
+    } else {
+      lastTitlebarMouseDownRef.current = now;
+      event.preventDefault();
+      event.stopPropagation();
+      void startCurrentWindowDragging();
+    }
+  };
+
+  const handleTitlebarDoubleClickCapture = (event: ReactMouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, input, select, textarea, [role=button], .mode-toggle")) return;
+    if (suppressNativeDoubleClickRef.current) {
+      suppressNativeDoubleClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
+  };
 
   return (
     /*
@@ -91,7 +124,11 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
      * It stays a sibling of the controls: only this surface calls the native
      * window API, so Run and the mode toggle remain ordinary controls.
      */
-    <header className="toolbar">
+    <header
+      className="toolbar"
+      onMouseDownCapture={handleTitlebarMouseDown}
+      onDoubleClickCapture={handleTitlebarDoubleClickCapture}
+    >
       {/*
        * Keep this element an empty surface so Run, mode, Bode, and Settings
        * remain ordinary interactive controls (including the traffic-light
@@ -101,31 +138,6 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
         className="titlebar-drag-region"
         aria-hidden="true"
         title="Double-click to maximize or restore"
-        onMouseDown={(event) => {
-          if (event.button !== 0) return;
-          const now = Date.now();
-          const previous = lastTitlebarMouseDownRef.current;
-          const isDoubleClick = event.detail >= 2 || (previous !== null && now - previous <= 500);
-          if (isDoubleClick) {
-            lastTitlebarMouseDownRef.current = null;
-            suppressNativeDoubleClickRef.current = true;
-            void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
-          } else {
-            lastTitlebarMouseDownRef.current = now;
-            event.preventDefault();
-            event.stopPropagation();
-            void startCurrentWindowDragging();
-          }
-        }}
-        onDoubleClick={(event) => {
-          if (suppressNativeDoubleClickRef.current) {
-            suppressNativeDoubleClickRef.current = false;
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-          }
-          void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
-        }}
       />
       <div className="titlebar-left" data-tauri-drag-region="false">
         <div className="brand">
