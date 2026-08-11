@@ -10,6 +10,45 @@ import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { installDevBridge } from "./lib/devBridge";
 import { initThemeMode } from "./lib/theme";
 import { hydrateInstalledLtspiceStandardModels } from "./store/useRuntimeModelLibraries";
+import type { Submenu } from "@tauri-apps/api/menu";
+
+const SETTINGS_MENU_EVENT = "tau:open-settings";
+
+async function installNativeApplicationMenu() {
+  try {
+    const { isTauri } = await import("@tauri-apps/api/core");
+    if (!isTauri() || !navigator.userAgent.includes("Mac")) return;
+
+    const { Menu, PredefinedMenuItem } = await import("@tauri-apps/api/menu");
+    const menu = await Menu.default();
+    let appMenu: Submenu | undefined;
+    let firstSubmenu: Submenu | undefined;
+    for (const item of await menu.items()) {
+      if (item.kind !== "Submenu") continue;
+      const submenu = item as Submenu;
+      firstSubmenu ??= submenu;
+      if ((await item.text()) === "Tau") appMenu = submenu;
+    }
+    // Menu.default() puts the app submenu first on macOS; use that position
+    // as a localized/product-name-safe fallback when its title is not Tau.
+    appMenu ??= firstSubmenu;
+    if (!appMenu) return;
+
+    await appMenu.append([
+      await PredefinedMenuItem.new({ item: "Separator" }),
+      {
+        id: "tau-settings",
+        text: "Settings",
+        accelerator: "CmdOrCtrl+,",
+        action: () => window.dispatchEvent(new Event(SETTINGS_MENU_EVENT)),
+      },
+    ]);
+    await menu.setAsAppMenu();
+  } catch {
+    // Browser builds and older native shells do not expose the menu plugin;
+    // the toolbar and command-palette routes remain available there.
+  }
+}
 
 // Dev-only. Tree-shaken out of production builds by the constant condition, so
 // nothing here reaches a shipped bundle.
@@ -46,6 +85,7 @@ async function boot() {
   // exact user-installed databases before the first runnable UI appears so a
   // fast click cannot race into a generic-model refusal.
   await hydrateInstalledLtspiceStandardModels();
+  await installNativeApplicationMenu();
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
       <AppErrorBoundary>

@@ -52,4 +52,15 @@ describe("CommandPalette ui/command", () => {
     expect(startPlacing).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("keeps Settings reachable from the command palette", async () => {
+    const onClose = vi.fn();
+    const onOpenSettings = vi.fn();
+    render(<CommandPalette open onClose={onClose} onOpenSettings={onOpenSettings} />);
+    const input = screen.getByPlaceholderText(/Search parts/);
+    fireEvent.change(input, { target: { value: "settings" } });
+    fireEvent.click(await screen.findByText("Settings"));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

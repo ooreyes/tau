@@ -877,6 +877,12 @@ function App() {
     setSettingsOpen(true);
   }, []);
 
+  useEffect(() => {
+    const openFromNativeMenu = () => openSettingsSurface();
+    window.addEventListener("tau:open-settings", openFromNativeMenu);
+    return () => window.removeEventListener("tau:open-settings", openFromNativeMenu);
+  }, [openSettingsSurface]);
+
   /**
    * Whether the live scope is describing the circuit that is open now.
    *
@@ -3970,6 +3976,7 @@ function App() {
             open={paletteOpen}
             onClose={() => setPaletteOpen(false)}
             onOpenModelLibraries={() => setModelLibrariesOpen(true)}
+            onOpenSettings={openSettingsSurface}
           />
         )}
       </Suspense>
