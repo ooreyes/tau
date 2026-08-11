@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { GripHorizontal, X } from "lucide-react";
 import { placeInspector, type Placement } from "./anchorPlacement";
 import type { Rect } from "../overlayPlacement";
 
@@ -55,6 +55,25 @@ export interface SelectionInspectorProps {
 
 const DEFAULT_SIZE = { width: 300, height: 340 };
 
+interface PanelPosition {
+  x: number;
+  y: number;
+}
+
+/** Keep a user-placed panel reachable when the shell or drawer resizes. */
+function clampPanelPosition(
+  position: PanelPosition,
+  size: { width: number; height: number },
+  viewport: Rect,
+): PanelPosition {
+  const maxX = Math.max(viewport.minX, viewport.maxX - size.width);
+  const maxY = Math.max(viewport.minY, viewport.maxY - size.height);
+  return {
+    x: Math.max(viewport.minX, Math.min(maxX, position.x)),
+    y: Math.max(viewport.minY, Math.min(maxY, position.y)),
+  };
+}
+
 export function SelectionInspector({
   anchor,
   viewport,
@@ -66,6 +85,14 @@ export function SelectionInspector({
 }: SelectionInspectorProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState(DEFAULT_SIZE);
+  const [dragPosition, setDragPosition] = useState<PanelPosition | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    origin: PanelPosition;
+  } | null>(null);
   // The anchor the current placement was computed against. Between recomputes
   // the panel translates by the difference, so it rides along with the part
   // instead of hanging in space while the canvas pans under it.
@@ -128,6 +155,9 @@ export function SelectionInspector({
     if (!anchor) {
       setSettled(null);
       placedAnchorRef.current = null;
+      setDragPosition(null);
+      setDragging(false);
+      dragRef.current = null;
       return;
     }
     const place = () => {
@@ -146,11 +176,18 @@ export function SelectionInspector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchorKey, compute]);
 
+  // A different inspection gets a fresh placement. Closing and reopening the
+  // same inspection also starts from the computed side of the selected part,
+  // while a resize clamps an existing drag below without losing it.
+  useEffect(() => {
+    setDragPosition(null);
+  }, [title]);
+
   // Rule 3. Keyed on the signal, not on the selection, which is rule 2.
   useEffect(() => {
     if (focusSignal === 0) return;
     const first = panelRef.current?.querySelector<HTMLElement>(
-      "input, select, textarea, button:not(.selection-inspector-close), [tabindex]:not([tabindex='-1'])",
+      "input, select, textarea, button:not(.selection-inspector-close), [tabindex]:not([tabindex='-1']):not(.selection-inspector-move)",
     );
     first?.focus();
   }, [focusSignal]);
@@ -180,6 +217,86 @@ export function SelectionInspector({
   if (!anchor || !settled) return null;
   const { placement } = settled;
   const leader = placement.leader;
+  const automaticPosition = {
+    x: placement.x + offset.x,
+    y: placement.y + offset.y,
+  };
+  const position = clampPanelPosition(
+    dragPosition ?? automaticPosition,
+    size,
+    viewport,
+  );
+  const dragDelta = {
+    x: position.x - automaticPosition.x,
+    y: position.y - automaticPosition.y,
+  };
+
+  const moveBy = (dx: number, dy: number) => {
+    const next = clampPanelPosition(
+      { x: position.x + dx, y: position.y + dy },
+      size,
+      viewport,
+    );
+    setDragPosition(next);
+  };
+
+  const onHeaderPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const target = event.target as Element | null;
+    if (target?.closest("button, input, select, textarea, [data-radix-collection-item]")) return;
+    event.preventDefault();
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: position,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDragging(true);
+  };
+
+  const onHeaderPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    setDragPosition(clampPanelPosition(
+      {
+        x: drag.origin.x + event.clientX - drag.startX,
+        y: drag.origin.y + event.clientY - drag.startY,
+      },
+      size,
+      viewport,
+    ));
+  };
+
+  const onHeaderPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    dragRef.current = null;
+    setDragging(false);
+  };
+
+  const onMoveHandleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
+    const step = event.shiftKey ? 64 : 16;
+    switch (event.key) {
+      case "ArrowLeft":
+        moveBy(-step, 0);
+        break;
+      case "ArrowRight":
+        moveBy(step, 0);
+        break;
+      case "ArrowUp":
+        moveBy(0, -step);
+        break;
+      case "ArrowDown":
+        moveBy(0, step);
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   return (
     <>
@@ -189,8 +306,8 @@ export function SelectionInspector({
         // it does not decorate.
         <svg className="selection-inspector-leader" aria-hidden="true">
           <line
-            x1={leader.fromX + offset.x}
-            y1={leader.fromY + offset.y}
+            x1={leader.fromX + offset.x + dragDelta.x}
+            y1={leader.fromY + offset.y + dragDelta.y}
             x2={leader.toX + offset.x}
             y2={leader.toY + offset.y}
           />
@@ -218,9 +335,9 @@ export function SelectionInspector({
          * know how much of the window the results drawer is covering.
          */
         style={{
-          left: placement.x + offset.x,
-          top: placement.y + offset.y,
-          maxHeight: Math.max(160, viewport.maxY - (placement.y + offset.y)),
+          left: position.x,
+          top: position.y,
+          maxHeight: Math.max(160, viewport.maxY - position.y),
         }}
         // `dialog` without `aria-modal`: it names a surface a screen reader can
         // jump to, without the "everything else is inert" claim that would be
@@ -228,8 +345,27 @@ export function SelectionInspector({
         role="dialog"
         aria-label={title}
       >
-        <div className="selection-inspector-head">
+        <div
+          className="selection-inspector-head"
+          data-dragging={dragging || undefined}
+          onPointerDown={onHeaderPointerDown}
+          onPointerMove={onHeaderPointerMove}
+          onPointerUp={onHeaderPointerUp}
+          onPointerCancel={onHeaderPointerUp}
+          style={{ touchAction: "none", userSelect: "none", cursor: dragging ? "grabbing" : "grab" }}
+        >
           <span className="selection-inspector-title">{title}</span>
+          <span
+            className="selection-inspector-move"
+            role="button"
+            tabIndex={0}
+            aria-label={`Move ${title}`}
+            aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown"
+            title="Drag to move; use arrow keys to reposition"
+            onKeyDown={onMoveHandleKeyDown}
+          >
+            <GripHorizontal size={12} strokeWidth={1.7} aria-hidden="true" />
+          </span>
           <button
             type="button"
             className="selection-inspector-close"

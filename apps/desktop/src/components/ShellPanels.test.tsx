@@ -273,6 +273,32 @@ describe("ComponentInspector - imported op-amp parameters", () => {
       ltExtraAttrs: { extras: { Value2: "MY_OP07" } },
     });
   });
+
+  it("keeps an imported vendor identity and model read-only in the default inspector", () => {
+    const selected = {
+      id: "u-vendor-default",
+      kind: "opamp" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "OP07 LT1001",
+      label: "U1",
+      ltSymbolType: "Opamps\\OP07",
+      ltExtraAttrs: {
+        baseValue: "OP07",
+        derivedValue: "OP07 LT1001",
+        extras: { Value2: "LT1001" },
+      },
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    expect(screen.getByText("OP07")).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Exact model" })).toBeNull();
+    expect(screen.getByText("LT1001")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Op-amp model" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Open-loop gain" })).toBeNull();
+  });
 });
 
 describe("ComponentInspector - semiconductor model chooser", () => {
@@ -633,8 +659,12 @@ describe("ComponentInspector - controlled sources", () => {
     for (const component of [source("cccs", "10", "F1"), source("ccvs", "1k", "H1")]) {
       cleanup();
       show(component);
-      expect(screen.getByText(/cannot watch an existing source such as V1/)).toBeTruthy();
-      expect(screen.getByText(/Wire C\+ and C- in series with the branch whose current you want/)).toBeTruthy();
+      if (component.kind === "cccs") {
+        expect(screen.getByText(/Tau supplies the current-sense pair/)).toBeTruthy();
+        expect(screen.getByText(/wire C\+ and C- in series with the branch/)).toBeTruthy();
+      } else {
+        expect(screen.getByText(/Output voltage is the transresistance/)).toBeTruthy();
+      }
     }
   });
 
@@ -686,11 +716,15 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
   it("states the LED's own drop and the zener's marked breakdown", () => {
     show(junction("led", "LED"));
     expect(screen.getByRole("status").textContent).toContain("Generic LED · 2 V forward");
+    expect(screen.getByRole("combobox", { name: "Color" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Forward voltage" })).toBeTruthy();
 
     cleanup();
     show(junction("zener", "5V1"));
     expect(screen.getByRole("status").textContent)
       .toContain("Generic Zener · 0.7 V forward · 5.1 V reverse.");
+    expect(screen.getByRole("textbox", { name: "Breakdown voltage" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Forward voltage" })).toBeTruthy();
 
     // A marking that names no library part is still a part the deck runs, so
     // it must not be reported as a missing model.
@@ -728,6 +762,20 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
     expect(status).toContain("Imported exact model · identity and provenance are read-only");
     expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Toggle advanced settings" })).toBeNull();
+  });
+
+  it("shows imported exact provenance without exposing generic Zener knobs", () => {
+    show(junction("zener", "5V1", {
+      ltSymbolType: "Zener",
+      ltModelName: "BZX84C5V1",
+      ltModelFile: "vendor.lib",
+    }));
+
+    expect(screen.getByRole("status").textContent)
+      .toContain("Imported exact model · identity and provenance are read-only (BZX84C5V1 from vendor.lib).");
+    expect(screen.queryByRole("textbox", { name: "Breakdown voltage" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Forward voltage" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
   });
 
   it("defers to a model this schematic defines rather than claiming ideal", () => {
@@ -1433,12 +1481,12 @@ describe("ComponentInspector - titled property groups", () => {
     expect(screen.getByRole("combobox", { name: "Length (L) SI prefix" }).textContent).toContain("nm");
   });
 
-  it("reads an unset label as none rather than as an empty box", () => {
+  it("reads an unset component ID as none rather than as an empty box", () => {
     show(part("resistor", "r-1", "1k", ""));
 
-    const refdes = screen.getByRole("textbox", { name: "Reference designator" }) as HTMLInputElement;
-    expect(refdes.value).toBe("");
-    expect(refdes.getAttribute("placeholder")).toBe("none");
+    const componentId = screen.getByRole("textbox", { name: "Component ID" }) as HTMLInputElement;
+    expect(componentId.value).toBe("");
+    expect(componentId.getAttribute("placeholder")).toBe("none");
   });
 
   it("still serves a kind's fields instead of one raw Value box", () => {
@@ -1446,6 +1494,54 @@ describe("ComponentInspector - titled property groups", () => {
     expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
     expect((screen.getByRole("textbox", { name: "Voltage gain" }) as HTMLInputElement).value).toBe("2");
     expect(screen.getByRole("combobox", { name: "Voltage gain SI prefix" }).textContent).toContain("V/V");
+  });
+
+  it("presents generic op-amp gain and output rails in shared rows", () => {
+    show(part("opamp", "u-1", "ideal", "U1"));
+
+    expect(screen.getByRole("status").textContent)
+      .toContain("Generic Tau op-amp · validated gain and output limits.");
+    expect((screen.getByRole("textbox", { name: "Open-loop gain" }) as HTMLInputElement).value).toBe("1");
+    expect(screen.getByRole("combobox", { name: "Open-loop gain SI prefix" }).textContent).toContain("MegV/V");
+    expect((screen.getByRole("textbox", { name: "Minimum output" }) as HTMLInputElement).value).toBe("-15");
+    expect((screen.getByRole("textbox", { name: "Maximum output" }) as HTMLInputElement).value).toBe("15");
+    expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Attach Model Library" })).toBeNull();
+
+    const rows = [...document.querySelectorAll(".property-field")];
+    expect(rows.length).toBeGreaterThanOrEqual(4);
+    for (const row of rows) {
+      expect(row.querySelector(":scope > span:first-child")).toBeTruthy();
+    }
+  });
+
+  it("shows a rail-order error without mutating an invalid generic op-amp draft", () => {
+    show(part("opamp", "u-1", "ideal", "U1"));
+    const minimum = screen.getByRole("textbox", { name: "Minimum output" }) as HTMLInputElement;
+
+    fireEvent.change(minimum, { target: { value: "20" } });
+    fireEvent.blur(minimum);
+
+    expect(useSchematic.getState().components[0].value).toBe("ideal");
+    expect(minimum.getAttribute("aria-invalid")).toBe("true");
+    const describedBy = minimum.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent)
+      .toContain("Minimum output must be below maximum output.");
+  });
+
+  it("does not expose generic op-amp knobs for an imported behavioral identity", () => {
+    const imported = part("opamp", "u-imported", "Avol=1Meg GBW=10Gig", "U1");
+    const selected = { ...imported, ltSymbolType: "Opamps\\UniversalOpamp2" };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    expect(screen.getByRole("status").textContent)
+      .toContain("Imported behavioral op-amp · exact identity and provenance are read-only.");
+    expect(screen.queryByRole("textbox", { name: "Open-loop gain" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Minimum output" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Maximum output" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Op-amp model" })).toBeNull();
   });
 });
 

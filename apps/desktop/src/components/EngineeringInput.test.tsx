@@ -136,6 +136,30 @@ describe("EngineeringInput", () => {
     expect(screen.getByRole("alert").textContent).toContain("at or above");
   });
 
+  it("keeps validation on its own row beside a shared property field", () => {
+    render(
+      <label className="property-field">
+        <span>Dead time</span>
+        <EngineeringInput
+          label="Dead time"
+          unit="s"
+          value="200n"
+          min={1e-12}
+          max={1}
+          onValueChange={vi.fn()}
+        />
+      </label>,
+    );
+    const input = screen.getByLabelText("Dead time") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "0" } });
+
+    const error = screen.getByRole("alert");
+    expect(error.classList.contains("property-validation-error")).toBe(true);
+    expect(error.parentElement?.classList.contains("property-field")).toBe(true);
+    expect(error.previousElementSibling?.classList.contains("eng-input")).toBe(true);
+    expect(input.getAttribute("aria-describedby")).toBe(error.id);
+  });
+
   it("uses a bounded unitless field without an irrelevant SI-prefix chooser", () => {
     const onValueChange = vi.fn();
     render(

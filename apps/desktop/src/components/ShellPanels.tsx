@@ -1141,7 +1141,11 @@ function junctionModelSummary(
     return `Generic diode · ${ideal.forwardVolts} V forward.`;
   }
   if (hasLtspiceProvenance(component)) {
-    return "Imported exact model · identity and provenance are read-only; the authored device is preserved.";
+    const identity = component.ltModelName?.trim()
+      || component.value.trim().split(/\s+/)[0]
+      || "authored model";
+    const source = component.ltModelFile?.trim() ? ` from ${component.ltModelFile.trim()}` : "";
+    return `Imported exact model · identity and provenance are read-only (${identity}${source}).`;
   }
   if (component.kind === "diode" && /(?:^|[\s,;])(?:is|n)\s*=/i.test(` ${component.value}`)) {
     return "Generic diode · validated Shockley parameters.";
@@ -1168,6 +1172,35 @@ function subcircuitPortSides(
 }
 
 /**
+ * Keep routine inspector help to one scan-friendly line. The full engineering
+ * explanation remains available as a tooltip and accessible name, while the
+ * visible grid does not turn a single property into a paragraph-sized card.
+ */
+function compactInspectorHint(text: string): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.startsWith("Q outputs a sine")) {
+    return "Q outputs a sine of ±1 V; FM sets frequency, AM scales the amplitude, and COM is the reference.";
+  }
+  if (normalized.includes("cannot watch an existing source")
+    && normalized.includes("Output current is the gain")) {
+    return "Tau supplies the current-sense pair; wire C+ and C- in series with the branch.";
+  }
+  const firstSentence = normalized.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim();
+  if (firstSentence && firstSentence.length <= 150) return firstSentence;
+  if (firstSentence) return `${firstSentence.slice(0, 147).trimEnd()}…`;
+  if (normalized.length <= 150) return normalized;
+  return `${normalized.slice(0, 147).trimEnd()}…`;
+}
+
+function InspectorHint({ text }: { text: string }) {
+  return (
+    <p className="property-hint" title={text} aria-label={text}>
+      {compactInspectorHint(text)}
+    </p>
+  );
+}
+
+/**
  * A number the schema puts bounds on.
  *
  * The controlled input this replaces committed every keystroke and never
@@ -1187,12 +1220,14 @@ function BoundedParamInput({
   onBeginChange,
   onFocusField,
   onCommit,
+  externalValidationMessage,
 }: {
   field: ParamField;
   value: string;
   onBeginChange: () => void;
   onFocusField: () => void;
   onCommit: (next: string) => void;
+  externalValidationMessage?: string | null;
 }) {
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
@@ -1212,7 +1247,7 @@ function BoundedParamInput({
     onCommit(next);
   };
 
-  const error = paramValidationMessage(field, draft);
+  const error = paramValidationMessage(field, draft) ?? externalValidationMessage ?? null;
 
   return (
     <>
@@ -1330,12 +1365,14 @@ function ParamValueControl({
   onBeginChange,
   onFocusField,
   onValueChange,
+  externalValidationMessage,
 }: {
   field: ParamField;
   value: string;
   onBeginChange: () => void;
   onFocusField: () => void;
   onValueChange: (next: string) => void;
+  externalValidationMessage?: string | null;
 }) {
   // Bounds, unit and the number itself, all in the unit the reader sees.
   const shown = displayParamField(field);
@@ -1361,6 +1398,7 @@ function ParamValueControl({
         onBeginChange={onBeginChange}
         onFocusField={onFocusField}
         onCommit={commit}
+        externalValidationMessage={externalValidationMessage}
       />
       <span className="property-unit" aria-hidden="true">{shown.unit}</span>
     </span>
@@ -1375,6 +1413,7 @@ function ParamValueControl({
       max={shown.max}
       onBeginChange={onBeginChange}
       onValueChange={commit}
+      externalValidationMessage={externalValidationMessage}
     />
   ) : isBoundedParamField(shown) || field.kind === "number" ? (
     <BoundedParamInput
@@ -1383,6 +1422,7 @@ function ParamValueControl({
       onBeginChange={onBeginChange}
       onFocusField={onFocusField}
       onCommit={commit}
+      externalValidationMessage={externalValidationMessage}
     />
   ) : (
     // Unbounded text: nothing to clamp, so it keeps committing as you type.
@@ -1517,6 +1557,7 @@ function ComponentPropertyGroup({
   // beside it instead.
   const idealJunction = selected ? placedIdealJunction(selected, directives) : null;
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [crossFieldError, setCrossFieldError] = useState<string | null>(null);
 
   const beginParamChange = (key: string) => {
     if (!selected) return;
@@ -1533,7 +1574,12 @@ function ComponentPropertyGroup({
     const values = { ...decodeParams(selected.kind, base), [key]: value };
     const field = fields.find((candidate) => candidate.key === key);
     if (field && paramValidationMessage(field, value)) return;
-    if (paramValuesValidationMessage(selected.kind, values)) return;
+    const crossError = paramValuesValidationMessage(selected.kind, values);
+    if (crossError) {
+      setCrossFieldError(crossError);
+      return;
+    }
+    setCrossFieldError(null);
     setValue(selected.id, encodeParams(selected.kind, values));
   };
 
@@ -1647,7 +1693,9 @@ function ComponentPropertyGroup({
       </Button>
     ) : null;
 
-  const genericOpampFields = selected?.kind === "opamp" && !opamp?.imported
+  const genericOpampFields = selected?.kind === "opamp"
+    && opamp?.mode === "behavioral"
+    && !opamp.imported
     ? visibleFields.filter((field) => field.key !== "model").map((field) => (
       <label key={field.key} className="property-field">
         <span>{field.label}</span>
@@ -1655,7 +1703,13 @@ function ComponentPropertyGroup({
           field={field}
           value={field.value}
           onBeginChange={() => beginParamChange(field.key)}
-          onFocusField={() => { editKeyRef.current = null; }}
+          onFocusField={() => {
+            editKeyRef.current = null;
+            setCrossFieldError(null);
+          }}
+          externalValidationMessage={
+            field.key === "vmin" || field.key === "vmax" ? crossFieldError : null
+          }
           onValueChange={(value) => updateParam(field.key, value)}
         />
       </label>
@@ -1741,11 +1795,11 @@ function ComponentPropertyGroup({
             </>
           ) : (
             <label className="property-field">
-              <span>Refdes</span>
+              <span>Component ID</span>
               <input
                 className="mono-num"
                 value={selected.label}
-                aria-label="Reference designator"
+                aria-label="Component ID"
                 // An empty box says nothing; "none" says the part has no
                 // designator yet, which is a different and true statement.
                 placeholder="none"
@@ -1884,7 +1938,7 @@ function ComponentPropertyGroup({
                         />
                       )}
                     </label>
-                    {parameter.description && <p className="property-hint">{parameter.description}</p>}
+                    {parameter.description && <InspectorHint text={parameter.description} />}
                   </div>
                 );
               })}
@@ -2056,6 +2110,12 @@ function ComponentPropertyGroup({
                       <span>Exact identity</span>
                       <span className="mono-num property-readonly">{opamp.partName}</span>
                     </div>
+                    {opamp.modelName !== opamp.partName && (
+                      <div className="property-field">
+                        <span>Exact model</span>
+                        <span className="mono-num property-readonly" aria-label="Exact model">{opamp.modelName}</span>
+                      </div>
+                    )}
                     <p className="property-hint" role="status">
                       {opampStatus?.kind === "ready"
                         ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "Model Libraries" : "this document"}`
@@ -2065,7 +2125,9 @@ function ComponentPropertyGroup({
                     </p>
                   </>
                 ) : opamp?.imported ? (
-                  <p className="property-hint" role="status">Imported behavioral op-amp · exact identity and provenance are read-only.</p>
+                  <p className="property-hint" role="status">
+                    Imported behavioral op-amp · exact identity and provenance are read-only. Identity: {opamp.partName}.
+                  </p>
                 ) : (
                   <>
                     <p className="property-hint" role="status">Generic Tau op-amp · validated gain and output limits.</p>
@@ -2078,7 +2140,7 @@ function ComponentPropertyGroup({
             <>
               {/* A part whose meaning lives in pins the panel has no field for
                   (the modulator's FM, AM and COM) says so above its numbers. */}
-              {partSummary && <p className="property-hint">{partSummary}</p>}
+              {partSummary && <InspectorHint text={partSummary} />}
               {visibleFields.map((field) => (
                 <Fragment key={field.key}>
                   <label className="property-field">
@@ -2091,7 +2153,7 @@ function ComponentPropertyGroup({
                       onValueChange={(value) => updateParam(field.key, value)}
                     />
                   </label>
-                  {field.description && <p className="property-hint">{field.description}</p>}
+                  {field.description && <InspectorHint text={field.description} />}
                 </Fragment>
               ))}
               {visibleFields.length === 0 && entry && (

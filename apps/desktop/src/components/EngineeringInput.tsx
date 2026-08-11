@@ -26,6 +26,8 @@ interface EngineeringInputProps {
   min?: number;
   max?: number;
   minExclusive?: boolean;
+  /** A cross-field error owned by the inspector (for example rail ordering). */
+  externalValidationMessage?: string | null;
   /**
    * Optional command fields (e.g. scope "At value") may sit empty at rest.
    * When true, an empty mantissa is not marked invalid — incomplete drafts
@@ -60,6 +62,7 @@ export function EngineeringInput({
   max,
   minExclusive = false,
   allowEmpty = false,
+  externalValidationMessage = null,
 }: EngineeringInputProps) {
   const [parts, setParts] = useState(() => splitEngineeringValue(value, unit));
   const [prefixOpen, setPrefixOpen] = useState(false);
@@ -81,7 +84,7 @@ export function EngineeringInput({
   };
   const emptyAllowed = allowEmpty && parts.mantissa.trim() === "";
   const errorId = useId();
-  const validationMessage = (() => {
+  const fieldValidationMessage = (() => {
     if (emptyAllowed) return null;
     if (!isEngineeringMantissa(parts.mantissa)) return `Enter a finite ${unit || "number"}.`;
     let numeric: number;
@@ -97,6 +100,7 @@ export function EngineeringInput({
     if (max !== undefined && numeric > max) return `Enter a value at or below ${max}.`;
     return null;
   })();
+  const validationMessage = externalValidationMessage ?? fieldValidationMessage;
   const valid = validationMessage === null;
   // `field-sizing: content` is not reliable in the macOS WebView. Give WebKit
   // an explicit character width so the complete mantissa remains visible.
@@ -137,62 +141,64 @@ export function EngineeringInput({
   };
 
   return (
-    <div className="eng-input" onFocus={onFocus} onBlur={onBlur}>
-      <input
-        className="mono-num"
-        aria-label={label}
-        value={parts.mantissa}
-        size={inputSize}
-        style={{ width: `${inputSize}ch` }}
-        inputMode="decimal"
-        spellCheck={false}
-        aria-invalid={!valid}
-        aria-describedby={validationMessage ? errorId : undefined}
-        onChange={(event) => {
-          if (!isEngineeringMantissaDraft(event.currentTarget.value)) return;
-          const next = { ...parts, mantissa: event.currentTarget.value };
-          setParts(next);
-          commit(next);
-        }}
+    <>
+      <div className="eng-input" onFocus={onFocus} onBlur={onBlur}>
+        <input
+          className="mono-num"
+          aria-label={label}
+          value={parts.mantissa}
+          size={inputSize}
+          style={{ width: `${inputSize}ch` }}
+          inputMode="decimal"
+          spellCheck={false}
+          aria-invalid={!valid}
+          aria-describedby={validationMessage ? errorId : undefined}
+          onChange={(event) => {
+            if (!isEngineeringMantissaDraft(event.currentTarget.value)) return;
+            const next = { ...parts, mantissa: event.currentTarget.value };
+            setParts(next);
+            commit(next);
+          }}
         />
+        {unit && (
+          <Select
+            value={prefixSelectValue(parts.prefix)}
+            open={prefixOpen}
+            onOpenChange={(open) => {
+              prefixOpenRef.current = open;
+              setPrefixOpen(open);
+            }}
+            onValueChange={(nextValue) => {
+              const next = { ...parts, prefix: prefixFromSelectValue(nextValue) };
+              setParts(next);
+              commit(next);
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              className="eng-input-prefix mono-num"
+              aria-label={`${label} SI prefix`}
+            >
+              <SelectValue placeholder={unit} />
+            </SelectTrigger>
+            <SelectContent>
+              {ENGINEERING_PREFIXES.map((prefix) => (
+                <SelectItem
+                  key={prefix.value || "base"}
+                  value={prefixSelectValue(prefix.value)}
+                >
+                  {prefixOptionLabel(prefix, unit)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
       {validationMessage && (
         <span id={errorId} className="property-validation-error" role="alert">
           {validationMessage}
         </span>
       )}
-      {unit && (
-        <Select
-          value={prefixSelectValue(parts.prefix)}
-          open={prefixOpen}
-          onOpenChange={(open) => {
-            prefixOpenRef.current = open;
-            setPrefixOpen(open);
-          }}
-          onValueChange={(nextValue) => {
-            const next = { ...parts, prefix: prefixFromSelectValue(nextValue) };
-            setParts(next);
-            commit(next);
-          }}
-        >
-          <SelectTrigger
-            size="sm"
-            className="eng-input-prefix mono-num"
-            aria-label={`${label} SI prefix`}
-          >
-            <SelectValue placeholder={unit} />
-          </SelectTrigger>
-          <SelectContent>
-            {ENGINEERING_PREFIXES.map((prefix) => (
-              <SelectItem
-                key={prefix.value || "base"}
-                value={prefixSelectValue(prefix.value)}
-              >
-                {prefixOptionLabel(prefix, unit)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-    </div>
+    </>
   );
 }

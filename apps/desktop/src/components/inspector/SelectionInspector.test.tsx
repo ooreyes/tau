@@ -196,4 +196,68 @@ describe("selection inspector - placement", () => {
     renderInspector({ anchor: null });
     expect(screen.queryByRole("dialog", { name: "R1 properties" })).toBeNull();
   });
+
+  it("moves from the header with a pointer and clamps to a narrow viewport", () => {
+    renderInspector();
+    const inspector = panel();
+    const header = inspector.querySelector(".selection-inspector-head") as HTMLElement;
+    const initialLeft = Number.parseFloat(inspector.style.left);
+
+    fireEvent.pointerDown(header, { button: 0, pointerId: 7, clientX: 500, clientY: 320 });
+    expect(header.getAttribute("data-dragging")).toBe("true");
+    fireEvent.pointerMove(header, { pointerId: 7, clientX: 620, clientY: 380 });
+    expect(Number.parseFloat(inspector.style.left)).toBeGreaterThan(initialLeft);
+    fireEvent.pointerUp(header, { pointerId: 7, clientX: 620, clientY: 380 });
+    expect(header.getAttribute("data-dragging")).toBeNull();
+
+    fireEvent.pointerDown(header, { button: 0, pointerId: 8, clientX: 620, clientY: 380 });
+    fireEvent.pointerMove(header, { pointerId: 8, clientX: -10000, clientY: -10000 });
+    expect(Number.parseFloat(inspector.style.left)).toBeGreaterThanOrEqual(VIEWPORT.minX);
+    expect(Number.parseFloat(inspector.style.top)).toBeGreaterThanOrEqual(VIEWPORT.minY);
+  });
+
+  it("offers keyboard movement without stealing the first-field focus command", () => {
+    const { rerender } = renderInspector({ focusSignal: 0 });
+    const moveHandle = screen.getByRole("button", { name: "Move R1 properties" });
+    moveHandle.focus();
+    const initialLeft = Number.parseFloat(panel().style.left);
+
+    fireEvent.keyDown(moveHandle, { key: "ArrowLeft" });
+    expect(Number.parseFloat(panel().style.left)).toBe(initialLeft - 16);
+
+    rerender(
+      <SelectionInspector
+        anchor={ANCHOR}
+        viewport={VIEWPORT}
+        title="R1 properties"
+        focusSignal={1}
+        onDismiss={() => {}}
+      >
+        <input aria-label="Value" defaultValue="1k" />
+      </SelectionInspector>,
+    );
+    expect(document.activeElement).toBe(screen.getByLabelText("Value"));
+  });
+
+  it("keeps a moved panel reachable when the viewport shrinks", () => {
+    const { rerender } = renderInspector();
+    const inspector = panel();
+    const header = inspector.querySelector(".selection-inspector-head") as HTMLElement;
+    fireEvent.pointerDown(header, { button: 0, pointerId: 9, clientX: 500, clientY: 320 });
+    fireEvent.pointerMove(header, { pointerId: 9, clientX: 1200, clientY: 700 });
+    fireEvent.pointerUp(header, { pointerId: 9, clientX: 1200, clientY: 700 });
+
+    rerender(
+      <SelectionInspector
+        anchor={ANCHOR}
+        viewport={{ minX: 52, minY: 44, maxX: 600, maxY: 500 }}
+        title="R1 properties"
+        onDismiss={() => {}}
+      >
+        <input aria-label="Value" defaultValue="1k" />
+      </SelectionInspector>,
+    );
+    expect(Number.parseFloat(panel().style.left)).toBeLessThanOrEqual(300);
+    expect(Number.parseFloat(panel().style.top)).toBeLessThanOrEqual(160);
+  });
 });
