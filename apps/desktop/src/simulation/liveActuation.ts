@@ -738,6 +738,14 @@ function runIsGone(failure: LiveFailure): boolean {
   return failure.kind === "not-running" || failure.kind === "worker-died" || failure.kind === "not-available";
 }
 
+/** One control's newest requested position, kept as the request the user made
+ *  rather than as a plan, because what that request means depends on where the
+ *  engine is when it finally goes out. */
+interface PendingActuation {
+  component: ActuableComponent;
+  nextValue: string;
+}
+
 export interface LiveActuationQueueOptions {
   /** The deck this run was started from. Fixed for the life of the queue,
    *  because a plan is only meaningful against the deck it was resolved from. */
@@ -769,12 +777,49 @@ export interface LiveActuationQueueOptions {
  * The irreducible floor is one alter per DEVICE the emitter produced — two for
  * a pot, two for an SPDT. That is a property of the netlist, not of this
  * queue, and {@link LiveActuationPlan.intermediate} is where it is disclosed.
+ *
+ * ## Why the queue has to remember what the engine holds
+ *
+ * Coalescing is what makes a plan RELATIVE rather than absolute, and that is
+ * the whole difficulty. {@link planLiveActuation} reads the component's current
+ * value to decide which legs actually moved, in which order to move them
+ * (grow before shrink, so the track is never momentarily smaller than the real
+ * one), and what the intermediate total really is. Its caller — `App`'s live
+ * actuation diff — supplies the previous SHEET value, which after a coalesced
+ * burst is a position the engine never reached: a drag that overshoots to 0.9
+ * and settles back to 0.6 arrives here as "0.9 → 0.6" while the running deck
+ * still holds 0.5. Planned against 0.9 that is a shrink-then-grow and the
+ * running track dips to 9 kΩ under a 10 kΩ pot — exactly the surge the ordering
+ * exists to prevent — and the disclosure sentence names a total the run never
+ * solves.
+ *
+ * So the queue keeps its own record of the value the engine's copy of each
+ * control holds, and every plan is computed against THAT: seeded from the
+ * caller's before-value on first touch (the sheet and the deck were in step at
+ * Run), advanced when a change is dispatched, put back when the engine refused
+ * it outright, and forgotten when a half-applied change leaves the engine in a
+ * state no single component value names. A plan is also re-derived at dispatch
+ * rather than trusted from `push`, because between the two the engine may have
+ * moved: a position the running circuit already holds then costs no halt at
+ * all, instead of a round trip that changes nothing.
  */
 export class LiveActuationQueue {
   private readonly options: LiveActuationQueueOptions;
-  /** Insertion-ordered by control. Re-setting an existing key keeps its
-   *  original position, so a control does not jump the queue by being dragged. */
-  private readonly pending = new Map<string, LiveActuationPlan>();
+  /**
+   * Insertion-ordered by control, holding the REQUEST rather than a plan.
+   * Re-setting an existing key keeps its original position, so a control does
+   * not jump the queue by being dragged, and storing the request is what lets
+   * the plan be derived against the engine's state at the moment it goes out.
+   */
+  private readonly pending = new Map<string, PendingActuation>();
+  /**
+   * What the engine's copy of each control currently holds, in the component
+   * value vocabulary `planLiveActuation` reads. Absent means "not known", which
+   * is either "never touched on this run" or "a partial change left it
+   * somewhere no value names"; both fall back to the caller's before-value,
+   * which is the only other evidence there is.
+   */
+  private readonly engineValues = new Map<string, string>();
   private pumping = false;
   private waiters: (() => void)[] = [];
   private cycles = 0;
@@ -788,14 +833,40 @@ export class LiveActuationQueue {
    * that has not gone out yet.
    *
    * Returns the planned target synchronously so a refusal is on screen at the
-   * instant of the click, rather than one round trip later.
+   * instant of the click, rather than one round trip later. The plan in that
+   * answer is what would go out right now; the one actually sent is re-derived
+   * at dispatch, and can only differ by the engine having moved in between.
    */
   push(component: ActuableComponent, nextValue: string): LiveActuationTarget {
-    const target = planLiveActuation(this.options.deck, component, nextValue);
-    if (target.kind !== "alter") return target;
-    this.pending.set(target.plan.controlId, target.plan);
+    const target = planLiveActuation(this.options.deck, this.asEngineHoldsIt(component), nextValue);
+    if (target.kind !== "alter") {
+      // A position the ENGINE already holds is not a change, whatever route the
+      // sheet took to get back to it. Anything still queued for this control is
+      // a superseded position that would now drive the running circuit AWAY
+      // from where the user left it, so it goes too.
+      if (target.kind === "unchanged") this.pending.delete(target.controlId);
+      return target;
+    }
+    this.pending.set(target.plan.controlId, { component, nextValue });
     this.schedule();
     return target;
+  }
+
+  /**
+   * The same control, carrying the value the running deck holds for it.
+   *
+   * First touch seeds the record from the caller's own before-value: the deck
+   * was built from the sheet at Run, so at that moment they agree, and there is
+   * no other evidence available. Everything after that comes from what this
+   * queue actually dispatched.
+   */
+  private asEngineHoldsIt(component: ActuableComponent): ActuableComponent {
+    const known = this.engineValues.get(component.id);
+    if (known === undefined) {
+      this.engineValues.set(component.id, component.value);
+      return component;
+    }
+    return { ...component, value: known };
   }
 
   /** Alter commands actually spent — one `bg_halt`/`alter`/`bg_resume` each.
@@ -813,7 +884,9 @@ export class LiveActuationQueue {
     return this.pending.size;
   }
 
-  /** Drop everything still queued — the caller stopped the run, or left. */
+  /** Drop everything still queued — the caller stopped the run, or left. What
+   *  the engine is known to hold survives: dropping a position that was never
+   *  sent does not move the running circuit back. */
   cancelPending(): void {
     this.pending.clear();
   }
@@ -841,8 +914,21 @@ export class LiveActuationQueue {
       for (;;) {
         const next = this.pending.entries().next();
         if (next.done === true) break;
-        const [id, plan] = next.value;
+        const [id, request] = next.value;
         this.pending.delete(id);
+        const held = this.asEngineHoldsIt(request.component);
+        const target = planLiveActuation(this.options.deck, held, request.nextValue);
+        // Only `unchanged` can appear here: a refusal depends on the kind, the
+        // designator, the deck and the NEW value, none of which have moved
+        // since `push` answered `alter`. `unchanged` means the engine reached
+        // this position by another route, and the honest response to that is to
+        // spend nothing.
+        if (target.kind !== "alter") continue;
+        const plan = target.plan;
+        // Recorded before the first alter goes out, so a position pushed while
+        // this cycle is in flight is planned against where this one leaves the
+        // engine rather than against where it started.
+        this.engineValues.set(id, plan.nextValue);
         // Counted around the sender rather than off the outcome, so the number
         // is what the engine was actually asked to do — a refused alter still
         // cost the run a halt and a resume, and must still show up here.
@@ -850,6 +936,7 @@ export class LiveActuationQueue {
           this.cycles += 1;
           return this.options.send(options);
         });
+        this.reconcile(id, outcome, held.value);
         this.options.onOutcome?.(outcome);
         if (this.shouldAbandon(outcome)) {
           this.pending.clear();
@@ -861,6 +948,33 @@ export class LiveActuationQueue {
       const waiters = this.waiters;
       this.waiters = [];
       for (const waiter of waiters) waiter();
+    }
+  }
+
+  /**
+   * Correct the optimistic record against what the engine really took.
+   *
+   * `failed` is the only outcome that applied nothing — `applyLiveActuation`
+   * reports a first-step refusal that way and everything later as `partial` —
+   * so it is the only one that can be put back exactly. A half-applied change
+   * leaves the running circuit at a track total or a throw pair that no single
+   * component value spells, so the record is dropped rather than guessed at:
+   * the next push then falls back to the sheet, and
+   * {@link describeLiveActuationOutcome} has already told the user that the
+   * circuit and the sheet disagree and that a re-run is what resynchronises
+   * them.
+   */
+  private reconcile(id: string, outcome: LiveActuationOutcome, heldBefore: string): void {
+    switch (outcome.kind) {
+      case "applied":
+        return;
+      case "failed":
+        this.engineValues.set(id, heldBefore);
+        return;
+      case "partial":
+      case "ended":
+        this.engineValues.delete(id);
+        return;
     }
   }
 

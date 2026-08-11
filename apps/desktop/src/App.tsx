@@ -162,6 +162,13 @@ import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRu
 import { technicalErrorDetails, userFacingErrorMessage } from "./lib/errorMessage";
 import { useSimulationPreferences } from "./lib/simulationPreferences";
 import { SHELL, SHELL_SEPARATORS, inspectorName } from "./components/shellContract";
+import { RunTransport } from "./components/RunTransport";
+import { LiveScopePane } from "./components/LiveScopePane";
+import { useLiveRun, type LiveChannelRequest } from "./components/useLiveRun";
+import { formatSeconds, type LiveRunStatus } from "./simulation/liveRun";
+import { buildSpiceDeck, unresolvedSubcktMessage } from "./engine/spiceNetlist";
+import { isActuable, isDraggableWiper } from "./schematic/actuation";
+import type { SchematicComponent } from "./schematic/types";
 
 /**
  * Settings is a whole second surface — seven pages, a provider catalog, usage
@@ -256,6 +263,77 @@ async function projectPathExists(path: string): Promise<boolean> {
 // the run feels risky to kick off without warning.
 const LARGE_RUN_WEB_STEPS = 150_000;
 const LARGE_RUN_NATIVE_STEPS = 500_000;
+
+/**
+ * How long a CONTINUOUS run's deck is asked to last, counted in output steps of
+ * the resolution Tau already chose for this circuit.
+ *
+ * A SPICE deck cannot express "run forever": `.tran` needs an end time, and
+ * `live_spice.rs` reports reaching it as `analysis-complete`. So a live run is a
+ * transient over a span chosen to be unreachable in practice rather than a
+ * fictional infinity — a hundred million output points at the circuit's own
+ * timestep, which at the measured ~500k solved points/s is hours of wall clock
+ * for even a trivial RC and far longer for anything real.
+ *
+ * It is not hidden behind that arithmetic. The band under the transport prints
+ * the resulting span, and if a run ever does reach it the stop is reported as
+ * `horizon-reached` ("Finished at …") like any other ending, never as the user
+ * having pressed Stop. Scaling by the circuit's own step rather than fixing a
+ * number of seconds is what keeps the span meaningful across six decades of
+ * circuit timescale.
+ */
+const LIVE_HORIZON_OUTPUT_STEPS = 100_000_000;
+
+/**
+ * Traces a live run plots, capped at the scope's own palette.
+ *
+ * The engine will happily publish every node in the circuit, and a scope with
+ * forty overlaid traces is not a measurement, it is a smear — and each extra
+ * vector costs the solver throughput on every poll. Probed nets are taken
+ * first so the user's own choices survive the cap, and the cap is reported
+ * when it bites rather than silently dropping nets off the plot.
+ */
+const LIVE_MAX_CHANNELS = 6;
+
+/**
+ * `friendlyNetName` from `engine/nativeSpice.ts`, which does not export it.
+ *
+ * Copied rather than approximated because the live scope and the bounded
+ * plotter show the same nets minutes apart: a net labelled `V(R1.C1)` while it
+ * runs and `V(n003)` once it stops teaches the engineer that the two plots are
+ * of different things. Three lines, and the alternative is exporting a private
+ * helper out of the native engine module purely for a caption.
+ */
+function friendlyNetName(net: { id: string; pins: readonly { componentLabel: string }[] }): string {
+  const labels = [...new Set(net.pins.map((pin) => pin.componentLabel).filter(Boolean))];
+  return labels.length > 0 ? labels.slice(0, 2).join(".") : net.id;
+}
+
+/**
+ * Which nets a live run plots, in the order it plots them, and how many it had
+ * to leave out.
+ *
+ * Pure and exported so the ordering is testable without an engine: "the user's
+ * probes come first" is the part that matters, because it is what makes the cap
+ * survivable. `omitted` is returned rather than swallowed — a plot that quietly
+ * shows six of forty nets is the same class of lie as one that hides a wrapped
+ * buffer.
+ */
+export function liveScopeChannelRequests(
+  nets: readonly { id: string; isGround: boolean; pins: readonly { componentLabel: string }[] }[],
+  probedNetIds: ReadonlySet<string>,
+  limit: number = LIVE_MAX_CHANNELS,
+): { channels: LiveChannelRequest[]; omitted: number } {
+  const plottable = nets.filter((net) => !net.isGround);
+  const probed = (net: { id: string }) => probedNetIds.has(net.id.toLowerCase());
+  const ordered = [...plottable.filter(probed), ...plottable.filter((net) => !probed(net))];
+  const channels = ordered.slice(0, Math.max(0, limit)).map((net) => ({
+    vector: `v(${net.id})`,
+    label: `V(${friendlyNetName(net)})`,
+    unit: "V",
+  }));
+  return { channels, omitted: ordered.length - channels.length };
+}
 
 /**
  * The preview solver is the product path in a browser, where paying its worker
@@ -625,6 +703,9 @@ function App() {
   // genuinely different run/document superseded this one" and discards
   // whatever comes back.
   const transientAbortRef = useRef<AbortController | null>(null);
+  /** The options the transient currently on screen was solved with — see
+   *  `executeTransient`. Null when no transient result is standing. */
+  const lastTransientOptionsRef = useRef<AnalysisOptions | null>(null);
   const saveActiveToProjectRef = useRef<(options?: { quietBlocked?: boolean }) => Promise<boolean>>(async () => false);
 
   // Analysis to auto-start after an assistant-confirmed circuit lands, latched
@@ -798,8 +879,39 @@ function App() {
     setSettingsOpen(true);
   }, []);
 
+  /**
+   * Whether the live scope is describing the circuit that is open now.
+   *
+   * The scope is mounted on `liveRun.ring`, which the hook creates once per run
+   * and never clears — right for the run itself (a trace must survive its own
+   * Stop; that is the whole point of looking at it) and wrong across documents.
+   * Nothing in `useLiveRun` knows a document exists, so the answer has to be
+   * kept here: `invalidateAnalysis` is the one call every document-navigation
+   * route already makes to drop the results that no longer describe the sheet,
+   * and a live trace solved from the previous document is exactly such a
+   * result. Without this, opening another circuit and returning to the
+   * simulator showed the old one's waveform under the new one's name.
+   */
+  const [liveScopeShown, setLiveScopeShown] = useState(false);
+
+  /**
+   * Whether the live session is still the most recent thing that ran.
+   *
+   * The transport shares one status line between two mechanisms that know
+   * nothing about each other, and `liveRun.status` keeps its last stop reason
+   * for as long as the hook is mounted. So once a live run had ended, the line
+   * a finished WINDOW run left behind was the LIVE session's — a bounded
+   * transient that completed normally could report "solution diverged" from a
+   * different run minutes earlier. A stale reason attached to the wrong run is
+   * worse than no reason at all, so a bounded run takes the line back.
+   */
+  const [lastRunWasLive, setLastRunWasLive] = useState(false);
+
   const invalidateAnalysis = useCallback((state: "idle" | "stopped" = "idle") => {
     analysisRequestRef.current += 1;
+    setLiveScopeShown(false);
+    setLiveActuationDisclosures({});
+    lastTransientOptionsRef.current = null;
     // Every remembered answer goes with the results it described. See
     // `runInputsRef`: a key surviving its result would let a later tab click
     // skip a run and then find nothing to show.
@@ -816,6 +928,143 @@ function App() {
     setDcStepFamily(null);
     setRunState(state);
   }, []);
+
+  /**
+   * The document's own `.tran` line, verbatim, so the transport can quote the
+   * file rather than paraphrase it ("From this file's .tran 5m").
+   *
+   * `analysesFromDirectives` gives the parsed numbers; this gives the words the
+   * author wrote, which is what a reader recognises when Tau claims to be
+   * reproducing their file.
+   */
+  const authoredTranDirective = useMemo(
+    () => directives.find((line) => /^\s*\.tran\b/i.test(line))?.trim() ?? null,
+    [directives],
+  );
+
+  /**
+   * The running circuit.
+   *
+   * LIVE is the default and an authored `.tran` pre-selects WINDOW at that
+   * duration — that decision is `defaultRunPlan`'s, inside the hook, so this
+   * file cannot develop a second opinion about it.
+   */
+  const liveRun = useLiveRun({
+    authoredTran: authoredAnalysisOptions ?? null,
+    authoredDirective: authoredTranDirective,
+    onNotice: showNotice,
+  });
+  const { start: startLiveSession_, stop: stopLiveRun, actuate: actuateLiveRun } = liveRun;
+  const liveRunning = liveRun.running;
+  /**
+   * The circuit as it stood the last time the running deck was synchronised
+   * with it.
+   *
+   * `Canvas`'s `onActuate` says only "something was operated", not which part,
+   * so the components that changed are worked out by diffing against this. It
+   * is set when a live run starts and advanced every time a change is sent, so
+   * a burst of pointer moves during a wiper drag diffs against what the engine
+   * last received rather than against the start of the run.
+   */
+  const liveComponentsRef = useRef<SchematicComponent[]>([]);
+  /** Read by the actuation effect, which must keep its original dependencies —
+   *  adding `liveRunning` to them would re-fire it on every start and stop. */
+  const liveRunningRef = useRef(liveRunning);
+  liveRunningRef.current = liveRunning;
+  /**
+   * The circuit each operated control briefly left the run solving, keyed by
+   * the control it belongs to.
+   *
+   * Tau's engine bridge alters one instance per command, so a part the emitter
+   * spells as two resistors cannot change atomically: the run resumes between
+   * the two alters and genuinely integrates something that is neither the old
+   * circuit nor the new one — an SPDT with both throws open and COM floating on
+   * two 1e12 Ω resistors, or a pot holding a track total no real part has. That
+   * interval is milliseconds long, it is visible in the trace as a transient
+   * nothing on the sheet accounts for, and `LiveActuationPlan.intermediate`
+   * already writes the sentence for it. Storing it here is what puts that
+   * sentence in front of the reader instead of computing it and dropping it,
+   * which is precisely the silent smoothing-over AGENTS.md forbids.
+   *
+   * Keyed by control rather than kept as a single latest sentence: two controls
+   * can each have left their own artefact in the same trace, and collapsing
+   * them would silently retract the first one.
+   */
+  const [liveActuationDisclosures, setLiveActuationDisclosures] =
+    useState<Readonly<Record<string, string>>>({});
+  /** Only ever called with a genuinely different value, so a burst of wiper
+   *  moves that keeps producing the same sentence does not re-render the band. */
+  const noteActuationDisclosure = useCallback((controlId: string, sentence: string | null) => {
+    setLiveActuationDisclosures((previous) => {
+      const current = previous[controlId] ?? null;
+      if (current === sentence) return previous;
+      const next = { ...previous };
+      if (sentence === null) delete next[controlId];
+      else next[controlId] = sentence;
+      return next;
+    });
+  }, []);
+  /** `stopAnalysis` is declared far below this point but the transport is wired
+   *  above it, and the bounded abort path must stay exactly the one control the
+   *  drawer and the editor toolbar already call — not a second copy of it. */
+  const stopAnalysisRef = useRef<() => void>(() => {});
+
+  /**
+   * Whether this live session has already been told why it is ending.
+   *
+   * `stopLiveRun` records an intent synchronously but `liveRun.running` does
+   * not go false until the halt has round-tripped through the engine, so the
+   * app can ask a second time in the same event and the LAST intent is the one
+   * the user reads. That is how leaving the simulator came to report
+   * "the circuit changed": every document-navigation route calls
+   * `leaveSimulator()` and then replaces the store's components in the same
+   * event, the edit effect below runs while `running` is still true, and its
+   * `circuit-edited` overwrote the true reason.
+   *
+   * First reason wins, because the first thing that happened is why the run
+   * ended — the document did not change and then get abandoned, it was
+   * abandoned and then changed. Reset when a run starts, not when one ends: the
+   * halt is asynchronous and a flag cleared on `running` going false would
+   * reopen the same window it exists to close.
+   */
+  const liveStopReasonClaimedRef = useRef(false);
+  const claimLiveStop = useCallback((intent: Parameters<typeof stopLiveRun>[0]) => {
+    if (liveStopReasonClaimedRef.current) return;
+    liveStopReasonClaimedRef.current = true;
+    stopLiveRun(intent);
+  }, [stopLiveRun]);
+
+  /**
+   * Leave the simulator, stopping whatever it was solving on the way out.
+   *
+   * Every route back to the schematic goes through here: the header's mode
+   * toggle, the activity rail, the tab strip's hide button, opening or closing
+   * a document, applying an assistant circuit, and clearing the sheet. That is
+   * the whole point of centralising it — a route that skipped it would leave a
+   * solver running against a circuit nobody is looking at, and a *partly*
+   * patched set of routes is worse than none, because the one that leaks is
+   * invisible until the machine gets hot.
+   *
+   * Deliberately NOT a `useEffect` on `mode`. An effect runs after the commit
+   * that already painted the schematic, which leaves a window — one poll, up to
+   * 20 ms — in which a live frame can land against a view the user has left.
+   * `stopLiveRun` clears the session's poll timer synchronously, before the
+   * halt is even sent, so calling it inline closes that window entirely.
+   */
+  const leaveSimulator = useCallback(() => {
+    claimLiveStop("left-simulator");
+    setMode("schematic");
+  }, [claimLiveStop]);
+
+  /** The mode toggle in both chrome surfaces. Entering is a plain state change;
+   *  leaving is never one. */
+  const changeMode = useCallback((next: "schematic" | "simulator") => {
+    if (next === "schematic") {
+      leaveSimulator();
+      return;
+    }
+    setMode("simulator");
+  }, [leaveSimulator]);
 
   // Build the param scope (.param/.func) from the document's directives once per
   // change so every analysis resolves {expr}/{param} values the same way. A bad
@@ -906,6 +1155,10 @@ function App() {
    */
   const beginRun = useCallback((kind: RunKind) => {
     setLastRunKind(kind);
+    // Every bounded run in the app opens here, which makes this the one place
+    // that can honestly answer "is the live session still the most recent thing
+    // that ran?" for the transport's status line. See `transportStatus`.
+    setLastRunWasLive(false);
     runInputsRef.current[kind] = `${analysisInputsKeyRef.current}\u0000${analysisSetupKeyRef.current(kind)}`;
   }, []);
   const analysisSetupKeyRef = useRef(analysisSetupKey);
@@ -933,6 +1186,33 @@ function App() {
   }, [lastRunKind, analysis, opAnalysis, acAnalysis, dcAnalysis, tfAnalysis, noiseAnalysis, stepFamily]);
 
   /**
+   * One engine, one lease — said out loud instead of discovered.
+   *
+   * The live session holds ngspice for as long as it runs, and the Rust side
+   * refuses any other analysis while it does ("A live simulation is running.
+   * Stop it before starting another analysis."). Nothing up here knew that.
+   * Selecting a tab in the analysis rail IS the run gesture, so a reader could
+   * ask for `.op` mid-run, get the interlock's sentence back as a FAILED
+   * result, and have it stored as this circuit's operating point — one that
+   * then survived stopping the run, because a stored result keyed to the right
+   * document counts as fresh. An engine refusal is not an answer about a
+   * circuit and must never be filed as one.
+   *
+   * Refused here rather than by disabling the tabs: a control that silently
+   * does nothing teaches nothing, and the fix (stop the run) is one sentence.
+   */
+  const refuseWhileLive = useCallback(
+    (run: () => void | Promise<void>) => () => {
+      if (liveRunningRef.current) {
+        showNotice("A live run is using the engine. Stop it before starting another analysis.");
+        return;
+      }
+      void run();
+    },
+    [showNotice],
+  );
+
+  /**
    * Does this analysis already hold the answer for the circuit as it stands?
    *
    * Consulted by the analysis rail before it re-runs on a tab selection. The
@@ -950,6 +1230,14 @@ function App() {
       : kind === "step" ? stepFamily
       : analysis;
     if (!result) return false;
+    // A run that never reached the solver is not this circuit's answer, so it
+    // cannot let a tab selection skip the run. "Show me this" is entitled to
+    // another attempt when the last one failed — the failure may have been the
+    // engine being busy, a library that has since been installed, or anything
+    // else outside the document signature this key is built from. Pressing Run
+    // was already the only way back, which made a transient refusal permanent
+    // for as long as the sheet went untouched.
+    if (!result.ok) return false;
     const key = `${analysisInputsKey}\u0000${analysisSetupKey(kind)}`;
     return runInputsRef.current[kind] === key;
   }, [
@@ -1052,6 +1340,13 @@ function App() {
 
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
     const requestId = ++analysisRequestRef.current;
+    // The span that is actually on screen, which is not always the document's.
+    // A WINDOW run from the transport solves the bounds the user typed there,
+    // and `rerunAfterActuationRef` re-solves "the run the reader is already
+    // looking at" — so it has to re-solve THIS, not the authored `.tran` that
+    // `effectiveAnalysisOptions` still holds. Cleared by `invalidateAnalysis`,
+    // because after an ordinary edit there is no run on screen to reproduce.
+    lastTransientOptionsRef.current = options;
     const startedAt = Date.now();
     setAnalysisRunning(true);
     beginRun("tran");
@@ -1144,6 +1439,125 @@ function App() {
     await saveActiveToProjectRef.current({ quietBlocked: true });
     confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => { void executeTransient(effectiveAnalysisOptions); });
   }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded]);
+
+  /**
+   * The circuit-time span a continuous run's deck is asked for.
+   *
+   * Derived from the resolution Tau already chose for this circuit rather than
+   * fixed in seconds — see {@link LIVE_HORIZON_OUTPUT_STEPS}. Shown under the
+   * transport in live mode, because a ceiling nobody can see is a ceiling that
+   * will surprise somebody.
+   */
+  const liveHorizonSeconds = useMemo(() => {
+    const outputStep = effectiveAnalysisOptions.stopTime / Math.max(1, effectiveAnalysisOptions.steps);
+    return outputStep * LIVE_HORIZON_OUTPUT_STEPS;
+  }, [effectiveAnalysisOptions]);
+
+  /**
+   * What Run does from the transport, per the mode the user can see.
+   *
+   * WINDOW is the ordinary bounded transient, and it goes through
+   * `executeTransient` rather than `runAnalysis`: `runAnalysis` first awaits a
+   * project save, which is right for the header's Run (a deliberate "run my
+   * file") and wrong for a control the user may press repeatedly while tuning a
+   * span. The pre-run size guard stays, because a bounded run can still be
+   * enormous.
+   *
+   * LIVE energises the circuit through the engine bridge and never touches the
+   * bounded path at all. Outside the desktop app that bridge answers
+   * `not-available`, which is reported as the capability absence it is — Tau
+   * does not quietly run a bounded transient instead and call it live.
+   */
+  const runFromTransport = useCallback(async () => {
+    const plan = liveRun.plan;
+    setResultsRaise((n) => n + 1);
+    // The previous run's explanation stops describing anything the user is
+    // looking at the instant they press Run again — including when the last
+    // attempt was refused and the next one is a bounded run that cannot be.
+    liveRun.clearMessage();
+
+    if (plan.mode === "window") {
+      const options = enforceMinimumTransientSteps(
+        components,
+        {
+          ...effectiveAnalysisOptions,
+          stopTime: plan.stopTime,
+          ...(plan.startTime > 0 ? { startTime: plan.startTime } : {}),
+        },
+        isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS,
+      );
+      confirmLargeRunIfNeeded(options, () => { void executeTransient(options); });
+      return;
+    }
+
+    let deck: ReturnType<typeof buildSpiceDeck>;
+    try {
+      assertCurrentSimulationIntegrity();
+      deck = buildSpiceDeck(
+        {
+          components,
+          wires,
+          netLabels,
+          params,
+          directives,
+          ascForeignSymbols,
+          userModelLibraries: userModelLibraryTexts,
+          userModelLibraryNames,
+        },
+        { kind: "tran", stopTime: liveHorizonSeconds, steps: LIVE_HORIZON_OUTPUT_STEPS },
+      );
+    } catch (error) {
+      showNotice(userFacingErrorMessage(error, "Tau could not build a deck for this circuit."));
+      return;
+    }
+    // Same fail-closed rule the bounded native path uses: a subcircuit with no
+    // resolvable definition is refused here, by name, instead of being handed
+    // to ngspice to reject with a cryptic message half a second later.
+    if (deck.unresolvedSubckts.length > 0) {
+      showNotice(unresolvedSubcktMessage(deck.unresolvedSubckts));
+      return;
+    }
+
+    const probedNetIds = new Set(
+      probes.map((probe) => probe.netId?.toLowerCase()).filter((id): id is string => Boolean(id)),
+    );
+    const { channels, omitted } = liveScopeChannelRequests(deck.circuit.nets, probedNetIds);
+    if (channels.length === 0) {
+      showNotice("This circuit has no node voltage to plot, so there is nothing to watch live.");
+      return;
+    }
+    if (omitted > 0) {
+      showNotice(`Watching ${channels.length} of ${channels.length + omitted} nets live — probe the ones you want to see.`);
+    }
+    liveComponentsRef.current = components;
+    // A new session is a new set of facts: no stop reason has been claimed for
+    // it yet, and the intervals the LAST run's actuations disclosed are not in
+    // the trace this one is about to draw.
+    liveStopReasonClaimedRef.current = false;
+    setLiveActuationDisclosures({});
+    setLiveScopeShown(true);
+    setLastRunWasLive(true);
+    await startLiveSession_({ netlist: deck.netlist, deck, channels });
+  }, [
+    liveRun.plan,
+    liveRun.clearMessage,
+    components,
+    wires,
+    netLabels,
+    params,
+    directives,
+    ascForeignSymbols,
+    userModelLibraryTexts,
+    userModelLibraryNames,
+    probes,
+    effectiveAnalysisOptions,
+    liveHorizonSeconds,
+    confirmLargeRunIfNeeded,
+    executeTransient,
+    assertCurrentSimulationIntegrity,
+    showNotice,
+    startLiveSession_,
+  ]);
 
   const runOperatingAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -1494,6 +1908,26 @@ function App() {
     }
   }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi, dcSetup, couplings, assertCurrentSimulationIntegrity]);
 
+  /**
+   * The analysis rail's seven run gestures, each holding the engine-lease
+   * refusal. Built once per callback change rather than inline in the JSX so
+   * the analysis panel is not handed seven new function identities on every
+   * frame of a live run.
+   */
+  const boundedRuns = useMemo(() => ({
+    tran: refuseWhileLive(runAnalysis),
+    op: refuseWhileLive(runOperatingAnalysis),
+    ac: refuseWhileLive(runAcAnalysis),
+    dc: refuseWhileLive(runDcAnalysis),
+    tf: refuseWhileLive(runTfAnalysis),
+    noise: refuseWhileLive(runNoiseAnalysis_),
+    step: refuseWhileLive(runStepAnalysis),
+  }), [
+    refuseWhileLive,
+    runAnalysis, runOperatingAnalysis, runAcAnalysis, runDcAnalysis,
+    runTfAnalysis, runNoiseAnalysis_, runStepAnalysis,
+  ]);
+
   const preferredAnalysis = useMemo(
     () => pickAutoRunAnalysis(directives)?.kind ?? "tran",
     [directives],
@@ -1515,9 +1949,53 @@ function App() {
   const circuitIsInteractive = useMemo(() => isInteractiveSchematic(components), [components]);
   const circuitControls = useMemo(() => liveControls(components), [components]);
   const circuitControlsHint = useMemo(
-    () => liveControlHint(circuitControls, preferredAnalysis),
-    [circuitControls, preferredAnalysis],
+    // `liveRunning`, because the consequence genuinely differs: an energised
+    // circuit bends its running trace, an idle one re-solves the authored
+    // analysis. Promising a re-run while a solve is in flight would tell the
+    // reader to expect the plot to blank and restart, which it does not.
+    () => liveControlHint(circuitControls, preferredAnalysis, liveRunning),
+    [circuitControls, preferredAnalysis, liveRunning],
   );
+
+  /**
+   * What the transport shows, from whichever run is actually in flight.
+   *
+   * A bounded WINDOW run has no circuit-time progress to report — `ngspice`
+   * hands back one finished result, not a stream — so it reports `NaN`, which
+   * `formatSeconds` renders as an em dash. That is deliberate and is the whole
+   * reason this is not `0`: a zero would be a measurement, and the honest
+   * answer while a bounded solve is in flight is that Tau does not know where
+   * it has got to.
+   */
+  const transportStatus = useMemo<LiveRunStatus>(() => {
+    if (liveRunning) return liveRun.status;
+    if (analysisRunning) {
+      return {
+        phase: "running",
+        solvedCircuitTime: Number.NaN,
+        rate: { source: "unknown", targetRate: liveRun.plan.targetRate },
+      };
+    }
+    // A bounded run has taken the line since the live session ended, so the
+    // live session's stop reason no longer describes anything the reader is
+    // looking at. `idle` and not a synthesised `stopped`: a stop reason is a
+    // statement about a run that was interrupted, and `ngspice` handing back
+    // one finished result is not that. What the bounded run produced — its
+    // span, its warnings, its failure — belongs to the results drawer, which
+    // says it in full. See `lastRunWasLive`.
+    if (!lastRunWasLive) return { phase: "idle" };
+    return liveRun.status;
+  }, [liveRunning, analysisRunning, lastRunWasLive, liveRun.status, liveRun.plan.targetRate]);
+
+  /** Stop whichever run the transport is showing. The live session and the
+   *  bounded abort path are separate mechanisms and stay so; this only picks. */
+  const stopFromTransport = useCallback(() => {
+    if (liveRunning) {
+      claimLiveStop("user");
+      return;
+    }
+    stopAnalysisRef.current();
+  }, [liveRunning, claimLiveStop]);
 
   // The global Run command follows the first authored analysis directive, as
   // LTspice users expect. Selecting a mode tab remains an explicit request to
@@ -1569,6 +2047,7 @@ function App() {
     invalidateAnalysis("stopped");
     showNotice("Simulation stopped. Run again when ready.");
   }, [analysis, analysisRunning, invalidateAnalysis, showNotice]);
+  stopAnalysisRef.current = stopAnalysis;
 
   // Snapshot the live store into the active tab so schematic annotations and
   // undo/redo history are isolated from every other open circuit.
@@ -1696,7 +2175,7 @@ function App() {
     }
     adoptDirectiveOptions(doc);
     invalidateAnalysis();
-    setMode("schematic");
+    leaveSimulator();
     setFitSignal((n) => n + 1);
     // A bare "Opened <file>" is not reported. The tab strip, the title bar and
     // the drawing itself all just changed to say so, and a toast that restates
@@ -1705,7 +2184,7 @@ function App() {
     // where the trace legend and the measurement cards are. A notice with
     // something to add (dropped parts, stranded terminals) still speaks.
     if (options?.notice) showNotice(options.notice);
-  }, [tabs, snapshotActive, loadCircuit, adoptDirectiveOptions, invalidateAnalysis, showNotice, components.length, wires.length]);
+  }, [tabs, snapshotActive, loadCircuit, adoptDirectiveOptions, invalidateAnalysis, leaveSimulator, showNotice, components.length, wires.length]);
 
   const openSimFromProject = useCallback((path: string, title: string, json: string) => {
     documentNavigationRef.current += 1;
@@ -1941,10 +2420,10 @@ function App() {
     )));
     adoptDirectiveOptions(appliedDocument);
     invalidateAnalysis();
-    setMode("schematic");
+    leaveSimulator();
     setFitSignal((value) => value + 1);
     showNotice("Applied assistant changes to the current circuit.");
-  }, [activeId, adoptDirectiveOptions, components, invalidateAnalysis, probes, replaceCircuit, showNotice]);
+  }, [activeId, adoptDirectiveOptions, components, invalidateAnalysis, leaveSimulator, probes, replaceCircuit, showNotice]);
 
   // Auto-starts the analysis an assistant-confirmed circuit's directives
   // request (ask -> confirm -> data appears), reusing the exact per-mode run
@@ -2272,8 +2751,8 @@ function App() {
       }
     }
     invalidateAnalysis();
-    setMode("schematic");
-  }, [tabs, activeId, snapshotActive, restoreCircuit, invalidateAnalysis]);
+    leaveSimulator();
+  }, [tabs, activeId, snapshotActive, restoreCircuit, invalidateAnalysis, leaveSimulator]);
 
   const clearScratchpad = useCallback(() => {
     documentNavigationRef.current += 1;
@@ -2300,14 +2779,14 @@ function App() {
         : tab
     )));
     invalidateAnalysis();
-    setMode("schematic");
+    leaveSimulator();
     setConfirmClearOpen(false);
     // No raise here. This replaced `setGraphOpen(true)`, which was a no-op
     // reset of a simulator-only panel; bumping the shared drawer's raise
     // counter is not, and it lifted an empty "No analysis yet" drawer over
     // the blank canvas of a schematic that had not been run.
     showNotice("Schematic cleared.");
-  }, [activeId, newCircuit, invalidateAnalysis, showNotice]);
+  }, [activeId, newCircuit, invalidateAnalysis, leaveSimulator, showNotice]);
 
   /**
    * Re-solve after a contact was operated, instead of blanking the plot.
@@ -2317,6 +2796,14 @@ function App() {
    * whose entire purpose is to see the new result, so it re-runs the analysis
    * the reader is already looking at. Held in a ref so the effect below keeps
    * its original dependencies and does not re-fire on every render.
+   *
+   * "The analysis the reader is already looking at" is taken literally for the
+   * transient: `lastTransientOptionsRef` holds the bounds that produced the
+   * trace on screen, which for a run started from the transport's WINDOW mode
+   * are the ones the user typed there and not the document's `.tran`. Falling
+   * back to `effectiveAnalysisOptions` re-solved the authored span instead, so
+   * throwing a switch after a 1 ms window silently answered a different
+   * question — the axis changed under the reader with nothing saying why.
    */
   const rerunAfterActuationRef = useRef<() => void>(() => {});
   rerunAfterActuationRef.current = () => {
@@ -2325,17 +2812,84 @@ function App() {
     else if (preferredAnalysis === "dc") void runDcAnalysis();
     else if (preferredAnalysis === "tf") void runTfAnalysis();
     else if (preferredAnalysis === "noise") void runNoiseAnalysis_();
-    else void executeTransient(effectiveAnalysisOptions);
+    else void executeTransient(lastTransientOptionsRef.current ?? effectiveAnalysisOptions);
   };
   const actuationPendingRef = useRef(false);
   const handleActuate = useCallback(() => { actuationPendingRef.current = true; }, []);
 
+  /**
+   * Operating a control while the circuit is energised, which is the payoff the
+   * whole live path exists for: the solver is halted, the one device the emitter
+   * wrote for this part is altered, and the SAME transient resumes, so the trace
+   * on screen acquires a corner instead of blanking and starting again.
+   *
+   * `Canvas`'s `onActuate` reports only that *something* moved, so the parts
+   * that changed are found by diffing against the circuit the running deck was
+   * last synchronised with. Only actuable kinds are considered: every other
+   * difference is a real edit, and an edit is handled by the branch below, not
+   * by an alter.
+   *
+   * Held in a ref, like the re-solve above and for the same reason: the effect
+   * that consumes it keeps its original dependencies.
+   */
+  const actuateLiveRunRef = useRef<() => void>(() => {});
+  actuateLiveRunRef.current = () => {
+    const previous = new Map(liveComponentsRef.current.map((part) => [part.id, part]));
+    liveComponentsRef.current = components;
+    for (const part of components) {
+      if (!isActuable(part.kind) && !isDraggableWiper(part.kind)) continue;
+      const before = previous.get(part.id);
+      if (!before || before.value === part.value) continue;
+      // The component goes in holding its OLD value and the new one is the
+      // second argument, because that pair is what `planLiveActuation` reads:
+      // it compares the two through the netlist emitter's own readers to decide
+      // which resistors move and in what order. Handing it the new value twice
+      // makes every change look like no change, and it answers `unchanged` — a
+      // switch that moves on the sheet and never reaches the solver.
+      const target = actuateLiveRun(
+        { id: part.id, kind: part.kind, label: part.label, value: before.value },
+        part.value,
+      );
+      if (!target) continue;
+      if (target.kind === "refused") {
+        showNotice(target.failure.message);
+        // Nothing reached the running circuit, so any interval this control
+        // disclosed for an earlier move is no longer what is on the trace.
+        noteActuationDisclosure(target.controlId, null);
+        continue;
+      }
+      // `intermediate` is null when one alter does the whole change, and the
+      // null is as load-bearing as the sentence: it retracts a disclosure the
+      // previous move made about this same control.
+      if (target.kind === "alter") noteActuationDisclosure(target.plan.controlId, target.plan.intermediate);
+      else noteActuationDisclosure(target.controlId, null);
+    }
+  };
+
+  /**
+   * A circuit edit during a live run stops the run.
+   *
+   * The deck the engine is solving was built from the sheet as it was at Run,
+   * and `alter` can change a value but not add a wire. Carrying on would leave
+   * a trace advancing under a schematic it no longer describes, which is the
+   * exact silent-wrongness AGENTS.md forbids — so the run ends, with
+   * `circuit-edited` as its own visible reason.
+   */
+  const liveEditRef = useRef<() => void>(() => {});
+  liveEditRef.current = () => {
+    if (liveRunning) claimLiveStop("circuit-edited");
+  };
+
   useEffect(() => {
     if (actuationPendingRef.current) {
       actuationPendingRef.current = false;
-      rerunAfterActuationRef.current();
+      // A live run absorbs the change; an idle one re-solves. Both keep what is
+      // on screen, which is the promise the live-controls band makes.
+      if (liveRunningRef.current) actuateLiveRunRef.current();
+      else rerunAfterActuationRef.current();
       return;
     }
+    liveEditRef.current();
     invalidateAnalysis();
   }, [components, wires, directives, invalidateAnalysis]);
 
@@ -2648,13 +3202,66 @@ function App() {
    * in the simulator - the assistant, or nothing. Explorer and Components are
    * schematic-only, so there is nothing else to pay for.
    */
+  const analysisWorkspace = workspaceWidth(
+    shellWidth,
+    chrome.assistant.visible ? [effectiveAssistantWidth] : [],
+  );
   const analysisPane = resolveAnalysisPane({
-    workspace: workspaceWidth(shellWidth, chrome.assistant.visible ? [effectiveAssistantWidth] : []),
+    workspace: analysisWorkspace,
     persisted: analysisPaneResize.width,
   });
   /** Only the simulator splits. The schematic keeps the full-bleed canvas and
    *  today's peek drawer, at every width. */
   const analysisSplit = mode === "simulator" && activeProjectFile && analysisPane.layout === "split";
+
+  /**
+   * Keep the divider's own idea of its width inside the clamp the layout is
+   * actually enforcing.
+   *
+   * `usePanelWidth` clamps every drag and arrow-key step against the STATIC
+   * `ANALYSIS_PANE_WIDTH`, whose maximum (560px = plotter floor + circuit
+   * floor) is only reachable in a wide workspace. `resolveAnalysisPane` knows
+   * the real ceiling — at a 1100px window with Bode open it is 410px — and
+   * clamps the RENDERED width to it, so the circuit pane never loses its floor.
+   * What it could not do is stop the hook from banking the unreachable number:
+   * a drag past the stop left the divider believing it sat at 560 while the
+   * screen showed 410, and the next 150px of the return gesture, or the next
+   * ten arrow presses, then moved nothing at all. A control that ignores the
+   * first third of a gesture reads as broken, which is why this exists.
+   *
+   * Narrowly: only a width the DIVIDER just moved, and only while a divider
+   * exists. The three guards below are each load-bearing, and the middle one is
+   * the reason the two clamping effects above this were deleted in the first
+   * place:
+   *
+   * - **Stacked layouts are skipped.** With no divider there is no gesture to
+   *   correct, and `resolveAnalysisPane`'s ceiling collapses to the pane's own
+   *   minimum in a cramped workspace — so a schematic with all three side
+   *   panels open would otherwise pull the remembered width down to 280px and
+   *   the simulator would open at its floor for the rest of the session. The
+   *   min-window screenshot gate caught exactly that.
+   * - **A resize is not a decision.** A window that got narrower is not the
+   *   user changing their mind, so a changed workspace leaves the remembered
+   *   width alone and widening the window hands it back.
+   * - **The width has to have moved.** Merely entering the simulator, where a
+   *   divider appears over an unchanged workspace, must not commit the reader
+   *   to whatever that workspace happens to allow.
+   *
+   * What is left is precisely a drag or an arrow-key step, which IS the user
+   * placing the divider now — and now has a ceiling.
+   */
+  const analysisDividerRef = useRef({ workspace: -1, width: -1 });
+  const { width: analysisPaneWidth, setWidth: setAnalysisPaneWidth } = analysisPaneResize;
+  const analysisPaneMax = analysisPane.maxWidth;
+  useEffect(() => {
+    const previous = analysisDividerRef.current;
+    analysisDividerRef.current = { workspace: analysisWorkspace, width: analysisPaneWidth };
+    if (!analysisSplit) return;
+    if (previous.workspace !== analysisWorkspace) return;
+    if (previous.width === analysisPaneWidth) return;
+    if (analysisPaneWidth <= analysisPaneMax) return;
+    setAnalysisPaneWidth(analysisPaneMax);
+  }, [analysisSplit, analysisWorkspace, analysisPaneWidth, analysisPaneMax, setAnalysisPaneWidth]);
 
   /**
    * Where the inspector may go, and what it should stay off.
@@ -2732,13 +3339,14 @@ function App() {
         result={analysis}
         runState={runState}
         isRunning={analysisRunning}
+        liveRunning={liveRunning}
         title={activeDirty ? `${documentTitle} •` : (activeProjectFile ? documentTitle : (projectRootName ?? "Open a project"))}
         onModeChange={(nextMode) => {
           if (nextMode === "simulator" && !activeProjectFile) {
             showNotice("Open or create a schematic before using the simulator.");
             return;
           }
-          setMode(nextMode);
+          changeMode(nextMode);
           if (nextMode === "simulator") setFitSignal((value) => value + 1);
         }}
         onRun={activeProjectFile ? runAndShowSimulator : () => showNotice("Open or create a schematic before running a simulation.")}
@@ -2766,13 +3374,13 @@ function App() {
           projectOpen={Boolean(projectRootPath)}
           schematicOpen={activeProjectFile}
           onFocusExplorer={() => {
-            setMode("schematic");
+            leaveSimulator();
             if (assistantOpen && !independentColumnsFit) setPartsOpen(false);
           }}
-          onModeChange={setMode}
+          onModeChange={changeMode}
           onSearch={() => setPaletteOpen(true)}
           onFocusComponents={() => {
-            setMode("schematic");
+            leaveSimulator();
             setPartsOpen((open) => {
               const next = !open;
               if (next) {
@@ -2879,7 +3487,7 @@ function App() {
               if (tab?.filePath) void requestProjectRename(tab.filePath, name);
             }}
             onNewCircuit={startNewCircuit}
-            onHideSimulator={() => setMode("schematic")}
+            onHideSimulator={leaveSimulator}
           />
           {/* Named, unlike the empty-state stage above it, because this is the
               one a keyboard or screen-reader user needs to be able to reach and
@@ -3005,6 +3613,57 @@ function App() {
                 </span>
               </header>
               {/*
+                * The run transport, and this is the surface that owns it.
+                *
+                * Not the header's Run (`Toolbar.tsx`): that control is the
+                * simulation health lamp — neutral, amber, green, red — and its
+                * job is "run my file and show me the simulator". Its own tests
+                * pin that styling, and a lamp that also had to become a Stop
+                * button, carry a Live|Window choice and hold an editable
+                * duration would stop being legible as either thing.
+                *
+                * Not the editor toolbar (`ShellPanels.tsx`) either: that Run
+                * belongs to the schematic, and a live run only exists in the
+                * simulator — leaving for the schematic is one of the things
+                * that stops it (`leaveSimulator`). A transport on a surface
+                * that cannot hold a run is a control that is dead half the
+                * time.
+                *
+                * So it sits here, in the circuit pane, one band above the
+                * controls it energises. That adjacency is the requirement, in
+                * the user's own words: "This will allow us to actively see the
+                * plot change when the user clicks a button." Stop is one click
+                * from the switch you just threw, and the band is visible
+                * whenever the simulator is, including at the 900px floor where
+                * the results drawer is collapsed to a peek strip.
+                */}
+              <div className="run-transport-band">
+                <RunTransport
+                  plan={liveRun.plan}
+                  status={transportStatus}
+                  livePlan={liveRun.livePlan}
+                  windowPlan={liveRun.windowPlan}
+                  onPlanChange={liveRun.setPlan}
+                  onRun={() => { void runFromTransport(); }}
+                  onStop={stopFromTransport}
+                />
+                {/*
+                  * The ceiling behind "runs continuously". A `.tran` card needs
+                  * an end time, so a continuous run is a transient over a span
+                  * chosen to be unreachable rather than an infinity Tau cannot
+                  * express — and a ceiling nobody can see is one that will
+                  * surprise somebody. See LIVE_HORIZON_OUTPUT_STEPS.
+                  */}
+                {liveRun.plan.mode === "live" && (
+                  <p className="run-transport-note">
+                    {`Solved as a ${formatSeconds(liveHorizonSeconds)} transient; reaching that end is reported as a stop, not hidden.`}
+                  </p>
+                )}
+                {liveRun.message && (
+                  <p role="alert" className="run-transport-alert">{liveRun.message}</p>
+                )}
+              </div>
+              {/*
                 * Live controls. The simulator is otherwise strictly read-only -
                 * the padlock above says so - and the one exception, operating a
                 * contact, was discoverable only by hovering the exact symbol.
@@ -3017,7 +3676,9 @@ function App() {
                 <div className="live-controls" role="group" aria-label="Live controls">
                   <span className="live-controls-title">
                     <span
-                      className={`live-controls-lamp${analysisRunning ? " solving" : ""}`}
+                      // Lit by either run: the lamp says "a solver is working",
+                      // and a live run is the one that works longest.
+                      className={`live-controls-lamp${analysisRunning || liveRunning ? " solving" : ""}`}
                       aria-hidden="true"
                     />
                     Live
@@ -3031,6 +3692,27 @@ function App() {
                     ))}
                   </ul>
                   <p className="live-controls-hint">{circuitControlsHint}</p>
+                  {/*
+                    * What the run genuinely solved between the alters of a
+                    * multi-device change. See `liveActuationDisclosures`: the
+                    * sentence is the planner's own, rendered here rather than
+                    * discarded, because the interval it describes is in the
+                    * trace whether or not anything says so.
+                    *
+                    * Ordered by `circuitControls` so it reads down the band in
+                    * the same order as the readouts above it, and carried on
+                    * `live-controls-hint` because it IS the consequence row -
+                    * a second full-width caption under the first, not a new
+                    * kind of surface needing a new kind of styling.
+                    */}
+                  {circuitControls.map((control) => {
+                    const disclosure = liveActuationDisclosures[control.id];
+                    return disclosure === undefined ? null : (
+                      <p key={`${control.id}-intermediate`} role="status" className="live-controls-hint">
+                        {disclosure}
+                      </p>
+                    );
+                  })}
                 </div>
               )}
               <div className="sim-schematic-canvas">
@@ -3150,6 +3832,33 @@ function App() {
               />
             )}
             waveforms={mode !== "simulator" ? null : (
+              <>
+              {/*
+                * The live scope, above the bounded plotter rather than instead
+                * of it. A live run and a finished `.tran` are different
+                * measurements of the same circuit and an engineer often wants
+                * both; swapping one for the other would also mean the plotter's
+                * cursors and measurements vanished the moment Run was pressed.
+                *
+                * `key` is the run key and nothing else. It is bumped once per
+                * run, so a new run gets a fresh pane (and a fresh y-axis), while
+                * a run in flight keeps the same element — and therefore the zoom
+                * and the pan the user set — through every one of the thirty-odd
+                * frames a second landing underneath it.
+                */}
+              {liveScopeShown && liveRun.ring && (
+                <div className="live-scope-host">
+                  <LiveScopePane
+                    key={liveRun.runKey}
+                    ring={liveRun.ring}
+                    channels={liveRun.channels}
+                    timeWindow={liveRun.timeWindow}
+                    onWindowChange={liveRun.setTimeWindow}
+                    status={liveRun.status}
+                    retention={liveRun.retention}
+                  />
+                </div>
+              )}
               <Suspense fallback={null}>
                 <AnalysisErrorBoundary>
                   <SimulationPanel
@@ -3181,13 +3890,15 @@ function App() {
                     runProgress={runProgress}
                     onOptionsChange={overrideAnalysisOptions}
                     onResetOptions={resetAnalysisOptions}
-                    onRun={runAnalysis}
-                    onRunOperatingPoint={runOperatingAnalysis}
-                    onRunAcSweep={runAcAnalysis}
-                    onRunDcSweep={runDcAnalysis}
-                    onRunTf={runTfAnalysis}
-                    onRunNoise={runNoiseAnalysis_}
-                    onRunStep={runStepAnalysis}
+                    // Every one of these is a run gesture, and the engine is not
+                    // free while the live session holds it - see `boundedRuns`.
+                    onRun={boundedRuns.tran}
+                    onRunOperatingPoint={boundedRuns.op}
+                    onRunAcSweep={boundedRuns.ac}
+                    onRunDcSweep={boundedRuns.dc}
+                    onRunTf={boundedRuns.tf}
+                    onRunNoise={boundedRuns.noise}
+                    onRunStep={boundedRuns.step}
                     onStop={stopAnalysis}
                     hasFreshResult={hasFreshResult}
                     dcSetup={dcSetup}
@@ -3203,6 +3914,7 @@ function App() {
                   />
                 </AnalysisErrorBoundary>
               </Suspense>
+              </>
             )}
           />
         )}

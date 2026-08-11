@@ -3,7 +3,8 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 
 import { Button } from "@/components/ui/button";
 import { PlotAxes, ScopeClip } from "./PlotAxes";
-import { tickCountsFromSize, useMeasuredSize, type MeasuredSize } from "./useMeasuredSize";
+import { PLOT_PAD, TRACE_EDGE_GUTTER, scopeWidth } from "./plotGeometry";
+import { tickCountsFromSize, useMeasuredSize } from "./useMeasuredSize";
 import {
   MAX_WAVEFORM_RENDER_POINTS,
   waveformBounds,
@@ -100,25 +101,16 @@ export const LIVE_SCOPE_NAMES = {
 } as const;
 
 /**
- * Mirrors `SimulationPanel`'s private `PLOT_WIDTH_FALLBACK` / `PLOT_PAD` /
- * `TRACE_EDGE_GUTTER` / `PLOT_HEIGHT`, because they are private to that file
- * and this pane must not fork the geometry.
+ * How tall the live scope's face is.
  *
- * They are copied rather than reinvented: a live trace and a bounded one appear
- * one above the other in the same drawer, so their gutters, their tick bands
- * and their edge insets have to line up to the pixel. The wiring unit's job is
- * to promote these to a shared module and delete this block — see the followUps
- * for this unit.
+ * The gutters, the edge inset and the 1:1 viewBox fallback that go with it are
+ * NOT declared here: they used to be copied from `SimulationPanel`'s private
+ * constants, and they now come from the shared `./plotGeometry`, so a live
+ * trace and a bounded one in the same drawer cannot drift apart. The height
+ * stays local because it is this pane's own editorial call, not a number the
+ * two plots have to agree on.
  */
-const PLOT_WIDTH_FALLBACK = 340;
-const PLOT_PAD = 46;
-const TRACE_EDGE_GUTTER = 2.5;
 export const LIVE_SCOPE_HEIGHT = 260;
-
-/** viewBox width for the pane, in CSS pixels once its `<svg>` has been measured. */
-function scopeWidth(size: MeasuredSize): number {
-  return size.width > 0 ? Math.round(size.width) : PLOT_WIDTH_FALLBACK;
-}
 
 /**
  * The visible span a live scope opens at, and the fallback for a degenerate
@@ -188,7 +180,12 @@ export interface LiveScopeTrace {
   channel: LiveScopeChannel;
   color: string;
   path: string;
-  /** Points the envelope decimator kept. Diagnostic, not decoration. */
+  /**
+   * Points actually drawn — what the envelope decimator kept, after the window
+   * clip. Diagnostic, not decoration: zero here is the pane's own evidence that
+   * this window has nothing to show, which is what the empty-window notice is
+   * derived from rather than guessed at.
+   */
   pointCount: number;
 }
 
@@ -203,21 +200,138 @@ export interface LiveScopeGeometry {
 }
 
 /**
- * `waveformEnvelopeIndices` and `waveformBounds` are declared over
- * `ReadonlyArray<number>`, and a `Float64Array` — which is what the ring hands
- * out — is not one: it is missing `concat`, `flat` and `flatMap`, none of which
- * either function calls. Both read only `.length` and `[i]`.
- *
- * The alternative to this cast is `Array.from` on every frame, which at the
- * ring's 2^19 capacity is a half-million-element copy sixty times a second, on
- * top of the copy `sliceByTime` already makes. Requirement 3 of this unit is
- * that the pane not do that. The real fix is one character wider than a cast
- * and lives in `simulation/waveform.ts`, which this unit does not own: widen
- * those parameters to `ArrayLike<number>` and delete this. It is in the
- * followUps.
+ * How far a neighbour probe may double before it concludes there is no
+ * neighbour worth drawing. Sixty-four doublings is 1.8e19 times the ring's mean
+ * sample spacing: a sample that far outside the window cannot contribute a
+ * visible crossing at any timebase, so the search stops rather than dragging the
+ * whole retained side into the slice to reach it.
  */
-function indexed(samples: Float64Array): readonly number[] {
-  return samples as unknown as readonly number[];
+const NEIGHBOUR_PROBE_DOUBLINGS = 64;
+
+/**
+ * The circuit time of the retained sample nearest to `t` on `side`, or `t`
+ * itself when that side of `t` holds nothing.
+ *
+ * This exists because the pane may not add a method to `LiveSampleRing` (that
+ * file belongs to the transport), and the only slicing the ring exposes is by
+ * time — so "give me one more sample past the edge" has to be asked as "give me
+ * a small interval past the edge" and then narrowed. The probe starts at twice
+ * the ring's MEAN sample spacing, which for a uniformly-sampled buffer means the
+ * very first probe copies about two samples and stops, and doubles from there so
+ * a variable-timestep run with a long quiet stretch still finds its neighbour in
+ * a handful of steps.
+ *
+ * The cost is the number of samples inside the first non-empty probe, and not
+ * the ring's capacity: every earlier probe covered a strictly smaller interval
+ * and came back empty, so this one copies exactly the samples within the winning
+ * pad of the edge — two of them, for any stream whose spacing is near its own
+ * mean. That is what keeps the per-frame copy the render cadence exists to avoid
+ * out of this path. The one exception is honest and named below: once the pad
+ * would reach past the oldest (or newest) retained sample there is nothing left
+ * to bisect, and the slice takes that whole side — the same copy the pane
+ * already makes whenever the window covers the buffer.
+ */
+function neighbourTime(ring: LiveSampleRing, t: number, side: -1 | 1): number {
+  const bound = side < 0 ? ring.earliestRetainedTime : ring.latestTime;
+  if (bound === null) return t;
+  const distance = side < 0 ? t - bound : bound - t;
+  // Nothing retained beyond this edge, so there is no segment to complete and
+  // the window needs no widening at all.
+  if (!(distance > 0)) return t;
+
+  const span = (ring.latestTime ?? 0) - (ring.earliestRetainedTime ?? 0);
+  const meanSpacing = ring.length > 1 && span > 0 ? span / (ring.length - 1) : 0;
+  // A ring whose samples all share one timestamp has no spacing to extrapolate
+  // from; start small enough that the doubling still lands on the far sample in
+  // ten steps rather than jumping past a nearer one.
+  let pad = meanSpacing > 0 ? meanSpacing * 2 : distance / 1024;
+
+  for (let probe = 0; probe < NEIGHBOUR_PROBE_DOUBLINGS; probe += 1) {
+    // Past the end of the retained samples there is no interval left to narrow:
+    // the far bound IS a sample, so widening to it is the answer.
+    if (!(pad > 0) || pad >= distance) return bound;
+    const view = side < 0 ? ring.sliceByTime(t - pad, t) : ring.sliceByTime(t, t + pad);
+    const found = view.times.length;
+    if (found > 0) return side < 0 ? view.times[found - 1]! : view.times[0]!;
+    pad *= 2;
+  }
+  // Astronomically far from any sample. Widening would cost a full-side copy to
+  // reach a point that cannot be seen; leave the window as asked, and let the
+  // empty-window sentence explain the blank axis.
+  return t;
+}
+
+/**
+ * The window's samples plus the first sample beyond each edge.
+ *
+ * Slicing the ring by the visible window alone throws away the segment that
+ * STRADDLES an edge, and a straddling segment is not an edge case: zoom between
+ * two samples — inevitable on a slow-changing trace, and the normal state of
+ * affairs a few zoom presses in — and every sample is outside the window while
+ * the correct picture is a line crossing the whole view. Pre-clipped, the pane
+ * drew nothing at all and said nothing about it, which is the blank-instrument
+ * failure this file's header forbids.
+ *
+ * The widening is by TIME because that is the only slice the ring offers, but it
+ * is bounded to one sample per side, so it is the by-index padding in disguise
+ * rather than a re-slice of the buffer. `waveformEnvelopeIndices` already knows
+ * what to do with those two extra samples — it keeps them as its `leading` and
+ * `trailing` points precisely so a caller can draw the crossing.
+ */
+function windowViewWithNeighbours(ring: LiveSampleRing, t0: number, t1: number): LiveSampleView {
+  return ring.sliceByTime(neighbourTime(ring, t0, -1), neighbourTime(ring, t1, 1));
+}
+
+/** One point of a drawn trace, in circuit time and signal units. */
+interface TracePoint {
+  time: number;
+  value: number;
+}
+
+/**
+ * Cut the polyline at the window edges instead of letting the SVG clip do it.
+ *
+ * The clip rect would produce the same picture, but only after the rasteriser
+ * has been handed coordinates that can run to 1e9 px at deep zoom — where
+ * renderers stop being reliable, and where "blank pane" would have been traded
+ * for "wrong line". Cutting here keeps every emitted coordinate inside the plot
+ * box, which also means the Y autoscale below fits exactly what is drawn.
+ *
+ * The cut point is a linear interpolation between two solved samples, which
+ * invents nothing: the straight segment between those samples is already the
+ * claim the polyline makes, and this only decides where that segment meets the
+ * frame. `ScopeClip` stays as the backstop for the Y direction, where the held
+ * axis from {@link steadyYBounds} can legitimately be tighter than the data.
+ */
+function clipTraceToWindow(points: readonly TracePoint[], t0: number, t1: number): TracePoint[] {
+  if (points.length === 0) return [];
+  const crossing = (a: TracePoint, b: TracePoint, t: number): TracePoint => {
+    const dt = b.time - a.time;
+    return { time: t, value: dt === 0 ? b.value : a.value + ((b.value - a.value) * (t - a.time)) / dt };
+  };
+
+  let lo = 0;
+  while (lo < points.length && points[lo]!.time < t0) lo += 1;
+  let hi = points.length - 1;
+  while (hi >= 0 && points[hi]!.time > t1) hi -= 1;
+
+  if (lo > hi) {
+    // Nothing inside: the only thing this window can honestly show is the
+    // segment passing through it, and only if it really does pass through.
+    const before = points[lo - 1];
+    const after = points[lo];
+    if (!before || !after || !(after.time > t1)) return [];
+    return [crossing(before, after, t0), crossing(before, after, t1)];
+  }
+
+  const clipped = points.slice(lo, hi + 1);
+  const before = points[lo - 1];
+  if (before && clipped[0]!.time > t0) clipped.unshift(crossing(before, clipped[0]!, t0));
+  const after = points[hi + 1];
+  if (after && clipped[clipped.length - 1]!.time < t1) {
+    clipped.push(crossing(clipped[clipped.length - 1]!, after, t1));
+  }
+  return clipped;
 }
 
 /**
@@ -251,7 +365,7 @@ export function liveScopeGeometry(input: {
     earliestRetainedTime: ring.earliestRetainedTime,
     hasDiscardedHistory: ring.hasDiscardedHistory(),
   });
-  const view = ring.sliceByTime(visible.t0, visible.t1);
+  const view = windowViewWithNeighbours(ring, visible.t0, visible.t1);
 
   const innerWidth = Math.max(0, width - PLOT_PAD * 2);
   const innerHeight = Math.max(0, height - PLOT_PAD * 2);
@@ -264,45 +378,83 @@ export function liveScopeGeometry(input: {
   const picked = channels.map((channel, position) => {
     const values = view.channels[channel.index];
     const indices = values
-      ? waveformEnvelopeIndices(indexed(view.times), indexed(values), visible.t0, visible.t1, columns)
+      // The ring's `Float64Array` slices go straight in: `waveformEnvelopeIndices`
+      // is declared over `ArrayLike<number>`, so nothing is copied or cast here.
+      ? waveformEnvelopeIndices(view.times, values, visible.t0, visible.t1, columns)
       : [];
-    return { channel, position, values, indices };
-  });
-
-  // Y from the DECIMATED samples, not from the raw slice. The envelope keeps
-  // the minimum and the maximum of every column, so the extremes are all still
-  // present, and this turns an autoscale over half a million samples into one
-  // over a few thousand.
-  const yBounds = waveformBounds(
-    picked.map(({ values, indices }) => ({
-      values: values ? indices.map((index) => values[index]!) : [],
-    })),
-  );
-  const ySpan = yBounds.max - yBounds.min || 1;
-  const xSpan = visible.t1 - visible.t0 || 1;
-
-  const traces = picked.map(({ channel, position, values, indices }) => {
-    let path = "";
+    const kept: TracePoint[] = [];
     if (values) {
       for (const index of indices) {
         const time = view.times[index];
         const value = values[index];
         if (time === undefined || value === undefined) continue;
         if (!Number.isFinite(time) || !Number.isFinite(value)) continue;
-        const x = PLOT_PAD + TRACE_EDGE_GUTTER + ((time - visible.t0) / xSpan) * traceWidth;
-        const y = height - PLOT_PAD - ((value - yBounds.min) / ySpan) * innerHeight;
-        path += `${path === "" ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)} `;
+        kept.push({ time, value });
       }
+    }
+    return { channel, position, points: clipTraceToWindow(kept, visible.t0, visible.t1) };
+  });
+
+  // Y from the DECIMATED, WINDOW-CLIPPED samples, not from the raw slice. The
+  // envelope keeps the minimum and the maximum of every column, so the extremes
+  // are all still present, and this turns an autoscale over half a million
+  // samples into one over a few thousand. Clipped, not padded, is what makes the
+  // axis describe the window: the neighbour a screen away that only exists to
+  // complete a crossing segment must not stretch the scale, but the point where
+  // that segment enters the frame is on screen and must fit.
+  const yBounds = waveformBounds(
+    picked.map(({ points }) => ({ values: points.map((point) => point.value) })),
+  );
+  const ySpan = yBounds.max - yBounds.min || 1;
+  const xSpan = visible.t1 - visible.t0 || 1;
+
+  const traces = picked.map(({ channel, position, points }) => {
+    let path = "";
+    for (const { time, value } of points) {
+      const x = PLOT_PAD + TRACE_EDGE_GUTTER + ((time - visible.t0) / xSpan) * traceWidth;
+      const y = height - PLOT_PAD - ((value - yBounds.min) / ySpan) * innerHeight;
+      path += `${path === "" ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)} `;
     }
     return {
       channel,
       color: channel.color ?? LIVE_TRACE_COLORS[position % LIVE_TRACE_COLORS.length]!,
       path,
-      pointCount: indices.length,
+      pointCount: points.length,
     };
   });
 
   return { width, height, visible, view, yBounds, traces };
+}
+
+/**
+ * The sentence for a window that draws nothing, and `null` when something is on
+ * screen.
+ *
+ * A blank plot is the one state a scope must never leave unexplained, because a
+ * flat empty axis and "you have scrolled somewhere there is no data" look
+ * identical. Now that a straddling segment renders, an empty picture means the
+ * window really is outside the retained samples, and which side it is outside on
+ * is the difference between "wait" and "scroll back" — so the two get different
+ * sentences. `null` for an empty ring: "No samples yet" already says that, and
+ * two notices for one condition is how a pane starts crying wolf.
+ */
+export function describeEmptyWindow(
+  visible: VisibleWindow,
+  data: { latestTime: number | null; earliestRetainedTime: number | null },
+  drawnPoints: number,
+  formatTime = formatSeconds,
+): string | null {
+  if (drawnPoints > 0) return null;
+  const latest = data.latestTime;
+  const earliest = data.earliestRetainedTime;
+  if (latest === null || earliest === null) return null;
+  if (visible.t0 > latest) {
+    return `Nothing solved in this window yet — the newest sample is at ${formatTime(latest)}, off the left edge.`;
+  }
+  if (visible.t1 < earliest) {
+    return `No samples in this window — the oldest one still retained is at ${formatTime(earliest)}, off the right edge.`;
+  }
+  return "No samples in this window.";
 }
 
 /**
@@ -490,6 +642,15 @@ export function LiveScopePane({
   };
 
   const discarded = describeDiscardedHistory(geometry.view);
+  const drawnPoints = geometry.traces.reduce((total, trace) => total + trace.pointCount, 0);
+  const emptyWindow =
+    channels.length > 0
+      ? describeEmptyWindow(
+          geometry.visible,
+          { latestTime: ring.latestTime, earliestRetainedTime: ring.earliestRetainedTime },
+          drawnPoints,
+        )
+      : null;
   const decimated = retention ? describeEngineDecimation(retention) : null;
   const achievedRate = status.phase === "running" ? displayRate(status.rate) : null;
   const requestedRate = status.phase === "running" ? status.rate.targetRate : null;
@@ -638,6 +799,16 @@ export function LiveScopePane({
       {decimated && (
         <p data-notice="engine-decimation" role="status" className="m-0 text-[11px] leading-4 text-warning">
           {decimated}
+        </p>
+      )}
+      {/*
+        No `role="status"` on the sentence below: like the clipped-window one
+        after it this is a standing explanation of what the axis is showing, not
+        an event, and `runStatusLabel` already owns the one live region here.
+      */}
+      {emptyWindow && (
+        <p data-notice="window-empty" className="m-0 text-[11px] leading-4 text-muted-foreground">
+          {emptyWindow}
         </p>
       )}
       {geometry.visible.clippedByDiscard && (

@@ -38,6 +38,23 @@ const windowRadio = () => screen.getByRole("radio", { name: RUN_TRANSPORT_NAMES.
 const stopField = () =>
   screen.getByLabelText(RUN_TRANSPORT_NAMES.windowStop) as HTMLInputElement;
 
+/**
+ * Every stop reason this component is proved to render, as ONE table.
+ *
+ * The coverage guard at the bottom derives its expectation from this array
+ * rather than re-typing the kinds: a second hand-written list agrees with the
+ * model just as happily while the render table quietly misses a kind, which is
+ * the exact hole the guard exists to close.
+ */
+const STOP_REASON_CASES: [StopReasonKind, StopReason][] = [
+  ["user-stopped", { kind: "user-stopped" }],
+  ["left-simulator", { kind: "left-simulator" }],
+  ["sample-budget", { kind: "sample-budget", atCircuitTime: 2.5, budget: 2_000_000 }],
+  ["horizon-reached", { kind: "horizon-reached", atCircuitTime: 5e-3 }],
+  ["diverged", { kind: "diverged", atCircuitTime: 1e-4, detail: "timestep too small" }],
+  ["circuit-edited", { kind: "circuit-edited" }],
+];
+
 /** A run in flight, with whatever the rate estimator currently knows. */
 function running(solvedCircuitTime: number, achieved: number | null, target: number | null = null): LiveRunStatus {
   return { phase: "running", solvedCircuitTime, rate: rateReport(target, achieved) };
@@ -222,6 +239,48 @@ describe("RunTransport", () => {
     expect(screen.getByRole("alert").textContent).toContain("nothing to solve");
   });
 
+  it.each([
+    ["ends before it starts", 5e-4],
+    ["ends exactly where it starts", 1e-3],
+  ])("refuses to arm Run on a window that %s", (_case, stopTime) => {
+    // Saying "there is nothing to solve" and leaving Run armed is worse than
+    // either one alone: the component has already diagnosed the window, so the
+    // user is invited to press a button whose only outcome is the empty plot
+    // the message exists to spare them.
+    const h = handlers();
+    const backwards = withWindowBounds(windowPlanFromAuthoredTran({ startTime: 1e-3, stopTime: 5e-3 }), {
+      stopTime,
+    });
+    const { rerender } = render(<RunTransport {...h} plan={backwards} />);
+
+    expect((runButton() as HTMLButtonElement).disabled).toBe(true);
+    // ...and nothing promises a stop time for a run that cannot happen.
+    expect(screen.queryByText(/Runs to t =/)).toBeNull();
+    expect(screen.getByRole("alert").textContent).toContain("nothing to solve");
+
+    // `disabled` means "blocks Run"; a run in flight is still stoppable however
+    // the window reads, and an unsolvable window is not a way to trap the user
+    // in a running solver.
+    rerender(<RunTransport {...h} plan={backwards} status={running(1, null)} />);
+    expect((stopButton() as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("keeps Run armed the moment the window becomes solvable again", () => {
+    // The refusal above must be about this window and not a latch: the
+    // component holds no state, and the horizon comes back with the window.
+    const h = handlers();
+    const solvable = withWindowBounds(windowPlanFromAuthoredTran({ startTime: 1e-3, stopTime: 5e-3 }), {
+      stopTime: 2e-3,
+    });
+    render(<RunTransport {...h} plan={solvable} />);
+
+    expect((runButton() as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("Runs to t = 2 ms, then stops.")).toBeTruthy();
+    fireEvent.click(runButton());
+    expect(h.onRun).toHaveBeenCalledTimes(1);
+  });
+
   it("locks the mode and the bounds while a run is in flight", () => {
     render(
       <RunTransport
@@ -273,18 +332,15 @@ describe("RunTransport", () => {
     expect(warning.textContent).toContain("0.4× against the 1× requested");
   });
 
-  it.each<[StopReasonKind, StopReason]>([
-    ["user-stopped", { kind: "user-stopped" }],
-    ["left-simulator", { kind: "left-simulator" }],
-    ["sample-budget", { kind: "sample-budget", atCircuitTime: 2.5, budget: 2_000_000 }],
-    ["horizon-reached", { kind: "horizon-reached", atCircuitTime: 5e-3 }],
-    ["diverged", { kind: "diverged", atCircuitTime: 1e-4, detail: "timestep too small" }],
-    ["circuit-edited", { kind: "circuit-edited" }],
-  ])("renders the %s stop distinguishably, and offers Run again", (_kind, reason) => {
+  it.each(STOP_REASON_CASES)("renders the %s stop distinguishably, and offers Run again", (kind, reason) => {
     render(
       <RunTransport {...handlers()} status={{ phase: "stopped", solvedCircuitTime: 1, reason }} />,
     );
 
+    // The label is what the guard below counts, so a case filed under a kind it
+    // does not actually render would make that guard lie.
+    expect(reason.kind).toBe(kind);
+    expect(describeStopReason(reason).trim()).not.toBe("");
     expect(screen.getByText(describeStopReason(reason))).toBeTruthy();
     // A stopped run does not look like a running one: the control is Run again.
     expect(runButton()).toBeTruthy();
@@ -294,30 +350,55 @@ describe("RunTransport", () => {
   });
 
   it("covers every stop reason the model can produce", () => {
-    // Guards the table above: a new StopReason kind must fail here rather than
-    // silently render as a blank status line.
-    const covered: StopReasonKind[] = [
-      "user-stopped",
-      "left-simulator",
-      "sample-budget",
-      "horizon-reached",
-      "diverged",
-      "circuit-edited",
-    ];
-    expect(new Set(covered)).toEqual(new Set(STOP_REASON_KINDS));
+    // Guards the table above by reading it: a new StopReason kind must fail
+    // here rather than silently render as a blank status line, and so must a
+    // kind that is in the model and in nobody's render case.
+    const rendered = STOP_REASON_CASES.map(([kind]) => kind);
+    expect(new Set(rendered)).toEqual(new Set(STOP_REASON_KINDS));
+    // A duplicated row would let the set match while a kind went unrendered.
+    expect(rendered).toHaveLength(STOP_REASON_KINDS.length);
   });
 
   it("names its controls so none of them collide with a name the shell already uses", () => {
-    render(<RunTransport {...handlers()} plan={windowPlanFromAuthoredTran({ stopTime: 1 })} />);
+    // The window with a Tstart, so BOTH engineering fields are mounted and the
+    // SI-prefix comboboxes `EngineeringInput` derives (`<label> SI prefix`) are
+    // in the collision check rather than only the names this file declares.
+    const { rerender } = render(
+      <RunTransport
+        {...handlers()}
+        plan={windowPlanFromAuthoredTran({ startTime: 1e-3, stopTime: 5e-3 }, { directive: ".tran 0 5m 1m" })}
+      />,
+    );
 
     // "Run simulation" / "Stop simulation" / "Stop" belong to the editor
     // toolbar, the results drawer, the simulation panel and the assistant.
     // "Live controls" is SHELL.liveControls, the canvas switches.
-    for (const taken of ["Run simulation", "Stop simulation", "Stop", "Run", "Live controls", "Live"]) {
-      expect(screen.queryByRole("button", { name: taken })).toBeNull();
-      expect(screen.queryByRole("radio", { name: taken })).toBeNull();
-      expect(screen.queryByRole("group", { name: taken })).toBeNull();
+    const taken = ["Run simulation", "Stop simulation", "Stop", "Run", "Live controls", "Live"];
+    const collidable = ["button", "radio", "group", "radiogroup", "combobox", "textbox"] as const;
+    for (const name of taken) {
+      for (const role of collidable) {
+        expect(screen.queryAllByRole(role, { name })).toEqual([]);
+      }
+      // Nothing reaches these names by any other labelling route either.
+      expect(screen.queryAllByLabelText(name)).toEqual([]);
     }
+    // The Stop control is only mounted while a run is in flight, so it is
+    // checked in the state that has it.
+    rerender(
+      <RunTransport
+        {...handlers()}
+        plan={windowPlanFromAuthoredTran({ startTime: 1e-3, stopTime: 5e-3 })}
+        status={running(1e-3, 0.5, 1)}
+      />,
+    );
+    for (const name of taken) {
+      for (const role of collidable) {
+        expect(screen.queryAllByRole(role, { name })).toEqual([]);
+      }
+    }
+    rerender(
+      <RunTransport {...handlers()} plan={windowPlanFromAuthoredTran({ stopTime: 1 })} />,
+    );
     expect(screen.getByRole("group", { name: RUN_TRANSPORT_NAMES.group })).toBeTruthy();
     expect(screen.getByRole("radiogroup", { name: RUN_TRANSPORT_NAMES.modeGroup })).toBeTruthy();
     // The visible words stay the user's words even though the names qualify them.

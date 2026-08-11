@@ -151,4 +151,34 @@ describe("liveControlHint", () => {
   it("says nothing at all about a circuit with no controls", () => {
     expect(liveControlHint(liveControls([part("resistor", "1k", "R1")]), "tran")).toBeNull();
   });
+
+  /**
+   * The re-run sentences above are all false while a solve is in flight. A live
+   * run does not restart anything: `simulation/liveActuation.ts` halts the
+   * solver, alters the one device the emitter wrote for the part, and resumes
+   * the SAME transient, so the trace keeps its history and acquires a corner.
+   * Promising a re-run there tells the reader to expect the plot to blank, and
+   * that expectation is what makes a working feature look broken.
+   */
+  it("promises a bend, not a re-run, while the circuit is energised", () => {
+    const one = liveControls([part("switch", "open", "S1")]);
+    expect(liveControlHint(one, "tran", true)).toBe(
+      "Toggle S1 on the circuit and the running trace bends.",
+    );
+    // The authored analysis stops mattering once a run is live: there is one
+    // solve in flight and it is the thing that responds, whatever the document
+    // happens to declare.
+    for (const analysis of ["tran", "op", "ac", "dc", "tf", "noise"] as const) {
+      expect(liveControlHint(one, analysis, true)).toBe(
+        "Toggle S1 on the circuit and the running trace bends.",
+      );
+    }
+  });
+
+  it("keeps the plural form when several controls are energised", () => {
+    const many = liveControls([part("switch", "open", "S1"), part("pushButton", "open", "PB1")]);
+    expect(liveControlHint(many, "dc", true)).toBe(
+      "Operate a control on the circuit and the running trace bends.",
+    );
+  });
 });

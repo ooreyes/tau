@@ -127,6 +127,35 @@ export const SHELL = {
 export const PLANNED = {} as const satisfies Record<string, ShellSurface>;
 
 /**
+ * Named `role="group"` clusters that are NOT landmarks.
+ *
+ * Kept apart from `SHELL` deliberately. `SHELL` is the landmark inventory — one
+ * surface, one landmark, one name — and a group is not a landmark: it is a
+ * label a screen reader announces on the way past, not a destination the reader
+ * can jump to. Adding the run transport or the live scope to `SHELL` would grow
+ * that inventory for two clusters that live *inside* surfaces which are already
+ * named (`SHELL.circuitOverview` and `SHELL.resultsDrawer`), and the redesign's
+ * whole point was to shrink it.
+ *
+ * They are recorded here rather than left only in their components because a
+ * duplicate accessible name is a bug for anyone driving Tau by name, and this
+ * file is where that collision is meant to be visible. `SHELL.liveControls` is
+ * "Live controls" — the hand-operable switches on the canvas, an unrelated
+ * feature — which is exactly why the scope is "Live scope" and nothing here is
+ * named "Live" on its own.
+ *
+ * `shellContract.liveNames.test.ts` asserts these against `RUN_TRANSPORT_NAMES`
+ * and `LIVE_SCOPE_NAMES`, so the components stay the source of truth for their
+ * own markup and this file cannot silently drift from them.
+ */
+export const SHELL_GROUPS = {
+  /** The Run/Stop + Live|Window cluster in the simulator's circuit pane. */
+  runTransport: "Run transport",
+  /** The scrolling scope in the results drawer, drawn while a circuit runs. */
+  liveScope: "Live scope",
+} as const;
+
+/**
  * Inspector name for a given designator, e.g. `R1 properties`.
  *
  * Named for what it inspects, not "Properties": the latter tells a
@@ -151,6 +180,20 @@ export const SHELL_CONTROLS = {
   railSettings: "Settings",
   transportRun: "Run simulation",
   transportSettings: "Settings",
+  /**
+   * The simulator's own transport, which is a different control from
+   * `transportRun` above and deliberately differently named.
+   *
+   * `transportRun` is the header's Run: a health lamp that starts the authored
+   * analysis and switches view, and whose `isRunning` styling `Toolbar.test.tsx`
+   * pins. These four are the control that energises a circuit and stops it
+   * again, and they must be sayable by voice next to it without ambiguity, so
+   * every one contains its own visible label (WCAG 2.5.3).
+   */
+  liveRun: "Run this circuit",
+  liveStop: "Stop this run",
+  runMode: "Run mode",
+  scopeResumeFollow: "Resume live follow",
   openAssistant: "Open Bode",
   closeAssistant: "Close assistant",
   closeSettings: "Close settings",

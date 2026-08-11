@@ -20,7 +20,7 @@
  * shell contract, which is allowed, but must be deliberate and called out in
  * the commit. A stage that changes it incidentally is the signal to stop.
  */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The same two mocks every App-level suite takes: keep the project store off
@@ -46,6 +46,8 @@ vi.mock("./lib/localAiRuntime", async (importOriginal) => ({
 }));
 
 import App from "./App";
+import { ASSISTANT_PANEL_WIDTH } from "./components/assistantPanelState";
+import { ANALYSIS_PANE_WIDTH, SHELL_LAYOUT } from "./chrome/resolveChrome";
 import { SHELL, SHELL_CONTROLS, SHELL_SEPARATORS, type ShellSurface } from "./components/shellContract";
 import { simulationPreferences } from "./lib/simulationPreferences";
 import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./project/defaultWorkspace";
@@ -76,16 +78,45 @@ Object.defineProperty(globalThis, "localStorage", {
 });
 
 let shellWidth = 1440;
+/**
+ * Observers are remembered so a test can re-fire them, which is the only way to
+ * model a window resize: App learns its width from a ResizeObserver, not from
+ * the `resize` event, so dispatching one proves nothing.
+ */
+const liveObservers: { callback: ResizeObserverCallback; targets: Element[]; self: ResizeObserver }[] = [];
 class TestResizeObserver {
-  constructor(private readonly callback: ResizeObserverCallback) {}
+  private readonly entry: { callback: ResizeObserverCallback; targets: Element[]; self: ResizeObserver };
+  constructor(callback: ResizeObserverCallback) {
+    this.entry = { callback, targets: [], self: this as unknown as ResizeObserver };
+    liveObservers.push(this.entry);
+  }
   observe(target: Element) {
-    this.callback(
+    this.entry.targets.push(target);
+    this.entry.callback(
       [{ target, contentRect: { width: shellWidth, height: 800 } } as ResizeObserverEntry],
-      this as unknown as ResizeObserver,
+      this.entry.self,
     );
   }
   unobserve() {}
-  disconnect() {}
+  disconnect() {
+    const at = liveObservers.indexOf(this.entry);
+    if (at >= 0) liveObservers.splice(at, 1);
+  }
+}
+
+/** Resize the window the way the browser would: same observers, new width. */
+function resizeShellTo(width: number) {
+  shellWidth = width;
+  act(() => {
+    for (const observer of liveObservers) {
+      for (const target of observer.targets) {
+        observer.callback(
+          [{ target, contentRect: { width, height: 800 } } as ResizeObserverEntry],
+          observer.self,
+        );
+      }
+    }
+  });
 }
 Object.defineProperty(globalThis, "ResizeObserver", {
   configurable: true,
@@ -94,6 +125,7 @@ Object.defineProperty(globalThis, "ResizeObserver", {
 
 beforeEach(() => {
   shellWidth = 1440;
+  liveObservers.length = 0;
   storage.clear();
   simulationPreferences.reset();
   storage.set("tau.assistant.open", "1");
@@ -269,6 +301,119 @@ describe("shell inventory by app state", () => {
     // A translucent sheet is not enough: otherwise a screen reader can reach
     // controls that a sighted user cannot interact with until Settings closes.
     expect(isPresent(SHELL.assistant)).toBe(false);
+  });
+});
+
+/**
+ * The divider, driven — not merely counted.
+ *
+ * The two cases above prove the separator is present at 1440 and absent at 900,
+ * which is the split/stack decision and nothing else. What neither of them
+ * touches is the thing the divider is FOR, and that is where the defect was:
+ * `usePanelWidth` clamps every drag and arrow-key step against the static
+ * `ANALYSIS_PANE_WIDTH` (max 560 = plotter floor + circuit floor), while
+ * `resolveAnalysisPane` computes the real, workspace-dependent ceiling and
+ * clamps only the RENDERED width to it. Between those two numbers the divider
+ * banked a width the layout would never show, and the reader paid for it on the
+ * NEXT gesture: the first stretch of it moved nothing at all.
+ *
+ * 1100px with Bode open is not a corner: workspace is 1100 − rail − handle −
+ * assistant = 698px, comfortably above the 620px split threshold, and the real
+ * ceiling there is 698 − 8 − 280 = 410px against the static 560px. A 150px
+ * dead zone in an ordinary window.
+ */
+describe("the analysis divider is bounded by the layout, not by its config", () => {
+  const workspaceAt = (width: number) =>
+    width - SHELL_LAYOUT.railWidth - SHELL_LAYOUT.handleWidth - ASSISTANT_PANEL_WIDTH.defaultWidth;
+  /** What `resolveAnalysisPane` allows here, recomputed from the same
+   *  constants rather than copied as a number that can go stale. */
+  const resolvedMax = (width: number) => Math.min(
+    ANALYSIS_PANE_WIDTH.maxWidth,
+    Math.max(
+      ANALYSIS_PANE_WIDTH.minWidth,
+      workspaceAt(width) - SHELL_LAYOUT.handleWidth - SHELL_LAYOUT.simulatorSchematicMin,
+    ),
+  );
+  const paneWidth = () => {
+    const column = document.querySelector(".workspace-column--split") as HTMLElement | null;
+    const raw = column?.style.getPropertyValue("--analysis-pane-w") ?? "";
+    return Number.parseInt(raw, 10);
+  };
+  /** One gesture: press on the handle, move, release. Widening is leftward,
+   *  which is the "edge: left" convention the handle is configured with. */
+  const dragDivider = (dx: number) => {
+    const handle = screen.getByRole("separator", { name: SHELL_SEPARATORS.analysisPane });
+    fireEvent.pointerDown(handle, { button: 0, clientX: 600, clientY: 300, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 600 + dx, clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 600 + dx, clientY: 300, pointerId: 1 });
+  };
+
+  async function openSimulatorAt(width: number) {
+    shellWidth = width;
+    await openProject();
+    fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
+    await screen.findByRole("separator", { name: SHELL_SEPARATORS.analysisPane });
+  }
+
+  it("never lets a drag squeeze the circuit pane past its floor", async () => {
+    await openSimulatorAt(1100);
+    const ceiling = resolvedMax(1100);
+    expect(ceiling).toBeLessThan(ANALYSIS_PANE_WIDTH.maxWidth); // the band under test
+
+    dragDivider(-400); // hard left: ask for far more than the layout can give
+    expect(paneWidth()).toBe(ceiling);
+    // The floor this protects. `.workspace-column > .sim-schematic-pane` is
+    // `min-width: 0` in App.css, so the stylesheet is NOT holding this line -
+    // the arithmetic is.
+    expect(workspaceAt(1100) - SHELL_LAYOUT.handleWidth - paneWidth())
+      .toBeGreaterThanOrEqual(SHELL_LAYOUT.simulatorSchematicMin);
+  });
+
+  it("responds to the very next drag after one that hit the stop", async () => {
+    await openSimulatorAt(1100);
+    const ceiling = resolvedMax(1100);
+
+    dragDivider(-400);
+    expect(paneWidth()).toBe(ceiling);
+
+    // A separate gesture, narrowing by 60px. This is the assertion the whole
+    // case exists for: before the divider was clamped to the layout's ceiling,
+    // it started this drag believing it sat at 560, so 60px of travel landed at
+    // 500 - still above the 410 the screen was showing - and the divider did
+    // not move. Two more gestures like it would still not have moved it.
+    dragDivider(60);
+    expect(paneWidth()).toBe(ceiling - 60);
+  });
+
+  it("reports its own live bounds to assistive technology", async () => {
+    await openSimulatorAt(1100);
+    dragDivider(-400);
+
+    const handle = screen.getByRole("separator", { name: SHELL_SEPARATORS.analysisPane });
+    expect(handle.getAttribute("aria-valuemax")).toBe(String(resolvedMax(1100)));
+    // valuenow tracked the rendered pane even while the hook held 560, so the
+    // number was right and the control was still dead. Both must agree now.
+    expect(handle.getAttribute("aria-valuenow")).toBe(String(paneWidth()));
+  });
+
+  /**
+   * The half that must NOT change. A window that got narrower is not the user
+   * changing their mind: the remembered width is clamped for display and handed
+   * back when there is room for it again. Clamping the divider's own value on a
+   * resize would silently shrink a pane the reader had chosen.
+   */
+  it("hands a wide pane back when the window has room for it again", async () => {
+    await openSimulatorAt(1600);
+    dragDivider(-400);
+    const wide = paneWidth();
+    expect(wide).toBe(ANALYSIS_PANE_WIDTH.maxWidth);
+
+    // Narrow, then widen, without touching the divider.
+    resizeShellTo(1100);
+    expect(paneWidth()).toBe(resolvedMax(1100));
+    resizeShellTo(1600);
+
+    expect(paneWidth()).toBe(wide);
   });
 });
 

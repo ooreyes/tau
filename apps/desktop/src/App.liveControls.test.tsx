@@ -137,8 +137,28 @@ describe("App - live controls band in the simulator", () => {
     );
   });
 
-  it("follows the authored analysis when it says what re-runs", async () => {
+  /**
+   * This case used to assert the transient sentence flat, as though the
+   * authored directive alone decided it. It no longer does, and the reason is
+   * the live run: while a solve is in flight `liveActuation.ts` halts, alters
+   * one device and resumes the SAME transient, so the trace bends instead of
+   * re-running and "the transient re-runs" would be describing a restart from
+   * t = 0 that does not happen. The sentence is therefore a function of the run
+   * state, and this case is now scoped to the state it is true in — idle, with
+   * an authored `.tran`, which the transport shows as an editable Window rather
+   * than energising continuously. `liveControls.test.ts` covers the energised
+   * sentence, which cannot be reached here (jsdom has no ngspice bridge).
+   */
+  it("follows the authored analysis while nothing is energised", async () => {
     await openSimulator(SWITCHED_DIVIDER, { directives: [".tran 1m"] });
+    // The document's `.tran` pre-selects Window rather than being applied
+    // invisibly, so the run this sentence promises is one the user can see the
+    // bounds of and edit.
+    expect(
+      (screen.getByRole("radio", { name: "Window: run a fixed time span" }) as HTMLElement)
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(screen.getByRole("button", { name: "Run this circuit" })).toBeTruthy();
     expect(bandText()).toContain(
       "Toggle S1 on the circuit and the transient re-runs.",
     );

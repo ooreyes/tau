@@ -586,6 +586,105 @@ describe("live actuation — a drag costs one halt/alter/resume, not one per val
     ]);
   });
 
+  it("orders a coalesced wiper move against the state the engine holds, not one it never had", async () => {
+    // `App.actuateLiveRunRef` hands every pointer value the PREVIOUS SHEET
+    // value as its before-state, so a drag that overshoots and comes back
+    // leaves one surviving request whose before-state (0.9) the engine never
+    // reached — everything between the first push and the pump was superseded.
+    // Ordering that request by its own before-state shrinks a leg first, and
+    // grow-before-shrink exists precisely so the track is never momentarily
+    // SMALLER than the real one.
+    const engine = recorder();
+    const plans: LiveActuationPlan[] = [];
+    const queue = new LiveActuationQueue({
+      deck: DECK,
+      send: engine.send,
+      onOutcome: (outcome) => plans.push(outcome.plan),
+    });
+
+    queue.push(control("RV1"), "10k Wiper=0.9");
+    queue.push(at("RV1", "10k Wiper=0.9"), "10k Wiper=0.6");
+    await queue.settled();
+
+    expect(engine.sent).toEqual([
+      { instance: "R_RV1_a", value: "6000" },
+      { instance: "R_RV1_b", value: "4000" },
+    ]);
+    // Spelled as the property and not only as the order: the engine is still
+    // solving the centred 5k/5k track when the first of these lands.
+    const legs: Record<string, number> = { R_RV1_a: 5000, R_RV1_b: 5000 };
+    legs[engine.sent[0]!.instance] = Number(engine.sent[0]!.value);
+    expect(legs.R_RV1_a! + legs.R_RV1_b!).toBeGreaterThan(10_000);
+    // ...and the disclosure names the total the run really solves (6k + 5k),
+    // not the one a never-applied before-state would imply.
+    expect(plans[0]!.intermediate).toContain("11 kΩ");
+  });
+
+  it("plans the position that arrives mid-flight against the change already sent", async () => {
+    const gate = deferred<void>();
+    const sent: { instance: string; value: string }[] = [];
+    const queue = new LiveActuationQueue({
+      deck: DECK,
+      send: async (options) => {
+        sent.push({ instance: options.instance, value: options.value });
+        if (sent.length === 1) await gate.promise;
+        return { ok: true, value: telemetry() };
+      },
+    });
+
+    queue.push(control("RV1"), "10k Wiper=0.6");
+    // Let the pump start so the first change is genuinely outstanding, then
+    // overshoot and settle back while it is in flight.
+    await Promise.resolve();
+    queue.push(at("RV1", "10k Wiper=0.6"), "10k Wiper=0.9");
+    queue.push(at("RV1", "10k Wiper=0.9"), "10k Wiper=0.7");
+    gate.resolve();
+    await queue.settled();
+
+    // The second cycle moves 0.6 → 0.7, because 0.6 is where the first cycle
+    // left the engine. Ordered by the superseded 0.9 it would shrink A first
+    // and put a 9k track under a circuit that has 10k.
+    expect(sent).toEqual([
+      { instance: "R_RV1_a", value: "6000" },
+      { instance: "R_RV1_b", value: "4000" },
+      { instance: "R_RV1_a", value: "7000" },
+      { instance: "R_RV1_b", value: "3000" },
+    ]);
+  });
+
+  it("spends nothing when a burst ends where the running circuit already is", async () => {
+    const engine = recorder();
+    const queue = new LiveActuationQueue({ deck: DECK, send: engine.send });
+
+    // Out and back before the pump ran. The engine never left these positions,
+    // so there is nothing to send — and a queued position that would drive it
+    // away from where the user left the sheet must be dropped, not sent.
+    queue.push(control("RV1"), "10k Wiper=0.7");
+    expect(queue.push(at("RV1", "10k Wiper=0.7"), "10k Wiper=0.5").kind).toBe("unchanged");
+    queue.push(control("S1"), "closed");
+    expect(queue.push(at("S1", "closed"), "open").kind).toBe("unchanged");
+    await queue.settled();
+
+    expect(engine.sent).toEqual([]);
+    expect(queue.haltResumeCycles).toBe(0);
+  });
+
+  it("puts back what it assumed about the engine when an alter never reached it", async () => {
+    const refused: LiveFailure = { kind: "alter-refused", message: "value out of range" };
+    const engine = recorder([failWith(refused)]);
+    const queue = new LiveActuationQueue({ deck: DECK, send: engine.send });
+
+    queue.push(control("RV1"), "10k Wiper=0.6");
+    await queue.settled();
+    // The first leg was refused, so nothing landed and the engine still holds
+    // the centred track.
+    expect(engine.sent).toEqual([{ instance: "R_RV1_a", value: "6000" }]);
+
+    expect(queue.push(at("RV1", "10k Wiper=0.6"), "10k Wiper=0.5").kind).toBe("unchanged");
+    await queue.settled();
+    expect(engine.sent).toHaveLength(1);
+  });
+
   it("drops queued positions when the caller cancels", async () => {
     const gate = deferred<void>();
     const engine = recorder([gate.promise.then(() => ({ ok: true as const, value: telemetry() }))]);

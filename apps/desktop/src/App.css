@@ -777,11 +777,32 @@ body {
   fill: var(--grid-dot-major);
 }
 
-/* Component symbols */
+/* Component symbols.
+ *
+ * The canvas weight is 1.55, and this is the only rule that says so.
+ *
+ * It used to be said twice. `b04d699` ("migrate LTspice shell design") tuned
+ * this rule 1.6 -> 1.45 AND, in the same commit, appended a bulk-pasted shell
+ * block near the end of the file that re-declared `.symbol { stroke-width:
+ * 1.55 }`. Equal specificity, so the later copy won and the 1.45 had been dead
+ * since 2026-06-20 - every screenshot, design review and token pass since
+ * (including `2ea6aff`, which tokenized the duplicate's colour without
+ * noticing it was a duplicate) approved a 1.55 canvas.
+ *
+ * So 1.55 is the intended weight by seven weeks of evidence, and 1.45 is the
+ * intent that never shipped. Resolving it the other way - deleting the
+ * duplicate's declaration and letting 1.45 take effect - would have silently
+ * re-weighted every symbol on the canvas, which is why this sat unresolved.
+ * The value moved up here and the duplicate block was removed; the computed
+ * style is byte-identical because nothing between the two rules matched
+ * `.symbol` at this specificity, and the higher-specificity overrides
+ * (`.component.selected`, `.component.operable-hover`, `.ghost`,
+ * `.symbol-preview`) win on specificity, not on order.
+ */
 .symbol {
   fill: none;
   stroke: var(--comp);
-  stroke-width: 1.45;
+  stroke-width: 1.55;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -6108,10 +6129,10 @@ body {
   fill: var(--grid-dot-major);
 }
 
-.symbol {
-  stroke: var(--comp);
-  stroke-width: 1.55;
-}
+/* The `.symbol` re-declaration that used to sit here was the winning half of a
+   duplicate pair; its 1.55 now lives on the single `.symbol` rule near the top
+   of this file, where the rest of the symbol spec (fill, caps, joins,
+   non-scaling stroke) already was. See that rule's comment for the resolution. */
 
 /* Connection dot where 3+ conductors meet (drawn by Canvas at junctions). */
 .junction-dot {
@@ -10133,4 +10154,88 @@ button.bottom-panel-head:focus-visible {
    readout reads as unstable and on a measured value it actively misleads. */
 @media (prefers-reduced-motion: reduce) {
   .led-glow { transition: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   THE RUN TRANSPORT AND THE LIVE SCOPE
+
+   `RunTransport.tsx` and `LiveScopePane.tsx` were built as self-contained
+   presentational units and told to defer their stylesheet to whoever wired them
+   in, so that a component could not quietly acquire an opinion about where it
+   was going to be mounted. This is that stylesheet. It does two things and no
+   more: it gives the transport a band to sit in, and it undoes the two rules
+   the bounded plotter's `.scope-*` family imposes that are wrong for a live
+   pane. Tokens only, as everything below the token zone must be.
+══════════════════════════════════════════════════════════════════════════════ */
+
+/* The transport's band, between the circuit header and the live-controls strip.
+   Same construction as `.live-controls` in styles/liveControls.css — full pane
+   width, no box of its own, the header's own hairline as the separator — so the
+   two read as one stack of bands rather than as two competing panels.
+
+   `overflow-x: auto` for the same reason `.editor-toolbar` has it: at the app's
+   declared 900px minimum the circuit pane can be ~280px wide, and Run, Stop and
+   the Live|Window pair must stay reachable by scrolling rather than be clipped
+   into unreachability. `min-window-dod.mjs` checks precisely that. */
+.run-transport-band {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--panel-3);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.run-transport-note {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* A named failure from the engine bridge, or a stop `StopReason` has no word
+   for. Warning, not error: the run is over and the sentence explains it, which
+   is not the same as something being broken. */
+.run-transport-alert {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+  color: var(--signal);
+}
+
+/* The live scope, inside the results drawer above the bounded plotter.
+
+   `LiveScopePane` reuses the plotter's `.scope-shell` / `.scope-svg` /
+   `.scope-trace` / `.scope-legend` classes on purpose: the two panes show the
+   same nets minutes apart, so their instrument face, hairline, trace weight and
+   gutters have to be identical to the pixel. Two of those rules were written for
+   the plotter's layout, though, and are re-stated here rather than weakened
+   there — the plotter is not changing.
+
+   `.scope-shell`'s padding assumes it is the plotter's own top-level block; here
+   the drawer already provides the inset, and doubling it pushed the trace band
+   narrower than the bounded plot beneath it. */
+.live-scope-host > .scope-shell {
+  padding: 0 0 var(--sp-2);
+}
+
+/* `.scope-legend` stacks its rows because the plotter's legend is a column of
+   per-trace statistics. The live legend is a single row of channel names, and
+   the pane already asks for `flex-wrap`; without this the base rule's
+   `flex-direction: column` wins (App.css is unlayered, Tailwind's utilities are
+   not) and every channel gets its own line. */
+.live-scope-host .scope-legend {
+  flex-direction: row;
+}
+
+/* The scope draws a hairline separating it from the bounded plotter below, so
+   the reader can see at a glance that these are two measurements and not one
+   plot with an odd header. */
+.live-scope-host {
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
 }

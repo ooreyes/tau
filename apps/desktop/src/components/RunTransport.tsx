@@ -258,8 +258,19 @@ export function RunTransport({
 
   const authoredText = plan.mode === "window" ? describeAuthored(plan) : null;
   const editedFromAuthored = plan.mode === "window" && isWindowEditedFromAuthored(plan);
-  // A window that ends before it starts solves nothing. Say so rather than
-  // letting Run produce an empty plot the user has to diagnose.
+  /*
+   * A window that ends at or before it starts solves nothing. Say so rather
+   * than letting Run produce an empty plot the user has to diagnose — and,
+   * because a diagnosis the control ignores is worse than no diagnosis, do not
+   * arm Run at the same time. This is the component's own judgement about its
+   * own value, so it does not wait for the owner to pass `disabled`: the owner
+   * blocks Run for reasons this component cannot see (no schematic, a deck that
+   * will not build), and the two combine rather than replace each other.
+   *
+   * Only Run. `disabled` here means what it means everywhere else in this file
+   * — Stop is never disabled — because an unsolvable window is not a reason to
+   * trap a user inside a running solver.
+   */
   const emptyWindow = plan.mode === "window" && !(plan.stopTime > plan.startTime);
 
   return (
@@ -290,7 +301,7 @@ export function RunTransport({
             size="sm"
             className="gap-1.5 bg-secondary hover:bg-accent"
             aria-label={RUN_TRANSPORT_NAMES.run}
-            disabled={disabled}
+            disabled={disabled || emptyWindow}
             onClick={onRun}
           >
             <Play size={12} strokeWidth={1.6} fill="currentColor" aria-hidden="true" />
@@ -382,12 +393,21 @@ export function RunTransport({
       {/*
        * What pressing Run will actually do, in one sentence, from the model's
        * own horizon rather than from this component's opinion of it.
+       *
+       * Withheld for an empty window, because `runPlanHorizon` answers a
+       * window's `stopTime` whether or not the window contains any time at
+       * all: "Runs to t = 500 µs, then stops" beside a Run that is refusing to
+       * start, for a window that starts at 1 ms, is a promise about a run that
+       * cannot happen. The alert below is then the only thing said about it,
+       * which is right — there is one fact here, not two.
        */}
-      <p className="m-0 text-[11px] leading-4 text-muted-foreground">
-        {horizon === null
-          ? "Runs continuously, like a circuit on the bench, until you stop it."
-          : `Runs to t = ${formatSeconds(horizon)}, then stops.`}
-      </p>
+      {!emptyWindow && (
+        <p className="m-0 text-[11px] leading-4 text-muted-foreground">
+          {horizon === null
+            ? "Runs continuously, like a circuit on the bench, until you stop it."
+            : `Runs to t = ${formatSeconds(horizon)}, then stops.`}
+        </p>
+      )}
 
       {authoredText && (
         <div className="flex flex-wrap items-center gap-2 text-[11px] leading-4 text-muted-foreground">
@@ -414,7 +434,8 @@ export function RunTransport({
 
       {emptyWindow && (
         <p role="alert" className="m-0 text-[11px] leading-4 text-destructive">
-          This window ends at or before it starts, so there is nothing to solve.
+          This window ends at or before it starts, so there is nothing to solve. Run stays
+          unavailable until it ends after it starts.
         </p>
       )}
 

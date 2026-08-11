@@ -168,7 +168,8 @@ import {
   toggleCardWidth,
 } from "./cardLayout";
 import { PlotAxes, ScopeClip } from "./PlotAxes";
-import { useMeasuredSize, tickCountsFromSize, type MeasuredSize } from "./useMeasuredSize";
+import { PLOT_PAD, TRACE_EDGE_GUTTER, scopeWidth } from "./plotGeometry";
+import { useMeasuredSize, tickCountsFromSize } from "./useMeasuredSize";
 import { usePlotViewport } from "./usePlotViewport";
 import { ScopeZoomCluster } from "./ScopeZoomCluster";
 import type { Viewport } from "../simulation/plotViewport";
@@ -268,49 +269,17 @@ interface SimulationPanelProps {
   liveSchematicPlayback?: boolean;
 }
 
-/**
- * The scope's coordinate system is 1:1 with rendered CSS pixels.
- *
- * It was not. Every `<svg>` here declared `viewBox="0 0 340 <h>"` and was then
- * stretched to whatever width the panel gave it, so the browser applied one
- * uniform scale to the whole drawing. In the 1052px-wide plotter that is 3.1x:
- * an 11px tick label rendered at 34px, the 46-unit axis gutter ate 143px a
- * side, and a 1.5-unit trace drew as a 4.7px slab. The plot's own text was the
- * largest type in the product, sitting inside a window whose chrome is 11px.
- *
- * The fix is not to shrink the type, it is to stop scaling it: each pane
- * measures its own `<svg>` (they all already did, for tick-count thinning) and
- * uses that width as the viewBox width, so one user unit is one device pixel.
- * `PLOT_PAD`, the font sizes in `App.css`, and `PlotAxes`'s "7.2px per glyph"
- * label-collision estimate then all mean what they say. That estimate is the
- * tell that 1:1 was the original intent and the stretch was the accident.
- *
- * `PLOT_WIDTH_FALLBACK` covers the case where there is no measurement: jsdom
- * has no layout, so `ResizeObserver` and `getBoundingClientRect` both report
- * zero there, and a viewBox of width 0 is a degenerate plot that still renders
- * rather than throwing. Falling back to the historical 340 keeps that case
- * behaving exactly as it did before, which is what the existing tests pin.
- */
-const PLOT_WIDTH_FALLBACK = 340;
-
-/** viewBox width for a pane, in CSS pixels once its `<svg>` has been measured. */
-function scopeWidth(size: MeasuredSize): number {
-  return size.width > 0 ? Math.round(size.width) : PLOT_WIDTH_FALLBACK;
-}
-
 // Fixed pane height, in real pixels now that the viewBox is 1:1. Previously
 // 210 units stretched to ~650px in a wide panel; 260 real pixels leaves 168px
 // of trace area inside the gutters, which is a readable scope face without
 // giving one plot the whole drawer. Card-sized panes use PLOT_HEIGHT_PX.
+//
+// This one stays local: the live scope's own height is a different editorial
+// decision about a different pane, so a shared name would only make two
+// unrelated numbers look coupled. The geometry that genuinely IS shared - the
+// 1:1 viewBox rule, PLOT_PAD, TRACE_EDGE_GUTTER and scopeWidth's fallback -
+// moved to ./plotGeometry, which carries the reasoning that used to be here.
 const PLOT_HEIGHT = 260;
-// Labels and axis titles need separate visual bands; the shared plot box stays
-// at 46px so the waveform retains useful vertical range. PlotAxes places the
-// vertical title and Y tick anchors at opposite sides of this gutter.
-const PLOT_PAD = 46;
-// Keep round line caps visibly inside the instrument frame. Mapping endpoints
-// exactly onto the clip boundary shaved half the stroke and made periodic
-// traces look cut off at both ends even though their samples were complete.
-const TRACE_EDGE_GUTTER = 2.5;
 
 type TransientCursorId = "c1" | "c2";
 

@@ -9,6 +9,25 @@ export interface WaveformBounds {
   max: number;
 }
 
+/**
+ * Sample sequences arrive here as both `number[]` (the TS solver's traces) and
+ * `Float64Array` (the live ring's slices), so the scanning helpers below are
+ * declared over `ArrayLike<number>` rather than `ReadonlyArray<number>`.
+ *
+ * The difference is not cosmetic. A `Float64Array` is not a `ReadonlyArray`:
+ * it lacks `concat`, `flat` and `flatMap`, none of which any of these functions
+ * calls — they read `.length` and `[i]` and nothing else. Declaring the narrow
+ * type forced the live scope to either cast at the boundary or call
+ * `Array.from` on every frame, and at the ring's 2^19 capacity that is a
+ * half-million-element copy sixty times a second. `ArrayLike<number>` states
+ * the actual requirement, so both shapes pass without a copy and without a
+ * cast that a future edit could quietly invalidate.
+ *
+ * The cost of the wider type is that these bodies may not use `for…of` or any
+ * array method; index loops are deliberate here, not an oversight.
+ */
+type Samples = ArrayLike<number>;
+
 const WAVEFORM_PADDING_FRACTION = 0.08;
 // Native solvers often leave femto-scale numerical residue on a physically
 // steady milli/volt-scale signal. Treating that residue as the whole Y domain
@@ -40,12 +59,14 @@ function paddedWaveformBounds(rawMin: number, rawMax: number): WaveformBounds {
 }
 
 /** Find scope bounds without spreading a large native result into a function call. */
-export function waveformBounds(traces: ReadonlyArray<Pick<Trace, "values">>): WaveformBounds {
+export function waveformBounds(traces: ReadonlyArray<{ values: Samples }>): WaveformBounds {
   let rawMin = Number.POSITIVE_INFINITY;
   let rawMax = Number.NEGATIVE_INFINITY;
 
   for (const trace of traces) {
-    for (const value of trace.values) {
+    const { values } = trace;
+    for (let index = 0; index < values.length; index += 1) {
+      const value = values[index];
       if (!Number.isFinite(value)) continue;
       if (value < rawMin) rawMin = value;
       if (value > rawMax) rawMax = value;
@@ -182,8 +203,8 @@ export function displaySampleIndices(length: number, maxPoints = MAX_WAVEFORM_RE
  * min/max envelope made only of engineering lines, never an area-to-baseline.
  */
 export function waveformEnvelopeIndices(
-  times: ReadonlyArray<number>,
-  values: ReadonlyArray<number>,
+  times: Samples,
+  values: Samples,
   xMin: number,
   xMax: number,
   pixelColumns: number,

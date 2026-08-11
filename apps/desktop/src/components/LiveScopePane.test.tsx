@@ -260,6 +260,131 @@ describe("live scope geometry", () => {
   });
 });
 
+describe("live scope at tight zoom", () => {
+  /**
+   * Two samples a millisecond apart. Any window narrower than that gap — which
+   * is where the timebase knob lands after a few presses, and where a
+   * slow-changing trace lives all the time — contains no sample at all, and the
+   * only true picture is the segment passing through it.
+   */
+  const straddled = () => {
+    const ring = new LiveSampleRing({ channelCount: 1, capacity: 1024 });
+    ring.push(0, [0]);
+    ring.push(1e-3, [1]);
+    return ring;
+  };
+
+  it("draws the segment that crosses a window holding no sample of its own", () => {
+    const geometry = liveScopeGeometry({
+      ring: straddled(),
+      channels: CHANNELS,
+      timeWindow: { spanSeconds: 2e-4, anchorEndTime: 6e-4 },
+      width: 940,
+      height: LIVE_SCOPE_HEIGHT,
+    });
+
+    // Pre-clipping the ring by TIME deleted both endpoints of this segment and
+    // left an empty path: a line across the whole view, drawn as nothing.
+    const [trace] = geometry.traces;
+    expect(trace!.pointCount).toBe(2);
+    const xs = [...trace!.path.matchAll(/[ML] (-?[\d.]+) /g)].map((m) => Number(m[1]));
+    // Cut at the frame, not thrown at the rasteriser: the line spans the full
+    // trace band and every coordinate stays inside the plot box.
+    expect(xs[0]).toBeCloseTo(PAD + GUTTER, 1);
+    expect(xs[1]).toBeCloseTo(940 - PAD - GUTTER, 1);
+
+    const ys = [...trace!.path.matchAll(/[ML] -?[\d.]+ (-?[\d.]+)/g)].map((m) => Number(m[1]));
+    // A rising ramp still rises: SVG y grows downward, so the right end is higher
+    // up the box. This is what catches a "line" that is really a flat artefact.
+    expect(ys[0]).toBeGreaterThan(ys[1]!);
+    expect(ys.every((y) => y >= PAD - 1e-9 && y <= LIVE_SCOPE_HEIGHT - PAD + 1e-9)).toBe(true);
+  });
+
+  it("renders that crossing in the pane, and says nothing about missing data", () => {
+    stubLayout(940);
+    const { container } = render(
+      <Harness
+        ring={straddled()}
+        status={running(1e-3)}
+        initialWindow={{ spanSeconds: 2e-4, anchorEndTime: 6e-4 }}
+      />,
+    );
+    expect(container.querySelector(".scope-trace")?.getAttribute("d")).not.toBe("");
+    expect(traceXs(container)).toHaveLength(2);
+    // The window is full of signal, so nothing here may suggest otherwise.
+    expect(container.querySelector('[data-notice="window-empty"]')).toBeNull();
+  });
+
+  it("draws nothing, and says why, past the newest sample", () => {
+    stubLayout(940);
+    const { container } = render(
+      <Harness
+        ring={straddled()}
+        status={running(1e-3)}
+        initialWindow={{ spanSeconds: 1e-3, anchorEndTime: 5e-3 }}
+      />,
+    );
+    // Nothing has been solved out here yet. Drawing a line into it would be the
+    // straddle fix overreaching into invention.
+    expect(container.querySelector(".scope-trace")?.getAttribute("d")).toBe("");
+    expect(container.querySelector('[data-notice="window-empty"]')?.textContent).toBe(
+      "Nothing solved in this window yet — the newest sample is at 1 ms, off the left edge.",
+    );
+  });
+
+  it("draws nothing, and says why, before the oldest sample still retained", () => {
+    stubLayout(940);
+    const ring = new LiveSampleRing({ channelCount: 1, capacity: 8 });
+    for (let i = 0; i < 40; i += 1) ring.push(i * 1e-4, [i]);
+    const { container } = render(
+      <Harness
+        ring={ring}
+        status={running(3.9e-3)}
+        initialWindow={{ spanSeconds: 5e-4, anchorEndTime: 1e-3 }}
+      />,
+    );
+    expect(container.querySelector(".scope-trace")?.getAttribute("d")).toBe("");
+    // The two facts are separate sentences: this window is empty, AND the ring
+    // has thrown away what used to be in it.
+    expect(container.querySelector('[data-notice="window-empty"]')?.textContent).toBe(
+      "No samples in this window — the oldest one still retained is at 3.2 ms, off the right edge.",
+    );
+    expect(container.querySelector('[data-notice="window-clipped"]')).toBeTruthy();
+  });
+
+  it("finds the neighbouring samples without copying the ring", () => {
+    // The cadence design's whole premise: the ring is not React state, and no
+    // frame may copy it. Widening the slice by one sample either side is only
+    // affordable if it stays a widening — a naive "grab a span either side"
+    // would sail past this at any zoom level the user actually reaches.
+    const ring = new LiveSampleRing({ channelCount: 1, capacity: 1 << 15 });
+    const sampleCount = 20_000;
+    for (let i = 0; i < sampleCount; i += 1) ring.push(i * 5e-5, [Math.sin(i / 50)]);
+
+    let copied = 0;
+    const realSlice = ring.sliceByTime.bind(ring);
+    ring.sliceByTime = (t0: number, t1: number) => {
+      const view = realSlice(t0, t1);
+      copied += view.times.length;
+      return view;
+    };
+
+    // A 1 µs window wedged between two samples 50 µs apart: the case that used
+    // to blank the pane, and the case with the most to gain from over-slicing.
+    const geometry = liveScopeGeometry({
+      ring,
+      channels: CHANNELS,
+      timeWindow: { spanSeconds: 1e-6, anchorEndTime: 0.5 + 2.5e-5 },
+      width: 940,
+      height: LIVE_SCOPE_HEIGHT,
+    });
+
+    expect(geometry.traces[0]!.pointCount).toBe(2);
+    expect(copied).toBeLessThanOrEqual(16);
+    expect(copied).toBeLessThan(sampleCount / 100);
+  });
+});
+
 describe("live scope follow, pan and zoom", () => {
   it("leaves follow when the trace is dragged, and offers a visible way back", () => {
     stubLayout(940);
@@ -281,12 +406,18 @@ describe("live scope follow, pan and zoom", () => {
     expect(panned.anchorEndTime).not.toBeNull();
     expect(panned.anchorEndTime!).toBeLessThan(DEFAULT_LIVE_SPAN_SECONDS);
     expect(pane().getAttribute("data-following")).toBe("false");
-    // The newest sample is no longer at the right edge; the trace scrolled.
-    expect(lastTraceX(container)).toBeLessThan(940 - PAD - GUTTER);
+    // The trace scrolled by exactly the 120 px dragged: the run starts at t = 0,
+    // so its first sample used to sit on the left gutter and now sits 120 px in.
+    // The RIGHT end is no longer a "did it scroll" witness, and deliberately so —
+    // samples continue past the pinned edge, so the trace runs into the edge and
+    // is cut there rather than stopping one sample short of it.
+    expect(traceXs(container)[0]).toBeCloseTo(PAD + GUTTER + 120, 0);
+    expect(lastTraceX(container)).toBeCloseTo(940 - PAD - GUTTER, 1);
 
     fireEvent.click(screen.getByRole("button", { name: LIVE_SCOPE_NAMES.resumeFollow }));
     expect((seen.mock.calls[seen.mock.calls.length - 1]![0] as TimeWindow).anchorEndTime).toBeNull();
     expect(pane().getAttribute("data-following")).toBe("true");
+    expect(traceXs(container)[0]).toBeCloseTo(PAD + GUTTER, 1);
     expect(lastTraceX(container)).toBeCloseTo(940 - PAD - GUTTER, 1);
   });
 
@@ -393,8 +524,12 @@ describe("live scope honesty", () => {
     // Two losses, two sentences. They have different causes and different
     // fixes, so merging them into one vague "data missing" would leave the
     // engineer unable to act on either.
+    // The words are `describeEngineDecimation`'s, quoted rather than paraphrased
+    // so the pane cannot rewrite the model's sentence. Two cumulative counts and
+    // no ratio: `stride` describes only the last frame read, so pairing it with
+    // a whole-run total used to produce "1 in 1 solved points — 4,102,208 …".
     expect(engine?.textContent).toBe(
-      "Showing 1 in 10 solved points — 9,000 samples the engine solved were never sent to the plot.",
+      "Showing 1,000 of 10,000 solved points — 9,000 samples the engine solved were never sent to the plot.",
     );
     expect(discard?.textContent).toMatch(/discarded/);
     expect(engine?.textContent).not.toBe(discard?.textContent);

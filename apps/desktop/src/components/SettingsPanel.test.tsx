@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtime = vi.hoisted(() => ({
@@ -34,12 +34,51 @@ Element.prototype.setPointerCapture = () => {};
 Element.prototype.releasePointerCapture = () => {};
 Element.prototype.scrollIntoView = () => {};
 
+/**
+ * Run the section's in-flight async work to completion, then let React commit.
+ *
+ * This replaces the `findBy*` / `waitFor` polling every case here used to do,
+ * and the distinction matters more than it looks. `findByText` is a 1000 ms
+ * wall-clock deadline sampled every 50 ms: on an idle host the answer is ready
+ * in single-digit milliseconds and it never notices, but the full suite runs
+ * many jsdom-heavy files in parallel workers on a machine that regularly stalls
+ * one for seconds at a time (PROGRESS/STATE record whole tests blowing the
+ * 5000 ms limit with no assertion failure). A poll against a clock that stops
+ * is a race by construction, and raising the deadline only moves the number at
+ * which it is lost - it does not remove the dependency on wall time.
+ *
+ * `act` removes it. Everything this section awaits is a resolved promise from a
+ * `vi.fn()` mock - the mount-time `getLocalAiStatus` probe, `ensureLocalAi`,
+ * `stopLocalAi` - so draining the microtask queue inside `act` and flushing the
+ * resulting render is not "waiting long enough", it is the work finishing. What
+ * follows a `settle()` can therefore be a synchronous `getBy*`, which fails
+ * immediately and truthfully when the UI is wrong instead of after a second of
+ * polling that reads as a timeout.
+ *
+ * NOTE for whoever comes here from the "Settings is React.lazy now" theory:
+ * this file has no lazy boundary to await. It renders `SettingsAiSection`
+ * directly; the `lazy()`-wrapped surface is `SettingsWindow` in `App.tsx`, and
+ * only the tests that mount the app shell cross a `Suspense` boundary.
+ */
+async function settle() {
+  await act(async () => { await Promise.resolve(); });
+}
+
+/** Mount the section with its mount-time status probe already resolved. */
+async function renderAiSection(onNotice: (message: string) => void = vi.fn()) {
+  const view = render(<SettingsAiSection onNotice={onNotice} />);
+  await settle();
+  return view;
+}
+
 async function chooseSelectOption(ariaLabel: string, optionName: string | RegExp) {
   const trigger = screen.getByRole("combobox", { name: ariaLabel });
   fireEvent.pointerDown(trigger, { button: 0, pointerId: 1, pointerType: "mouse" });
-  const option = await screen.findByRole("option", { name: optionName });
+  await settle();
+  const option = screen.getByRole("option", { name: optionName });
   fireEvent.pointerUp(option, { button: 0, pointerId: 1, pointerType: "mouse" });
   fireEvent.click(option);
+  await settle();
 }
 
 const storage = new Map<string, string>();
@@ -100,56 +139,61 @@ beforeEach(() => {
 describe("SettingsAiSection local assistant lifecycle", () => {
   it("offers Turn on when the runtime is missing", async () => {
     runtime.getStatus.mockResolvedValue(status({ installed: false }));
-    render(<SettingsAiSection onNotice={vi.fn()} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Turn on" }));
-    await waitFor(() => expect(ensure.ensureLocalAi).toHaveBeenCalled());
+    await renderAiSection();
+    fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
+    await settle();
+    expect(ensure.ensureLocalAi).toHaveBeenCalled();
   });
 
   it("defaults to on-device with a labeled download and no localhost copy", async () => {
     runtime.getStatus.mockResolvedValue(status());
-    render(<SettingsAiSection onNotice={vi.fn()} />);
+    await renderAiSection();
     expect(screen.getByRole("radio", { name: "On-device" }).getAttribute("aria-checked")).toBe("true");
     const model = screen.getByRole("combobox", { name: "On-device model" });
     expect(model.tagName).toBe("BUTTON");
     expect(model.getAttribute("data-slot")).toBe("select-trigger");
     expect(model.textContent).toMatch(/Qwen3 1\.7B/);
     expect(document.querySelector(".settings-field select")).toBeNull();
-    expect(await screen.findByText("Download: 914 MB")).toBeTruthy();
+    expect(screen.getByText("Download: 914 MB")).toBeTruthy();
     expect(screen.queryByText(/8080|127\.0\.0\.1|localhost/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Download & turn on" }));
-    await waitFor(() => expect(ensure.ensureLocalAi).toHaveBeenCalled());
+    await settle();
+    expect(ensure.ensureLocalAi).toHaveBeenCalled();
   });
 
   it("starts a cached model with Turn on", async () => {
     saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
     runtime.getStatus.mockResolvedValue(status({ downloaded4: true }));
-    render(<SettingsAiSection onNotice={vi.fn()} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Turn on" }));
-    await waitFor(() => expect(ensure.ensureLocalAi).toHaveBeenCalled());
+    await renderAiSection();
+    fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
+    await settle();
+    expect(ensure.ensureLocalAi).toHaveBeenCalled();
   });
 
   it("exposes Turn off when ready", async () => {
     runtime.getStatus.mockResolvedValue(status({ state: "ready", managed: true, downloaded17: true }));
     runtime.stop.mockResolvedValue(status({ downloaded17: true }));
-    render(<SettingsAiSection onNotice={vi.fn()} />);
-    expect(await screen.findByText("On-device AI · Ready")).toBeTruthy();
+    await renderAiSection();
+    expect(screen.getByText("On-device AI · Ready")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Turn off" }));
-    await waitFor(() => expect(runtime.stop).toHaveBeenCalledTimes(1));
+    await settle();
+    expect(runtime.stop).toHaveBeenCalledTimes(1);
   });
 
   it("imports a custom model from Advanced", async () => {
     runtime.getStatus.mockResolvedValue(status());
     const notice = vi.fn();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<SettingsAiSection onNotice={notice} />);
-    await screen.findByText("Download: 914 MB");
+    await renderAiSection(notice);
+    expect(screen.getByText("Download: 914 MB")).toBeTruthy();
     fireEvent.click(screen.getByText("Advanced"));
     fireEvent.change(screen.getByRole("textbox", { name: "Hugging Face model repository" }), {
       target: { value: "mlx-community/Custom-Circuit-4bit" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Import" }));
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "On-device model" }).textContent)
-      .toMatch(/Custom-Circuit-4bit|mlx-community/));
+    await settle();
+    expect(screen.getByRole("combobox", { name: "On-device model" }).textContent)
+      .toMatch(/Custom-Circuit-4bit|mlx-community/);
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(confirm).toHaveBeenCalledOnce();
     confirm.mockRestore();
@@ -157,15 +201,16 @@ describe("SettingsAiSection local assistant lifecycle", () => {
 
   it("requires cloud consent before showing send-ready key path", async () => {
     runtime.getStatus.mockResolvedValue(status());
-    render(<SettingsAiSection onNotice={vi.fn()} />);
-    await screen.findByText("Download: 914 MB");
+    await renderAiSection();
+    expect(screen.getByText("Download: 914 MB")).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "Cloud" }));
+    await settle();
     // Was `findByLabelText(/API key/)`. Key ENTRY moved out of this component
     // into the one shared `settings/ProviderKeyField`, rendered once by the
     // Model configuration page, so that a secret is written in exactly one
     // place. What this section still owns is key PRESENCE for the selected
     // cloud provider, which is what gates chat.
-    expect(await screen.findByText("No Google Gemini key saved")).toBeTruthy();
+    expect(screen.getByText("No Google Gemini key saved")).toBeTruthy();
     expect(screen.queryByLabelText(/API key/)).toBeNull();
     expect(screen.getByText(/Consent is required/i)).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: "On-device model" })).toBeNull();
@@ -180,13 +225,14 @@ describe("SettingsAiSection local assistant lifecycle", () => {
 
   it("picks Anthropic through cloud-provider ui/Select", async () => {
     runtime.getStatus.mockResolvedValue(status());
-    render(<SettingsAiSection onNotice={vi.fn()} />);
-    await screen.findByText("Download: 914 MB");
+    await renderAiSection();
+    expect(screen.getByText("Download: 914 MB")).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "Cloud" }));
+    await settle();
     await chooseSelectOption("Cloud provider", /Anthropic/);
     // Same reason as above: presence, not entry. Selecting Anthropic must swap
     // which provider's key the section reports on.
-    expect(await screen.findByText("No Anthropic key saved")).toBeTruthy();
+    expect(screen.getByText("No Anthropic key saved")).toBeTruthy();
     expect(screen.queryByText(/Google Gemini key/)).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Gemini model" })).toBeNull();
   });

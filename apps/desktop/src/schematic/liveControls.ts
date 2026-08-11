@@ -128,6 +128,17 @@ function capitalize(word: string): string {
 }
 
 /**
+ * What operating a control does while a circuit is energised.
+ *
+ * A live run does not re-run anything: `simulation/liveActuation.ts` halts the
+ * solver, alters the one device the emitter wrote for this part, and resumes
+ * the SAME transient, so the trace already on screen acquires a corner. Saying
+ * "the transient re-runs" there would describe a restart from t = 0 that does
+ * not happen, and would tell the reader to expect the plot to blank.
+ */
+const LIVE_RERUN = "the running trace bends";
+
+/**
  * One sentence naming the control and the consequence, or null when the
  * schematic has nothing to operate.
  *
@@ -135,13 +146,20 @@ function capitalize(word: string): string {
  * the specific thing the reader has to find on the drawing. With several it
  * stops naming them - the readouts beside it already do - and states the
  * consequence once.
+ *
+ * `energised` is what the consequence actually turns on, and it is the run's
+ * real state rather than the transport's selected mode. An idle circuit still
+ * re-solves the authored analysis - that carve-out is unchanged and is what
+ * `App.liveControls.test.tsx`'s "operating a control keeps the result on
+ * screen" case pins - and only a solve genuinely in flight bends instead.
  */
 export function liveControlHint(
   controls: readonly LiveControl[],
   analysis: LiveAnalysis,
+  energised = false,
 ): string | null {
   if (controls.length === 0) return null;
-  const rerun = RERUN[analysis];
+  const rerun = energised ? LIVE_RERUN : RERUN[analysis];
   if (controls.length === 1) {
     const only = controls[0];
     return `${capitalize(only.gesture)} ${only.name} on the circuit and ${rerun}.`;

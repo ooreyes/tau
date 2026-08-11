@@ -416,11 +416,23 @@ export function engineRetention(telemetry: LiveTelemetry, skew = 0): LiveRetenti
  * while it has not — so the caller renders nothing rather than a reassuring
  * "complete" badge that would eventually become a lie. Same contract as
  * `describeDiscardedHistory` in `simulation/liveRun.ts`, for the upstream loss.
+ *
+ * Two counts, never a ratio and a count. `stride` describes ONE frame — the
+ * last one read — while `decimatedSamples` is the whole run's cumulative loss,
+ * and pairing them produced sentences that contradicted themselves: a run that
+ * had thrown away millions of points but whose most recent frame happened to
+ * fit read "Showing 1 in 1 solved points — 4,102,208 samples … were never sent
+ * to the plot." `deliveredSamples` and `decimatedSamples` are both cumulative
+ * and both monotonic, so their sum is the number of points the engine has
+ * solved and the pair can only ever describe the same span of the run.
  */
 export function describeEngineDecimation(retention: LiveRetention): string | null {
   if (retention.isWholeRun || retention.decimatedSamples === 0) return null;
-  const skipped = retention.decimatedSamples.toLocaleString("en-US");
-  return `Showing 1 in ${retention.stride} solved points — ${skipped} samples the engine solved were never sent to the plot.`;
+  const delivered = retention.deliveredSamples;
+  const skipped = retention.decimatedSamples;
+  const solved = delivered + skipped;
+  return `Showing ${delivered.toLocaleString("en-US")} of ${solved.toLocaleString("en-US")} solved points — ${
+    skipped.toLocaleString("en-US")} samples the engine solved were never sent to the plot.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -452,12 +464,29 @@ export function stopReasonFromEngine(
     case "analysis-complete":
     case "requested-stop-time":
       return { kind: "horizon-reached", atCircuitTime: solvedCircuitTime };
-    case "sample-budget":
+    // One field, one unit. The engine's ceiling is in SCALARS (samples ×
+    // published vectors); `StopReason.sample-budget.budget` is rendered by
+    // `describeStopReason` as a SAMPLE count, and the same variant is built by
+    // `evaluateStopReason` out of `RunPlan.sampleBudget`, which really is
+    // samples. Passing the scalar count through unconverted printed "sample
+    // budget of 32,000,000 reached" for a 25-vector run that had produced
+    // 1.28 M samples against a declared 50,000,000-sample plan — a number that
+    // was neither the budget nor the count nor the plan. Dividing by the
+    // engine's own vector count uses exactly the divisor its own sentence uses
+    // ("… 32000000 solved values (1280000 samples across 25 traces) …"), so the
+    // rendered number is the sample ceiling the run actually hit. The caller
+    // still shows `LiveEnded.detail` for a budget stop, because that sentence
+    // is the only place both quantities appear together.
+    case "sample-budget": {
+      const traces = Number.isFinite(telemetry.vectorCount) && telemetry.vectorCount >= 1
+        ? Math.trunc(telemetry.vectorCount)
+        : 1;
       return {
         kind: "sample-budget",
         atCircuitTime: solvedCircuitTime,
-        budget: telemetry.scalarBudget,
+        budget: Math.floor(telemetry.scalarBudget / traces),
       };
+    }
     case "non-finite":
       return {
         kind: "diverged",
@@ -628,6 +657,98 @@ export async function liveSpiceStatus(): Promise<LiveResult<LiveTelemetry | null
 /** ngspice's name for a transient plot's own time axis. */
 export const LIVE_TIME_VECTOR = "time";
 
+// ---------------------------------------------------------------------------
+// Two vocabularies for one node
+// ---------------------------------------------------------------------------
+
+/**
+ * The spellings one requested vector could plausibly have in a live plot, most
+ * specific first.
+ *
+ * Tau names a node voltage `v(out)` everywhere a human reads it — that is what
+ * `liveScopeChannelRequests` asks for and what the bounded plotter's captions
+ * say — but a running plot latches ngspice's OWN vector list, and for a
+ * transient analysis that list is BARE node names plus `time` plus a
+ * `name#branch` per voltage source. Measured against this repo's own
+ * `LIVE_RC_DECK` through the bundled libngspice, `AllVecs` publishes exactly
+ * `in`, `out`, `time`, `v1#branch`, and adding `.save v(out) v(in)` does not
+ * change it. `poll_live_spice` resolves names by equality against that list, so
+ * asking it for `v(out)` is refused by name — and a refusal inside a poll tick
+ * ends the run.
+ *
+ * Candidates rather than a rewrite, because which spelling is right is a
+ * property of the plot and not of the request: the verbatim form is tried
+ * first, so a plot that really does publish `v(out)` is polled with `v(out)`,
+ * and only then is the bare node tried. A differential probe (`v(a,b)`) is a
+ * computed expression with no published vector behind it at all, so it is
+ * given no fallback and is reported as unpublished rather than quietly polled
+ * as a node named `a,b`.
+ */
+export function liveVectorSpellings(vector: string): readonly string[] {
+  const trimmed = vector.trim();
+  if (trimmed === "") return [];
+  const spellings = [trimmed];
+  const call = /^([A-Za-z]+)\(([^()]*)\)$/.exec(trimmed);
+  const argument = call?.[2]?.trim() ?? "";
+  if (call && argument !== "" && !argument.includes(",")) {
+    const fn = call[1]!.toLowerCase();
+    if (fn === "v") spellings.push(argument);
+    else if (fn === "i") spellings.push(`${argument}#branch`);
+  }
+  return spellings;
+}
+
+/** Which of the vectors a caller asked for a run actually publishes. */
+export interface LiveVectorResolution {
+  /** Poll names, in the run's own spelling, in the order they were requested.
+   *  Order is load-bearing: the child answers in the order it was asked, and
+   *  {@link liveChunkFromSlice} hands the columns to the ring in that order. */
+  names: readonly string[];
+  /** What each surviving request will actually be polled as, so a caller can
+   *  keep showing the user its own spelling while the wire uses ngspice's. */
+  matched: readonly { requested: string; polled: string }[];
+  /** Requests this run publishes under no spelling. To be reported and
+   *  dropped — never sent, and never plotted as a flat line. */
+  unpublished: readonly string[];
+}
+
+/**
+ * Translate a caller's vector list into the run's own, dropping what it does
+ * not publish.
+ *
+ * Pure and exported because two places need the same answer and must not each
+ * work it out their own way: {@link LiveSpiceSession} polls with `names`, and
+ * the UI sizes its plot and its legend from `unpublished`. One function over
+ * the same two inputs cannot disagree with itself; two hand-written filters
+ * would, and the shape of that disagreement is a column landing in the wrong
+ * trace — a plot that looks right and is not.
+ */
+export function resolveLiveVectorNames(
+  requested: readonly string[],
+  latched: readonly string[],
+): LiveVectorResolution {
+  const published = new Map<string, string>();
+  for (const name of latched) {
+    const key = name.trim().toLowerCase();
+    if (key !== "" && !published.has(key)) published.set(key, name);
+  }
+  const names: string[] = [];
+  const matched: { requested: string; polled: string }[] = [];
+  const unpublished: string[] = [];
+  for (const request of requested) {
+    const hit = liveVectorSpellings(request)
+      .map((spelling) => published.get(spelling.toLowerCase()))
+      .find((name): name is string => name !== undefined);
+    if (hit === undefined) {
+      unpublished.push(request);
+      continue;
+    }
+    names.push(hit);
+    matched.push({ requested: request, polled: hit });
+  }
+  return { names, matched, unpublished };
+}
+
 /**
  * One frame, reshaped into what {@link LiveSampleRing.pushChunk} takes.
  *
@@ -723,8 +844,26 @@ export class LiveSpiceSession {
   readonly plot: string;
   readonly vectors: readonly string[];
   readonly libraryPath: string;
+  /**
+   * What this session will actually ask for, and what it had to leave behind:
+   * the requested vectors translated into this run's own spelling, plus the
+   * ones it publishes under no spelling.
+   *
+   * Resolved in the constructor rather than left to the caller to correct once
+   * the start promise settles, because the poll timer is already ticking by
+   * then: a 20 ms cadence against an `await` boundary is a race the caller
+   * cannot win, and the poll that loses it is refused by name and takes the
+   * whole run with it. Public so that "which traces is this run really
+   * carrying?" is answerable from the session rather than inferred from the
+   * frames that come back.
+   */
+  readonly vectorResolution: LiveVectorResolution;
 
   private readonly options: LiveSessionOptions;
+  /** Exactly what goes on the wire. `undefined` preserves the documented
+   *  "omitted means every latched vector" contract; a narrowed list stays
+   *  narrowed for every poll of the run. */
+  private readonly pollNames: readonly string[] | undefined;
   private readonly estimator = new AchievedRateEstimator();
   private timer: ReturnType<typeof setInterval> | null = null;
   private polling = false;
@@ -745,6 +884,8 @@ export class LiveSpiceSession {
     this.vectors = start.vectors;
     this.libraryPath = start.libraryPath;
     this.options = options;
+    this.vectorResolution = resolveLiveVectorNames(options.names ?? [], start.vectors);
+    this.pollNames = options.names === undefined ? undefined : this.vectorResolution.names;
     this.lastTelemetry = start.telemetry;
     const interval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
     this.timer = setInterval(() => {
@@ -783,12 +924,25 @@ export class LiveSpiceSession {
       this.skipped += 1;
       return;
     }
+    // An empty `names` means "every latched vector" to the child, so a caller
+    // whose whole request was unpublished would silently be given the entire
+    // plot instead of the traces it asked for. There is nothing to read here
+    // and nothing to draw, so the run ends by its own name rather than
+    // widening into a frame nobody can interpret.
+    if (this.pollNames !== undefined && this.pollNames.length === 0) {
+      this.abandon({
+        kind: "engine-refused",
+        message: `This live run publishes none of the vectors Tau asked for (${
+          this.vectorResolution.unpublished.join(", ")}), so there is nothing to plot.`,
+      });
+      return;
+    }
     this.polling = true;
     try {
-      const result = await pollLiveSpice({ names: this.options.names, maxSamples: this.options.maxSamples });
+      const result = await pollLiveSpice({ names: this.pollNames, maxSamples: this.options.maxSamples });
       if (this.finished) return;
       if (!result.ok) {
-        this.finish({ kind: "failed", failure: result.failure });
+        this.abandon(result.failure);
         return;
       }
       this.deliver(result.value);
@@ -797,18 +951,51 @@ export class LiveSpiceSession {
     }
   }
 
+  /**
+   * End a run this side can no longer read, and stop the solver behind it.
+   *
+   * A failed poll used to end the session HERE ONLY. ngspice went on solving a
+   * circuit nobody was reading, and because the engine host holds its single
+   * live lease until the run is halted, every later Run was refused with "A
+   * live simulation is already running." — one bad frame cost the feature for
+   * the rest of the session.
+   *
+   * The halt is best-effort and deliberately not awaited: the UI has already
+   * lost this run and must be told now, not 10-13 ms later, and the host
+   * retires its own session too. Both sides converge on stopped; neither
+   * assumes the other did it. `haltLiveSpice` answers with a named failure
+   * rather than rejecting, so there is no floating rejection to handle — a
+   * halt against an already-retired session is exactly the `not-running`
+   * answer this ignores.
+   */
+  private abandon(failure: LiveFailure): void {
+    if (this.finished) return;
+    this.clearTimer();
+    void haltLiveSpice();
+    this.finish({ kind: "failed", failure });
+  }
+
   private deliver(slice: LiveSlicePayload): void {
     const telemetry = slice.telemetry;
     this.lastTelemetry = telemetry;
     const chunk = liveChunkFromSlice(slice);
     const newest = chunk && chunk.times.length > 0 ? chunk.times[chunk.times.length - 1]! : null;
-    if (newest !== null) {
-      this.lastTime = newest;
-      // The engine's own wall clock, not the renderer's: it is the clock the
-      // solved points were actually produced against, and it cannot be skewed
-      // by a stalled animation frame.
-      this.estimator.observe(telemetry.wallSeconds * 1000, newest);
-    }
+    if (newest !== null) this.lastTime = newest;
+    // The engine's own wall clock, not the renderer's: it is the clock the
+    // solved points were actually produced against, and it cannot be skewed by
+    // a stalled animation frame.
+    //
+    // Every frame is fed, including an empty one. An empty frame is EVIDENCE,
+    // not an absence of it: wall time advanced and no circuit time came with
+    // it. Feeding only frames that carried samples left a stalled solver
+    // reporting its last good measurement as if it were current — the same
+    // class of lie as printing the requested rate as the achieved one, since
+    // the number on screen was true once and is not true now. Observing the
+    // unchanged circuit time against the later wall clock is precisely what
+    // makes the reported rate decay toward zero, as the rate report's own
+    // contract promises. Equal circuit times are not a rewind, so this cannot
+    // trip `AchievedRateEstimator`'s different-run reset.
+    this.estimator.observe(telemetry.wallSeconds * 1000, this.lastTime);
     const retention = this.retentionOf(telemetry, slice.skew);
     this.options.onFrame?.({
       slice,

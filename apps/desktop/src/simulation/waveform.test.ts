@@ -149,4 +149,35 @@ describe("waveform display data", () => {
     expect(Number.isFinite(bounds.min)).toBe(true);
     expect(Number.isFinite(bounds.max)).toBe(true);
   });
+
+  /**
+   * The live scope's ring hands out `Float64Array`, and it must reach these
+   * functions with no copy and no cast: at the ring's 2^19 capacity, an
+   * `Array.from` per frame is a half-million-element copy sixty times a second.
+   *
+   * This is as much a COMPILE-time contract as a runtime one. The arguments
+   * below are deliberately passed unconverted, so narrowing either signature
+   * back to `ReadonlyArray<number>` fails `pnpm typecheck` on this file rather
+   * than pushing the problem back out to a cast at the call site — which is
+   * exactly where it was, and a cast is a claim no tool re-checks. The runtime
+   * assertions then pin the other half: a typed array and a plain array of the
+   * same samples must produce identical answers.
+   */
+  it("accepts Float64Array samples directly and answers identically to number[]", () => {
+    const times = Array.from({ length: 1_000 }, (_, index) => index);
+    const values = times.map((index) => (index % 2 === 0 ? 0 : 5));
+    const typedTimes = Float64Array.from(times);
+    const typedValues = Float64Array.from(values);
+
+    expect(waveformEnvelopeIndices(typedTimes, typedValues, 0, 999, 10))
+      .toEqual(waveformEnvelopeIndices(times, values, 0, 999, 10));
+    expect(waveformBounds([{ values: typedValues }]))
+      .toEqual(waveformBounds([{ values }]));
+  });
+
+  /** A typed array's non-finite samples must be skipped, not framed. */
+  it("waveformBounds ignores non-finite Float64Array samples", () => {
+    const typed = waveformBounds([{ values: Float64Array.from([NaN, Infinity, -Infinity, 2, -1]) }]);
+    expect(typed).toEqual(waveformBounds([{ values: [NaN, Infinity, -Infinity, 2, -1] }]));
+  });
 });

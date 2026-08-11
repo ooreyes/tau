@@ -19,7 +19,9 @@ import {
   liveAlterableInstances,
   liveChunkFromSlice,
   liveSpiceStatus,
+  liveVectorSpellings,
   resolveLiveInstance,
+  resolveLiveVectorNames,
   startLiveSession,
   startLiveSpice,
   stopReasonFromEngine,
@@ -30,7 +32,7 @@ import {
   type LiveStartResponse,
   type LiveTelemetry,
 } from "./nativeLive";
-import { POLL_INTERVAL_MS } from "../simulation/liveRun";
+import { POLL_INTERVAL_MS, describeStopReason, rateReport } from "../simulation/liveRun";
 import { LiveSampleRing } from "../simulation/liveRun";
 import { buildSpiceDeck } from "./spiceNetlist";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
@@ -271,6 +273,241 @@ describe("live ngspice bridge — back-pressure", () => {
   });
 });
 
+// ── two vocabularies for one node ───────────────────────────────────────────
+
+/**
+ * Exactly what the bundled libngspice publishes for this repo's own
+ * `LIVE_RC_DECK` (`live_spice.rs`): bare node names, the time axis, and a
+ * `#branch` per voltage source. Adding `.save v(out) v(in)` to the deck does
+ * not change it. Every case below is written against these strings rather than
+ * against a convenient invention, because the invention is what let the naming
+ * defect survive a green suite: the fixtures said `v(out)`, the engine says
+ * `out`, and nothing in the file ever compared the two.
+ */
+const LATCHED_RC_VECTORS = ["in", "out", "time", "v1#branch"];
+
+/** ngspice's own refusal, spelled as `resolve_names` in `live_spice.rs` spells
+ *  it, so a poll for an unpublished name fails here the way it fails there. */
+const rcEngineNames = (requested: readonly string[]): string[] =>
+  requested.map((name) => {
+    const hit = LATCHED_RC_VECTORS.find((known) => known.toLowerCase() === name.toLowerCase());
+    if (hit === undefined) throw `"${name}" is not a vector this live run publishes.`;
+    return hit;
+  });
+
+describe("live ngspice bridge — the app's vector names against the engine's", () => {
+  it("resolves Tau's spelling onto the run's own, and names what has no match", () => {
+    const resolution = resolveLiveVectorNames(
+      ["time", "v(out)", "v(IN)", "i(V1)", "v(n042)", "v(out,in)"],
+      LATCHED_RC_VECTORS,
+    );
+    expect(resolution.names).toEqual(["time", "out", "in", "v1#branch"]);
+    expect(resolution.matched).toEqual([
+      { requested: "time", polled: "time" },
+      { requested: "v(out)", polled: "out" },
+      { requested: "v(IN)", polled: "in" },
+      { requested: "i(V1)", polled: "v1#branch" },
+    ]);
+    // A net this deck has no node for, and a differential probe, which is a
+    // computed expression rather than a published vector. Both are reported so
+    // the caller can drop them out loud.
+    expect(resolution.unpublished).toEqual(["v(n042)", "v(out,in)"]);
+  });
+
+  it("prefers the verbatim spelling when the plot really does publish it", () => {
+    // Which spelling is right is a property of the plot, not of the request, so
+    // a build that publishes the parenthesised form must be polled with it.
+    expect(resolveLiveVectorNames(["v(out)"], ["time", "v(out)", "out"]).names).toEqual(["v(out)"]);
+    expect(liveVectorSpellings("v(out)")).toEqual(["v(out)", "out"]);
+    expect(liveVectorSpellings("i(v1)")).toEqual(["i(v1)", "v1#branch"]);
+    expect(liveVectorSpellings("time")).toEqual(["time"]);
+  });
+
+  it("polls the engine's spelling, not the app's, from the very first tick", async () => {
+    // The whole live feature died here: App asks for `v(n001)`, ngspice latched
+    // `n001`, the first poll 20 ms later was refused by name, and the transport
+    // read "Ready." one frame after Run.
+    enableNativeRuntime();
+    const pollArgs: unknown[] = [];
+    respond({
+      start_live_spice: () => startResponse({ vectors: LATCHED_RC_VECTORS }),
+      poll_live_spice: (args) => {
+        pollArgs.push(args);
+        const names = rcEngineNames((args as { request: { names: string[] } }).request.names);
+        return slicePayload([0, 1e-6], [0, 0.5], { names, columns: [[0, 1e-6], [0, 0.5]] });
+      },
+      halt_live_spice: () => telemetry({ running: false, stopReason: "halted-by-user", stopDetail: "Stopped." }),
+    });
+
+    const ends: LiveRunOutcome[] = [];
+    const frames: LiveFrame[] = [];
+    const outcome = await startLiveSession({
+      netlist: "deck",
+      names: ["time", "v(out)"],
+      onFrame: (frame) => frames.push(frame),
+      onEnd: (end) => ends.push(end),
+    });
+    if (outcome.kind !== "started") throw new Error("expected a started session");
+    expect(outcome.session.vectorResolution.names).toEqual(["time", "out"]);
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+    expect(pollArgs[0]).toEqual({ request: { names: ["time", "out"] } });
+    expect(ends).toEqual([]);
+    expect(frames).toHaveLength(3);
+    await outcome.session.stop();
+  });
+
+  it("narrows the poll list to what was latched, so one dropped trace is not fatal", async () => {
+    // Even with the spelling fixed, sending a name the run does not publish
+    // turns a documented, reported drop into a dead run: `resolve_names`
+    // refuses the WHOLE frame, not just the offending column.
+    enableNativeRuntime();
+    const pollArgs: unknown[] = [];
+    respond({
+      start_live_spice: () => startResponse({ vectors: LATCHED_RC_VECTORS }),
+      poll_live_spice: (args) => {
+        pollArgs.push(args);
+        const names = rcEngineNames((args as { request: { names: string[] } }).request.names);
+        return slicePayload([0, 1e-6], [0, 0.5], {
+          names,
+          columns: [[0, 1e-6], ...names.slice(1).map(() => [0, 0.5])],
+        });
+      },
+      halt_live_spice: () => telemetry({ running: false, stopReason: "halted-by-user", stopDetail: "Stopped." }),
+    });
+
+    const ends: LiveRunOutcome[] = [];
+    const outcome = await startLiveSession({
+      netlist: "deck",
+      names: ["time", "v(out)", "v(nowhere)"],
+      onEnd: (end) => ends.push(end),
+    });
+    if (outcome.kind !== "started") throw new Error("expected a started session");
+    expect(outcome.session.vectorResolution.unpublished).toEqual(["v(nowhere)"]);
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2);
+    expect(pollArgs).toEqual([
+      { request: { names: ["time", "out"] } },
+      { request: { names: ["time", "out"] } },
+    ]);
+    expect(ends).toEqual([]);
+    await outcome.session.stop();
+  });
+
+  it("refuses to widen to the whole plot when nothing asked for is published", async () => {
+    // An empty name list means "every latched vector" to the child. Letting a
+    // fully unresolved request decay into that would hand back columns for
+    // traces nobody asked for, in an order nobody declared.
+    enableNativeRuntime();
+    let polls = 0;
+    let halts = 0;
+    respond({
+      start_live_spice: () => startResponse({ vectors: LATCHED_RC_VECTORS }),
+      poll_live_spice: () => {
+        polls += 1;
+        return slicePayload([0], [0]);
+      },
+      halt_live_spice: () => {
+        halts += 1;
+        return telemetry({ running: false, stopReason: "halted-by-user", stopDetail: "Stopped." });
+      },
+    });
+    const ends: LiveRunOutcome[] = [];
+    const outcome = await startLiveSession({
+      netlist: "deck",
+      names: ["v(nowhere)"],
+      onEnd: (end) => ends.push(end),
+    });
+    if (outcome.kind !== "started") throw new Error("expected a started session");
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4);
+    expect(polls).toBe(0);
+    expect(ends).toHaveLength(1);
+    expect(ends[0]).toMatchObject({ kind: "failed", failure: { kind: "engine-refused" } });
+    expect(halts).toBe(1);
+  });
+
+  it("stops the solver when a poll fails, instead of stranding the engine's lease", async () => {
+    // The engine host holds Tau's single live lease until the run is halted, so
+    // a session that forgets a run locally without halting it makes every later
+    // Run fail with "A live simulation is already running." One bad frame used
+    // to cost the feature for the rest of the session.
+    enableNativeRuntime();
+    let halts = 0;
+    respond({
+      start_live_spice: () => startResponse({ vectors: LATCHED_RC_VECTORS }),
+      poll_live_spice: () => {
+        throw '"v(n001)" is not a vector this live run publishes.';
+      },
+      halt_live_spice: () => {
+        halts += 1;
+        return telemetry({ running: false, stopReason: "halted-by-user", stopDetail: "Stopped." });
+      },
+    });
+    const ends: LiveRunOutcome[] = [];
+    const outcome = await startLiveSession({ netlist: "deck", onEnd: (end) => ends.push(end) });
+    if (outcome.kind !== "started") throw new Error("expected a started session");
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    expect(ends).toMatchObject([{ kind: "failed", failure: { kind: "engine-refused" } }]);
+    expect(halts).toBe(1);
+    // And exactly once, however long the timers are advanced afterwards.
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 20);
+    expect(halts).toBe(1);
+    expect(ends).toHaveLength(1);
+  });
+});
+
+// ── the reported rate decays when the solver stalls ─────────────────────────
+
+describe("live ngspice bridge — a stalled solver", () => {
+  it("lets the measured rate fall to zero instead of repeating its last good one", async () => {
+    // An empty frame is evidence: the engine's own wall clock advanced and no
+    // circuit time came with it. Feeding only frames that carried samples left
+    // the last measurement on screen as though it were current — true once, and
+    // not true now.
+    enableNativeRuntime();
+    let poll = 0;
+    respond({
+      start_live_spice: () => startResponse({ vectors: LATCHED_RC_VECTORS }),
+      poll_live_spice: () => {
+        poll += 1;
+        const wallSeconds = poll * (POLL_INTERVAL_MS / 1000);
+        // Five frames of real progress, then a solver that stops advancing.
+        const moving = poll <= 5;
+        const times = moving ? [poll * 1e-3] : [];
+        return slicePayload(times, moving ? [1] : [], {
+          names: ["time", "out"],
+          columns: [times, moving ? [1] : []],
+          telemetry: telemetry({ wallSeconds }),
+        });
+      },
+      halt_live_spice: () => telemetry({ running: false, stopReason: "halted-by-user", stopDetail: "Stopped." }),
+    });
+
+    const frames: LiveFrame[] = [];
+    const outcome = await startLiveSession({
+      netlist: "deck",
+      names: ["time", "v(out)"],
+      targetRate: 0.05,
+      onFrame: (frame) => frames.push(frame),
+    });
+    if (outcome.kind !== "started") throw new Error("expected a started session");
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5);
+    const moving = frames[4]!.rate;
+    expect(moving).toEqual(rateReport(0.05, 0.05));
+    expect(moving).toMatchObject({ source: "achieved", keepingUp: true });
+
+    // Long enough that the whole smoothing window is stalled frames.
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 40);
+    const stalled = frames[frames.length - 1]!.rate;
+    expect(stalled).toEqual({ source: "achieved", rate: 0, targetRate: 0.05, keepingUp: false });
+
+    await outcome.session.stop();
+  });
+});
+
 // ── named failures ──────────────────────────────────────────────────────────
 
 describe("live ngspice bridge — named failures", () => {
@@ -444,8 +681,15 @@ describe("live ngspice bridge — stop reasons", () => {
     expect(end.ended.engineReason).toBe("sample-budget");
     expect(isBudgetExhausted(end.ended)).toBe(true);
     expect(isUserStop(end.ended)).toBe(false);
-    expect(end.ended.reason).toEqual({ kind: "sample-budget", atCircuitTime: 1e-6, budget: 1024 });
+    // 512, not the 1024 this case used to assert. That older expectation locked
+    // in a unit error: `scalarBudget` counts samples × vectors, and the field it
+    // was being copied into is rendered by `describeStopReason` as a SAMPLE
+    // count. The detail sentence right below is the arithmetic — 1024 solved
+    // values across 2 traces is 512 samples — and the two now agree instead of
+    // the status line quoting a number from a different unit.
+    expect(end.ended.reason).toEqual({ kind: "sample-budget", atCircuitTime: 1e-6, budget: 512 });
     expect(end.ended.detail).toBe(budgetDetail);
+    expect(budgetDetail).toContain("1024 solved values (512 samples across 2 traces)");
 
     // Pressing Stop afterwards must still say "budget", not "you stopped it".
     const stopped = await outcome.session.stop();
@@ -477,7 +721,43 @@ describe("live ngspice bridge — stop reasons", () => {
     expect(stopped).toMatchObject({ kind: "ended", ended: { engineReason: "sample-budget" } });
     if (stopped.kind !== "ended") return;
     expect(isUserStop(stopped.ended)).toBe(false);
-    expect(stopped.ended.reason).toMatchObject({ kind: "sample-budget", budget: 1024 });
+    // As above: the halt's telemetry declares a 1024-SCALAR ceiling over 2
+    // vectors, so the sample budget the status line may quote is 512. Asserting
+    // 1024 here — as this case used to — was asserting that the number survives
+    // the trip unchanged, which is exactly the defect.
+    expect(stopped.ended.reason).toMatchObject({ kind: "sample-budget", budget: 512 });
+  });
+
+  /**
+   * The conversion has to hold for the shape that made it visible: a wide run.
+   *
+   * 25 traces against the engine's own 32,000,000-scalar ceiling is 1.28 M
+   * samples, and the old code printed the 32,000,000 as though it were a
+   * sample count — a number that was neither the budget, nor the samples
+   * produced, nor the plan's declared budget.
+   */
+  it("states the sample ceiling in samples, not in solved values", () => {
+    const wide = telemetry({
+      running: false,
+      vectorCount: 25,
+      solvedSamples: 1_280_000,
+      scalars: 32_000_000,
+      scalarBudget: 32_000_000,
+      stopReason: "sample-budget",
+    });
+    expect(stopReasonFromEngine(wide, 4e-3)).toEqual({
+      kind: "sample-budget",
+      atCircuitTime: 4e-3,
+      budget: 1_280_000,
+    });
+    expect(describeStopReason(stopReasonFromEngine(wide, 4e-3)!)).toContain("sample budget of 1,280,000");
+
+    // A telemetry that cannot say how wide it is must not turn the ceiling into
+    // a division by zero; the scalar count is then the best available statement
+    // and is at least not smaller than the truth.
+    expect(
+      stopReasonFromEngine(telemetry({ running: false, vectorCount: 0, scalarBudget: 4096, stopReason: "sample-budget" }), 1),
+    ).toMatchObject({ budget: 4096 });
   });
 
   it("carries a non-finite sample through as liveRun's own diverged reason", async () => {
@@ -562,8 +842,9 @@ describe("live ngspice bridge — retention honesty", () => {
       isWholeRun: false,
     });
     const sentence = describeEngineDecimation(retention);
-    expect(sentence).toContain("1 in 3");
-    expect(sentence).toContain("1,500");
+    expect(sentence).toBe(
+      "Showing 500 of 2,000 solved points — 1,500 samples the engine solved were never sent to the plot.",
+    );
 
     // The loss survives into the end of the run, so a stopped plot cannot claim
     // completeness either — note the halt above answers with a telemetry whose
@@ -577,6 +858,30 @@ describe("live ngspice bridge — retention honesty", () => {
   it("says nothing while nothing has been discarded", () => {
     expect(describeEngineDecimation(engineRetention(telemetry()))).toBeNull();
     expect(engineRetention(telemetry()).isWholeRun).toBe(true);
+  });
+
+  /**
+   * The sentence may never pair a per-FRAME ratio with a per-RUN count.
+   *
+   * This is the state that exposed it: a long run has thrown away millions of
+   * points, and the frame that happens to be in hand right now was small
+   * enough to be delivered whole (`stride: 1`). The old wording read "Showing
+   * 1 in 1 solved points — 4,102,208 samples the engine solved were never sent
+   * to the plot", which is a self-contradiction in one line. Delivered and
+   * decimated are both cumulative, so the pair can only describe one span.
+   */
+  it("never contradicts itself by pairing this frame's stride with the run's loss", () => {
+    const sentence = describeEngineDecimation({
+      deliveredSamples: 2_048_000,
+      decimatedSamples: 4_102_208,
+      stride: 1,
+      skew: 0,
+      isWholeRun: false,
+    });
+    expect(sentence).not.toContain("1 in 1");
+    expect(sentence).toBe(
+      "Showing 2,048,000 of 6,150,208 solved points — 4,102,208 samples the engine solved were never sent to the plot.",
+    );
   });
 
   it("squares off a ragged frame instead of throwing inside the poll tick", () => {

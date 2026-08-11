@@ -1,8 +1,16 @@
 /**
- * EveryCircuit-style live schematic current mode: map wall-clock progress onto
- * a real `.tran` time axis so V/I/flow labels scrub through engine samples.
- * Never invents currents — callers still use `tranComponentCurrents` /
- * `tranAnnotations` at the returned time.
+ * Scrubbing a FINISHED `.tran`: EveryCircuit-style current mode, which maps
+ * wall-clock progress onto the completed result's own time axis so the
+ * schematic's V/I/flow labels replay samples that already exist. Never invents
+ * currents — callers still use `tranComponentCurrents` / `tranAnnotations` at
+ * the returned time.
+ *
+ * NOT the live run. `simulation/liveRun.ts` + `engine/nativeLive.ts` are a
+ * different feature: a solver actually running now, whose samples do not exist
+ * until the engine produces them. This module never talks to an engine and
+ * cannot advance a solve; it only chooses a readout time inside an array it was
+ * handed. The two share the word "live" and nothing else, so a change here can
+ * never be a change to the running-circuit path.
  */
 
 /** Default wall-clock loop for one full t0→tstop scrub (ms). */

@@ -9,6 +9,19 @@ interface ToolbarProps {
   result: AnalysisResult | null;
   runState: "idle" | "complete" | "error" | "stopped";
   isRunning: boolean;
+  /**
+   * A live run is energising the circuit, held by the simulator's own transport.
+   *
+   * A SEPARATE prop, not folded into `isRunning`, and deliberately so. This
+   * control is the simulation health lamp: `isRunning` drives its amber state
+   * and `Toolbar.test.tsx` pins that exact styling, so widening `isRunning`
+   * would make a live run repaint the lamp as if the header had started
+   * something. What a live run really means here is narrower — Tau has one
+   * ngspice capability and it is leased, so this Run cannot start anything
+   * until that run stops. It blocks the button and says why, and touches
+   * nothing else.
+   */
+  liveRunning?: boolean;
   title: string;
   assistantOpen: boolean;
   projectOpen?: boolean;
@@ -23,7 +36,7 @@ type LampState = "idle" | "running" | "ok" | "error" | "warn";
 
 const ICON = { size: 13, strokeWidth: 1.6 } as const;
 
-export function Toolbar({ mode, result, runState, isRunning, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
+export function Toolbar({ mode, result, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
   const isSimulator = mode === "simulator";
   const runHasError = !isRunning && (runState === "error" || result?.ok === false);
   const runIsAcceptable = !isRunning && runState === "complete" && result?.ok === true;
@@ -123,7 +136,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
             <Button
               variant="outline"
               size="sm"
-              disabled={isRunning || !schematicOpen}
+              disabled={isRunning || liveRunning || !schematicOpen}
               className={cn(
                 "gap-1.5 bg-secondary hover:bg-accent",
                 runHasError && "run-button--error",
@@ -137,7 +150,13 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
               Run
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{isRunning ? "Simulation running…" : "Run simulation and switch to simulator"}</TooltipContent>
+          <TooltipContent>
+            {isRunning
+              ? "Simulation running…"
+              : liveRunning
+                ? "A live run has this circuit energised. Stop it in the simulator first."
+                : "Run simulation and switch to simulator"}
+          </TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
