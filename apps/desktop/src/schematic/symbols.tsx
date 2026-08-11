@@ -472,14 +472,34 @@ function labelHalfTurn(rotation: Rotation): 0 | 180 {
   return rotation > 90 && rotation <= 270 ? 180 : 0;
 }
 
+const PIN_LABEL_ACCESSIBLE_NAMES: Record<string, string> = {
+  clk: "clock",
+  com: "common reference",
+  pre: "preset",
+  clr: "clear",
+  qbar: "inverted Q",
+  reset: "reset",
+  cont: "control voltage",
+  thres: "threshold",
+  disch: "discharge",
+  rst: "reset",
+  vref: "reference voltage",
+  dp: "decimal point",
+};
+
+const pinLabelAccessibleName = (pin: string, text: string): string =>
+  PIN_LABEL_ACCESSIBLE_NAMES[pin] ?? text;
+
 function PinLabel({
   text,
+  ariaLabel,
   x,
   y,
   rotation,
   mirrored,
 }: {
   text: string;
+  ariaLabel?: string;
   x: number;
   y: number;
   rotation: Rotation;
@@ -493,6 +513,7 @@ function PinLabel({
     <text
       className="subckt-pin-label"
       data-pin-label={text}
+      aria-label={ariaLabel}
       textAnchor="middle"
       // Half the 7px cap height, so the caption's midline sits on its own row.
       y={2.4}
@@ -519,7 +540,8 @@ const NL = 10; // nose-body label column
 export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPlacement[]>> = {
   // CLK / R ride above their own row and COM sits below them: the reference
   // terminal leaves the bottom-left CORNER, so its caption has to share the
-  // left column with the last input rather than sit beside a lead.
+  // left column with the last input rather than sit beside a lead. PRE/CLR
+  // use the right interior lane so the async names do not crowd COM.
   //
   // The gap between those two is 11 units, not the 8 it started as. A caption
   // is taller than 8, so at 8 the two boxes touched -- measured at 0.9 px on
@@ -533,25 +555,25 @@ export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPl
   dflop: [
     { pin: "d", text: "D", x: -F, y: -16 },
     { pin: "clk", text: "CLK", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -F, y: 20 },
-    { pin: "pre", text: "PRE", x: 2, y: -19 },
-    { pin: "clr", text: "CLR", x: 2, y: 19 },
+    { pin: "com", text: "COM", x: -12, y: 20 },
+    { pin: "pre", text: "PRE", x: 2, y: -18 },
+    { pin: "clr", text: "CLR", x: 2, y: 18 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q̅", x: F, y: 16 },
   ],
   srflop: [
     { pin: "s", text: "S", x: -F, y: -16 },
     { pin: "r", text: "R", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -F, y: 20 },
+    { pin: "com", text: "COM", x: -12, y: 20 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q̅", x: F, y: 16 },
   ],
   tflop: [
     { pin: "t", text: "T", x: -F, y: -16 },
     { pin: "clk", text: "CLK", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -F, y: 20 },
-    { pin: "pre", text: "PRE", x: 2, y: -19 },
-    { pin: "clr", text: "CLR", x: 2, y: 19 },
+    { pin: "com", text: "COM", x: -12, y: 20 },
+    { pin: "pre", text: "PRE", x: 2, y: -18 },
+    { pin: "clr", text: "CLR", x: 2, y: 18 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q̅", x: F, y: 16 },
   ],
@@ -559,9 +581,9 @@ export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPl
     { pin: "j", text: "J", x: -F, y: -16 },
     { pin: "k", text: "K", x: -F, y: -3 },
     { pin: "clk", text: "CLK", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -F, y: 20 },
-    { pin: "pre", text: "PRE", x: 2, y: -19 },
-    { pin: "clr", text: "CLR", x: 2, y: 19 },
+    { pin: "com", text: "COM", x: -12, y: 20 },
+    { pin: "pre", text: "PRE", x: 2, y: -18 },
+    { pin: "clr", text: "CLR", x: 2, y: 18 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q̅", x: F, y: 16 },
   ],
@@ -654,6 +676,7 @@ function SymbolPinLabels({
         <PinLabel
           key={label.pin}
           text={label.text}
+          ariaLabel={pinLabelAccessibleName(label.pin, label.text)}
           x={label.x}
           y={label.y}
           rotation={rotation}
@@ -663,6 +686,7 @@ function SymbolPinLabels({
       {caption && (
         <PinLabel
           text={caption.text}
+          ariaLabel="555 timer"
           x={caption.x}
           y={caption.y}
           rotation={rotation}
@@ -932,10 +956,13 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
     case "polarizedCapacitor":
       return (
         <>
-          <line x1={-32} y1={0} x2={-6} y2={0} />
-          <line x1={-6} y1={-13} x2={-6} y2={13} strokeWidth={2.5} />
-          <path d="M 4 -13 Q 14 0 4 13" fill="none" />
-          <line x1={6} y1={0} x2={32} y2={0} />
+          {/* Keep a small painted gap between each lead and its plate. The
+              right lead used to start inside the curved plate, making the
+              negative side look cut through rather than terminated. */}
+          <line data-cap-lead="a" x1={-32} y1={0} x2={-9} y2={0} />
+          <line data-cap-plate="straight" x1={-6} y1={-13} x2={-6} y2={13} strokeWidth={2.5} />
+          <path data-cap-plate="curved" d="M 4 -13 C 14 -7 14 7 4 13" fill="none" />
+          <line data-cap-lead="b" x1={15} y1={0} x2={32} y2={0} />
           <path d="M -18 -8 H -12 M -15 -11 V -5" />
         </>
       );
@@ -999,9 +1026,9 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
         <>
           <line x1={0} y1={-pin} x2={0} y2={-r} />
           <circle cx={0} cy={0} r={r} />
-          <CenteredSineGlyph y={-5} />
-          <path d="M 0 1 V 10" />
-          <path d="M -5 5 L 0 11 L 5 5" />
+          <path data-sine-glyph="" data-current-sine="" d="M -9 -8 C -7 -12 -3 -12 0 -8 S 7 -4 9 -8" fill="none" />
+          <path data-current-arrow="shaft" d="M 0 -1 V 8" />
+          <path data-current-arrow="head" d="M -5 4 L 0 10 L 5 4" />
           <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );
@@ -1045,10 +1072,10 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <line x1={10} y1={-14} x2={10} y2={14} />
           <line x1={10} y1={0} x2={32} y2={0} />
-          <path d="M 14 -20 L 25 -31" />
-          <path d="M 25 -31 L 23 -23 M 25 -31 L 17 -29" />
-          <path d="M 5 -20 L 16 -31" />
-          <path d="M 16 -31 L 14 -23 M 16 -31 L 8 -29" />
+          {/* Two outward arrows share a diagonal lane but keep a clear gap
+              between their heads at selected stroke weight. */}
+          <path data-light-arrow="one" d="M 18 -20 L 31 -33 M 31 -33 L 29 -25 M 31 -33 L 23 -31" />
+          <path data-light-arrow="two" d="M 5 -20 L 18 -33 M 18 -33 L 16 -25 M 18 -33 L 10 -31" />
         </>
       );
 
@@ -1070,10 +1097,8 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
           <line x1={10} y1={-14} x2={10} y2={14} />
           <line x1={10} y1={0} x2={32} y2={0} />
           {/* Incoming light arrows (opposite of LED emission arrows). */}
-          <path d="M 25 -31 L 14 -20" />
-          <path d="M 14 -20 L 16 -28 M 14 -20 L 22 -22" />
-          <path d="M 16 -31 L 5 -20" />
-          <path d="M 5 -20 L 7 -28 M 5 -20 L 13 -22" />
+          <path data-light-arrow="one" d="M 31 -33 L 18 -20 M 18 -20 L 20 -28 M 18 -20 L 26 -22" />
+          <path data-light-arrow="two" d="M 18 -33 L 5 -20 M 5 -20 L 7 -28 M 5 -20 L 13 -22" />
         </>
       );
 
@@ -1448,10 +1473,16 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
           ) : (
             <line data-contact="open" x1={-12} y1={0} x2={9} y2={-15} />
           )}
-          {/* NC+/NC− control pair (unwired → the static state above holds) */}
-          <line x1={-16} y1={32} x2={-16} y2={16} />
-          <line x1={16} y1={32} x2={16} y2={16} />
-          <line x1={-16} y1={16} x2={16} y2={16} />
+          {/* NC+/NC− control pair (unwired → the static state above holds).
+              These are separate voltage-sense terminals, not a conductor: the
+              old joining bar made the pair look like an unrelated rectangle
+              and visually shorted the control indication. */}
+          <g data-switch-control="voltage">
+            <line x1={-16} y1={32} x2={-16} y2={16} />
+            <circle cx={-16} cy={16} r={2.5} />
+            <line x1={16} y1={32} x2={16} y2={16} />
+            <circle cx={16} cy={16} r={2.5} />
+          </g>
         </>
       );
     }

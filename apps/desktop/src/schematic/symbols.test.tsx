@@ -561,6 +561,84 @@ describe("passive redraws (item 3)", () => {
   });
 });
 
+describe("symbol geometry remediation: sources, capacitors, and light arrows", () => {
+  it("keeps the sine and current arrow apart at selected stroke weight", () => {
+    const markup = render("iac");
+    const elements = drawnElements(markup);
+    const sine = elements.find((element) => attr(element.tag, "data-current-sine") !== undefined);
+    const arrow = elements
+      .filter((element) => attr(element.tag, "data-current-arrow") !== undefined)
+      .flatMap((element) => element.segments);
+    expect(sine, "AC current sine").toBeTruthy();
+    expect(arrow, "AC current arrow").not.toHaveLength(0);
+
+    const closest = arrow.reduce(
+      (best, arrowSegment) => Math.min(
+        best,
+        ...sine!.segments.map((sineSegment) => segmentDistance(arrowSegment, sineSegment)),
+      ),
+      Infinity,
+    );
+    expect(closest, "current glyph clearance").toBeGreaterThan(SELECTED_STROKE);
+    // DC and AC current sources retain the same terminal bank; only the
+    // interior artwork gets a separate lane.
+    expect(getLocalPins("isource")).toEqual(getLocalPins("iac"));
+  });
+
+  it.each(["led", "photodiode"] as const)(
+    "%s keeps its two light arrows separated and inside the preview",
+    (kind) => {
+      const markup = render(kind);
+      const arrows = ["one", "two"].map((name) =>
+        drawnElements(markup)
+          .find((element) => attr(element.tag, "data-light-arrow") === name),
+      );
+      expect(arrows.every(Boolean), `${kind} arrow pair`).toBe(true);
+      const closest = arrows[0]!.segments.reduce(
+        (best, first) => Math.min(
+          best,
+          ...arrows[1]!.segments.map((second) => segmentDistance(first, second)),
+        ),
+        Infinity,
+      );
+      expect(closest, `${kind} arrow clearance`).toBeGreaterThan(SELECTED_STROKE);
+      for (const arrow of arrows) {
+        expect(arrow!.box.minX, `${kind} arrow left`).toBeGreaterThanOrEqual(-PREVIEW_HALF_W);
+        expect(arrow!.box.maxX, `${kind} arrow right`).toBeLessThanOrEqual(PREVIEW_HALF_W);
+        expect(arrow!.box.minY, `${kind} arrow top`).toBeGreaterThanOrEqual(-PREVIEW_HALF_H);
+        expect(arrow!.box.maxY, `${kind} arrow bottom`).toBeLessThanOrEqual(PREVIEW_HALF_H);
+      }
+      // Direction remains meaningful: LED arrows leave the diode, while
+      // photodiode arrows point toward it.
+      const first = arrows[0]!.segments[0];
+      expect(first.b.x > first.a.x, `${kind} light direction`).toBe(kind === "led");
+    },
+  );
+
+  it("leaves a selected-stroke gap between each polarized-capacitor lead and plate", () => {
+    const markup = renderWith("polarizedCapacitor");
+    const elements = drawnElements(markup);
+    const leadA = elements.find((element) => attr(element.tag, "data-cap-lead") === "a");
+    const leadB = elements.find((element) => attr(element.tag, "data-cap-lead") === "b");
+    const straight = elements.find((element) => attr(element.tag, "data-cap-plate") === "straight");
+    const curved = elements.find((element) => attr(element.tag, "data-cap-plate") === "curved");
+    expect(leadA && leadB && straight && curved, "polarized capacitor geometry").toBeTruthy();
+    const gapA = Math.min(
+      ...leadA!.segments.flatMap((lead) => straight!.segments.map((plate) => segmentDistance(lead, plate))),
+    );
+    const gapB = Math.min(
+      ...leadB!.segments.flatMap((lead) => curved!.segments.map((plate) => segmentDistance(lead, plate))),
+    );
+    expect(gapA, "straight plate gap").toBeGreaterThan(SELECTED_STROKE);
+    expect(gapB, "curved plate gap").toBeGreaterThan(SELECTED_STROKE);
+    // The artwork moved, not the electrical contract.
+    expect(getLocalPins("polarizedCapacitor")).toEqual([
+      { id: "a", label: "+", x: -32, y: 0 },
+      { id: "b", label: "−", x: 32, y: 0 },
+    ]);
+  });
+});
+
 // ── item 4: the four controlled sources must be tellable apart ─────────────
 
 describe("controlled sources are distinguishable (item 4)", () => {
@@ -1122,6 +1200,20 @@ describe("digital parts carry a readable pinout (item 5)", () => {
     }
   });
 
+  it("keeps async flop labels in separate interior lanes with accessible names", () => {
+    const markup = renderWith("dflop");
+    const labels = new Map(drawnText(markup).map((label) => [label.text, label]));
+    for (const pair of [["COM", "CLR"], ["PRE", "Q"]]) {
+      expect(
+        overlaps(textBox(labels.get(pair[0])!), textBox(labels.get(pair[1])!)),
+        `${pair[0]} overlaps ${pair[1]}`,
+      ).toBe(false);
+    }
+    expect(markup).toContain('data-pin-label="PRE" aria-label="preset"');
+    expect(markup).toContain('data-pin-label="CLR" aria-label="clear"');
+    expect(markup).toContain('data-pin-label="COM" aria-label="common reference"');
+  });
+
   it("never draws pin text upside-down or mirrored, at any of the four rotations", () => {
     // A <text> inside a symbol inherits the wrapper's `rotate(R) scale(-1 1)`.
     // Nothing corrected it, so the 555's caption read BACKWARDS when the part
@@ -1231,6 +1323,21 @@ describe("contacts draw their state (item 6)", () => {
     for (const open of ["", "open", "no", "0"]) {
       expect(conducts("switch", open, "a", "b"), `"${open}"`).toBe(false);
     }
+  });
+
+  it("shows the switch control pair as two open terminals, not a rectangle", () => {
+    const markup = renderWith("switch", "open");
+    expect(markup).toContain('data-switch-control="voltage"');
+    expect(markup).not.toContain('x1="-16" y1="16" x2="16" y2="16"');
+    expect(markup).toContain('cx="-16" cy="16" r="2.5"');
+    expect(markup).toContain('cx="16" cy="16" r="2.5"');
+    // Both control pins stay present and unshorted; the lower pair is a
+    // presentation change, not a schema or netlist change.
+    expect(conducts("switch", "open", "cp", "cn")).toBe(false);
+    expect(getLocalPins("switch").filter((pin) => pin.id === "cp" || pin.id === "cn")).toEqual([
+      { id: "cp", label: "NC+", x: -16, y: 32 },
+      { id: "cn", label: "NC-", x: 16, y: 32 },
+    ]);
   });
 
   it("drops the push button's plate onto its contacts when pressed", () => {

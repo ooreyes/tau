@@ -107,6 +107,53 @@ describe("imported LTspice symbol presentation", () => {
       }
     }
   });
+
+  it("keeps capacitor labels attached to the fitted body through rotation and mirror", () => {
+    const cases: SchematicComponent[] = [
+      { id: "native-c0", kind: "capacitor", label: "C0", value: "10u", x: 0, y: 0, rotation: 0 },
+      { id: "native-c90", kind: "capacitor", label: "C90", value: "10u", x: 160, y: 0, rotation: 90 },
+      { id: "native-p", kind: "polarizedCapacitor", label: "C+", value: "10u", x: 320, y: 0, rotation: 180, mirrored: true },
+      { ...byLabel("C1"), id: "imported-cap-mirror", mirrored: true },
+    ];
+    const wires = cases.flatMap((component) => {
+      const fitted = componentVisualPlacement(component);
+      const firstPin = component.pinOverride?.[0]
+        ?? (() => {
+          const local = transformPoint(getLocalPins(component.kind)[0], fitted.rotation, fitted.mirrored);
+          return { x: fitted.x + local.x, y: fitted.y + local.y };
+        })();
+      const dx = firstPin.x - fitted.x;
+      const dy = firstPin.y - fitted.y;
+      const length = Math.hypot(dx, dy) || 1;
+      return [{
+        id: `${component.id}-wire`,
+        points: [
+          { x: firstPin.x + (dx / length) * 32, y: firstPin.y + (dy / length) * 32 },
+          firstPin,
+        ],
+      }];
+    });
+
+    for (const component of cases) {
+      const fitted = componentVisualPlacement(component);
+      const placement = buildLabelPlacements([component], wires).get(component.id);
+      expect(placement, `${component.id} labels`).toBeDefined();
+      const box = placement!.box;
+      const boxCenter = { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 };
+      expect(Math.hypot(boxCenter.x - fitted.x, boxCenter.y - fitted.y), `${component.id} attachment`).toBeLessThan(56);
+      // The attached pair must not fall back onto the terminal wire merely
+      // because the file anchor and fitted visual centre differ.
+      for (const wire of wires.filter((candidate) => candidate.id.startsWith(component.id))) {
+        const [a, b] = wire.points;
+        expect(rectsOverlap(box, {
+          minX: Math.min(a.x, b.x) - 2,
+          minY: Math.min(a.y, b.y) - 2,
+          maxX: Math.max(a.x, b.x) + 2,
+          maxY: Math.max(a.y, b.y) + 2,
+        }), `${component.id} label on wire`).toBe(false);
+      }
+    }
+  });
 });
 
 describe("Canvas wire geometry", () => {

@@ -348,6 +348,33 @@ export const sourceValueLabel = (kind: ComponentKind, value: string): string => 
 
 const componentBounds = (component: SchematicComponent) => componentGeometryBounds(component);
 
+/** World-space bounds of the rendered body, excluding terminal leads. Unlike
+ * `componentBounds`, this is centred on the fitted visual placement, which is
+ * essential for imported `.asc` symbols whose file anchor is not their body
+ * centre. Label attachment uses this for capacitors so a long imported lead
+ * cannot pull the refdes/value pair away from the plate it names. */
+const componentBodyWorldBounds = (component: SchematicComponent): Rect => {
+  const placement = componentVisualPlacement(component);
+  const body = isNativeMultiPinSubcircuit(component)
+    ? nativeSubcircuitBody(component)
+    : SYMBOL_BODY[component.kind];
+  const corners = [
+    { x: body.minX, y: body.minY },
+    { x: body.maxX, y: body.minY },
+    { x: body.maxX, y: body.maxY },
+    { x: body.minX, y: body.maxY },
+  ].map((point) => {
+    const transformed = transformPoint(point, placement.rotation, placement.mirrored);
+    return { x: placement.x + transformed.x, y: placement.y + transformed.y };
+  });
+  return {
+    minX: Math.min(...corners.map((point) => point.x)),
+    minY: Math.min(...corners.map((point) => point.y)),
+    maxX: Math.max(...corners.map((point) => point.x)),
+    maxY: Math.max(...corners.map((point) => point.y)),
+  };
+};
+
 const labelAxis = (component: SchematicComponent) => {
   const pins = getComponentPins(component);
   if (pins.length !== 2) return "center";
@@ -495,6 +522,78 @@ export const componentWorldRect = (component: SchematicComponent): Rect => {
 };
 
 const labelCandidates = (component: SchematicComponent, refText: string, valText: string) => {
+  const attachedCapacitor = component.kind === "capacitor" || component.kind === "polarizedCapacitor";
+  if (attachedCapacitor) {
+    const body = componentBodyWorldBounds(component);
+    const centerX = (body.minX + body.maxX) / 2;
+    const centerY = (body.minY + body.maxY) / 2;
+    const hasRef = Boolean(component.label);
+    const inline = (y: number) => {
+      if (!hasRef) {
+        return makePlacement(
+          refText,
+          valText,
+          { x: centerX, y, anchor: "middle" },
+          { x: centerX, y, anchor: "middle" },
+        );
+      }
+      const gap = 8;
+      const refWidth = estimateTextWidth(refText, "ref");
+      const valWidth = Math.max(8, estimateTextWidth(valText, "val"));
+      const left = centerX - (refWidth + gap + valWidth) / 2;
+      const refEnd = left + refWidth;
+      return makePlacement(
+        refText,
+        valText,
+        { x: refEnd, y, anchor: "end" },
+        { x: refEnd + gap, y, anchor: "start" },
+      );
+    };
+    const stacked = (x: number, anchor: "start" | "end") => {
+      if (!hasRef) {
+        return makePlacement(
+          refText,
+          valText,
+          { x, y: centerY, anchor },
+          { x, y: centerY, anchor },
+        );
+      }
+      return makePlacement(
+        refText,
+        valText,
+        { x, y: centerY - 7, anchor },
+        { x, y: centerY + 7, anchor },
+      );
+    };
+    const vertical = labelAxis(component) === "vertical";
+    const attached = vertical
+      ? [
+        stacked(body.maxX + 12, "start"),
+        stacked(body.minX - 12, "end"),
+      ]
+      : [
+        inline(body.minY - 12),
+        inline(body.maxY + 12),
+      ];
+    // Keep the old side/fallback candidates after the attached choices. A
+    // deliberately crowded sheet may need one, but the normal path remains
+    // close to the capacitor body and is rotation/mirror aware.
+    const b = componentBounds(component);
+    const placement = componentVisualPlacement(component);
+    const x = placement.x;
+    const y = placement.y;
+    const leftX = component.x + b.minX - 10;
+    const rightX = component.x + b.maxX + 10;
+    const topRefY = component.y + b.minY - 20;
+    const belowRefY = component.y + b.maxY + 10;
+    const fallback = [
+      makePlacement(refText, valText, { x: leftX, y: y - 7, anchor: "end" }, { x: leftX, y: y + 7, anchor: "end" }),
+      makePlacement(refText, valText, { x: rightX, y: y - 7, anchor: "start" }, { x: rightX, y: y + 7, anchor: "start" }),
+      makePlacement(refText, valText, { x, y: topRefY, anchor: "middle" }, { x, y: topRefY + 12, anchor: "middle" }),
+      makePlacement(refText, valText, { x, y: belowRefY, anchor: "middle" }, { x, y: belowRefY + 12, anchor: "middle" }),
+    ];
+    return vertical ? [...attached, ...fallback] : [...attached, ...fallback.reverse()];
+  }
   const b = componentBounds(component);
   const placement = componentVisualPlacement(component);
   const x = placement.x;

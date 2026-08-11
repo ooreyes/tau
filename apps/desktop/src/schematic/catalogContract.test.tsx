@@ -107,10 +107,16 @@ describe("Library catalog contract", () => {
   it("uses one horizontally centered sine glyph for every sine-bearing symbol", () => {
     for (const kind of ["vac", "iac", "modulator"] as const) {
       const markup = renderToStaticMarkup(<svg><ComponentSymbol kind={kind} /></svg>);
-      expect(markup, `${kind} sine`).toContain(`d="${CENTERED_SINE_PATH}"`);
+      if (kind === "iac") {
+        // Current sources use a compact upper-lane wave so their arrow has a
+        // clear lower lane; it remains explicitly tagged as a sine glyph.
+        expect(markup, `${kind} sine`).toContain('data-current-sine=""');
+      } else {
+        expect(markup, `${kind} sine`).toContain(`d="${CENTERED_SINE_PATH}"`);
+      }
       expect(markup.match(/data-sine-glyph=/g), `${kind} sine count`).toHaveLength(1);
     }
     const currentSource = renderToStaticMarkup(<svg><ComponentSymbol kind="iac" /></svg>);
-    expect(currentSource).toContain('transform="translate(0 -5)"');
+    expect(currentSource).toContain('data-current-arrow="shaft"');
   });
 });
