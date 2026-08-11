@@ -34,12 +34,28 @@ describe("Toolbar Run health control", () => {
     expect(toggleMaximize).toHaveBeenCalledOnce();
   });
 
-  it("uses Tauri's native toggleMaximize API for the window", async () => {
+  it("toggles physical native window bounds and restores them", async () => {
     const toggleMaximize = vi.fn(async () => {});
-    const window = { toggleMaximize, startDragging: vi.fn(async () => {}) };
+    const setPosition = vi.fn(async () => {});
+    const setSize = vi.fn(async () => {});
+    const window = {
+      toggleMaximize,
+      startDragging: vi.fn(async () => {}),
+      outerPosition: vi.fn(async () => ({ x: 20, y: 30 })),
+      outerSize: vi.fn(async () => ({ width: 1182, height: 768 })),
+      setPosition,
+      setSize,
+      currentMonitor: vi.fn(async () => ({ workArea: { position: { x: 0, y: 24 }, size: { width: 1512, height: 944 } } })),
+    };
 
     await toggleTitlebarMaximize(window);
-    expect(toggleMaximize).toHaveBeenCalledOnce();
+    expect(setPosition).toHaveBeenCalledOnce();
+    expect(setSize).toHaveBeenCalledOnce();
+    expect(toggleMaximize).not.toHaveBeenCalled();
+
+    await toggleTitlebarMaximize(window);
+    expect(setPosition).toHaveBeenCalledTimes(2);
+    expect(setSize).toHaveBeenCalledTimes(2);
   });
 
   it("starts native dragging through the explicit window API", async () => {
