@@ -57,12 +57,11 @@ import { schematicToAsc } from "./io/ascExport";
 import {
   COMPONENTS_RAIL_WIDTH,
   ComponentsRail,
-  EditorTabs,
-  EditorToolbar,
   ExplorerPanel,
   ComponentInspector,
   WireInspector,
 } from "./components/ShellPanels";
+import { EditorTabs, EditorToolbar } from "./components/editor/EditorChrome";
 import { ActivityRail } from "./components/shell/NavRail";
 import { BottomPanel } from "./components/drawer/DiagnosticsTab";
 import { ResultsDrawer, type DrawerCover } from "./components/drawer/ResultsDrawer";
