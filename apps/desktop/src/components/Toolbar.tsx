@@ -105,7 +105,8 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
           if (event.button !== 0) return;
           const now = Date.now();
           const previous = lastTitlebarMouseDownRef.current;
-          if (previous !== null && now - previous <= 500) {
+          const isDoubleClick = event.detail >= 2 || (previous !== null && now - previous <= 500);
+          if (isDoubleClick) {
             lastTitlebarMouseDownRef.current = null;
             suppressNativeDoubleClickRef.current = true;
             void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
