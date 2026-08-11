@@ -45,6 +45,7 @@ const ICON = { size: 13, strokeWidth: 1.6 } as const;
 
 export function Toolbar({ mode, result, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
   const lastTitlebarMouseDownRef = useRef<number | null>(null);
+  const lastTitlebarClickRef = useRef<number | null>(null);
   const suppressNativeDoubleClickRef = useRef(false);
   const isSimulator = mode === "simulator";
   const runHasError = !isRunning && (runState === "error" || result?.ok === false);
@@ -113,6 +114,26 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
     void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
   };
 
+  const handleTitlebarClickCapture = (event: ReactMouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, input, select, textarea, [role=button], .mode-toggle")) return;
+    if (suppressNativeDoubleClickRef.current) {
+      suppressNativeDoubleClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    const now = Date.now();
+    const previous = lastTitlebarClickRef.current;
+    if (event.detail >= 2 || (previous !== null && now - previous <= 500)) {
+      lastTitlebarClickRef.current = null;
+      void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
+    } else {
+      lastTitlebarClickRef.current = now;
+    }
+  };
+
   return (
     /*
      * The dedicated `.titlebar-drag-region` below is the drag surface because
@@ -128,6 +149,7 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
       className="toolbar"
       onMouseDownCapture={handleTitlebarMouseDown}
       onDoubleClickCapture={handleTitlebarDoubleClickCapture}
+      onClickCapture={handleTitlebarClickCapture}
     >
       {/*
        * Keep this element an empty surface so Run, mode, Bode, and Settings
