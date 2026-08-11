@@ -2,18 +2,12 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export interface TitlebarWindowControls {
-  isMaximized: () => Promise<boolean>;
-  maximize: () => Promise<void>;
-  unmaximize: () => Promise<void>;
+  toggleMaximize: () => Promise<void>;
   startDragging: () => Promise<void>;
 }
 
 export async function toggleTitlebarMaximize(window: TitlebarWindowControls): Promise<void> {
-  if (await window.isMaximized()) {
-    await window.unmaximize();
-  } else {
-    await window.maximize();
-  }
+  await window.toggleMaximize();
 }
 
 /** The native title-bar gesture is deliberately tiny and deterministic. */
