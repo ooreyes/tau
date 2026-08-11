@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
+import { useRef } from "react";
 import { Activity, CircuitBoard, MessageSquare, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -38,6 +39,8 @@ type LampState = "idle" | "running" | "ok" | "error" | "warn";
 const ICON = { size: 13, strokeWidth: 1.6 } as const;
 
 export function Toolbar({ mode, result, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
+  const lastTitlebarMouseDownRef = useRef<number | null>(null);
+  const suppressNativeDoubleClickRef = useRef(false);
   const isSimulator = mode === "simulator";
   const runHasError = !isRunning && (runState === "error" || result?.ok === false);
   const runIsAcceptable = !isRunning && runState === "complete" && result?.ok === true;
@@ -97,7 +100,25 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
         data-tauri-drag-region="true"
         aria-hidden="true"
         title="Double-click to maximize or restore"
+        onMouseDown={(event) => {
+          if (event.button !== 0) return;
+          const now = Date.now();
+          const previous = lastTitlebarMouseDownRef.current;
+          if (previous !== null && now - previous <= 500) {
+            lastTitlebarMouseDownRef.current = null;
+            suppressNativeDoubleClickRef.current = true;
+            void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
+          } else {
+            lastTitlebarMouseDownRef.current = now;
+          }
+        }}
         onDoubleClick={(event) => {
+          if (suppressNativeDoubleClickRef.current) {
+            suppressNativeDoubleClickRef.current = false;
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
         }}
       />
