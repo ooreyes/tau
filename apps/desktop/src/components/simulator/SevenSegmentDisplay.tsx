@@ -45,6 +45,19 @@ export interface SevenSegmentDecodeOptions {
 
 const DEFAULT_SEGMENT_THRESHOLD_VOLTS = 0.5;
 
+/**
+ * Read the common-terminal contract from an imported or expert-authored value.
+ * A bare seven-segment part is common-cathode for backward compatibility;
+ * `polarity=anode` / `common anode` opts into the opposite LED direction.
+ */
+export function sevenSegmentPolarityFromValue(value: string | undefined): "anode" | "cathode" {
+  const text = (value ?? "").toLowerCase();
+  return /(?:polarity\s*[=:]\s*|common\s+|\b)(?:anode)\b/.test(text)
+    && !/cathode/.test(text)
+    ? "anode"
+    : "cathode";
+}
+
 function orderedSegments(segments: Iterable<SevenSegmentSegment>): SevenSegmentSegment[] {
   const active = new Set(segments);
   return SEVEN_SEGMENT_SEGMENTS.filter((segment) => active.has(segment));
@@ -101,10 +114,10 @@ export function decodeSevenSegmentPattern(
  * Read segment activity from the actual solved node voltages.
  *
  * A seven-segment symbol exposes `COM`, rather than a separate anode/cathode
- * model. A driven pin is therefore the pin whose voltage differs materially
- * from COM. Taking the magnitude of that difference supports both common
- * cathode (segment above COM) and common anode (segment below COM) semantics
- * without assuming a logic polarity that the circuit did not provide.
+ * pin. The default is common-cathode and an explicit `polarity="anode"`
+ * selects the reverse LED direction. `auto` is retained for serialized API
+ * compatibility but is intentionally directional (cathode), never an
+ * absolute-voltage test that would make reverse drive look illuminated.
  */
 export function activeSevenSegmentSegments(
   segmentVoltages: SevenSegmentNodeVoltages | null | undefined,
@@ -115,14 +128,14 @@ export function activeSevenSegmentSegments(
   const threshold = Number.isFinite(options.thresholdVolts)
     ? Math.max(0, options.thresholdVolts as number)
     : DEFAULT_SEGMENT_THRESHOLD_VOLTS;
-  const polarity = options.polarity ?? "auto";
+  const polarity = options.polarity ?? "cathode";
   return SEVEN_SEGMENT_SEGMENTS.filter((segment) => {
     const voltage = segmentVoltages?.[segment];
     if (!Number.isFinite(voltage)) return false;
     const delta = (voltage as number) - (commonVoltage as number);
-    if (polarity === "cathode") return delta >= threshold;
+    if (polarity === "cathode" || polarity === "auto") return delta >= threshold;
     if (polarity === "anode") return delta <= -threshold;
-    return Math.abs(delta) >= threshold;
+    return false;
   });
 }
 

@@ -37,6 +37,7 @@ import {
 import { formatEngineering } from "../simulation/quantity";
 import {
   deriveSevenSegmentDisplayState,
+  sevenSegmentPolarityFromValue,
   SEVEN_SEGMENT_SEGMENTS,
   SevenSegmentDisplay,
   type SevenSegmentDisplayState,
@@ -158,7 +159,11 @@ function simulatorSevenSegmentStates({
     }
     states.set(
       display.id,
-      deriveSevenSegmentDisplayState(segmentVoltages, netVoltage(entry?.pins.com)),
+      deriveSevenSegmentDisplayState(
+        segmentVoltages,
+        netVoltage(entry?.pins.com),
+        { polarity: sevenSegmentPolarityFromValue(display.value) },
+      ),
     );
   }
   return states;

@@ -6,6 +6,7 @@ import {
   activeSevenSegmentSegments,
   decodeSevenSegmentPattern,
   deriveSevenSegmentDisplayState,
+  sevenSegmentPolarityFromValue,
   SEVEN_SEGMENT_DIGIT_PATTERNS,
   SEVEN_SEGMENT_SEGMENTS,
   SevenSegmentDisplay,
@@ -40,12 +41,24 @@ describe("seven-segment node decoding", () => {
   it("supports common-cathode and common-anode voltage polarity", () => {
     const pattern = SEVEN_SEGMENT_DIGIT_PATTERNS[6];
     const cathode = deriveSevenSegmentDisplayState(voltagesFor(pattern, 0, 5), 0);
-    const anode = deriveSevenSegmentDisplayState(voltagesFor(pattern, 5, 0), 5);
+    const anode = deriveSevenSegmentDisplayState(voltagesFor(pattern, 5, 0), 5, { polarity: "anode" });
 
     expect(cathode).toMatchObject({ kind: "digit", digit: 6 });
     expect(anode).toMatchObject({ kind: "digit", digit: 6 });
     expect(activeSevenSegmentSegments(voltagesFor(pattern, 0, 5), 0, { polarity: "cathode" })).toEqual(pattern);
     expect(activeSevenSegmentSegments(voltagesFor(pattern, 5, 0), 5, { polarity: "anode" })).toEqual(pattern);
+  });
+
+  it("does not illuminate a common-cathode display from reverse drive", () => {
+    const pattern = SEVEN_SEGMENT_DIGIT_PATTERNS[8];
+    expect(deriveSevenSegmentDisplayState(voltagesFor(pattern, 5, 0), 5)).toMatchObject({
+      kind: "blank",
+      activeSegments: [],
+    });
+    expect(sevenSegmentPolarityFromValue("")).toBe("cathode");
+    expect(sevenSegmentPolarityFromValue("polarity=anode")).toBe("anode");
+    expect(sevenSegmentPolarityFromValue("common anode")).toBe("anode");
+    expect(sevenSegmentPolarityFromValue("common cathode")).toBe("cathode");
   });
 
   it("keeps a blank display distinct from an unavailable result", () => {

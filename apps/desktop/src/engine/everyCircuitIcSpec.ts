@@ -177,16 +177,22 @@ export interface SevenSegNodes {
   g?: string;
   dp?: string;
   com?: string;
+  /** LED direction; a bare part remains common-cathode for compatibility. */
+  polarity?: "anode" | "cathode";
 }
 
 /**
- * 7-segment display: high-Z (1 GΩ) loads from each lit segment pin to `com`
- * so drivers see almost no current and pin voltages remain readable for
- * annotations. No BCD decoder — raw segment pins (EveryCircuit driver style).
+ * 7-segment display: each segment is a directional LED with a finite series
+ * resistor, not a symmetric high-Z resistor. This keeps reverse drive dark
+ * and gives ngspice a meaningful electrical load while retaining raw segment
+ * pins (there is no hidden BCD decoder).
  */
 export function sevenSegDeckLines(base: string, nodes: SevenSegNodes): string[] {
   const b = base.toLowerCase();
   const com = nodes.com ?? "0";
+  const polarity = nodes.polarity ?? "cathode";
+  const model = "TAU_7SEG_LED";
+  const seriesOhms = 220;
   const lines: string[] = [];
   const segs: Array<[string, string | undefined]> = [
     ["a", nodes.a],
@@ -200,7 +206,14 @@ export function sevenSegDeckLines(base: string, nodes: SevenSegNodes): string[] 
   ];
   for (const [tag, net] of segs) {
     if (!net) continue;
-    lines.push(`R_${b}_${tag} ${net} ${com} 1G`);
+    const ledNode = `${b}_${tag}_led`;
+    const diodeAnode = polarity === "anode" ? com : net;
+    const diodeCathode = ledNode;
+    const resistorEnd = polarity === "anode" ? net : com;
+    lines.push(
+      `D_${b}_${tag} ${diodeAnode} ${diodeCathode} ${model}`,
+      `R_${b}_${tag} ${ledNode} ${resistorEnd} ${seriesOhms}`,
+    );
   }
   return lines;
 }

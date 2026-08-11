@@ -188,6 +188,7 @@ type Schematic = {
 const DEFAULT_MODELS = [
   ".model TAU_DIODE D(Is=1e-14 N=1)",
   ".model TAU_LED D(Is=1e-16 N=2 Rs=10)",
+  ".model TAU_7SEG_LED D(Is=1e-20 N=2 Rs=10)",
   ".model TAU_ZENER D(Is=1e-14 N=1 Bv=5.1 Ibv=1m)",
   ".model TAU_NMOS NMOS(Level=1 Vto=1 Kp=200u Lambda=0.02)",
   ".model TAU_PMOS PMOS(Level=1 Vto=-1 Kp=80u Lambda=0.02)",
@@ -1974,6 +1975,10 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         g: pin("g"),
         dp: pin("dp"),
         com: pin("com"),
+        polarity: /(?:common\s+|polarity\s*[=:]?\s*)anode\b/i.test(component.value)
+          && !/cathode/i.test(component.value)
+          ? "anode"
+          : "cathode",
       });
     }
     case "sampleHold": {
