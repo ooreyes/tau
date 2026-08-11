@@ -1,34 +1,52 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-11**
+**Status: DONE - 2026-08-11**
 
-Unit: **Wave 2 inspector, simulator, and regression fleet**. Wave 1 is fully
-integrated and pushed through `8481721`; all three Wave 2 implementation lanes
-are now integrated through `02371ec`. Wave 2 owns the remaining shared
-inspector presentation, seven-segment simulator rendering, and cross-lane
-accessibility/render/performance regression proof.
+Unit: **Wave 3 packaged/native and Chrome UI/UX acceptance QA**. Wave 1 and
+Wave 2 are fully integrated; the final implementation tip before QA was
+`564c375`. All 24 stable PDF tracker issues now have `FIXED` status and
+matching code/test/visual evidence.
 
 **Files:** Wave 2 workers will use disjoint temporary worktrees and the issue
 ownership/file boundaries recorded in `UI_UX_FIXES.md`; this primary checkout
 remains the only owner of `PROGRESS.md`, `FEATURE_PARITY.md`, and
 `UI_UX_FIXES.md`.
 
-**Tests:** Wave 1 handoff gates remain green: frontend **256 files passed / 2
-skipped, 4,297 tests passed / 8 skipped**; typecheck **exit 0**; desktop build
-**exit 0**; design drift **9 checks + 47 tests passed**; cargo fmt/clippy
-**exit 0**; native Rust **104 passed / 0 failed / 42 ignored**; ignored
-real-ngspice smoke **42 passed / 0 failed**. Wave 2 focused landings are
-regression **8 tests**, simulator **92 tests**, and inspector **114 tests**;
-full Wave 2 gates are next.
+**Tests:** typecheck **exit 0**; full frontend **258 files passed / 2
+skipped, 4,337 tests passed / 8 skipped**; desktop web build **exit 0**;
+design drift **9 checks + 48 tests passed**; Tauri bundle **exit 0**;
+`codesign --verify --deep --strict` **exit 0**; `hdiutil verify` **VALID**;
+packaged engine smoke **336 samples, 0..5 V**; cargo fmt/clippy **exit 0**;
+native Rust **104 passed / 0 failed / 42 ignored**; ignored real-ngspice
+smoke **42 passed / 0 failed**. Packaged Computer Use imported and ran the
+unmodified RC deck (**3,079 samples, COMPLETE**) and an edited circuit with
+the seven-segment component (**3,104 samples, COMPLETE; U2 display blank for
+undriven nodes**). Chrome dev:web reported zero app-origin console errors and
+no overflow at all six theme/viewport combinations.
 
-**Parity items:** Wave 1 implementation items remain `IN PROGRESS` pending
-packaged/browser/native evidence. Wave 2 will target COMP-02, COMP-04,
-COMP-06, COMP-08B, COMP-09, COMP-11, COMP-13B, COMP-14, COMP-12 rendering,
-COMP-16, and regression/a11y/performance coverage.
+**Parity items:** `UI_UX_FIXES.md` is **24/24 FIXED**, covering SHELL-01–07
+and COMP-01–17. The complete issue-to-commit and screenshot index is
+`screenshots/ui-ux-fixes/QA-EVIDENCE.md`.
 
-**Next:** after the Mac is manually unlocked, begin serialized packaged
-Computer Use, Chrome, and engineering QA; do not close any tracker item until
-matching evidence exists.
+**Next:** parent task launches one fresh Sol High review from the final SHA;
+this orchestrator does not perform that review.
+
+---
+
+**2026-08-11 — Wave 3 packaged/native + Chrome acceptance QA:** Computer Use
+launched the unsigned packaged `Tau.app`, exercised recovery, import, source
+editing and finite-value validation, inspector movement, theme switching,
+symbol placement, title-bar drag/double-click zoom, fullscreen, and simulator
+controls at 900×600, 1280×800, and 1440×900 in light and dark. The native RC
+run completed with **3,079 samples**; the edited circuit completed with
+**3,104 samples** and reflected `U2 display: blank` from undriven simulation
+nodes. Chrome dev:web was checked at all six requested combinations with
+`scrollWidth == innerWidth`, `scrollHeight == innerHeight`, and **0
+app-origin console errors** after reload. Evidence is under
+`screenshots/ui-ux-fixes/native/`, `screenshots/ui-ux-fixes/chrome/`, and
+`screenshots/ui-ux-fixes/QA-EVIDENCE.md`. The Chrome local-file bridge refused
+the optional `.asc` upload because the extension lacks file-URL access; the
+packaged native run is the end-to-end import/edit/simulation proof.
 
 ---
 

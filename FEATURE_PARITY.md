@@ -2003,7 +2003,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Per-analysis ngspice option mapping
 
 ## 8. UX / app
-- 🟡 **PDF-directed UI/UX remediation fleet (active 2026-08-11):** the
+- ✅ **PDF-directed UI/UX remediation fleet (complete 2026-08-11):** the
   authoritative 24-item tracker is `UI_UX_FIXES.md`, with lossless source images
   under `screenshots/ui-ux-fix-brief/`. The fleet starts from tagged baseline
   `live-simulator-baseline-2026-08-11` (`919f0e1`), preserves exact model
@@ -2019,9 +2019,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `8481721`; regression proof landed in `de57dc0` (8 focused tests, 4,305-test
   full run), simulator rendering landed in `10b043e` (92 focused tests,
   native/ngspice gates green), and inspector presentation landed in `02371ec`
-  (114 focused tests). Visual/native evidence remains pending.**
+  (114 focused tests). Wave 3 packaged Computer Use and Chrome QA now prove
+  all 24 issues; the complete issue-to-commit and screenshot index is
+  `screenshots/ui-ux-fixes/QA-EVIDENCE.md`, and no stable issue remains
+  `UNVERIFIED`, `IN PROGRESS`, or silently deferred.**
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
-- 🟡 **Visual QA on the actual desktop app:** the current Tauri hot-reload app
+- ✅ **Visual QA on the actual desktop app:** the current Tauri hot-reload app
   stays alive on `auto/ltspice-parity`; live browser QA verified centered
   simulator fit/Home, the cross-mode assistant, and no horizontal overflow at
   900×600. A persisted-width stress pass maximized Explorer and Assistant and
@@ -2029,8 +2032,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   unsigned release bundle now also launches and stays alive, created a canonical
   ASC on disk in the selected native folder, and exposed the same Components +
   Assistant stack; the live 900×600 check measured body `scrollWidth === 900`
-  with both tools reachable. Remaining: repeat the *full* screenshot matrix in
-  the packaged build.
+  with both tools reachable. The packaged Computer Use matrix and Chrome
+  dev:web matrix are complete at 900×600, 1280×800, and 1440×900 in both
+  themes; captures and literal results are indexed in
+  `screenshots/ui-ux-fixes/QA-EVIDENCE.md`.
 - ✅ **One circuit-aware assistant in both modes (2026-07-14):** a single
   top-right toolbar entry opens the same assistant beside Schematic or
   Simulator. Context is built from the real document/result; Anthropic tool

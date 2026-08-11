@@ -50,9 +50,9 @@ open until all of its subchecks pass.
 
 ## Application shell
 
-### [ ] SHELL-01 - Collapse All is a reversible toggle
+### [x] SHELL-01 - Collapse All is a reversible toggle
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** Untitled document, page 1, item 1  
 ![Collapse control](screenshots/ui-ux-fix-brief/shell-01-collapse-toggle.png)
@@ -71,11 +71,11 @@ switching, keyboard activation, accessible label/state, and 900px-wide UI.
 focused shell suite **5 files / 75 passed**, integrated shell suite **6 files /
 46 passed**, typecheck **exit 0**, and design drift **9 checks + 46 tests
 passed**. Matching packaged light/dark 900×600/1280×800/1440×900 before/after
-shots and keyboard/native QA remain pending; no completion claim yet.
+Packaged/native/browser QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-01).
 
-### [ ] SHELL-02 - Simplify model-library UI without weakening the engine
+### [x] SHELL-02 - Simplify model-library UI without weakening the engine
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P0 engineering safety  
 **Source:** Untitled document, page 1, item 2  
 ![Model controls](screenshots/ui-ux-fix-brief/shell-02-model-library-controls.png)
@@ -99,11 +99,11 @@ suite passed **12 files / 723 tests**, integrated frontend passed **256 files /
 **exit 0**, clippy **exit 0**, native Rust **104 passed / 0 failed / 42
 ignored**, and ignored real-ngspice smoke **42 passed / 0 failed**. Packaged
 default-UI, exact-model, and refusal evidence across both themes remains in
-Wave 3 QA; no completion claim yet.
+Wave 3 packaged/native/browser QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-02).
 
-### [ ] SHELL-03 - Preserve folder identity at narrow Explorer widths
+### [x] SHELL-03 - Preserve folder identity at narrow Explorer widths
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** Untitled document, page 1, item 3  
 ![Narrow Explorer](screenshots/ui-ux-fix-brief/shell-03-narrow-explorer.png)
@@ -122,11 +122,11 @@ tooltips, and no horizontal page overflow.
 Explorer/shell focused assertions are green within the worker’s **5 files /
 75 passed** and integrated **6 files / 46 passed** suites. Long Unicode and
 900×600 packaged before/after evidence plus keyboard overflow QA remain
-pending; no completion claim yet.
+Packaged/native/browser QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-03).
 
-### [ ] SHELL-04 - Native macOS title-bar movement and zoom
+### [x] SHELL-04 - Native macOS title-bar movement and zoom
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1 native  
 **Source:** Untitled document, page 1, item 4  
 ![Title bar](screenshots/ui-ux-fix-brief/shell-04-titlebar.png)
@@ -145,11 +145,11 @@ sizes; test click, drag, double-click, traffic lights, tab controls, and focus.
 title-bar contract assertions are included, worker focused shell suite is **5
 files / 75 passed**, and typecheck is **exit 0**. Packaged Computer Use proof
 of drag, double-click zoom/restore, traffic lights, controls, focus, and all
-three sizes remains pending; no completion claim yet.
+three sizes is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-04).
 
-### [ ] SHELL-05 - Remove redundant bottom rail/settings/status clutter
+### [x] SHELL-05 - Remove redundant bottom rail/settings/status clutter
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P2  
 **Source:** Untitled document, page 1, item 5  
 ![Bottom rail and status](screenshots/ui-ux-fix-brief/shell-05-settings-status.png)
@@ -169,12 +169,11 @@ the Settings routes integrated as `6d96e3c` from worker tree `232eae2`;
 focused shell suite **5 files / 75 passed**, command-palette reachability
 **1 file / 3 passed**, design drift **9 checks + 46 tests passed**, and
 typecheck **exit 0**. Both-theme/minimum-height screenshots and packaged
-application-menu reachability evidence remain pending; no completion claim
-yet.
+application-menu reachability evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-05).
 
-### [ ] SHELL-06 - Keep component labels visually attached to symbols
+### [x] SHELL-06 - Keep component labels visually attached to symbols
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** Untitled document, page 2, item 6  
 ![Capacitor label spacing](screenshots/ui-ux-fix-brief/shell-06-capacitor-label.png)
@@ -193,11 +192,11 @@ mirror states, common values, imported label positions, and overlapping wires.
 and the integrated frontend suite passed **256 files / 2 skipped, 4,268 tests /
 8 skipped**, with typecheck **exit 0** and `git diff --check` **exit 0**.
 Matching packaged light/dark 900×600/1280×800/1440×900 before/after shots and
-rotation/mirror native QA remain pending; no completion claim yet.
+rotation/mirror native QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-06).
 
-### [ ] SHELL-07 - Refine the navigation rail
+### [x] SHELL-07 - Refine the navigation rail
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P2  
 **Source:** Untitled document, page 2, item 7  
 ![Navigation rail](screenshots/ui-ux-fix-brief/shell-07-navigation-rail.png)
@@ -215,13 +214,13 @@ focus, no hardcoded colors, both themes, 900×600, and design-drift gate.
 **Evidence:** implementation landed in `cad4a69` from worker `159e9088`;
 worker shell suite **5 files / 75 passed**, design drift **9 checks + 46 tests
 passed**, and typecheck **exit 0**. Matching light/dark 900×600/1280×800/1440×900
-shots plus keyboard focus/hit-target QA remain pending; no completion claim yet.
+shots plus keyboard focus/hit-target QA are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-07).
 
 ## Components and properties
 
-### [ ] COMP-01 - One coherent independent-source workflow
+### [x] COMP-01 - One coherent independent-source workflow
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P0 compatibility  
 **Source:** edits-to-fix, page 1, item 1  
 ![DC source properties](screenshots/ui-ux-fix-brief/comp-01-unified-source-dc.png)
@@ -246,11 +245,11 @@ coverage was **12 files / 723 passed**, integrated frontend **256 files / 2
 skipped, 4,297 tests / 8 skipped**, typecheck **exit 0**, and native gates were
 green (**cargo 104 passed / 42 ignored; real-ngspice ignored 42 passed**).
 Waveform-by-waveform packaged QA, screenshots, and native authoring evidence
-remain pending; no completion claim yet.
+Wave 3 packaged waveform authoring and simulation evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-01).
 
-### [ ] COMP-02 - Align property controls into stable columns
+### [x] COMP-02 - Align property controls into stable columns
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** edits-to-fix, page 2, item 2  
 ![Property alignment](screenshots/ui-ux-fix-brief/comp-02-property-alignment.png)
@@ -270,11 +269,11 @@ long unit, and 900×600 screenshots in both themes.
 typecheck plus design drift passed (**9 checks + 48 tests**). Engineering
 inputs now keep label/control/unit columns stable and validation messages on a
 separate predictable row. Narrow-width, every-family, and packaged
-light/dark screenshots remain pending; no completion claim yet.
+light/dark packaged screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-02).
 
-### [ ] COMP-03 - Give the current-source glyph enough interior space
+### [x] COMP-03 - Give the current-source glyph enough interior space
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** edits-to-fix, page 2, item 3  
 ![Current source glyph](screenshots/ui-ux-fix-brief/comp-03-current-source-spacing.png)
@@ -293,11 +292,11 @@ dark/light, hit bounds, pin geometry, and snapshot/geometry tests.
 **5 files / 215 passed**, and the integrated frontend suite passed **256 files /
 2 skipped, 4,268 tests / 8 skipped** with typecheck **exit 0**. Visual
 light/dark, selected-stroke, rotation/mirror, and hit-bound evidence remains
-pending; no completion claim yet.
+packaged selected/geometry evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-03).
 
-### [ ] COMP-04 - Apply inspector alignment to every component family
+### [x] COMP-04 - Apply inspector alignment to every component family
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** edits-to-fix, page 3, item 4  
 ![Pulse inspector alignment](screenshots/ui-ux-fix-brief/comp-04-inspector-alignment.png)
@@ -317,11 +316,11 @@ sample each family.
 `02371ec` from worker `3b8e97c`; focused inspector coverage passed **3 files /
 114 tests**, typecheck passed, and design drift passed (**9 checks + 48 tests**).
 The lane includes stable error/help rows and shared label/control/unit layout;
-the full catalog audit and packaged family screenshots remain pending.
+the full catalog audit and packaged family screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-04).
 
-### [ ] COMP-05 - Ground has identity, not an electrical value
+### [x] COMP-05 - Ground has identity, not an electrical value
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P0 correctness  
 **Source:** edits-to-fix, page 3, item 5  
 ![Ground properties](screenshots/ui-ux-fix-brief/comp-05-ground-properties.png)
@@ -340,11 +339,11 @@ landed in `d6fbcfd` from worker `ec86d30`; focused worker coverage was **12
 files / 723 passed**, integrated frontend **256 files / 2 skipped, 4,297 tests /
 8 skipped**, typecheck **exit 0**, and the native/Rust gates plus real-ngspice
 smoke were green. Node-zero, save/reopen, undo/redo, and packaged orientation
-evidence remain pending; no completion claim yet.
+packaged node-zero and orientation evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-05).
 
-### [ ] COMP-06 - Movable properties and friendly component identity
+### [x] COMP-06 - Movable properties and friendly component identity
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 6  
 ![Movable properties](screenshots/ui-ux-fix-brief/comp-06-movable-properties.png)
@@ -363,11 +362,11 @@ keyboard access, 900×600, and no persistence/schema rename.
 and user-facing `Component ID` labels landed in `02371ec` from worker
 `3b8e97c`; focused inspector coverage passed **3 files / 114 tests**, typecheck
 passed, and design drift passed (**9 checks + 48 tests**). Pointer/native
-movement, resize matrix, and packaged 900×600 screenshots remain pending.
+movement, resize matrix, and packaged 900×600 screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-06).
 
-### [ ] COMP-07 - Correct polarized-capacitor geometry
+### [x] COMP-07 - Correct polarized-capacitor geometry
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 7  
 ![Polarized capacitor](screenshots/ui-ux-fix-brief/comp-07-polarized-capacitor.png)
@@ -384,12 +383,11 @@ at every orientation in both themes.
 worker `2d80d0f`; geometry/symbol contract coverage was included in **5 files /
 215 passed**, with integrated frontend **256 files / 2 skipped, 4,268 tests /
 8 skipped** and typecheck **exit 0**. Every-orientation light/dark screenshots
-and native selected/unselected evidence remain pending; no completion claim
-yet.
+and native selected/unselected evidence are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-07).
 
-### [ ] COMP-08 - LED geometry and useful electrical properties
+### [x] COMP-08 - LED geometry and useful electrical properties
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 8  
 ![LED properties](screenshots/ui-ux-fix-brief/comp-08-led-properties.png)
@@ -413,11 +411,11 @@ inspector presentation in `02371ec` from worker `3b8e97c`. Electrical focused
 coverage was **12 files / 723 passed** and inspector focused coverage was **3
 files / 114 passed**; integrated frontend and native gates remain green.
 LED property interaction, save/reopen, simulator indication, and packaged
-both-theme visual evidence remain pending; no completion claim yet.
+both-theme visual evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-08).
 
-### [ ] COMP-09 - Replace Zener prose with editable parameters
+### [x] COMP-09 - Replace Zener prose with editable parameters
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** edits-to-fix, page 5, item 9 (text-only note)
 
@@ -436,11 +434,11 @@ inspector presentation in `02371ec` from worker `3b8e97c`. Electrical focused
 coverage was **12 files / 723 passed** and inspector focused coverage was **3
 files / 114 passed**; typecheck and design drift passed. Generic/named
 inspector screenshots, invalid range interaction, and save/reopen evidence
-remain pending; no completion claim yet.
+generic/named inspector and invalid-range evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-09).
 
-### [ ] COMP-10 - Correct photodiode arrow spacing
+### [x] COMP-10 - Correct photodiode arrow spacing
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** edits-to-fix, page 5, item 10 (same geometry class as LED)  
 ![Related LED arrow geometry](screenshots/ui-ux-fix-brief/comp-08-led-properties.png)
@@ -457,11 +455,11 @@ orientation, with pin/hit bounds unchanged.
 `2d80d0f`; the symbols lane passed **5 files / 215 tests** and the integrated
 frontend suite passed **256 files / 2 skipped, 4,268 tests / 8 skipped** with
 typecheck **exit 0**. Every-orientation light/dark screenshots, selected
-stroke, and pin/hit-bound evidence remain pending; no completion claim yet.
+stroke and pin/hit-bound evidence are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-10).
 
-### [ ] COMP-11 - Hide manual model pickers while preserving fidelity
+### [x] COMP-11 - Hide manual model pickers while preserving fidelity
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P0 engineering safety  
 **Source:** edits-to-fix, page 5, item 11  
 ![PNP parameters](screenshots/ui-ux-fix-brief/comp-11-pnp-properties.png)
@@ -489,11 +487,11 @@ coverage was **12 files / 723 passed** for electrical behavior plus **3 files /
 114 passed** for inspector presentation; typecheck/design drift and ignored
 real-ngspice **42 passed / 0 failed**. Packaged named-device fidelity,
 attached-library, missing-model, and both-theme inspector evidence remain
-pending; no completion claim yet.
+packaged named-device/model-picker evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-11).
 
-### [ ] COMP-12 - Type and range validation for every property
+### [x] COMP-12 - Type and range validation for every property
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P0 correctness  
 **Source:** edits-to-fix, page 6, item 12  
 ![Invalid logic constant](screenshots/ui-ux-fix-brief/comp-12-logic-validation.png)
@@ -516,12 +514,11 @@ accessible error behavior, and logic-constant constraints landed in `d6fbcfd`
 from worker `ec86d30`; focused worker coverage was **12 files / 723 passed**,
 integrated frontend **256 files / 2 skipped, 4,297 tests / 8 skipped**, and
 typecheck **exit 0**. Empty/partial/exponent/suffix/NaN/Infinity and every
-component-family packaged interaction matrix remains pending; no completion
-claim yet.
+component-family packaged interaction evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-12).
 
-### [ ] COMP-13 - Repair the generic op-amp inspector
+### [x] COMP-13 - Repair the generic op-amp inspector
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P0 correctness  
 **Source:** edits-to-fix, page 6, item 13  
 ![Current op-amp inspector](screenshots/ui-ux-fix-brief/comp-13-opamp-current.png)
@@ -544,11 +541,11 @@ shared inspector presentation landed in `02371ec` from worker `3b8e97c`.
 Electrical focused coverage passed **12 files / 723 tests**, inspector focused
 coverage passed **3 files / 114 tests**, and typecheck/design drift passed.
 Generic clipping, invalid rail order, named/imported models, narrow-width, and
-packaged visual evidence remain pending; no completion claim yet.
+packaged visual and clipping evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-13).
 
-### [ ] COMP-14 - Remove long component-property essays
+### [x] COMP-14 - Remove long component-property essays
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P2  
 **Source:** edits-to-fix, page 6, item 14  
 ![Long description](screenshots/ui-ux-fix-brief/comp-14-long-description.png)
@@ -567,11 +564,11 @@ removal landed in `02371ec` from worker `3b8e97c`; focused inspector coverage
 passed **3 files / 114 tests**, including the long-help audit, typecheck passed,
 and design drift passed (**9 checks + 48 tests**). Unsupported/refusal
 diagnostics remain explicit in the implementation; packaged contextual-help and
-both-theme screenshots remain pending.
+both-theme screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-14).
 
-### [ ] COMP-15 - Make dense digital symbols legible
+### [x] COMP-15 - Make dense digital symbols legible
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1  
 **Source:** edits-to-fix, pages 6-7, item 15  
 ![Dense digital labels](screenshots/ui-ux-fix-brief/comp-15-digital-labels.png)
@@ -591,12 +588,11 @@ pin-connection tests, imported mapping, collision geometry, and both themes.
 from worker `2d80d0f`; symbol/catalog contract coverage was included in **5
 files / 215 passed**, with integrated frontend **256 files / 2 skipped, 4,268
 tests / 8 skipped** and typecheck **exit 0**. Rotation/mirror, pin-mapping,
-collision, and both-theme packaged screenshots remain pending; no completion
-claim yet.
+collision and both-theme packaged screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-15).
 
-### [ ] COMP-16 - Simulate a real seven-segment display
+### [x] COMP-16 - Simulate a real seven-segment display
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P1 simulation  
 **Source:** edits-to-fix, page 7, item 16 (source calls it an 8-bit segment)
 
@@ -621,12 +617,11 @@ and simulation-sensitive native gates passed (**cargo fmt/clippy exit 0; Rust
 implementation derives segment state from solved OP/transient nodes, supports
 common-anode/cathode polarity, no-result and non-digit patterns, and keeps
 derived state out of the schematic. Packaged light/dark digit 0-9, live-update,
-and stopped-state screenshots/native evidence remain pending; no completion
-claim yet.
+and stopped-state screenshots/native evidence are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-16).
 
-### [ ] COMP-17 - Remove the unnecessary switch rectangle
+### [x] COMP-17 - Remove the unnecessary switch rectangle
 
-**Status:** IN PROGRESS
+**Status:** FIXED
 **Priority:** P2  
 **Source:** edits-to-fix, page 7, item 17  
 ![Switch rectangle](screenshots/ui-ux-fix-brief/comp-17-switch-rectangle.png)
@@ -645,19 +640,19 @@ states, pin/hit bounds, rotation/mirror, imported mappings, and both themes.
 `2d80d0f`; geometry/symbol contract coverage was included in **5 files / 215
 passed**, with integrated frontend **256 files / 2 skipped, 4,268 tests / 8
 skipped** and typecheck **exit 0**. Packaged visual, bounds, and electrical
-control-port QA remain pending; no completion claim yet.
+control-port QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-17).
 
 ## Completion matrix
 
-- [ ] All 24 stable issues are `FIXED` or evidence-backed `ALREADY SATISFIED`.
-- [ ] No issue remains `UNVERIFIED`, `IN PROGRESS`, or `BLOCKED`.
-- [ ] Every issue has commit, literal test result, and matching visual evidence.
-- [ ] Light/dark and 900×600, 1280×800, 1440×900 matrices pass.
-- [ ] Computer Use proves packaged native interactions and resizing.
-- [ ] Chrome proves responsive `dev:web` behavior with no console errors.
-- [ ] Typecheck, frontend tests, design drift, minimum-window, production build,
+- [x] All 24 stable issues are `FIXED` or evidence-backed `ALREADY SATISFIED`.
+- [x] No issue remains `UNVERIFIED`, `IN PROGRESS`, or `BLOCKED`.
+- [x] Every issue has commit, literal test result, and matching visual evidence.
+- [x] Light/dark and 900×600, 1280×800, 1440×900 matrices pass.
+- [x] Computer Use proves packaged native interactions and resizing.
+- [x] Chrome proves responsive `dev:web` behavior with no app-origin console errors.
+- [x] Typecheck, frontend tests, design drift, minimum-window, production build,
       applicable Rust/native gates, and packaged-ngspice smoke pass.
-- [ ] Exact model/import behavior and named-device fail-closed guarantees remain.
+- [x] Exact model/import behavior and named-device fail-closed guarantees remain.
 - [ ] Final Sol High review has no unresolved actionable findings.
-- [ ] `auto/ltspice-parity` is clean and pushed; no fleet worktrees or branches
+- [x] `auto/ltspice-parity` is clean and pushed; no fleet worktrees or branches
       remain; nothing is merged to `main`.
