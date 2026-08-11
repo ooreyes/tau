@@ -7,6 +7,7 @@ import {
   encodeIndependentSourceValue,
   updateIndependentSourceField,
   updatePwlPoint,
+  validatePwlTimeSequence,
 } from "./sourceValue";
 
 describe("independent-source value controls", () => {
@@ -40,6 +41,19 @@ describe("independent-source value controls", () => {
     source = updatePwlPoint(source, 2, "level", "1");
 
     expect(encodeIndependentSourceValue(source)).toBe("PWL(0 0 2u 5 3u 1)");
+  });
+
+  it("rejects an out-of-order PWL time before source mutation", () => {
+    const source = decodeIndependentSourceValue("PWL(0 0 2u 0 +1u 1)", "V");
+    expect(validatePwlTimeSequence(source.pwlPoints)).toBeNull();
+
+    const unchanged = updatePwlPoint(source, 2, "time", "1u");
+    expect(unchanged).toBe(source);
+    expect(encodeIndependentSourceValue(unchanged)).toBe("PWL(0 0 2u 0 +1u 1)");
+
+    const equal = updatePwlPoint(source, 1, "time", "2u");
+    expect(equal.pwlPoints[1]?.time).toBe("2u");
+    expect(validatePwlTimeSequence(equal.pwlPoints)).toBeNull();
   });
 
   it("preserves AC stimulus and source modifiers while editing Sine parameters", () => {

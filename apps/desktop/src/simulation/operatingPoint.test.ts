@@ -390,6 +390,71 @@ describe("DC operating point - seven-segment node voltages", () => {
     expect(segment?.voltage).toBeCloseTo(5, 6);
     expect(common?.voltage).toBeCloseTo(0, 6);
   });
+
+  it("models a directional LED branch with the deck's 220-ohm load", () => {
+    const source = vsource(0, 32, "5V", "V1");
+    const sourceResistance = resistor(96, 0, "100", "RS");
+    const display: SchematicComponent = {
+      id: uid("seg-series"),
+      kind: "sevenSeg",
+      x: 192,
+      y: 0,
+      rotation: 0,
+      value: "",
+      label: "U1",
+    };
+    const components = [
+      source,
+      sourceResistance,
+      display,
+      ground(0, 64),
+      ground(152, 32),
+    ];
+    const wires = [
+      wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire([{ x: 128, y: 0 }, { x: 152, y: 0 }, { x: 152, y: -32 }]),
+    ];
+    const circuit = extractCircuit(components, wires);
+    const entry = circuit.components.find(({ component }) => component.id === display.id);
+    const result = runOperatingPoint({ components, wires });
+
+    expect(result.ok).toBe(true);
+    expect(entry).toBeDefined();
+    if (!result.ok || !entry) return;
+    const segment = result.nets.find((net) => net.id === entry.pins.a);
+    // The schematic extractor keeps the three unconnected left pins on this
+    // shared preview net, so the expected load is three parallel 220-ohm
+    // branches: (5-V)/100 = 3(V-2)/220.
+    expect(segment?.voltage).toBeCloseTo(3.2692307692, 5);
+  });
+
+  it("does not load a segment when driven in reverse", () => {
+    const source = vsource(0, 32, "5V", "V1");
+    const sourceResistance = resistor(96, 0, "100", "RS");
+    const display: SchematicComponent = {
+      id: uid("seg-reverse"),
+      kind: "sevenSeg",
+      x: 192,
+      y: 0,
+      rotation: 0,
+      value: "anode",
+      label: "U1",
+    };
+    const components = [source, sourceResistance, display, ground(0, 64), ground(152, 32)];
+    const wires = [
+      wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire([{ x: 128, y: 0 }, { x: 152, y: 0 }, { x: 152, y: -32 }]),
+    ];
+    const circuit = extractCircuit(components, wires);
+    const entry = circuit.components.find(({ component }) => component.id === display.id);
+    const result = runOperatingPoint({ components, wires });
+
+    expect(result.ok).toBe(true);
+    expect(entry).toBeDefined();
+    if (!result.ok || !entry) return;
+    const segment = result.nets.find((net) => net.id === entry.pins.a);
+    expect(segment?.voltage).toBeCloseTo(5, 5);
+  });
 });
 
 // ---------------------------------------------------------------------------

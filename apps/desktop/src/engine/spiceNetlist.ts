@@ -36,6 +36,7 @@ import {
   timer555InstanceLine,
 } from "./everyCircuitIcSpec";
 import { parseModulator, modulatorDeckLines } from "./modulatorSpec";
+import { normalizeSevenSegmentPolarity } from "./sevenSegmentSpec";
 import { boundedOpampLine, parseOpampAvol, parseOpampOutputLimits, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { solverOptionOverrides } from "../lib/simulationPreferences";
@@ -2072,10 +2073,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         g: pin("g"),
         dp: pin("dp"),
         com: pin("com"),
-        polarity: /(?:common\s+|polarity\s*[=:]?\s*)anode\b/i.test(component.value)
-          && !/cathode/i.test(component.value)
-          ? "anode"
-          : "cathode",
+        polarity: normalizeSevenSegmentPolarity(component.value),
       });
     }
     case "sampleHold": {

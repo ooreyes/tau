@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { normalizeSevenSegmentPolarity } from "../../engine/sevenSegmentSpec";
 
 /** The raw segment pins exposed by Tau's seven-segment component. */
 export const SEVEN_SEGMENT_SEGMENTS = ["a", "b", "c", "d", "e", "f", "g", "dp"] as const;
@@ -51,11 +52,7 @@ const DEFAULT_SEGMENT_THRESHOLD_VOLTS = 0.5;
  * `polarity=anode` / `common anode` opts into the opposite LED direction.
  */
 export function sevenSegmentPolarityFromValue(value: string | undefined): "anode" | "cathode" {
-  const text = (value ?? "").toLowerCase();
-  return /(?:polarity\s*[=:]\s*|common\s+|\b)(?:anode)\b/.test(text)
-    && !/cathode/.test(text)
-    ? "anode"
-    : "cathode";
+  return normalizeSevenSegmentPolarity(value);
 }
 
 function orderedSegments(segments: Iterable<SevenSegmentSegment>): SevenSegmentSegment[] {
@@ -128,12 +125,12 @@ export function activeSevenSegmentSegments(
   const threshold = Number.isFinite(options.thresholdVolts)
     ? Math.max(0, options.thresholdVolts as number)
     : DEFAULT_SEGMENT_THRESHOLD_VOLTS;
-  const polarity = options.polarity ?? "cathode";
+  const polarity = normalizeSevenSegmentPolarity(options.polarity);
   return SEVEN_SEGMENT_SEGMENTS.filter((segment) => {
     const voltage = segmentVoltages?.[segment];
     if (!Number.isFinite(voltage)) return false;
     const delta = (voltage as number) - (commonVoltage as number);
-    if (polarity === "cathode" || polarity === "auto") return delta >= threshold;
+    if (polarity === "cathode") return delta >= threshold;
     if (polarity === "anode") return delta <= -threshold;
     return false;
   });

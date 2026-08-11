@@ -17,6 +17,7 @@ import {
   removePwlPoint,
   updateIndependentSourceField,
   updatePwlPoint,
+  validatePwlTimeSequence,
   type IndependentSourceMode,
   type IndependentSourceLegacyKind,
   type IndependentSourceUnit,
@@ -56,9 +57,12 @@ const SOURCE_FIELD_CONSTRAINTS: Record<string, SourceFieldConstraint> = {
   frequency: { min: 0, minExclusive: true },
   carrierFrequency: { min: 0, minExclusive: true },
   signalFrequency: { min: 0, minExclusive: true },
-  rise: { min: 0, minExclusive: true },
-  fall: { min: 0, minExclusive: true },
-  width: { min: 0, minExclusive: true },
+  // LTspice/ngspice accept zero-edge and zero-width PULSE values. The period
+  // remains strictly positive below; only a non-negative edge/on-time is
+  // valid here.
+  rise: { min: 0 },
+  fall: { min: 0 },
+  width: { min: 0 },
   period: { min: 0, minExclusive: true },
   riseTau: { min: 0, minExclusive: true },
   fallTau: { min: 0, minExclusive: true },
@@ -161,6 +165,47 @@ function SourceField({ label, value, unit = "", fieldKey, onBeginChange, onValue
         />
       )}
     </label>
+  );
+}
+
+function PwlTimeField({
+  point,
+  index,
+  points,
+  onBeginChange,
+  onValueChange,
+}: {
+  point: { time: string };
+  index: number;
+  points: { time: string; level: string }[];
+  onBeginChange: () => void;
+  onValueChange: (value: string) => void;
+}) {
+  const [sequenceError, setSequenceError] = useState<string | null>(null);
+  const timeKey = points.map((candidate) => candidate.time).join("\u0001");
+  useEffect(() => {
+    setSequenceError(null);
+  }, [index, timeKey]);
+
+  return (
+    <EngineeringInput
+      label={`PWL time ${index + 1}`}
+      value={point.time}
+      unit="s"
+      min={0}
+      externalValidationMessage={sequenceError}
+      onValueChange={(nextValue) => {
+        const candidate = points.map((candidatePoint, pointIndex) =>
+          pointIndex === index ? { ...candidatePoint, time: nextValue } : candidatePoint,
+        );
+        const error = validatePwlTimeSequence(candidate);
+        setSequenceError(error);
+        if (!error) {
+          onBeginChange();
+          onValueChange(nextValue);
+        }
+      }}
+    />
   );
 }
 
@@ -272,11 +317,10 @@ export function IndependentSourceEditor({
           <legend>Time / level points</legend>
           {source.pwlPoints.map((point, index) => (
             <div className="source-pwl-row" key={`${index}-${source.pwlPoints.length}`}>
-              <EngineeringInput
-                label={`PWL time ${index + 1}`}
-                value={point.time}
-                unit="s"
-                min={0}
+              <PwlTimeField
+                point={point}
+                index={index}
+                points={source.pwlPoints}
                 onBeginChange={() => onBeginChange(`pwl-time-${index}`)}
                 onValueChange={(nextValue) => commit(
                   `pwl-time-${index}`,

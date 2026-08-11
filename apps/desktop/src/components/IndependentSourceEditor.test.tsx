@@ -71,4 +71,40 @@ describe("IndependentSourceEditor validation", () => {
     expect(onBeginChange).not.toHaveBeenCalled();
     expect(onValueChange).not.toHaveBeenCalled();
   });
+
+  it("accepts LTspice-valid zero PULSE edge and on-time values", () => {
+    const { onBeginChange, onValueChange } = renderSource("PULSE(0 5 0 1n 1n 5u 10u)");
+
+    for (const label of ["Rise time", "Fall time", "On time"]) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value: "0" } });
+    }
+
+    expect(onBeginChange).toHaveBeenCalledWith("rise");
+    expect(onBeginChange).toHaveBeenCalledWith("fall");
+    expect(onBeginChange).toHaveBeenCalledWith("width");
+    expect(onValueChange.mock.calls.map(([next]) => next)).toEqual([
+      "PULSE(0 5 0 0n 1n 5u 10u)",
+      "PULSE(0 5 0 1n 0n 5u 10u)",
+      "PULSE(0 5 0 1n 1n 0u 10u)",
+    ]);
+  });
+
+  it("validates PWL times as a draft before mutating the source", () => {
+    const { onBeginChange, onValueChange } = renderSource("PWL(1m 0 2m 1)");
+    const firstTime = screen.getByLabelText("PWL time 1") as HTMLInputElement;
+
+    // The second point may not move before the first point.
+    fireEvent.change(firstTime, { target: { value: "3" } });
+    expect(firstTime.value).toBe("3");
+    expect(firstTime.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("alert").textContent).toContain("nondecreasing");
+    expect(onBeginChange).not.toHaveBeenCalled();
+    expect(onValueChange).not.toHaveBeenCalled();
+
+    // Equal and increasing timestamps are both legal and commit normally.
+    fireEvent.change(firstTime, { target: { value: "2" } });
+    expect(firstTime.getAttribute("aria-invalid")).toBe("false");
+    expect(onBeginChange).toHaveBeenCalledWith("pwl-time-0");
+    expect(onValueChange).toHaveBeenLastCalledWith("PWL(2m 0 2m 1)");
+  });
 });

@@ -1,3 +1,5 @@
+import { parsePwlTimeToken } from "../engine/sourceFunction";
+
 export type IndependentSourceUnit = "V" | "A";
 export type IndependentSourceMode = "dc" | "sine" | "pulse" | "pwl" | "exp" | "sffm";
 /** Import-only spellings which predate the unified source editor. */
@@ -6,6 +8,35 @@ export type IndependentSourceLegacyKind = "vac" | "iac" | "vpulse";
 export interface PwlPointValue {
   time: string;
   level: string;
+}
+
+/**
+ * Validate the ordered-time contract before a PWL draft reaches the
+ * schematic. Equal timestamps are legal in LTspice (the later point wins),
+ * while a decreasing timestamp makes the source unrunnable.
+ */
+export function validatePwlTimeSequence(points: readonly PwlPointValue[]): string | null {
+  let previous = -Infinity;
+  for (let index = 0; index < points.length; index += 1) {
+    const raw = points[index]?.time?.trim() ?? "";
+    let time: number;
+    try {
+      time = parsePwlTimeToken(raw, previous);
+    } catch (error) {
+      if (error instanceof Error && /goes backwards/i.test(error.message)) {
+        return "PWL times must be nondecreasing.";
+      }
+      return `PWL time ${index + 1} must be a finite non-negative time.`;
+    }
+    if (!Number.isFinite(time) || time < 0) {
+      return `PWL time ${index + 1} must be a finite non-negative time.`;
+    }
+    if (time < previous) {
+      return "PWL times must be nondecreasing.";
+    }
+    previous = time;
+  }
+  return null;
 }
 
 export interface IndependentSourceValue {
@@ -421,6 +452,7 @@ export function updatePwlPoint(
   const pwlPoints = source.pwlPoints.map((point, pointIndex) =>
     pointIndex === index ? { ...point, [key]: value } : point,
   );
+  if (key === "time" && validatePwlTimeSequence(pwlPoints)) return source;
   const next = { ...source, pwlPoints };
   return index === 0 && key === "level" && !source.dcExplicit ? { ...next, dcBias: value } : next;
 }

@@ -1,5 +1,10 @@
 import type { DigitalGateSpec } from "./digitalGateSpec";
 import { parseDigitalGate } from "./digitalGateSpec";
+import {
+  normalizeSevenSegmentPolarity,
+  SEVEN_SEGMENT_SERIES_OHMS,
+  type SevenSegmentPolarityInput,
+} from "./sevenSegmentSpec";
 
 /**
  * EveryCircuit-style integrated / converter blocks owned by Tau.
@@ -177,8 +182,8 @@ export interface SevenSegNodes {
   g?: string;
   dp?: string;
   com?: string;
-  /** LED direction; a bare part remains common-cathode for compatibility. */
-  polarity?: "anode" | "cathode";
+  /** LED direction; bare `anode` and canonical forms share one parser. */
+  polarity?: SevenSegmentPolarityInput;
 }
 
 /**
@@ -190,9 +195,9 @@ export interface SevenSegNodes {
 export function sevenSegDeckLines(base: string, nodes: SevenSegNodes): string[] {
   const b = base.toLowerCase();
   const com = nodes.com ?? "0";
-  const polarity = nodes.polarity ?? "cathode";
+  const polarity = normalizeSevenSegmentPolarity(nodes.polarity);
   const model = "TAU_7SEG_LED";
-  const seriesOhms = 220;
+  const seriesOhms = SEVEN_SEGMENT_SERIES_OHMS;
   const lines: string[] = [];
   const segs: Array<[string, string | undefined]> = [
     ["a", nodes.a],

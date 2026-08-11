@@ -232,9 +232,6 @@ function useMountedOnceOpened(open: boolean): boolean {
   return mounted;
 }
 
-const ModelLibrariesDialog = lazy(async () => ({
-  default: (await import("./components/ModelLibrariesDialog")).ModelLibrariesDialog,
-}));
 
 const SimulationSetupDialog = lazy(async () => ({
   default: (await import("./components/SimulationSetupDialog")).SimulationSetupDialog,
@@ -584,10 +581,8 @@ function App() {
   /** ASC import warnings keyed by document path (shown in Diagnostics). */
   const [importWarningsByPath, setImportWarningsByPath] = useState<Record<string, string[]>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [modelLibrariesOpen, setModelLibrariesOpen] = useState(false);
   const [simulationSetupOpen, setSimulationSetupOpen] = useState(false);
   const paletteMounted = useMountedOnceOpened(paletteOpen);
-  const modelLibrariesMounted = useMountedOnceOpened(modelLibrariesOpen);
   const simulationSetupMounted = useMountedOnceOpened(simulationSetupOpen);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
@@ -3976,14 +3971,6 @@ function App() {
             onClose={() => setPaletteOpen(false)}
             onOpenSettings={openSettingsSurface}
           />
-        )}
-      </Suspense>
-      {/* A boundary each, not one shared one: a second dialog suspending under
-          a shared boundary would blank the first one back out and lose the
-          state its user left in it. */}
-      <Suspense fallback={null}>
-        {modelLibrariesMounted && (
-          <ModelLibrariesDialog open={modelLibrariesOpen} onOpenChange={setModelLibrariesOpen} />
         )}
       </Suspense>
       <Suspense fallback={null}>

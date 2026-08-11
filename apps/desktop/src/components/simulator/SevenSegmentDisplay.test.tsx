@@ -57,6 +57,7 @@ describe("seven-segment node decoding", () => {
     });
     expect(sevenSegmentPolarityFromValue("")).toBe("cathode");
     expect(sevenSegmentPolarityFromValue("polarity=anode")).toBe("anode");
+    expect(sevenSegmentPolarityFromValue("anode")).toBe("anode");
     expect(sevenSegmentPolarityFromValue("common anode")).toBe("anode");
     expect(sevenSegmentPolarityFromValue("common cathode")).toBe("cathode");
   });
@@ -66,6 +67,7 @@ describe("seven-segment node decoding", () => {
     const activeLow = voltagesFor(pattern, 5, 0);
     expect(activeSevenSegmentSegments(activeLow, 5, { polarity: "cathode" })).toEqual([]);
     expect(activeSevenSegmentSegments(activeLow, 5, { polarity: "anode" })).toEqual(pattern);
+    expect(activeSevenSegmentSegments(activeLow, 5, { polarity: "auto" })).toEqual([]);
   });
 
   it("keeps a blank display distinct from an unavailable result", () => {

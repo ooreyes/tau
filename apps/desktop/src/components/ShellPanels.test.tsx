@@ -305,8 +305,9 @@ describe("ComponentInspector - semiconductor model chooser", () => {
 
     expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Attach Model Library" })).toBeNull();
-    expect(screen.getByRole("status").textContent)
-      .toContain("Needs an exact model · IRF540 isn't available. Run is refused");
+    const status = screen.getByRole("status").textContent ?? "";
+    expect(status).toContain("Needs an exact model · IRF540 isn't available. Run is refused");
+    expect(status).toContain("Open or drop a compatible .lib or .sub");
     expect(openLibraries).not.toHaveBeenCalled();
   });
 

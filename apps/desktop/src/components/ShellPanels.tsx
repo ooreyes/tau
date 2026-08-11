@@ -1721,7 +1721,7 @@ function ComponentPropertyGroup({
   const modelStatusHint = !selected || !modelKind ? "" : idealJunction
     ? junctionModelSummary(selected, idealJunction)
     : !selectedModelOption
-      ? `Needs an exact model · ${selectedModelName || "No model"} isn't available. Run is refused; Tau won't substitute a generic ${modelKind.toUpperCase()}.`
+      ? `Needs an exact model · ${selectedModelName || "No model"} isn't available. Run is refused; Tau won't substitute a generic ${modelKind.toUpperCase()}. Open or drop a compatible .lib or .sub while this schematic is active to attach it to this document.`
       : selectedModelOption.source !== "generic"
         ? `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`
         : JUNCTION_KINDS.has(modelKind)

@@ -28,6 +28,10 @@ import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVo
 import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
 import { previewChargeDefinedCapacitorMessage, previewNegativeCapacitorMessage } from "../schematic/behavioralCapacitor";
 import { previewVendorOpampMessage } from "../engine/opampModel";
+import {
+  normalizeSevenSegmentPolarity,
+  sevenSegmentBranchCompanion,
+} from "../engine/sevenSegmentSpec";
 
 // ---------------------------------------------------------------------------
 // Result type (mirrors linearTransient's style)
@@ -241,6 +245,26 @@ export function runOperatingPoint(
     const nodeIndex = new Map(
       nonGroundNets.map((net, idx) => [net.id, idx]),
     );
+    const sevenSegBranches = circuit.components.flatMap((entry) => {
+      if (entry.component.kind !== "sevenSeg") return [];
+      const com = nodeIdx(entry.pins["com"], nodeIndex);
+      const polarity = normalizeSevenSegmentPolarity(entry.component.value);
+      return (["a", "b", "c", "d", "e", "f", "g", "dp"] as const)
+        .map((id) => {
+          const segment = nodeIdx(entry.pins[id], nodeIndex);
+          if (segment < 0) return null;
+          return {
+            id: `${entry.component.id}:${id}`,
+            anode: polarity === "anode" ? com : segment,
+            cathode: polarity === "anode" ? segment : com,
+          };
+        })
+        .filter((branch): branch is {
+          id: string;
+          anode: number;
+          cathode: number;
+        } => branch !== null);
+    });
     // Resolve a behavioral expression's node name (e.g. V(out)) to a matrix
     // index; ground / "0" → −1. Net ids are the (sanitized) net-label names.
     const netByName = new Map<string, number>();
@@ -275,7 +299,7 @@ export function runOperatingPoint(
     // v+/v- rails, or a node isolated behind a reverse-biased diode) resolve
     // to ~0 V rather than making the matrix singular. Applied only for those
     // devices to avoid masking genuine floating-node errors elsewhere.
-    if (opamps.length > 0 || diodes.length > 0 || hasSwitch) {
+    if (opamps.length > 0 || diodes.length > 0 || sevenSegBranches.length > 0 || hasSwitch) {
       for (let i = 0; i < nonGroundNets.length; i++) {
         matrix[i][i] += GMIN;
       }
@@ -497,13 +521,7 @@ export function runOperatingPoint(
         }
 
         case "sevenSeg": {
-          // High-Z segment loads (1 GΩ) match the deck's R_… 1G emission.
-          const com = nodeIdx(entry.pins["com"], nodeIndex);
-          for (const id of ["a", "b", "c", "d", "e", "f", "g", "dp"] as const) {
-            const seg = nodeIdx(entry.pins[id], nodeIndex);
-            if (seg < 0 && com < 0) continue;
-            stampConductance(matrix, seg, com, 1e-9);
-          }
+          // Directional LED branches are stamped in the Newton loop below.
           break;
         }
 
@@ -543,12 +561,12 @@ export function runOperatingPoint(
     const work = new Float64Array(size * (size + 1));
     const out = new Float64Array(size);
 
-    // Linear circuits solve in one shot. With junction diodes the assembled
-    // matrix/rhs above is the constant part; Newton-iterate the diode
-    // companions on top of a reloaded copy of it until the junction voltages
-    // settle (SPICE-style reltol/vntol), with pnjlim damping each update.
+    // Linear circuits solve in one shot. With junction diodes or the
+    // directional seven-segment LED branches the assembled matrix/rhs above
+    // is the constant part; Newton-iterate the companions on top of a
+    // reloaded copy until the junction voltages settle.
     let solution: ArrayLike<number>;
-    if (diodes.length === 0) {
+    if (diodes.length === 0 && sevenSegBranches.length === 0) {
       loadAugmented(work, matrix, rhs, size);
       solution = solveAugmented(work, size, out);
     } else {
@@ -556,6 +574,7 @@ export function runOperatingPoint(
         diodes.map((entry) => [entry.component.id, diodeSpecFor(entry.component.kind, entry.component.value)]),
       );
       const guesses = new Map(diodes.map((entry) => [entry.component.id, 0]));
+      const sevenSegGuesses = new Map(sevenSegBranches.map((branch) => [branch.id, 0]));
       let converged: ArrayLike<number> | null = null;
       const stride = size + 1;
       for (let iteration = 0; iteration < NEWTON_MAX_ITERATIONS; iteration++) {
@@ -579,6 +598,12 @@ export function runOperatingPoint(
             stampCurrentFlat(work, stride, size, cathode, anode, photodiodePhotocurrentAmps(entry.component.value));
           }
         }
+        for (const branch of sevenSegBranches) {
+          const junction = sevenSegGuesses.get(branch.id) ?? 0;
+          const companion = sevenSegmentBranchCompanion(junction);
+          stampConductanceFlat(work, stride, branch.anode, branch.cathode, companion.conductance);
+          stampCurrentFlat(work, stride, size, branch.anode, branch.cathode, companion.equivalentCurrent);
+        }
         const attempt = solveAugmented(work, size, out);
         let settled = true;
         for (const entry of diodes) {
@@ -592,6 +617,14 @@ export function runOperatingPoint(
           if (Math.abs(next - previous) > 1e-6 + 1e-3 * Math.abs(next)) settled = false;
           guesses.set(entry.component.id, next);
         }
+        for (const branch of sevenSegBranches) {
+          const previous = sevenSegGuesses.get(branch.id) ?? 0;
+          const next =
+            (branch.anode >= 0 ? attempt[branch.anode] : 0)
+            - (branch.cathode >= 0 ? attempt[branch.cathode] : 0);
+          if (Math.abs(next - previous) > 1e-6 + 1e-3 * Math.abs(next)) settled = false;
+          sevenSegGuesses.set(branch.id, next);
+        }
         if (settled) {
           // `attempt` aliases the single reused `out` buffer, so keeping a
           // reference to it is only safe because we break out of the loop on
@@ -602,7 +635,7 @@ export function runOperatingPoint(
         }
       }
       if (!converged) {
-        return fail("The diode models did not converge at the DC operating point. Simplify the circuit or check diode orientation.", circuit);
+        return fail("The diode/LED models did not converge at the DC operating point. Simplify the circuit or check device orientation.", circuit);
       }
       solution = converged;
     }
