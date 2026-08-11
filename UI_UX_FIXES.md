@@ -75,7 +75,7 @@ shots and keyboard/native QA remain pending; no completion claim yet.
 
 ### [ ] SHELL-02 - Simplify model-library UI without weakening the engine
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P0 engineering safety  
 **Source:** Untitled document, page 1, item 2  
 ![Model controls](screenshots/ui-ux-fix-brief/shell-02-model-library-controls.png)
@@ -91,8 +91,15 @@ refusal when a named model is unresolved. Do not substitute generic devices.
 remain green; default catalog/settings/inspectors expose no manual picker;
 imported exact models still simulate or fail closed with the same diagnostics.
 
-**Evidence:** pending electrical-schema lane implementation and Wave 3 model
-fidelity QA.
+**Evidence:** default model-picker/import controls and exact-model provenance
+handling landed in `d6fbcfd` from rebased worker `ec86d30`; the worker’s focused
+suite passed **12 files / 723 tests**, integrated frontend passed **256 files /
+2 skipped, 4,297 tests / 8 skipped**, typecheck **exit 0**, design drift
+**9 checks + 47 tests passed**, desktop build **exit 0**, `cargo fmt --check`
+**exit 0**, clippy **exit 0**, native Rust **104 passed / 0 failed / 42
+ignored**, and ignored real-ngspice smoke **42 passed / 0 failed**. Packaged
+default-UI, exact-model, and refusal evidence across both themes remains in
+Wave 3 QA; no completion claim yet.
 
 ### [ ] SHELL-03 - Preserve folder identity at narrow Explorer widths
 
@@ -214,7 +221,7 @@ shots plus keyboard focus/hit-target QA remain pending; no completion claim yet.
 
 ### [ ] COMP-01 - One coherent independent-source workflow
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P0 compatibility  
 **Source:** edits-to-fix, page 1, item 1  
 ![DC source properties](screenshots/ui-ux-fix-brief/comp-01-unified-source-dc.png)
@@ -233,7 +240,13 @@ loss; this is not a destructive persistence migration.
 import/export representative LTspice spelling, build the correct deck, and
 verify transient/AC results. Remove duplicate placement entries only.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** unified source schema, legacy-kind decoding, and lossless
+round-trip encoding landed in `d6fbcfd` from worker `ec86d30`; focused worker
+coverage was **12 files / 723 passed**, integrated frontend **256 files / 2
+skipped, 4,297 tests / 8 skipped**, typecheck **exit 0**, and native gates were
+green (**cargo 104 passed / 42 ignored; real-ngspice ignored 42 passed**).
+Waveform-by-waveform packaged QA, screenshots, and native authoring evidence
+remain pending; no completion claim yet.
 
 ### [ ] COMP-02 - Align property controls into stable columns
 
@@ -299,7 +312,7 @@ sample each family.
 
 ### [ ] COMP-05 - Ground has identity, not an electrical value
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P0 correctness  
 **Source:** edits-to-fix, page 3, item 5  
 ![Ground properties](screenshots/ui-ux-fix-brief/comp-05-ground-properties.png)
@@ -313,7 +326,12 @@ face upward by default; imported orientation remains unchanged.
 **Acceptance/tests:** Node `0` deck behavior, placement, all rotations,
 save/reopen, imported ground, undo/redo, and absence of meaningless units.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** ground identity/default-orientation and inspector schema changes
+landed in `d6fbcfd` from worker `ec86d30`; focused worker coverage was **12
+files / 723 passed**, integrated frontend **256 files / 2 skipped, 4,297 tests /
+8 skipped**, typecheck **exit 0**, and the native/Rust gates plus real-ngspice
+smoke were green. Node-zero, save/reopen, undo/redo, and packaged orientation
+evidence remain pending; no completion claim yet.
 
 ### [ ] COMP-06 - Movable properties and friendly component identity
 
@@ -376,16 +394,17 @@ deck behavior, save/reopen, simulator indication, both themes, and no silent
 replacement of named models.
 
 **Evidence:** `COMP-08A` LED arrow geometry landed in `71ad682` from worker
-`2d80d0f`; symbol/catalog contract coverage was included in **5 files / 215
-passed**, with integrated frontend **256 files / 2 skipped, 4,268 tests / 8
-skipped** and typecheck **exit 0**. `COMP-08B` electrical properties remains
-owned by the electrical-schema lane; LED color/forward-voltage, exact-model,
-deck, save/reopen, and packaged visual evidence remain pending; no completion
-claim yet.
+`2d80d0f`; `COMP-08B` color/forward-voltage schema, generic defaults, and
+exact-model preservation landed in `d6fbcfd` from worker `ec86d30`. The
+electrical worker’s focused coverage was **12 files / 723 passed**, integrated
+frontend **256 files / 2 skipped, 4,297 tests / 8 skipped**, typecheck **exit
+0**, desktop build **exit 0**, and real-ngspice smoke **42 passed / 0 failed**.
+LED property interaction, save/reopen, simulator indication, and packaged
+both-theme visual evidence remain pending; no completion claim yet.
 
 ### [ ] COMP-09 - Replace Zener prose with editable parameters
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 5, item 9 (text-only note)
 
@@ -398,7 +417,13 @@ show concise provenance rather than editable fake equivalents.
 **Acceptance/tests:** Generic and named Zener, invalid ranges, deck cards,
 save/reopen, exact-model preservation, and inspector density.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** concise validated generic Zener parameters and exact-model
+provenance handling landed in `d6fbcfd` from worker `ec86d30`; focused worker
+coverage was **12 files / 723 passed**, integrated frontend **256 files / 2
+skipped, 4,297 tests / 8 skipped**, typecheck **exit 0**, and native/Rust plus
+real-ngspice gates were green. Generic/named inspector screenshots, invalid
+range interaction, and save/reopen evidence remain pending; no completion
+claim yet.
 
 ### [ ] COMP-10 - Correct photodiode arrow spacing
 
@@ -423,7 +448,7 @@ stroke, and pin/hit-bound evidence remain pending; no completion claim yet.
 
 ### [ ] COMP-11 - Hide manual model pickers while preserving fidelity
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P0 engineering safety  
 **Source:** edits-to-fix, page 5, item 11  
 ![PNP parameters](screenshots/ui-ux-fix-brief/comp-11-pnp-properties.png)
@@ -443,11 +468,17 @@ not fall back to generic parameters.
 models, missing models, attached libraries, decks, diagnostics, and
 named-device-fidelity zero-silent-substitution proof.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** default inspector model controls are hidden while explicit model
+library management, immutable exact identity, and fail-closed diagnostics are
+preserved by `d6fbcfd` from worker `ec86d30`; focused worker coverage was **12
+files / 723 passed**, integrated frontend **256 files / 2 skipped, 4,297 tests /
+8 skipped**, typecheck **exit 0**, and ignored real-ngspice smoke **42 passed /
+0 failed**. Packaged named-device fidelity, attached-library, missing-model,
+and both-theme inspector evidence remain pending; no completion claim yet.
 
 ### [ ] COMP-12 - Type and range validation for every property
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P0 correctness  
 **Source:** edits-to-fix, page 6, item 12  
 ![Invalid logic constant](screenshots/ui-ux-fix-brief/comp-12-logic-validation.png)
@@ -465,11 +496,17 @@ has no voltage unit, and renders that state on its symbol.
 Infinity, below/above range, invalid enum, keyboard commit/cancel, undo, screen
 reader attributes, and representative fields from every component family.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** shared parse/finite/range/domain validation, draft preservation,
+accessible error behavior, and logic-constant constraints landed in `d6fbcfd`
+from worker `ec86d30`; focused worker coverage was **12 files / 723 passed**,
+integrated frontend **256 files / 2 skipped, 4,297 tests / 8 skipped**, and
+typecheck **exit 0**. Empty/partial/exponent/suffix/NaN/Infinity and every
+component-family packaged interaction matrix remains pending; no completion
+claim yet.
 
 ### [ ] COMP-13 - Repair the generic op-amp inspector
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P0 correctness  
 **Source:** edits-to-fix, page 6, item 13  
 ![Current op-amp inspector](screenshots/ui-ux-fix-brief/comp-13-opamp-current.png)
@@ -486,7 +523,14 @@ Tau must not pretend the generic controls describe a vendor macro-model.
 **Acceptance/tests:** Generic op-amp deck and clipping behavior, invalid
 min/max order, named/imported models, save/reopen, both themes, and narrow width.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** `COMP-13A` validated generic gain/min/max definitions and exact
+model-safe encoding landed in `d6fbcfd` from worker `ec86d30`; `COMP-13B`
+shared inspector presentation remains with the Wave 2 inspector lane. The
+electrical worker’s focused suite passed **12 files / 723 tests**, integrated
+frontend **256 files / 2 skipped, 4,297 tests / 8 skipped**, typecheck **exit
+0**, and real-ngspice smoke **42 passed / 0 failed**. Generic clipping,
+invalid rail order, named/imported models, narrow-width, and packaged visual
+evidence remain pending; no completion claim yet.
 
 ### [ ] COMP-14 - Remove long component-property essays
 

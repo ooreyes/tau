@@ -2,31 +2,32 @@
 
 **Status: DONE - 2026-08-11**
 
-Unit: **Wave 1 shell Settings follow-up and symbol geometry landing**. The
-Settings command-palette/native-menu delta is integrated as `6d96e3c` from
-worker tree `232eae2`, and symbol geometry is integrated as `71ad682` from
-worker commit `2d80d0f598b9265359a60a705ff2c84606f7cc83`. SHELL-05 now has both
-renderer entry points in the landed tree; SHELL-06, COMP-03, COMP-07, COMP-08A,
-COMP-10, COMP-15, and COMP-17 implementations are landed. Packaged,
-both-theme, three-viewport visual/native evidence remains for Wave 3 QA.
+Unit: **Wave 1 electrical-schema landing and full native gates**. Electrical
+schema/model UI implementation is integrated as `d6fbcfd` from rebased worker
+commit `ec86d30414df9489904309d3fc41941f1140aef1`, parent `fc0b47b`. SHELL-02,
+COMP-01, COMP-05, COMP-08B, COMP-09, COMP-11, COMP-12, and COMP-13A
+implementation is landed; the stable tracker statuses remain `IN PROGRESS`
+until packaged, both-theme, three-viewport, and remaining inspector/native QA.
 
-**Files:** shell Settings routes and tests from `232eae2`; symbol geometry,
-label anchors, and catalog contract tests from `2d80d0f`; `UI_UX_FIXES.md`,
-`FEATURE_PARITY.md`, and this heartbeat record implementation evidence without
-claiming visual completion.
+**Files:** electrical-schema worker’s 24 application/test files, including
+source round-trip, parameter validation, model resolution/netlisting, LED
+rendering, inspector, and preserved EngineeringInput validation changes;
+`UI_UX_FIXES.md`, `FEATURE_PARITY.md`, and this heartbeat record evidence
+without claiming visual completion.
 
-**Tests:** shell Settings focused suite **3 files / 48 passed**; integrated
-frontend **256 files passed / 2 skipped, 4,268 tests passed / 8 skipped**;
-typecheck **exit 0**; design drift **9 checks + 46 tests passed**;
-`git diff --check` **exit 0**.
+**Tests:** integrated frontend **256 files passed / 2 skipped, 4,297 tests
+passed / 8 skipped**; typecheck **exit 0**; desktop build **exit 0**; design
+drift **9 checks + 47 tests passed**; `cargo fmt --check` **exit 0**; clippy
+**exit 0**; native Rust **104 passed / 0 failed / 42 ignored**; ignored
+real-ngspice smoke **42 passed / 0 failed**; `git diff --check` **exit 0**.
 
-**Parity items:** SHELL-05 Settings reachability is implemented but remains
-`IN PROGRESS` pending packaged menu proof. SHELL-06, COMP-03, COMP-07,
-COMP-08A, COMP-10, COMP-15, and COMP-17 remain `IN PROGRESS` pending packaged
-visual/native evidence and their remaining acceptance checks.
+**Parity items:** SHELL-02, COMP-01, COMP-05, COMP-08B, COMP-09, COMP-11,
+COMP-12, and COMP-13A implementations landed and are recorded as `IN PROGRESS`
+pending packaged/native/browser evidence. COMP-13B and the remaining shared
+inspector issues continue in Wave 2.
 
-**Next:** integrate the clean electrical-schema Wave 1 packet, then run the
-Wave 1 full frontend gates before starting Wave 2.
+**Next:** finish the Wave 1 tracker record and push it, then provision Wave 2
+inspector, simulator, and regression worktrees from this exact integration tip.
 
 ---
 
@@ -35,6 +36,16 @@ worktree preserved the command-palette and native application-menu Settings
 routes in worker tree `232eae2`; the orchestrator cherry-picked the missing
 four-file delta as `6d96e3c`. Command-palette/App-shell tests, typecheck, and
 design drift passed; packaged native reachability remains a QA obligation.
+
+---
+
+**2026-08-11 — Wave 1 electrical-schema landing:** authoritative Luna Max
+worker `019ff17f-9f67-7560-90cc-7db19d3cdad8` returned `ee0d059`; cherry-pick
+conflicted in the already-landed symbol geometry, so the orchestrator aborted,
+sent the lane back to rebase, and integrated its clean rebased commit
+`ec86d30` as `d6fbcfd` from parent `fc0b47b`. The integrated frontend, desktop
+build, Rust/native gates, and ignored real-ngspice smoke passed. No screenshots
+were claimed by the implementation lane.
 
 ---
 
