@@ -2003,35 +2003,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Per-analysis ngspice option mapping
 
 ## 8. UX / app
-- 🟡 **PDF-directed UI/UX remediation correction pass (2026-08-11):** Sol High
-  rejected integration `5f5fd20`; the authoritative 24-item tracker is
-  reopened wherever acceptance-matching packaged evidence or implementation
-  was not proven. The prior completion paragraph is historical and must not be
-  used as the current finish signal. Fresh native evidence must cover
-  populated/selected/properties/simulator states, connected edited circuits,
-  current-source geometry, seven-segment 0–9/live/stopped states, both themes,
-  and 900×600/1280×800/1440×900.
-  <!--
-  authoritative 24-item tracker is `UI_UX_FIXES.md`, with lossless source images
-  under `screenshots/ui-ux-fix-brief/`. The fleet starts from tagged baseline
-  `live-simulator-baseline-2026-08-11` (`919f0e1`), preserves exact model
-  resolution and `.asc` compatibility, and lands through the isolated-worktree
-  exception in `AGENTS.md`. Only evidence-backed `FIXED` or
-  `ALREADY SATISFIED` items count; the packaged native app, both themes, and the
-  900×600 floor are mandatory. **Wave 1 shell implementation landed in
-  `cad4a69` (SHELL-01/03/04/05/07), its Settings routes in `6d96e3c`, and
-  symbol geometry in `71ad682` (SHELL-06/COMP-03/COMP-07/COMP-08A/COMP-10/
-  COMP-15/COMP-17), and electrical-schema implementation in `d6fbcfd`
-  (SHELL-02/COMP-01/COMP-05/COMP-08B/COMP-09/COMP-11/COMP-12/COMP-13A);
-  Wave 2 inspector/simulator/regression lanes are now claimed from
-  `8481721`; regression proof landed in `de57dc0` (8 focused tests, 4,305-test
-  full run), simulator rendering landed in `10b043e` (92 focused tests,
-  native/ngspice gates green), and inspector presentation landed in `02371ec`
-  (114 focused tests). Wave 3 packaged Computer Use and Chrome QA now prove
-  all 24 issues; the complete issue-to-commit and screenshot index is
-  `screenshots/ui-ux-fixes/QA-EVIDENCE.md`, and no stable issue remains
-  `UNVERIFIED`, `IN PROGRESS`, or silently deferred.
-  -->
+- ✅ **PDF-directed UI/UX remediation complete (2026-08-11):** all 24 stable
+  issues are `FIXED` in `UI_UX_FIXES.md`. Correction commits cover lossless
+  legacy sources (`fd2193a`), bounded generic op-amp decks (`f173b18`), hidden
+  default model-library authoring (`22f7366`/`6d96e3c`), validation-before-
+  mutation, zener identity (`66e96aa`), directional seven-segment loading and
+  native model cards (`1bd9327`/`0b5d22b`), and selection-identity inspector
+  placement (`22f7366`/`551ec0a`). The current packaged evidence and literal
+  gate results are indexed in `screenshots/ui-ux-fixes/QA-EVIDENCE.md`; native
+  Computer Use proves a connected edit/run, current-source geometry, digits
+  0–9, live/stopped simulation, and both themes. Chrome `dev:web` proves the
+  requested responsive/console matrix without claiming file upload.
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - ✅ **Visual QA on the actual desktop app:** the current Tauri hot-reload app
   stays alive on `auto/ltspice-parity`; live browser QA verified centered

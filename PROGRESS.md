@@ -1,32 +1,44 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-11**
+**Status: DONE - 2026-08-11**
 
-Unit: **Sol High review correction pass**. The review rejected `5f5fd20`.
-Implementation and acceptance claims are being reopened until legacy source
-round-trips, generic op-amp defaults, model-library visibility, validation,
-zener identity, seven-segment polarity, inspector identity, and packaged
-native evidence are proven at the acceptance-matching state.
+Unit: **Sol High review correction pass**. The review rejected `5f5fd20`; the
+correction code and acceptance evidence are now complete at code tip `0b5d22b`.
 
-**Files:** Wave 2 workers will use disjoint temporary worktrees and the issue
-ownership/file boundaries recorded in `UI_UX_FIXES.md`; this primary checkout
-remains the only owner of `PROGRESS.md`, `FEATURE_PARITY.md`, and
-`UI_UX_FIXES.md`.
+**Files:** correction commits and the current packaged/Chrome evidence index in
+`screenshots/ui-ux-fixes/QA-EVIDENCE.md`; this primary checkout remained the
+only owner of `PROGRESS.md`, `FEATURE_PARITY.md`, and `UI_UX_FIXES.md`.
 
-**Tests:** prior `5f5fd20` gates are historical only. The correction pass will
-record fresh focused, frontend, native/Rust/ngspice, packaged-build, and
-acceptance-matrix results here after the fixes land.
+**Tests:** focused correction suite **10 files / 312 passed**; frontend
+**260 files passed / 2 skipped, 4,368 passed / 8 skipped**; typecheck,
+design drift, minimum-window, packaged build, Rust, real-ngspice, mounted
+packaged smoke, and Chrome responsive/console results are literalized in
+`QA-EVIDENCE.md`.
 
-**Parity items:** the Sol review reopened every unsupported or mismatched
-claim in `UI_UX_FIXES.md`; only review-supported evidence claims are retained
-while the correction lanes run. No issue is considered complete from the
-prior filenames alone.
+**Parity items:** all 24 stable UI/UX issues are `FIXED`; legacy source
+round-trips, bounded op-amp defaults, hidden default model authoring,
+validation-before-mutation, zener identity, directional seven-segment loading,
+and selection-identity inspector placement are covered by code/tests and the
+current native evidence map.
 
-**Next:** finish correction code, run packaged native QA with meaningful
-connected circuits, update evidence/tracking honestly, push a clean SHA, and
-return it to the parent. This orchestrator does not perform the Sol review.
+**Next:** return the clean pushed tip to the parent for a fresh Sol High review;
+this orchestrator does not perform that review.
 
 ---
+
+**2026-08-11 — Sol correction completion:** Landed and pushed the correction
+stack through code tip `0b5d22b`, then captured fresh packaged evidence from
+`/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app`.
+Native Computer Use imported and edited connected `Draft2.asc` (`COMPLETE`,
+980 samples, zero Errors diagnostics), exercised current-source geometry,
+Settings/command-palette model-library hiding, title-bar gestures, both themes,
+and 900×600/1280×800/1440×900 coverage. Ten separate seven-segment fixtures
+rendered digits 0–9; a packaged live run reported `Running — t = 214.726 s` and
+the stopped run reported the explicit sample-budget stop. Chrome dev:web at all
+three requested viewports had exact dimensions, no overflow, and zero
+page-origin console errors; extension transport noise is disclosed in the QA
+index. The final tracking/evidence commit and clean pushed tip are reported at
+handoff. No Sol review was run.
 
 **2026-08-11 — Wave 3 packaged/native + Chrome acceptance QA:** Computer Use
 launched the unsigned packaged `Tau.app`, exercised recovery, import, source
