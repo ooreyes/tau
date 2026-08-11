@@ -1891,6 +1891,22 @@ fn with_engine_messages(state: &CallbackState, message: String) -> String {
     }
 }
 
+/** Read the engine's diagnostics without consuming them.
+ *
+ * `take_messages` is a drain, and a drain is where a diagnostic goes to die:
+ * the live path folds this same buffer into the `engineLog` of every telemetry
+ * frame, so a caller that only wants to *ask a question* of the log must not be
+ * the reason the engineer never sees it. `fatal_engine_messages` peeks for
+ * exactly that reason; this is the same read for a caller with a different
+ * question. */
+pub(crate) fn peek_messages(state: &CallbackState) -> Vec<String> {
+    state
+        .messages
+        .lock()
+        .map(|messages| messages.clone())
+        .unwrap_or_default()
+}
+
 /** ngSpice_Circ can return status 0 even after a parser/MIF failure. Without
  * this guard ngSpice_CurPlot then points at the previous successful circuit,
  * and Tau can accidentally receive stale vectors as if they belonged to the

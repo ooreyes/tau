@@ -70,7 +70,8 @@ use tauri::{AppHandle, State};
 
 use crate::spice::{
     c_string, clear_callback_state, deck_lines, engine_log_tail, fatal_engine_messages,
-    library_candidates, missing_codemodel_message, non_finite_kind, take_messages, SpiceEngine,
+    library_candidates, missing_codemodel_message, non_finite_kind, peek_messages, take_messages,
+    SpiceEngine,
 };
 
 /// Argv marker that turns this executable into a live ngspice host.
@@ -154,6 +155,21 @@ const LIVE_SHUTDOWN_GRACE: Duration = Duration::from_millis(750);
 /** Ceiling on `ngSpice_running` transitions, matching the spike's 10-13 ms
  * measured stop latency with room for a loaded machine. */
 const LIVE_BG_STATE_TIMEOUT: Duration = Duration::from_secs(5);
+/** How long a `bg_resume` gets to put the solver back to work before Tau
+ * concludes the transient it was resuming had already reached its end.
+ *
+ * Twenty times the spike's measured background-state transition, and four
+ * orders of magnitude more than the thread spawn that is all a resume actually
+ * needs. A knob turned in the last milliseconds of a run has to be answered at
+ * human speed, so this is what that question costs instead of
+ * `LIVE_BG_STATE_TIMEOUT`. */
+const LIVE_RESUME_VERDICT: Duration = Duration::from_millis(250);
+/** How long the solver must stay running *on the run's own plot* before a
+ * resume is believed. ngspice's `com_resume` silently degrades into `com_run`
+ * when the analysis it was asked to resume is finished, and the second run is
+ * indistinguishable from the first for the moment it takes to allocate its
+ * plot. One watch interval of agreement is what separates them. */
+const LIVE_RESUME_CONFIRM: Duration = Duration::from_millis(25);
 /** Longest single frame the parent will assemble from the child's stdout. */
 const MAX_LIVE_FRAME_BYTES: usize = 16 * 1024 * 1024;
 /** Bytes of child stderr kept for diagnostics. The drain exists mainly so a
@@ -560,6 +576,23 @@ fn clamp_slice_samples(requested: Option<usize>) -> usize {
 // ─────────────────────────────────────────────────────────────────────────────
 // The live run itself (child-side, and directly testable)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** What the engine did with a `bg_resume`, once it is no longer ambiguous.
+ *
+ * The distinction that matters is the one the old code could not make: only
+ * `Failed` is a failure. A live run that ended while the engineer was reaching
+ * for a knob ended — nothing about that is an error, and calling it one is
+ * both a lie and, at five seconds a time, a slow one. */
+enum ResumeVerdict {
+    /// Back to work on the same plot it was solving before.
+    Solving,
+    /// Never ran again, because the analysis it was resuming was over.
+    Finished,
+    /// `com_resume` degraded into `com_run` and started a second analysis.
+    Restarted,
+    /// ngspice reported a fatal condition instead of resuming.
+    Failed(String),
+}
 
 /// What one locked read of the running plot produced, before framing.
 struct RawSlice {
@@ -1025,24 +1058,57 @@ impl LiveRun {
             return;
         }
         if !self.running() {
-            // The solver reaching the deck's own `.tran` end time is the one
-            // stop that is not an interruption, and it must not be reported as
-            // though Tau imposed it.
-            let reason = match self.stop_at_seconds {
-                Some(time) => format!(
-                    "The live run reached the requested stop time of {time} s and ngspice finished on that exact solved point."
-                ),
-                None => {
-                    "The transient analysis in this deck reached its own end time.".to_string()
-                }
-            };
-            let kind = if self.stop_at_seconds.is_some() {
-                LiveStopReason::RequestedStopTime
-            } else {
-                LiveStopReason::AnalysisComplete
-            };
-            self.record_stop(kind, reason);
+            self.record_completion(None);
         }
+    }
+
+    /** Record the one stop that is not an interruption.
+     *
+     * The solver reaching the deck's own `.tran` end time — or the exact
+     * instant the caller asked for — must never be reported as though Tau or
+     * ngspice failed. Shared by the watch tick and by the actuation path,
+     * because a knob turned in the last milliseconds of a run reaches the same
+     * fact by a different route and is owed the same sentence. `note` carries
+     * anything the route itself has to admit to. */
+    fn record_completion(&mut self, note: Option<&str>) {
+        let reason = match self.stop_at_seconds {
+            Some(time) => format!(
+                "The live run reached the requested stop time of {time} s and ngspice finished on that exact solved point."
+            ),
+            None => "The transient analysis in this deck reached its own end time.".to_string(),
+        };
+        let kind = if self.stop_at_seconds.is_some() {
+            LiveStopReason::RequestedStopTime
+        } else {
+            LiveStopReason::AnalysisComplete
+        };
+        self.record_stop(
+            kind,
+            match note {
+                Some(note) => format!("{reason} {note}"),
+                None => reason,
+            },
+        );
+    }
+
+    /** Answer, for a run that may already be over, what it is doing — or
+     * `None` if it is still solving.
+     *
+     * A run can reach its end at any instant, including between the poll that
+     * last reported it healthy and the next thing the engineer does to it. When
+     * that has happened the honest answer is the completion reason, named the
+     * way a watch tick would have named it, and not a failure: nothing went
+     * wrong. `enforce_limits` already holds every rule for classifying a solver
+     * that is no longer running, so this asks it rather than inventing a second
+     * opinion that could drift from the first. */
+    fn conclude_if_not_solving(&mut self) -> Option<LiveTelemetry> {
+        if self.stop.is_none() {
+            if self.running() {
+                return None;
+            }
+            self.enforce_limits();
+        }
+        Some(self.telemetry())
     }
 
     fn record_stop(&mut self, reason: LiveStopReason, detail: String) {
@@ -1076,29 +1142,131 @@ impl LiveRun {
      * catches that. */
     fn alter(&mut self, request: &LiveAlterRequest) -> Result<LiveTelemetry, String> {
         let command = alter_command(request)?;
-        if self.stop.is_some() || !self.running() {
-            return Err(
-                "This live run is no longer solving, so there is nothing to alter.".to_string(),
-            );
+        // A knob turned at a run that has already ended is not an error. It is
+        // a run that ended, and the answer is the reason it ended.
+        if let Some(finished) = self.conclude_if_not_solving() {
+            return Ok(finished);
         }
+
+        let before = peek_messages(&self.engine.callback_state).len();
         self.raw_command("bg_halt")?;
         if self.await_running(false, LIVE_BG_STATE_TIMEOUT).is_none() {
             return Err("ngspice did not stop the background solve, so Tau will not alter a circuit that is still being integrated.".to_string());
         }
+        if self.halt_found_nothing_to_stop(before) {
+            // The transient reached its end inside the window between the check
+            // above and the halt landing. Resuming from here would not continue
+            // anything: `com_resume` finds `ci_inprogress` false and quietly
+            // calls `com_run`, i.e. it re-runs the whole analysis into a second
+            // plot (measured — see `live_3b_`). Better to stop here and say the
+            // run finished than to hand the engineer a different run's samples.
+            self.record_completion(Some(
+                "The change was not applied, because the run had already finished when it arrived.",
+            ));
+            return Ok(self.telemetry());
+        }
+
         let altered = self.raw_command(&command);
         // Resume even when the alter was refused: leaving the engine halted
         // after a rejected knob turn would strand a run the user never stopped.
         let resumed = self.raw_command("bg_resume");
         altered?;
         resumed?;
-        if self.await_running(true, LIVE_BG_STATE_TIMEOUT).is_none() {
-            self.record_stop(
-                LiveStopReason::EngineError,
-                format!("ngspice accepted `{command}` but did not resume solving afterwards."),
-            );
-            return Err("ngspice did not resume the live run after the change.".to_string());
+        match self.confirm_resumed() {
+            ResumeVerdict::Solving => Ok(self.telemetry()),
+            ResumeVerdict::Finished => {
+                self.record_completion(None);
+                Ok(self.telemetry())
+            }
+            // `record_completion` halts on its way through `record_stop`, which
+            // is what stops the second run ngspice started behind Tau's back.
+            ResumeVerdict::Restarted => {
+                self.record_completion(Some(
+                    "ngspice re-ran the analysis from zero instead of resuming it, so Tau stopped that second run rather than show it as a continuation of the first.",
+                ));
+                Ok(self.telemetry())
+            }
+            ResumeVerdict::Failed(detail) => {
+                self.record_stop(
+                    LiveStopReason::EngineError,
+                    format!(
+                        "ngspice accepted `{command}` but reported a fatal condition instead of resuming: {detail}"
+                    ),
+                );
+                Err("ngspice did not resume the live run after the change.".to_string())
+            }
         }
-        Ok(self.telemetry())
+    }
+
+    /** Did the halt we just issued actually interrupt a solve?
+     *
+     * ngspice's `_thread_stop` (`sharedspice.c`) reports the number of 10 ms
+     * waits it needed for the background thread to leave, and a count of zero
+     * means the thread had already left of its own accord — the transient
+     * finished before the halt reached it. That is the one state in which
+     * `bg_resume` is destructive rather than useless, so it is worth asking the
+     * engine directly instead of inferring it from how long the call took.
+     *
+     * Only diagnostics printed *after* the halt are considered, so an earlier
+     * halt in the same telemetry window cannot answer for this one. If the
+     * message buffer overflowed in between, `before` overruns the log and this
+     * answers "no", which costs only the safety net in `confirm_resumed`. */
+    fn halt_found_nothing_to_stop(&self, before: usize) -> bool {
+        let messages = peek_messages(&self.engine.callback_state);
+        messages
+            .iter()
+            .skip(before)
+            .any(|message| message.contains("Background thread stopped with timeout = 0"))
+    }
+
+    /** Watch the engine until it is clear what `bg_resume` did.
+     *
+     * Three things can happen, and only one of them is the good one:
+     *
+     * * the solver goes back to work on *our* plot — the expected case, and the
+     *   plot identity is part of it because a resume that quietly became a
+     *   fresh `run` would otherwise pass this check while publishing a second
+     *   plot's samples as a continuation of the first;
+     * * it never runs again, because the transient it was asked to resume had
+     *   already reached its end. That is completion, not failure, and it is
+     *   decided in `LIVE_RESUME_VERDICT` rather than after the full
+     *   `LIVE_BG_STATE_TIMEOUT`, because a user who flips a switch as the run
+     *   ends is owed an answer now, not in five seconds;
+     * * ngspice says something fatal, which is the only genuine failure here.
+     *
+     * `LIVE_BG_STATE_TIMEOUT` is deliberately *not* the clock this runs on. Its
+     * five seconds are the right budget for a transition that is expected to
+     * happen; a resume that has not shown itself in `LIVE_RESUME_VERDICT` is
+     * overwhelmingly a transient that was already over, and making the engineer
+     * watch a frozen plot for five seconds to be told so is the defect this
+     * replaced. The residual risk — a solver so slow to start that it is called
+     * finished — costs nothing that is not recovered: `enforce_limits` re-halts
+     * any run that starts after a stop was recorded, on every watch tick. */
+    fn confirm_resumed(&mut self) -> ResumeVerdict {
+        let started = Instant::now();
+        let mut solving_since: Option<Instant> = None;
+        loop {
+            if let Some(plot) = unsafe { c_string((self.engine.api.cur_plot)()) } {
+                if !plot.eq_ignore_ascii_case(&self.plot) {
+                    return ResumeVerdict::Restarted;
+                }
+            }
+            if self.running() {
+                let since = *solving_since.get_or_insert_with(Instant::now);
+                if since.elapsed() >= LIVE_RESUME_CONFIRM {
+                    return ResumeVerdict::Solving;
+                }
+            } else if solving_since.is_some() {
+                // It resumed and then reached its own end inside the
+                // confirmation window. Still completion.
+                return ResumeVerdict::Finished;
+            } else if let Some(error) = fatal_engine_messages(&self.engine.callback_state) {
+                return ResumeVerdict::Failed(error);
+            } else if started.elapsed() >= LIVE_RESUME_VERDICT {
+                return ResumeVerdict::Finished;
+            }
+            thread::sleep(Duration::from_micros(200));
+        }
     }
 
     fn scalars(&self) -> usize {
@@ -1407,7 +1575,17 @@ fn frame_payload(line: &str) -> Option<&str> {
  * while a solver is still winding down. */
 struct LiveSession {
     child: Child,
-    stdin: ChildStdin,
+    /** Held as an `Option` so shutdown can `take()` it and close the pipe.
+     *
+     * The child's reader thread sits in `read_until` on this pipe, and the
+     * child's main loop joins that thread before it returns, so the child
+     * cannot finish exiting until it sees EOF. Keeping the writing end alive
+     * for the whole of `shutdown` therefore made the graceful path impossible:
+     * the Shutdown frame was read and obeyed, and the child then blocked in
+     * `reader.join()` until the 750 ms grace ran out and SIGKILL arrived.
+     * Closing this after the frame is written is what turns SIGKILL back into
+     * the backstop it was always documented to be. */
+    stdin: Option<ChildStdin>,
     frames: Receiver<Vec<u8>>,
     reader: Option<JoinHandle<()>>,
     stderr: Arc<Mutex<Vec<u8>>>,
@@ -1421,8 +1599,21 @@ impl LiveSession {
         let executable = std::env::current_exe().map_err(|error| {
             format!("Could not locate Tau's live ngspice worker executable: {error}")
         })?;
-        let mut child = Command::new(executable)
-            .arg(LIVE_WORKER_ARG)
+        let mut command = Command::new(executable);
+        command.arg(LIVE_WORKER_ARG);
+        Self::spawn_command(command, lease)
+    }
+
+    /** Spawn one worker over the three pipes the protocol needs.
+     *
+     * Split from `spawn` so the lifecycle above these pipes — the retirement of
+     * a refused session, and the graceful shutdown handshake — can be proven
+     * against a stand-in child. `cargo test`'s own binary cannot be re-executed
+     * with `--tau-spice-live-worker` (libtest rejects the argument), so without
+     * this seam the parent half of this module would only ever be exercised by
+     * hand. */
+    fn spawn_command(mut command: Command, lease: EngineLease) -> Result<Self, String> {
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -1484,7 +1675,7 @@ impl LiveSession {
 
         Ok(Self {
             child,
-            stdin,
+            stdin: Some(stdin),
             frames,
             reader: Some(reader),
             stderr: collected,
@@ -1513,16 +1704,24 @@ impl LiveSession {
     ) -> Result<LiveResponseFrame, String> {
         let encoded = serde_json::to_vec(frame)
             .map_err(|error| format!("Could not encode a live ngspice command: {error}"))?;
-        self.stdin
-            .write_all(&encoded)
-            .and_then(|()| self.stdin.write_all(b"\n"))
-            .and_then(|()| self.stdin.flush())
-            .map_err(|error| {
-                format!(
-                    "Tau's live ngspice worker stopped accepting commands: {error}.{}",
-                    self.diagnostics()
-                )
-            })?;
+        if self.stdin.is_none() {
+            return Err(format!(
+                "Tau's live ngspice worker has already been shut down.{}",
+                self.diagnostics()
+            ));
+        }
+        let written = self.stdin.as_mut().map(|stdin| {
+            stdin
+                .write_all(&encoded)
+                .and_then(|()| stdin.write_all(b"\n"))
+                .and_then(|()| stdin.flush())
+        });
+        if let Some(Err(error)) = written {
+            return Err(format!(
+                "Tau's live ngspice worker stopped accepting commands: {error}.{}",
+                self.diagnostics()
+            ));
+        }
 
         let deadline = Instant::now() + budget;
         loop {
@@ -1567,19 +1766,43 @@ impl LiveSession {
     }
 }
 
-impl Drop for LiveSession {
-    /** The only owner of the child process.
-     *
-     * Graceful first, because a clean exit lets `LiveRun`'s drop halt the
-     * background solver before `dlclose`; SIGKILL after the grace period,
-     * because a wedged child must not outlive the session that started it. */
-    fn drop(&mut self) {
-        let shutdown = serde_json::to_vec(&LiveRequestFrame::Shutdown).unwrap_or_default();
-        let _ = self.stdin.write_all(&shutdown);
-        let _ = self.stdin.write_all(b"\n");
-        let _ = self.stdin.flush();
+/// What one shutdown handshake cost, and whether it needed the SIGKILL backstop.
+#[derive(Clone, Copy, Debug)]
+struct ShutdownOutcome {
+    /// True when the child exited on its own before the grace period ran out.
+    exited_gracefully: bool,
+    elapsed: Duration,
+}
 
-        let deadline = Instant::now() + LIVE_SHUTDOWN_GRACE;
+impl LiveSession {
+    /** End the child, gracefully if it will let us.
+     *
+     * Three steps, and the middle one is the whole point. The Shutdown frame
+     * tells the child to leave its command loop; **closing stdin** then lets it
+     * finish leaving, because its reader thread is parked in `read_until` and
+     * its main loop joins that thread on the way out. With the pipe held open
+     * the child obeyed the frame and then blocked forever, so every Stop paid
+     * the full grace period and died by SIGKILL — a killed process cannot run
+     * `LiveRun`'s drop, which is the one thing that halts the background solver
+     * before `dlclose` unloads the code it is executing. SIGKILL stays as the
+     * backstop for a genuinely wedged child; it is no longer the normal path.
+     *
+     * Separate from `Drop` so the handshake is measurable: `Drop` runs this and
+     * throws the numbers away, a test runs it and asserts on them. Running it
+     * twice is harmless — the frame is not sent to a closed pipe, and
+     * `Child::wait` caches the status it already reaped. */
+    fn shutdown(&mut self) -> ShutdownOutcome {
+        let started = Instant::now();
+        if let Some(stdin) = self.stdin.as_mut() {
+            let shutdown = serde_json::to_vec(&LiveRequestFrame::Shutdown).unwrap_or_default();
+            let _ = stdin.write_all(&shutdown);
+            let _ = stdin.write_all(b"\n");
+            let _ = stdin.flush();
+        }
+        // Dropping the writing end is the EOF the child is waiting for.
+        self.stdin = None;
+
+        let deadline = started + LIVE_SHUTDOWN_GRACE;
         let mut exited = false;
         while Instant::now() < deadline {
             match self.child.try_wait() {
@@ -1587,7 +1810,10 @@ impl Drop for LiveSession {
                     exited = true;
                     break;
                 }
-                Ok(None) => thread::sleep(Duration::from_millis(10)),
+                // Short relative to the grace period, because a clean exit now
+                // takes a couple of milliseconds and a 10 ms sleep would be
+                // most of the measured stop latency.
+                Ok(None) => thread::sleep(Duration::from_millis(1)),
                 Err(_) => break,
             }
         }
@@ -1601,6 +1827,21 @@ impl Drop for LiveSession {
         if let Some(reader) = self.stderr_reader.take() {
             let _ = reader.join();
         }
+        ShutdownOutcome {
+            exited_gracefully: exited,
+            elapsed: started.elapsed(),
+        }
+    }
+}
+
+impl Drop for LiveSession {
+    /** The only owner of the child process.
+     *
+     * Graceful first, because a clean exit lets `LiveRun`'s drop halt the
+     * background solver before `dlclose`; SIGKILL after the grace period,
+     * because a wedged child must not outlive the session that started it. */
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 
@@ -1625,11 +1866,90 @@ fn lock_slot(slot: &Arc<Mutex<LiveSlot>>) -> MutexGuard<'_, LiveSlot> {
     slot.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/** End the child and release the lease, returning what the handshake cost.
+ *
+ * `None` when there was no session to end. */
+fn retire_session(slot: &mut LiveSlot) -> Option<ShutdownOutcome> {
+    let mut session = slot.session.take()?;
+    Some(session.shutdown())
+}
+
 /// Kill the child and release the lease as soon as it stops solving.
 fn retire_if_stopped(slot: &mut LiveSlot, telemetry: &LiveTelemetry) {
     if !telemetry.running {
-        slot.last = Some(telemetry.clone());
-        slot.session = None;
+        let mut telemetry = telemetry.clone();
+        // A worker that had to be killed is a worker whose solver never got to
+        // halt itself, and that belongs in the log the engineer can read rather
+        // than only in the exit status nobody sees.
+        if let Some(outcome) = retire_session(slot) {
+            if !outcome.exited_gracefully {
+                telemetry.engine_log.push(format!(
+                    "Tau's live ngspice worker did not exit within {} ms of being asked to, so it was killed after {} ms.",
+                    LIVE_SHUTDOWN_GRACE.as_millis(),
+                    outcome.elapsed.as_millis()
+                ));
+            }
+        }
+        slot.last = Some(telemetry);
+    }
+}
+
+/** Decide who still owns the engine after the child has *refused* a command.
+ *
+ * A refusal is not a transport failure: the child answered, so the session is
+ * intact by construction and the old code kept it. That is only right for the
+ * refusals a run survives — a poll naming a vector the plot never published
+ * leaves a perfectly healthy solve behind it. It was wrong for every other
+ * refusal, and the asymmetry was invisible from here: the frontend treats a
+ * failed call as the end of its session and stops asking, while the host still
+ * holds the lease and the child still holds a core, so the run becomes an
+ * orphan and every later Run is refused with "A live simulation is already
+ * running" until Tau restarts.
+ *
+ * So the two sides are made to agree by asking the only party that knows.
+ * `Status` costs one frame and reports whether the solver is still running; a
+ * session that is not running is retired here and now — which drops the child,
+ * halts the solver on the child's own way out, and releases the lease — and its
+ * final telemetry is kept in `last` so the UI can still be told why. A child
+ * that cannot even answer `Status` is retired for the same reason. Nothing is
+ * left in a state where one side assumes the other cleaned up.
+ *
+ * The refusal itself is returned unchanged apart from the appended stop
+ * detail: the caller asked for something and did not get it, and that stays
+ * true whatever the session's fate.
+ *
+ * The one case this deliberately leaves alone — a refusal from a solver that is
+ * still solving — is the case the frontend closes from its side: a failed call
+ * ends its session *and* fires a best-effort `halt_live_spice`, which arrives
+ * here as a Stop and retires the session the ordinary way. Neither side assumes
+ * the other did it; they meet. */
+fn settle_after_refusal(held: &mut LiveSlot, error: String) -> String {
+    let Some(session) = held.session.as_mut() else {
+        return error;
+    };
+    let status = session.request(&LiveRequestFrame::Status, LIVE_FRAME_TIMEOUT);
+    let telemetry = match status {
+        Ok(response) => response.telemetry,
+        // The child stopped answering while explaining itself. Whatever the
+        // first refusal meant, this session is over.
+        Err(_) => None,
+    };
+    match telemetry {
+        Some(telemetry) if telemetry.running => error,
+        Some(telemetry) => {
+            let detail = telemetry.stop_detail.clone();
+            retire_if_stopped(held, &telemetry);
+            match detail {
+                Some(detail) => format!("{error} The live run is no longer solving: {detail}"),
+                None => format!(
+                    "{error} The live run is no longer solving, so Tau released the engine."
+                ),
+            }
+        }
+        None => {
+            retire_session(held);
+            format!("{error} Tau could not confirm what the live run is doing, so it stopped the worker and released the engine.")
+        }
     }
 }
 
@@ -1688,34 +2008,38 @@ pub async fn poll_live_spice(
     let slot = Arc::clone(&state.slot);
     tauri::async_runtime::spawn_blocking(move || {
         let mut held = lock_slot(&slot);
-        let session = held
-            .session
-            .as_mut()
-            .ok_or_else(|| "No live simulation is running.".to_string())?;
-        let response =
-            match session.request(&LiveRequestFrame::Poll { request }, LIVE_FRAME_TIMEOUT) {
-                Ok(response) => response,
-                Err(error) => {
-                    // A worker that stopped answering is a worker that must not
-                    // keep the lease. Drop it here rather than waiting for a Stop
-                    // the user has no reason to press.
-                    held.session = None;
-                    return Err(error);
-                }
-            };
-        match (response.error, response.slice) {
-            (None, Some(slice)) => {
-                retire_if_stopped(&mut held, &slice.telemetry);
-                Ok(slice)
-            }
-            (Some(error), _) => Err(error),
-            (None, None) => {
-                Err("Tau's live ngspice worker returned an inconsistent response.".to_string())
-            }
-        }
+        poll_locked(&mut held, request)
     })
     .await
     .map_err(|error| format!("Tau's live ngspice task failed: {error}"))?
+}
+
+/// Split from the command so the ownership rules above can be tested.
+fn poll_locked(held: &mut LiveSlot, request: LivePollRequest) -> Result<LiveSlicePayload, String> {
+    let session = held
+        .session
+        .as_mut()
+        .ok_or_else(|| "No live simulation is running.".to_string())?;
+    let response = match session.request(&LiveRequestFrame::Poll { request }, LIVE_FRAME_TIMEOUT) {
+        Ok(response) => response,
+        Err(error) => {
+            // A worker that stopped answering is a worker that must not
+            // keep the lease. Drop it here rather than waiting for a Stop
+            // the user has no reason to press.
+            retire_session(held);
+            return Err(error);
+        }
+    };
+    match (response.error, response.slice) {
+        (None, Some(slice)) => {
+            retire_if_stopped(held, &slice.telemetry);
+            Ok(slice)
+        }
+        (Some(error), _) => Err(settle_after_refusal(held, error)),
+        (None, None) => {
+            Err("Tau's live ngspice worker returned an inconsistent response.".to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -1757,7 +2081,7 @@ pub async fn halt_live_spice(state: State<'_, LiveSpiceState>) -> Result<LiveTel
                 // Stop must stop. If the child will not answer, killing it is
                 // still an honest stop, and saying so is better than leaving a
                 // solver running behind a button that reported failure.
-                held.session = None;
+                retire_session(&mut held);
                 Err(error)
             }
         }
@@ -1779,7 +2103,7 @@ pub async fn live_spice_status(
         match session.request(&LiveRequestFrame::Status, LIVE_FRAME_TIMEOUT) {
             Ok(response) => finish_telemetry(&mut held, response).map(Some),
             Err(error) => {
-                held.session = None;
+                retire_session(&mut held);
                 Err(error)
             }
         }
@@ -1797,7 +2121,10 @@ fn finish_telemetry(
             retire_if_stopped(held, &telemetry);
             Ok(telemetry)
         }
-        (Some(error), _) => Err(error),
+        // Same ownership question as a refused poll, and the same answer: the
+        // child answered, so ask it whether it is still solving before deciding
+        // whether this session may keep the engine.
+        (Some(error), _) => Err(settle_after_refusal(held, error)),
         (None, None) => {
             Err("Tau's live ngspice worker returned an inconsistent response.".to_string())
         }
@@ -2034,13 +2361,191 @@ mod tests {
             .contains("unreadable command"));
     }
 
+    // ── session lifecycle (parent side, stand-in child) ────────────────────
+
+    /** A child that speaks the frame protocol and nothing else.
+     *
+     * It exists because the two lifecycle rules below are about what the
+     * *parent* does with a worker, not about ngspice: who owns the engine after
+     * a refusal, and whether Stop is a handshake or an execution. Both were
+     * wrong for months underneath a green suite precisely because no test could
+     * reach them — `cargo test`'s binary cannot be re-executed as a live worker
+     * (libtest rejects the argument), so the real child is unavailable here.
+     *
+     * The one behaviour it copies deliberately from the real worker is the last
+     * line: on Shutdown it stops answering but **cannot exit until its stdin
+     * reaches EOF**, because the real child's main loop joins a reader thread
+     * parked in `read_until`. A stand-in that exited on the frame alone would
+     * pass whether or not the parent ever closes the pipe, which is the whole
+     * question. */
+    fn stand_in_worker(
+        poll_reply: &LiveResponseFrame,
+        status_reply: &LiveResponseFrame,
+    ) -> LiveSession {
+        const SCRIPT: &str = r#"
+mark='TAU_LIVE_FRAME_V1:'
+while IFS= read -r line; do
+  case "$line" in
+    *'"poll"'*)     printf '%s%s\n' "$mark" "$TAU_TEST_POLL" ;;
+    *'"shutdown"'*) exec cat >/dev/null ;;
+    *)              printf '%s%s\n' "$mark" "$TAU_TEST_STATUS" ;;
+  esac
+done
+"#;
+        let mut command = std::process::Command::new("/bin/sh");
+        command
+            .arg("-c")
+            .arg(SCRIPT)
+            .env(
+                "TAU_TEST_POLL",
+                serde_json::to_string(poll_reply).expect("a reply frame encodes"),
+            )
+            .env(
+                "TAU_TEST_STATUS",
+                serde_json::to_string(status_reply).expect("a reply frame encodes"),
+            );
+        let lease = acquire_engine(EngineUse::Live).expect("the engine should be free");
+        LiveSession::spawn_command(command, lease).expect("the stand-in worker should spawn")
+    }
+
+    fn telemetry_frame(telemetry: LiveTelemetry) -> LiveResponseFrame {
+        LiveResponseFrame {
+            error: None,
+            start: None,
+            slice: None,
+            telemetry: Some(telemetry),
+        }
+    }
+
+    /** A refusal must leave exactly one of the two sides owning the run, and
+     * the deciding question is whether the solver is still solving.
+     *
+     * The frontend treats a failed call as the end of its session and stops
+     * asking. So a refusal that leaves the host holding the lease produces an
+     * orphan: a child still burning a core on a run nobody is reading, and
+     * every later Run refused with "A live simulation is already running" until
+     * the app restarts. The other error is just as real in the other direction
+     * — a poll that named a vector the plot never published must not tear down
+     * a healthy run — so both cases are asserted here. */
+    #[test]
+    fn a_refusal_retires_a_worker_that_has_stopped_and_spares_one_that_has_not() {
+        let _serialise = real_engine_test_guard();
+
+        let stopped = LiveTelemetry {
+            running: false,
+            stop_reason: Some(LiveStopReason::AnalysisComplete),
+            stop_detail: Some(
+                "The transient analysis in this deck reached its own end time.".to_string(),
+            ),
+            ..LiveTelemetry::default()
+        };
+        let mut slot = LiveSlot {
+            session: Some(stand_in_worker(
+                &LiveResponseFrame::failed("the live plot has gone".to_string()),
+                &telemetry_frame(stopped),
+            )),
+            last: None,
+        };
+        let error = poll_locked(&mut slot, LivePollRequest::default())
+            .expect_err("the stand-in worker refuses every poll");
+        assert!(
+            slot.session.is_none(),
+            "a refusal from a worker that is no longer solving left the session holding the engine"
+        );
+        assert!(
+            error.contains("the live plot has gone"),
+            "the worker's own words must survive: {error}"
+        );
+        assert!(
+            error.contains("reached its own end time"),
+            "the refusal must carry why the run is over: {error}"
+        );
+        assert_eq!(
+            slot.last.as_ref().and_then(|last| last.stop_reason),
+            Some(LiveStopReason::AnalysisComplete),
+            "retiring a session must keep the reason the UI still needs"
+        );
+        drop(
+            acquire_engine(EngineUse::Bounded)
+                .expect("retiring a live session must release the engine lease"),
+        );
+
+        let solving = LiveTelemetry {
+            running: true,
+            ..LiveTelemetry::default()
+        };
+        let mut slot = LiveSlot {
+            session: Some(stand_in_worker(
+                &LiveResponseFrame::failed(
+                    "\"vout\" is not a vector this live run publishes.".to_string(),
+                ),
+                &telemetry_frame(solving),
+            )),
+            last: None,
+        };
+        let error = poll_locked(&mut slot, LivePollRequest::default())
+            .expect_err("the stand-in worker refuses every poll");
+        assert!(error.contains("is not a vector this live run publishes"));
+        assert!(
+            slot.session.is_some(),
+            "a recoverable refusal tore down a run that is still solving"
+        );
+        assert!(
+            acquire_engine(EngineUse::Bounded).is_err(),
+            "a live run that survived a refusal must keep the engine"
+        );
+        drop(slot);
+        drop(acquire_engine(EngineUse::Bounded).expect("dropping the session releases the engine"));
+    }
+
+    /** Stop is a handshake, and SIGKILL is the backstop — not the other way
+     * round.
+     *
+     * The child cannot finish exiting until its stdin reaches EOF, so holding
+     * the writing end open through the whole grace period made the graceful
+     * path unreachable: every Stop waited out `LIVE_SHUTDOWN_GRACE` and then
+     * killed a process that had already been told to leave. A killed child
+     * never runs `LiveRun`'s drop, and that drop is the only thing that halts
+     * the background solver before `dlclose` unloads the code it is running. */
+    #[test]
+    fn stopping_a_session_closes_the_pipe_the_worker_is_waiting_on() {
+        let _serialise = real_engine_test_guard();
+        let idle = telemetry_frame(LiveTelemetry {
+            running: true,
+            ..LiveTelemetry::default()
+        });
+        let mut session = stand_in_worker(&idle, &idle);
+        session
+            .request(&LiveRequestFrame::Status, LIVE_FRAME_TIMEOUT)
+            .expect("the stand-in worker should answer before it is stopped");
+
+        let outcome = session.shutdown();
+        println!(
+            "stop latency {:?}, graceful exit {}",
+            outcome.elapsed, outcome.exited_gracefully
+        );
+        assert!(
+            outcome.exited_gracefully,
+            "the worker had to be killed after {:?}; Stop is still paying the full grace period",
+            outcome.elapsed
+        );
+        assert!(
+            outcome.elapsed < LIVE_SHUTDOWN_GRACE,
+            "a graceful stop took {:?}, which is the grace period, not a handshake",
+            outcome.elapsed
+        );
+    }
+
     // ── real-engine proofs ─────────────────────────────────────────────────
     //
     // These drive `LiveRun` directly rather than through the child process, for
-    // the same reason the 1E spike did: `cargo test`'s own binary cannot be
-    // re-executed with `--tau-spice-live-worker` (libtest rejects the argument),
-    // and the engine behaviour is what needs proving. The IPC layer above is
-    // covered by the framing and loop tests, which need no engine.
+    // the same reason the 1E spike did: the engine behaviour is what they are
+    // about, and a process in the loop would only add latency to every
+    // assertion. `maybe_run_live_spice_worker` cannot be reached from a test
+    // binary — libtest owns argv and rejects `--tau-spice-live-worker` — but
+    // that is not the same as the real chain being untestable from here, and
+    // the unit F proofs at the bottom of this file do run it in a real child
+    // (see `live_f_worker_child_entry`).
     //
     //   TAU_NGSPICE_LIB=build/ngspice-stage/lib/libngspice.dylib \
     //     cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml live_3a_ \
@@ -2067,6 +2572,22 @@ R1 in mid 1k
 R2 mid 0 1k
 C1 mid 0 100n
 .tran 10u 600
+.end";
+
+    /** The same RC, with a transient that ends by itself in a fraction of a
+     * second. Every other live proof deliberately outlives the test; these two
+     * are about what happens *after* the end.
+     *
+     * Twenty milliseconds of circuit time and not two, because `LiveRun::start`
+     * has to observe `ngSpice_running` go true before it will hand the run
+     * back, and a transient that finishes in single-digit milliseconds of wall
+     * clock can beat that observation. Short enough to wait for, long enough to
+     * be seen starting. */
+    const LIVE_SHORT_DECK: &str = "tau live short rc
+V1 in 0 SIN(0 1 1k)
+R1 in out 1k
+C1 out 0 100n
+.tran 10u 20m
 .end";
 
     fn live_candidates() -> Vec<PathBuf> {
@@ -2362,6 +2883,126 @@ C1 mid 0 100n
         );
     }
 
+    /** An actuation that lands after the run has ended is answered with the
+     * completion, at once.
+     *
+     * Nothing has gone wrong when a user reaches for a switch as the transient
+     * reaches its end time, so nothing may be reported as an error — and the
+     * answer has to arrive at human speed, because the alternative this
+     * replaced was a five-second stall ending in ENGINE ERROR. The deck here
+     * ends on its own in about two milliseconds of circuit time, which makes
+     * "the run is already over" the certain state rather than a race. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn live_3b_a_knob_turned_after_the_run_ended_reports_the_completion() {
+        let _guard = real_engine_test_guard();
+        let (mut run, _) = start(LiveStartRequest {
+            netlist: LIVE_SHORT_DECK.to_string(),
+            stop_at_seconds: None,
+            scalar_budget: None,
+        });
+        let waited = Instant::now();
+        while run.running() && waited.elapsed() < Duration::from_secs(10) {
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(!run.running(), "the short deck should finish by itself");
+
+        let asked = Instant::now();
+        let telemetry = run
+            .alter(&LiveAlterRequest {
+                instance: "R1".to_string(),
+                parameter: None,
+                value: "2k".to_string(),
+            })
+            .expect("a knob turned at a finished run is not an error");
+        let answered = asked.elapsed();
+        println!(
+            "3B knob after completion answered in {answered:?}: {:?} / {:?}",
+            telemetry.stop_reason, telemetry.stop_detail
+        );
+
+        assert!(!telemetry.running);
+        assert_eq!(
+            telemetry.stop_reason,
+            Some(LiveStopReason::AnalysisComplete),
+            "a run that reached its own end time must say so, not stay silent"
+        );
+        assert!(
+            answered < Duration::from_secs(1),
+            "the answer took {answered:?}; an actuation at the end of a run must not stall"
+        );
+    }
+
+    /** The two engine facts the actuation path now rests on, measured rather
+     * than assumed.
+     *
+     * First: after a transient has ended, `bg_halt` finds the background thread
+     * already gone and says so ("timeout = 0"), which is how Tau knows a resume
+     * would not be resuming anything. Second: if that signal is ever missed,
+     * `bg_resume` is not harmless — ngspice's `com_resume` sees
+     * `ci_inprogress` false, prints "Note: run starting" and calls `com_run`,
+     * re-running the whole analysis into a *second plot*. Classifying that as
+     * "solving again" would publish another run's samples as a continuation of
+     * this one, and classifying it as an engine error would call a completed
+     * run a failure. Both are refused here, quickly. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn live_3b_resuming_a_finished_transient_is_completion_not_an_engine_error() {
+        let _guard = real_engine_test_guard();
+        let (mut run, started) = start(LiveStartRequest {
+            netlist: LIVE_SHORT_DECK.to_string(),
+            stop_at_seconds: None,
+            scalar_budget: None,
+        });
+        let waited = Instant::now();
+        while run.running() && waited.elapsed() < Duration::from_secs(10) {
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(!run.running(), "the short deck should finish by itself");
+
+        let before = peek_messages(&run.engine.callback_state).len();
+        run.raw_command("bg_halt").expect("bg_halt is accepted");
+        assert!(
+            run.halt_found_nothing_to_stop(before),
+            "ngspice no longer reports that the halt found the solver already gone, so Tau's one chance to avoid re-running the analysis is missing: {:?}",
+            peek_messages(&run.engine.callback_state)
+        );
+
+        // Deliberately resume anyway: this is the state the check above exists
+        // to avoid, and the classifier must still be right when it is reached.
+        run.raw_command("bg_resume").expect("bg_resume is accepted");
+        let asked = Instant::now();
+        let verdict = run.confirm_resumed();
+        let answered = asked.elapsed();
+        let plot_now = unsafe { c_string((run.engine.api.cur_plot)()) };
+        println!(
+            "3B resume after completion verdict {} in {answered:?}; plot {:?} -> {plot_now:?}",
+            match verdict {
+                ResumeVerdict::Solving => "solving",
+                ResumeVerdict::Finished => "finished",
+                ResumeVerdict::Restarted => "restarted",
+                ResumeVerdict::Failed(_) => "failed",
+            },
+            started.plot
+        );
+        run.force_halt();
+
+        match verdict {
+            ResumeVerdict::Restarted | ResumeVerdict::Finished => {}
+            ResumeVerdict::Solving => panic!(
+                "a re-run of the analysis into {plot_now:?} was accepted as a continuation of {:?}",
+                started.plot
+            ),
+            ResumeVerdict::Failed(detail) => {
+                panic!("a completed run was reported as an engine failure: {detail}")
+            }
+        }
+        assert!(
+            answered < Duration::from_secs(1),
+            "the verdict took {answered:?}; the engineer must not wait out {LIVE_BG_STATE_TIMEOUT:?} to be told the run finished"
+        );
+    }
+
     /** A name the engine never published must not reach `ngGet_Vec_Info`, which
      * parses `plot.vector` syntax and walks the plot list to satisfy whatever
      * it is handed. */
@@ -2379,6 +3020,854 @@ C1 mid 0 100n
         assert!(
             error.contains("not a vector this live run publishes"),
             "{error}"
+        );
+        run.halt(LiveStopReason::HaltedByUser, "test".to_string());
+    }
+
+    // ── the whole chain, end to end (unit F) ───────────────────────────────
+    //
+    // Everything above proves one layer at a time: the framing without an
+    // engine, the engine without a process, the parent's ownership rules
+    // against a shell script. Nothing above proves that a run started the way
+    // the *app* starts one produces the samples the app asked for — and that
+    // gap is not theoretical. A frontend test whose mock declared
+    // `vectors: ["time", "v(out)"]` agreed with a bug for as long as it
+    // existed, because ngspice publishes bare `out` and no test anywhere had
+    // ever asked the library what it actually publishes.
+    //
+    // So these proofs run the real library, and two of them run it in a real
+    // child process over the real pipe protocol.
+
+    /** Environment flag that turns {@link live_f_worker_child_entry} into a
+     * live ngspice worker instead of a test.
+     *
+     * Read rather than argv-matched because argv belongs to libtest here: the
+     * child is `cargo test`'s own binary, invoked with a test filter. */
+    const LIVE_TEST_WORKER_ENV: &str = "TAU_LIVE_TEST_WORKER_CHILD";
+    /** The `--exact` name of that entry point. A constant because a filter that
+     * matches nothing is libtest's most dangerous answer: it exits 0 having run
+     * "0 tests". Here that is at least loud — the child exits at once, the
+     * parent's `Start` finds a closed pipe and fails with "worker exited
+     * unexpectedly" — but a renamed test should not cost anyone that
+     * investigation. */
+    const LIVE_TEST_WORKER_TEST: &str = "live_spice::tests::live_f_worker_child_entry";
+
+    /** The child half of the two process-level proofs below.
+     *
+     * `maybe_run_live_spice_worker` cannot be used from a test binary — libtest
+     * owns argv and rejects `--tau-spice-live-worker` — which is why the
+     * comment above once said the real chain was untestable from here. It is
+     * not: libtest will happily run *one named ignored test*, and that test can
+     * be `serve_live_worker` itself. The child is then the same code the
+     * packaged app runs, hosting the same library, speaking the same protocol
+     * down the same pipes. `spice.rs` already reaches its own crash probe this
+     * way (`live_1e_a_senddata_probe_child`); this is the same door.
+     *
+     * What this arrangement additionally proves, for free, is the reason
+     * `LIVE_FRAME_MARKER` exists. libtest prints `test <name> ... ` to stdout
+     * with no trailing newline before the body runs, so the first frame this
+     * writes is genuinely appended to somebody else's half-written line —
+     * exactly the ngspice `fprintf(stdout, …)` case the marker was designed
+     * for, and the parent recovers the frame from it.
+     *
+     * A no-op when the flag is absent, so the ordinary suites that match
+     * `live_` cannot hang waiting on a stdin nobody is writing to. */
+    #[test]
+    #[ignore = "entry point for the child process the live_f3/live_f4 proofs spawn"]
+    fn live_f_worker_child_entry() {
+        if std::env::var_os(LIVE_TEST_WORKER_ENV).is_none() {
+            return;
+        }
+        let stdout = std::io::stdout();
+        serve_live_worker(BufReader::new(std::io::stdin()), stdout.lock());
+    }
+
+    /// One real worker child, holding the engine lease, with nothing loaded yet.
+    fn spawn_real_worker() -> LiveSession {
+        let mut command =
+            Command::new(std::env::current_exe().expect("a test binary must know its own path"));
+        command
+            .args([
+                "--exact",
+                "--ignored",
+                "--nocapture",
+                "--test-threads=1",
+                LIVE_TEST_WORKER_TEST,
+            ])
+            .env(LIVE_TEST_WORKER_ENV, "1");
+        let lease = acquire_engine(EngineUse::Live)
+            .expect("no other run may hold the engine when a live proof starts");
+        LiveSession::spawn_command(command, lease).expect("the live worker child should spawn")
+    }
+
+    /** A worker child with a circuit energised, in a `LiveSlot`, i.e. the state
+     * `start_live_spice` leaves behind. The Tauri command itself needs an
+     * `AppHandle` for `library_candidates`; everything after that resolution is
+     * reproduced exactly. */
+    fn start_real_session(request: LiveStartRequest) -> (LiveSlot, LiveStartResponse) {
+        let mut session = spawn_real_worker();
+        let response = session
+            .request(
+                &LiveRequestFrame::Start {
+                    request,
+                    library_candidates: live_candidates(),
+                },
+                LIVE_START_TIMEOUT,
+            )
+            .expect("the worker child should answer a start");
+        let start = match (response.error, response.start) {
+            (None, Some(start)) => start,
+            (error, _) => panic!("the worker child refused the deck: {error:?}"),
+        };
+        (
+            LiveSlot {
+                session: Some(session),
+                last: None,
+            },
+            start,
+        )
+    }
+
+    /** `liveVectorSpellings` from `engine/nativeLive.ts`, transcribed.
+     *
+     * Transcribed and not approximated: this is the frontend's whole theory of
+     * how its own names relate to the engine's, and the point of the proof is
+     * to run *that* theory against the library rather than a Rust idea of it.
+     * A drift between the two shows up as this file's assertions passing while
+     * the product's resolver misses — so the mapping is kept in the same shape
+     * as the original, including the refusal to touch anything that is not a
+     * single-argument call. */
+    fn live_vector_spellings(vector: &str) -> Vec<String> {
+        let trimmed = vector.trim();
+        if trimmed.is_empty() {
+            return Vec::new();
+        }
+        let mut spellings = vec![trimmed.to_string()];
+        let call = trimmed
+            .strip_suffix(')')
+            .and_then(|head| head.split_once('('))
+            .filter(|(function, argument)| {
+                !function.is_empty()
+                    && function.chars().all(|c| c.is_ascii_alphabetic())
+                    && !argument.trim().is_empty()
+                    && !argument.contains([',', '(', ')'])
+            });
+        if let Some((function, argument)) = call {
+            let argument = argument.trim();
+            match function.to_ascii_lowercase().as_str() {
+                "v" => spellings.push(argument.to_string()),
+                "i" => spellings.push(format!("{argument}#branch")),
+                _ => {}
+            }
+        }
+        spellings
+    }
+
+    /// `resolveLiveVectorNames` from `engine/nativeLive.ts`: (polled, dropped).
+    fn resolve_live_vector_names(
+        requested: &[String],
+        latched: &[String],
+    ) -> (Vec<String>, Vec<String>) {
+        let mut names = Vec::new();
+        let mut unpublished = Vec::new();
+        for request in requested {
+            let hit = live_vector_spellings(request)
+                .into_iter()
+                .find_map(|spelling| {
+                    latched
+                        .iter()
+                        .find(|name| name.trim().eq_ignore_ascii_case(spelling.trim()))
+                        .cloned()
+                });
+            match hit {
+                Some(name) => names.push(name),
+                None => unpublished.push(request.clone()),
+            }
+        }
+        (names, unpublished)
+    }
+
+    /** A deck shaped like one Tau emits for a schematic with a switch and a
+     * pot: net names the importer produces (`n001`), a named node (`out`), the
+     * emitter's derived contact resistor `R_SW1` and its pot legs
+     * `R_POT1_a` / `R_POT1_b`.
+     *
+     * The device names are not decorative. `liveActuation.ts` builds them with
+     * `R_${safeName(label)}` / `_a` / `_b`, and an `alter` against a name the
+     * deck does not use is accepted by ngspice and does nothing at all — so a
+     * proof that invented its own instance names would prove that altering
+     * works while the product altered nothing. */
+    const LIVE_APP_DECK: &str = "tau live app deck
+V1 in 0 SIN(0 5 1k)
+R1 in out 1k
+R_SW1 out n001 1e12
+R_POT1_a n001 mid 5k
+R_POT1_b mid 0 5k
+C1 out 0 100n
+.tran 10u 600
+.end";
+
+    /** The switch shape `planStaticContact` really emits: one series resistor
+     * carrying `CONTACT_OPEN_OHMS` (1e12) or `CONTACT_CLOSED_OHMS` (1m).
+     *
+     * Open, `out` sits at the 1 V rail through R1; closed, the 1 mΩ contact
+     * pulls it to within a microvolt of ground. Twelve orders of magnitude of
+     * conductance in one `alter` is the stamp that would break first if a
+     * future ngspice stopped refreshing `RESconduct` on resume, which is why
+     * the assertion is on the two exact voltages and not on "it moved". */
+    const LIVE_SWITCH_DECK: &str = "tau live switch
+V1 in 0 1
+R1 in out 1k
+R_SW1 out 0 1e12
+C1 out 0 100n
+.tran 10u 600
+.end";
+
+    /// The two pot legs `planWiper` alters, at the emitter's own 50 % split.
+    const LIVE_POT_DECK: &str = "tau live pot
+V1 in 0 1
+R_POT1_a in mid 5k
+R_POT1_b mid 0 5k
+C1 mid 0 100n
+.tran 10u 600
+.end";
+
+    /** A deck whose own device evaluation goes non-finite, because on this
+     * engine build a *runaway* one does not.
+     *
+     * Measured while writing this, on the staged libngspice: an ideal
+     * positive-feedback integrator (`C1 out 0 1` / `G1 0 out out 0 1`, i.e.
+     * dV/dt = V) climbs to 3.3e306 and is then killed by ngspice's own timestep
+     * control — "Timestep too small … run simulation(s) aborted" — before any
+     * sample overflows. The same happened at every growth rate tried, because
+     * the local-truncation estimate is a third derivative and overflows before
+     * the solution does. B-source arithmetic is clamped too (`exp` saturates at
+     * 1e99, division by zero at 1e32). So the honest way to reach the
+     * non-finite guard is a device whose constitutive relation is itself
+     * undefined: `atanh` outside (-1, 1) returns NaN, and the pulse steps the
+     * argument from 0.5 to 2 partway through the run. The samples before the
+     * step are a real solved waveform, which is the half of the promise that
+     * says the approach to a blow-up must still be shown.
+     *
+     * See the unit report for the separate defect this measurement exposed:
+     * the aborted-runaway case is currently reported as `analysis-complete`. */
+    const LIVE_NON_FINITE_DECK: &str = "tau live non-finite
+V2 z 0 PULSE(0.5 2 200u 1n 1n 1 1)
+B1 out 0 V=atanh(V(z))
+R1 out 0 1k
+.tran 10u 500u
+.end";
+
+    /** The premise the frontend's whole live plot rests on: **ngspice publishes
+     * bare node names, and the app asks for `v(<net>)`**.
+     *
+     * `liveScopeChannelRequests` (App.tsx) emits one `v(<net id>)` per
+     * plottable net, and `resolveLiveVectorNames` (engine/nativeLive.ts) maps
+     * those onto whatever `AllVecs` latched. Nothing in the product tests that
+     * mapping against the library — the frontend suite mocks the boundary, and
+     * a mock that declared `vectors: ["time", "v(out)"]` once made a real bug
+     * invisible for as long as it lived. So this asserts what the engine
+     * actually latches, in both directions: the bare spelling is there, the
+     * parenthesised one is not, and the resolver's translation is the only
+     * reason a poll succeeds.
+     *
+     * If a future ngspice starts publishing `v(out)`, the resolver keeps
+     * working (it tries the caller's spelling first) but its premise is gone —
+     * and this fails loudly here rather than silently somewhere downstream. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn live_f1_the_names_the_app_asks_for_resolve_onto_what_ngspice_publishes() {
+        let _guard = real_engine_test_guard();
+        let (mut run, started) = start(LiveStartRequest {
+            netlist: LIVE_APP_DECK.to_string(),
+            stop_at_seconds: None,
+            scalar_budget: None,
+        });
+        println!("F1 plot {:?} latched {:?}", started.plot, started.vectors);
+
+        // What App.tsx would put on the wire for this circuit's nets, in its
+        // own format string, plus the branch current spelling the resolver
+        // also claims to handle.
+        let requested: Vec<String> = ["out", "n001", "mid", "in"]
+            .iter()
+            .map(|net| format!("v({net})"))
+            .chain(["i(V1)".to_string()])
+            .collect();
+
+        for net in ["out", "n001", "mid", "in", "time"] {
+            assert!(
+                started
+                    .vectors
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(net)),
+                "the live plot did not publish the bare node name {net:?}: {:?}",
+                started.vectors
+            );
+        }
+        for name in &started.vectors {
+            assert!(
+                !name.contains('(') && !name.contains(')'),
+                "ngspice published {name:?}; the app's resolver assumes bare names and would now need revisiting"
+            );
+        }
+
+        let (names, unpublished) = resolve_live_vector_names(&requested, &started.vectors);
+        assert!(
+            unpublished.is_empty(),
+            "the resolver would drop channels this circuit really has: {unpublished:?}"
+        );
+        assert_eq!(
+            names,
+            vec!["out", "n001", "mid", "in", "v1#branch"],
+            "the app's channel names did not translate onto the engine's own spelling"
+        );
+
+        // The translation is load-bearing, not decorative: the app's own
+        // spelling is refused by the run it was computed for.
+        let refused = run
+            .poll(&LivePollRequest {
+                names: vec!["v(out)".to_string()],
+                max_samples: None,
+            })
+            .expect_err("a parenthesised app channel name must not be pollable directly");
+        assert!(
+            refused.contains("not a vector this live run publishes"),
+            "{refused}"
+        );
+
+        // A net this deck does not have is reported, never plotted flat.
+        let (_, missing) = resolve_live_vector_names(&["v(nowhere)".to_string()], &started.vectors);
+        assert_eq!(missing, vec!["v(nowhere)".to_string()]);
+
+        thread::sleep(Duration::from_millis(200));
+        let mut with_axis = vec!["time".to_string()];
+        with_axis.extend(names.iter().cloned());
+        let slice = run
+            .poll(&LivePollRequest {
+                names: with_axis.clone(),
+                max_samples: Some(LIVE_MAX_SLICE_SAMPLES),
+            })
+            .expect("the resolved names must poll");
+        let telemetry = run.halt(LiveStopReason::HaltedByUser, "test".to_string());
+        println!(
+            "F1 delivered {} samples on {} channels ({} solved)",
+            slice.columns[0].len(),
+            slice.columns.len() - 1,
+            telemetry.solved_samples
+        );
+
+        assert_eq!(slice.names.len(), with_axis.len());
+        assert!(
+            !slice.columns[0].is_empty(),
+            "the app's channel set produced no samples at all"
+        );
+        for (index, column) in slice.columns.iter().enumerate() {
+            assert_eq!(
+                column.len(),
+                slice.columns[0].len(),
+                "channel {:?} came back a different length from the time axis",
+                slice.names[index]
+            );
+            assert!(
+                column.iter().all(|value| value.is_finite()),
+                "channel {:?} delivered a non-finite sample",
+                slice.names[index]
+            );
+        }
+        // Not just "some numbers": the divider tap must be a real fraction of
+        // the node above it, or the columns are in the wrong order.
+        let out = slice.columns[1].last().copied().expect("v(out)");
+        let n001 = slice.columns[2].last().copied().expect("v(n001)");
+        assert!(
+            n001.abs() < out.abs().max(1e-12),
+            "v(n001) {n001} is not below v(out) {out}; the 1e12 open contact between them is not in this plot"
+        );
+    }
+
+    /** The switch the app really emits, altered mid-run, changing the samples
+     * after the flip and none of the ones before it.
+     *
+     * `live_3a_altering_a_pot_mid_run…` proves a resistor `alter` reaches the
+     * matrix. This proves the shape the product actually sends: the emitter's
+     * derived instance name (`R_SW1`, not an invented `S1`) and the emitter's
+     * own contact values, which are twelve orders of magnitude apart. It also
+     * proves the half nobody had asserted — that the actuation is not
+     * retroactive. A live plot whose history changed under the engineer when a
+     * switch closed would be a plot of no circuit at all, so the samples
+     * delivered before the alter are re-read from the engine afterwards and
+     * compared point for point. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn live_f2_the_switch_the_app_emits_changes_only_the_samples_after_the_flip() {
+        let _guard = real_engine_test_guard();
+        let (mut run, _) = start(LiveStartRequest {
+            netlist: LIVE_SWITCH_DECK.to_string(),
+            stop_at_seconds: None,
+            scalar_budget: None,
+        });
+        thread::sleep(Duration::from_millis(300));
+        let before = poll(&mut run, &["time", "out"]);
+        assert!(
+            !before.columns[1].is_empty(),
+            "nothing solved before the contact closed"
+        );
+        let open_tail = tail_mean(&before.columns[1]);
+
+        // `CONTACT_CLOSED_OHMS` from simulation/liveActuation.ts, on the
+        // instance `derivedResistor` names for a switch labelled SW1.
+        let telemetry = run
+            .alter(&LiveAlterRequest {
+                instance: "R_SW1".to_string(),
+                parameter: None,
+                value: "1m".to_string(),
+            })
+            .expect("the emitter's contact resistor should be alterable");
+        assert!(
+            telemetry.running,
+            "the run must resume after a contact flip"
+        );
+        thread::sleep(Duration::from_millis(400));
+
+        let after = poll(&mut run, &["time", "out"]);
+        let closed_tail = tail_mean(&after.columns[1]);
+
+        // The history the engineer already saw, read back from the engine.
+        let keys: Vec<&CString> = run.vector_keys.iter().collect();
+        let indices: Vec<usize> = ["time", "out"]
+            .iter()
+            .map(|name| run.vectors.iter().position(|known| known == name).unwrap())
+            .collect();
+        let selected: Vec<&CString> = indices.iter().map(|index| keys[*index]).collect();
+        let whole = run.read_slice(&selected, 0, usize::MAX);
+        let stopped = run.halt(LiveStopReason::HaltedByUser, "test".to_string());
+        println!(
+            "F2 switch: open tail {open_tail:.6} V, closed tail {closed_tail:.6} V, {} samples",
+            stopped.solved_samples
+        );
+
+        assert!(
+            after.from >= before.cursor,
+            "the cursor went backwards across the flip, so history was re-delivered"
+        );
+        assert!(
+            (open_tail - 1.0).abs() < 1e-3,
+            "with the 1e12 contact open the node should sit on the 1 V rail, not at {open_tail:.6} V"
+        );
+        assert!(
+            closed_tail.abs() < 1e-3,
+            "after closing the 1 mΩ contact the node should be pulled to ground, not left at {closed_tail:.6} V. The switch the app emits is not reaching the running matrix."
+        );
+        assert_history_intact(&before, 1, &whole.columns[1], "closing the switch");
+    }
+
+    /** The pot the app really emits: two legs, altered grow-before-shrink, on
+     * the instance names `planWiper` derives.
+     *
+     * The ordering is the emitter's safety property (see `planLiveActuation`),
+     * so it is the ordering asserted here; the tap must land on the value the
+     * schematic now shows, and the samples that were already delivered must
+     * still describe the pot the user was holding when they were solved. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn live_f2_the_pot_legs_the_emitter_names_move_only_the_samples_after_the_drag() {
+        let _guard = real_engine_test_guard();
+        let (mut run, _) = start(LiveStartRequest {
+            netlist: LIVE_POT_DECK.to_string(),
+            stop_at_seconds: None,
+            scalar_budget: None,
+        });
+        thread::sleep(Duration::from_millis(300));
+        let before = poll(&mut run, &["time", "mid"]);
+        let half = tail_mean(&before.columns[1]);
+
+        // Grow before shrink, exactly as `planWiper` orders the two steps.
+        for (instance, value) in [("R_POT1_b", "8k"), ("R_POT1_a", "2k")] {
+            let telemetry = run
+                .alter(&LiveAlterRequest {
+                    instance: instance.to_string(),
+                    parameter: None,
+                    value: value.to_string(),
+                })
+                .unwrap_or_else(|error| panic!("{instance} should be alterable: {error}"));
+            assert!(telemetry.running, "the run must resume after {instance}");
+        }
+        thread::sleep(Duration::from_millis(400));
+
+        let after = poll(&mut run, &["time", "mid"]);
+        let dragged = tail_mean(&after.columns[1]);
+
+        let keys: Vec<&CString> = run.vector_keys.iter().collect();
+        let indices: Vec<usize> = ["time", "mid"]
+            .iter()
+            .map(|name| run.vectors.iter().position(|known| known == name).unwrap())
+            .collect();
+        let selected: Vec<&CString> = indices.iter().map(|index| keys[*index]).collect();
+        let whole = run.read_slice(&selected, 0, usize::MAX);
+        run.halt(LiveStopReason::HaltedByUser, "test".to_string());
+        println!("F2 pot: tap {half:.6} V before the drag, {dragged:.6} V after");
+
+        assert!(
+            (half - 0.5).abs() < 1e-3,
+            "the 5k/5k pot should tap half the rail, not {half:.6} V"
+        );
+        assert!(
+            (dragged - 0.8).abs() < 1e-3,
+            "after dragging the wiper to the 2k/8k split the tap should sit at 0.800 V, not {dragged:.6} V"
+        );
+        assert_history_intact(&before, 1, &whole.columns[1], "dragging the wiper");
+    }
+
+    /// Mean of the last few samples, i.e. where a settled node ended up.
+    fn tail_mean(column: &[f64]) -> f64 {
+        let tail = &column[column.len().saturating_sub(64)..];
+        tail.iter().sum::<f64>() / tail.len() as f64
+    }
+
+    /** Every sample a frame delivered is still, bit for bit, what the engine's
+     * plot holds at the index that frame says it came from.
+     *
+     * Indexed through `from + offset * stride` rather than compared as a
+     * contiguous prefix, because a live frame of a fast deck IS decimated —
+     * these runs solve ~500k points/s and a frame carries at most a couple of
+     * thousand. So this checks two things at once: that an actuation did not
+     * rewrite history, and that the `from`/`stride` arithmetic the UI uses to
+     * place a decimated frame on its time axis actually addresses the samples
+     * the frame contained. A stride the child reported but did not apply would
+     * put every point of a live trace at the wrong time. */
+    fn assert_history_intact(
+        frame: &LiveSlicePayload,
+        column: usize,
+        engine_column: &[f64],
+        what: &str,
+    ) {
+        let delivered = &frame.columns[column];
+        assert!(
+            !delivered.is_empty(),
+            "{what}: nothing had been delivered before the change, so there is no history to check"
+        );
+        for (offset, value) in delivered.iter().enumerate() {
+            let index = frame.from + offset * frame.stride;
+            assert_eq!(
+                engine_column.get(index).copied(),
+                Some(*value),
+                "{what} changed sample {index}: the engineer was shown {value}, the plot now holds {:?}",
+                engine_column.get(index)
+            );
+        }
+    }
+
+    /** Stop, through the real child, measured: prompt, graceful, and leaving
+     * nothing behind that could refuse the next Run.
+     *
+     * The failure this guards against is the one users actually hit — Stop
+     * appears to work, and every later Run is refused with "A live simulation
+     * is already running" until the app restarts. Three independent things have
+     * to be true for that not to happen, and each is checked against the
+     * operating system rather than against Tau's own bookkeeping: the child
+     * process is gone (asked of `ps`, by pid), the engine lease is free (asked
+     * of `acquire_engine`), and a second run can energise a circuit at once
+     * (done, and its samples read).
+     *
+     * Graceful matters as much as fast. A child killed by SIGKILL never runs
+     * `LiveRun`'s drop, and that drop is the only thing that halts the
+     * background solver before `dlclose` unloads the code it is executing — so
+     * the retirement path's own "had to be killed" note is asserted absent. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn live_f3_stop_is_prompt_and_leaves_neither_a_worker_nor_a_lease_behind() {
+        let _guard = real_engine_test_guard();
+        let (mut slot, _) = start_real_session(rc_request());
+        let pid = slot
+            .session
+            .as_ref()
+            .expect("a session was just started")
+            .child
+            .id();
+
+        let first = poll_locked(
+            &mut slot,
+            LivePollRequest {
+                names: vec!["time".to_string(), "out".to_string()],
+                max_samples: Some(64),
+            },
+        )
+        .expect("the live child should deliver a frame");
+        assert!(
+            !first.columns[0].is_empty(),
+            "the child produced no samples before Stop"
+        );
+
+        // `halt_live_spice`'s body, which is all of it that does not need an
+        // AppHandle: one Halt frame, then the shared retirement rule.
+        let pressed = Instant::now();
+        let response = slot
+            .session
+            .as_mut()
+            .expect("still running")
+            .request(&LiveRequestFrame::Halt, LIVE_FRAME_TIMEOUT)
+            .expect("the child should answer a halt");
+        let telemetry = finish_telemetry(&mut slot, response).expect("halt should succeed");
+        let stop_latency = pressed.elapsed();
+
+        let alive = Command::new("/bin/ps")
+            .args(["-p", &pid.to_string(), "-o", "pid="])
+            .output()
+            .expect("ps should run");
+        let survivor = String::from_utf8_lossy(&alive.stdout).trim().to_string();
+        println!(
+            "F3 stop latency {stop_latency:?} after {} solved samples; pid {pid} survivor {survivor:?}",
+            telemetry.solved_samples
+        );
+
+        assert_eq!(telemetry.stop_reason, Some(LiveStopReason::HaltedByUser));
+        assert!(!telemetry.running);
+        assert!(
+            slot.session.is_none(),
+            "Stop left the worker session in the slot, so the next Run will be refused"
+        );
+        assert!(
+            !telemetry
+                .engine_log
+                .iter()
+                .any(|line| line.contains("did not exit within")),
+            "the worker had to be killed, so its solver never got to halt itself: {:?}",
+            telemetry.engine_log
+        );
+        assert!(
+            survivor.is_empty(),
+            "the worker process {pid} outlived the Stop that was supposed to end it"
+        );
+        assert!(
+            stop_latency < Duration::from_secs(1),
+            "Stop took {stop_latency:?}; a button that takes a second to stop a solver reads as broken"
+        );
+
+        // The lease, asked of the thing that hands it out.
+        drop(
+            acquire_engine(EngineUse::Bounded)
+                .expect("Stop must leave the engine free for the next analysis"),
+        );
+
+        // And the claim that matters to the user: Run works again, now.
+        let restarted = Instant::now();
+        let (mut second, started) = start_real_session(rc_request());
+        let restart = restarted.elapsed();
+        assert!(
+            started.vectors.iter().any(|name| name == "time"),
+            "the second run published no time axis: {:?}",
+            started.vectors
+        );
+        let frame = poll_locked(
+            &mut second,
+            LivePollRequest {
+                names: vec!["time".to_string(), "out".to_string()],
+                max_samples: Some(64),
+            },
+        )
+        .expect("the second live run should deliver a frame");
+        println!(
+            "F3 second run energised in {restart:?}, first frame {} samples",
+            frame.columns[0].len()
+        );
+        assert!(
+            !frame.columns[0].is_empty(),
+            "the second run started but produced no samples"
+        );
+        retire_session(&mut second);
+        drop(acquire_engine(EngineUse::Bounded).expect("the second run released the engine too"));
+    }
+
+    /** A run that ended by itself and a run the engineer stopped are different
+     * facts, and they stay different all the way out to the JSON the renderer
+     * receives.
+     *
+     * The frontend acts on this: `nativeLive.ts` switches on the kebab-case
+     * spelling to decide whether the run "completed" or "was stopped", and the
+     * UI says so in words. If both arrived as the same string the app would
+     * either accuse the engine of stopping a run the user stopped, or claim a
+     * run finished when the user ended it early. So both payloads are
+     * serialised here exactly as Tauri serialises them and asserted on the
+     * wire, not on the Rust enum — a `#[serde(rename_all)]` change would
+     * otherwise pass every Rust test and break the product. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn live_f4_a_run_that_ended_by_itself_is_not_a_user_stop_on_the_wire() {
+        let _guard = real_engine_test_guard();
+
+        // 1. A deck that reaches its own end time while the UI is polling.
+        let (mut slot, _) = start_real_session(LiveStartRequest {
+            netlist: LIVE_SHORT_DECK.to_string(),
+            stop_at_seconds: None,
+            scalar_budget: None,
+        });
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let ended = loop {
+            let frame = poll_locked(
+                &mut slot,
+                LivePollRequest {
+                    names: vec!["time".to_string(), "out".to_string()],
+                    max_samples: Some(LIVE_MAX_SLICE_SAMPLES),
+                },
+            )
+            .expect("polling a finishing run is not an error");
+            if frame.telemetry.stop_reason.is_some() {
+                break frame;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the short deck never finished by itself"
+            );
+            thread::sleep(Duration::from_millis(10));
+        };
+        let self_ended = serde_json::to_string(&ended).expect("a slice payload serialises");
+        println!(
+            "F4 self-ended after {} samples: {:?}",
+            ended.telemetry.solved_samples, ended.telemetry.stop_detail
+        );
+        assert!(
+            slot.session.is_none(),
+            "a run that ended by itself kept its worker and the engine with it"
+        );
+        drop(acquire_engine(EngineUse::Bounded).expect("a finished run releases the engine"));
+
+        // 2. The same shape of payload for a run the engineer stopped.
+        let (mut slot, _) = start_real_session(rc_request());
+        thread::sleep(Duration::from_millis(100));
+        let response = slot
+            .session
+            .as_mut()
+            .expect("still running")
+            .request(&LiveRequestFrame::Halt, LIVE_FRAME_TIMEOUT)
+            .expect("the child should answer a halt");
+        let halted = finish_telemetry(&mut slot, response).expect("halt should succeed");
+        let user_stop = serde_json::to_string(&halted).expect("telemetry serialises");
+        println!("F4 user stop: {:?}", halted.stop_detail);
+        drop(acquire_engine(EngineUse::Bounded).expect("a stopped run releases the engine"));
+
+        assert_eq!(
+            ended.telemetry.stop_reason,
+            Some(LiveStopReason::AnalysisComplete)
+        );
+        assert_eq!(halted.stop_reason, Some(LiveStopReason::HaltedByUser));
+        assert!(
+            self_ended.contains("\"stopReason\":\"analysis-complete\""),
+            "the payload the renderer receives does not spell the completion the way nativeLive.ts reads it: {self_ended}"
+        );
+        assert!(
+            !self_ended.contains("halted-by-user"),
+            "a run that ended by itself was reported as a user Stop: {self_ended}"
+        );
+        assert!(
+            user_stop.contains("\"stopReason\":\"halted-by-user\""),
+            "a user Stop does not reach the renderer as one: {user_stop}"
+        );
+        assert!(
+            !user_stop.contains("analysis-complete"),
+            "a user Stop was reported as a completed analysis: {user_stop}"
+        );
+        assert!(
+            self_ended.contains("\"running\":false") && user_stop.contains("\"running\":false"),
+            "a stopped run must not still claim to be running"
+        );
+        assert!(
+            ended
+                .telemetry
+                .stop_detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("reached its own end time")),
+            "{:?}",
+            ended.telemetry.stop_detail
+        );
+        assert!(
+            halted
+                .stop_detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("Stopped by the engineer")),
+            "{:?}",
+            halted.stop_detail
+        );
+    }
+
+    /** A sample the solver could not produce a number for stops the run and is
+     * never handed to the plot.
+     *
+     * Two halves, and the second is the one that keeps a live trace honest: the
+     * frame is truncated *at* the bad sample rather than dropped, so the
+     * engineer sees the approach to the blow-up and nothing past it. A plot
+     * that kept scrolling would be showing a circuit that stopped being solved.
+     *
+     * `LIVE_NON_FINITE_DECK` explains why the deck is a domain violation rather
+     * than a runaway: on this engine build ngspice's timestep control kills a
+     * runaway before any sample overflows. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn live_f5_a_non_finite_sample_stops_the_run_instead_of_reaching_the_plot() {
+        let _guard = real_engine_test_guard();
+        let (mut run, _) = start(LiveStartRequest {
+            netlist: LIVE_NON_FINITE_DECK.to_string(),
+            stop_at_seconds: None,
+            scalar_budget: None,
+        });
+
+        let mut delivered: Vec<f64> = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let telemetry = loop {
+            let frame = poll(&mut run, &["time", "out"]);
+            delivered.extend_from_slice(&frame.columns[1]);
+            if frame.telemetry.stop_reason.is_some() {
+                break frame.telemetry;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the deck never produced its non-finite sample"
+            );
+            thread::sleep(Duration::from_millis(10));
+        };
+        println!(
+            "F5 delivered {} finite samples, last {:?}, then: {:?}",
+            delivered.len(),
+            delivered.last(),
+            telemetry.stop_detail
+        );
+
+        assert_eq!(
+            telemetry.stop_reason,
+            Some(LiveStopReason::NonFinite),
+            "a NaN in the solution was not reported as one: {:?}",
+            telemetry.stop_detail
+        );
+        assert!(!telemetry.running, "the solver was left running past a NaN");
+        assert!(
+            delivered.iter().all(|value| value.is_finite()),
+            "a non-finite sample was handed to the plot"
+        );
+        assert!(
+            delivered.len() > 8,
+            "only {} samples were delivered; the approach to the blow-up must still be shown",
+            delivered.len()
+        );
+        let detail = telemetry.stop_detail.clone().unwrap_or_default();
+        assert!(
+            detail.contains("out") && detail.contains("NaN"),
+            "the stop must name the trace and what it carried: {detail}"
+        );
+
+        // Tau did not invent the divergence: the engine's own plot still has a
+        // non-finite value at the index the stop named.
+        let keys: Vec<&CString> = run.vector_keys.iter().collect();
+        let index = run
+            .vectors
+            .iter()
+            .position(|name| name == "out")
+            .expect("out is published");
+        let whole = run.read_slice(&[keys[index]], 0, usize::MAX);
+        let (bad_index, bad_value, _) = whole
+            .diverged
+            .expect("the engine's plot must still hold the sample that stopped the run");
+        assert!(bad_value.is_nan(), "expected a NaN, found {bad_value}");
+        assert!(
+            detail.contains(&bad_index.to_string()),
+            "the stop named a different sample from the one in the plot ({bad_index}): {detail}"
         );
         run.halt(LiveStopReason::HaltedByUser, "test".to_string());
     }
