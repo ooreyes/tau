@@ -52,12 +52,15 @@ const wires = [
 
 const sourcePins = [
   [160, 272, "a"],
-  [208, 288, "b"],
-  [256, 304, "c"],
-  [304, 320, "d"],
-  [680, 272, "e"],
-  [632, 288, "f"],
-  [584, 304, "g"],
+  // The Tau symbol's physical pin order is A, F, G, E, B, C, D, DP.
+  // Keep this explicit: the wires are arranged by geometry, not by the
+  // alphabetic order used by the digit patterns below.
+  [208, 288, "f"],
+  [256, 304, "g"],
+  [304, 320, "e"],
+  [680, 272, "b"],
+  [632, 288, "c"],
+  [584, 304, "d"],
   [736, 320, "dp"],
 ];
 
