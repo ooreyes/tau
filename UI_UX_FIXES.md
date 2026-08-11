@@ -250,7 +250,7 @@ remain pending; no completion claim yet.
 
 ### [ ] COMP-02 - Align property controls into stable columns
 
-**Status:** UNVERIFIED  
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** edits-to-fix, page 2, item 2  
 ![Property alignment](screenshots/ui-ux-fix-brief/comp-02-property-alignment.png)
@@ -577,7 +577,7 @@ claim yet.
 
 ### [ ] COMP-16 - Simulate a real seven-segment display
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1 simulation  
 **Source:** edits-to-fix, page 7, item 16 (source calls it an 8-bit segment)
 
@@ -594,7 +594,16 @@ a number. Do not store derived display state in the schematic.
 anode/cathode semantics supported by the component, stopped/no-result state,
 live updates, both themes, and no hardcoded color outside token policy.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** simulator reflection implementation landed in `10b043e` from
+worker `272dfc8`. The focused simulator/operating-point suite passed **3 files
+/ 92 tests**, typecheck passed, design drift passed (**9 checks + 47 tests**),
+and simulation-sensitive native gates passed (**cargo fmt/clippy exit 0; Rust
+104 passed / 42 ignored; real-ngspice ignored 42 passed / 0 failed**). The
+implementation derives segment state from solved OP/transient nodes, supports
+common-anode/cathode polarity, no-result and non-digit patterns, and keeps
+derived state out of the schematic. Packaged light/dark digit 0-9, live-update,
+and stopped-state screenshots/native evidence remain pending; no completion
+claim yet.
 
 ### [ ] COMP-17 - Remove the unnecessary switch rectangle
 

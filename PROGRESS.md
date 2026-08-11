@@ -24,8 +24,19 @@ packaged/browser/native evidence. Wave 2 will target COMP-02, COMP-04,
 COMP-06, COMP-08B, COMP-09, COMP-11, COMP-13B, COMP-14, COMP-12 rendering,
 COMP-16, and regression/a11y/performance coverage.
 
-**Next:** integrate the remaining inspector and simulator commits one at a
-time, then run the full Wave 2 frontend/native gates before serialized QA.
+**Next:** integrate the remaining inspector commit, then run the full Wave 2
+frontend/native gates before serialized QA.
+
+---
+
+**2026-08-11 — Wave 2 simulator landing:** Luna Max simulator worker returned
+`272dfc8` from exact base `b60be53`; the orchestrator integrated it as
+`10b043e`. Focused simulator/operating-point coverage passed **3 files / 92
+tests**, typecheck passed, and design drift passed (**9 checks + 47 tests**).
+Because the change reflects simulation results, native gates also passed:
+`cargo fmt --check` and clippy **exit 0**, native Rust **104 passed / 0 failed /
+42 ignored**, and ignored real-ngspice **42 passed / 0 failed**. Packaged and
+browser visual evidence remains pending.
 
 ---
 
