@@ -144,7 +144,7 @@ describe("idealJunctionModel", () => {
       forwardVolts: IDEAL_LED_FORWARD_VOLTS,
     });
     expect(idealJunctionModel(part("zener", "D3", "5V1", 0, 0))).toMatchObject({
-      model: "TAU_ZENER_IDEAL_5V1",
+      model: "TAU_ZENER_IDEAL_5V1_FWD_0V7",
       forwardVolts: IDEAL_DIODE_FORWARD_VOLTS,
       breakdownVolts: 5.1,
     });
@@ -183,8 +183,8 @@ describe("deck emission", () => {
   it("emits one card for two identical parts and one per distinct rating", () => {
     const deck = buildSpiceDeck({
       components: [
-        part("zener", "D1", "5V1", 0, 0),
-        part("zener", "D2", "5V1", 200, 0),
+        part("zener", "D1", "5V1 Vfwd=0.7", 0, 0),
+        part("zener", "D2", "5V1 Vfwd=0.7", 200, 0),
         part("zener", "D3", "12V", 400, 0),
         part("ground", "", "", 0, 64),
       ],
@@ -192,8 +192,29 @@ describe("deck emission", () => {
     }, { kind: "op" });
     const cards = deck.netlist.split("\n").filter((line) => /^\.model TAU_ZENER_IDEAL/.test(line));
     expect(cards).toHaveLength(2);
-    expect(cards.join("\n")).toContain("TAU_ZENER_IDEAL_5V1");
+    expect(cards.join("\n")).toContain("TAU_ZENER_IDEAL_5V1_FWD_0V7");
     expect(cards.join("\n")).toContain("TAU_ZENER_IDEAL_12V");
+  });
+
+  it("keeps same-breakdown zeners separate when forward drops differ", () => {
+    const first = idealJunctionModel(part("zener", "D1", "5V1 Vfwd=0.7", 0, 0));
+    const second = idealJunctionModel(part("zener", "D2", "5V1 Vfwd=1.1", 200, 0));
+    expect(first?.model).toBe("TAU_ZENER_IDEAL_5V1_FWD_0V7");
+    expect(second?.model).toBe("TAU_ZENER_IDEAL_5V1_FWD_1V1");
+    expect(first?.model).not.toBe(second?.model);
+
+    const deck = buildSpiceDeck({
+      components: [
+        part("zener", "D1", "5V1 Vfwd=0.7", 0, 0),
+        part("zener", "D2", "5V1 Vfwd=1.1", 200, 0),
+        part("ground", "", "", 0, 64),
+      ],
+      wires: [],
+    }, { kind: "op" });
+    const cards = deck.netlist.split("\n").filter((line) => /^\.model TAU_ZENER_IDEAL/.test(line));
+    expect(cards).toHaveLength(2);
+    expect(cards.some((line) => line.includes("Vfwd=0.7"))).toBe(true);
+    expect(cards.some((line) => line.includes("Vfwd=1.1"))).toBe(true);
   });
 
   it("lets the document's own .model win over the ideal default", () => {

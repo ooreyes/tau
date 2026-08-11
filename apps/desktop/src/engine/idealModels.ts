@@ -252,7 +252,10 @@ export function idealJunctionModel(component: SchematicComponent): IdealJunction
     // generic zener at 5.1 V no matter what the schematic said.
     const breakdownVolts = keyedNumber(value, ["Vrev", "Bv", "Breakdown"], coded ?? IDEAL_ZENER_BREAKDOWN_VOLTS);
     const forwardVolts = keyedNumber(value, ["Vfwd", "Forward"], IDEAL_DIODE_FORWARD_VOLTS);
-    const model = `TAU_ZENER_IDEAL_${formatIdealVoltageCode(breakdownVolts)}`;
+    // The forward drop is electrical model identity too. Two zeners with the
+    // same breakdown rating but different Vfwd must never share a generated
+    // card: the deck's model table is keyed by this stable name.
+    const model = `TAU_ZENER_IDEAL_${formatIdealVoltageCode(breakdownVolts)}_FWD_${formatIdealVoltageCode(forwardVolts)}`;
     return {
       model,
       card: `.model ${model} D(Ron=${IDEAL_ON_OHMS} Roff=${IDEAL_OFF_OHMS}`
