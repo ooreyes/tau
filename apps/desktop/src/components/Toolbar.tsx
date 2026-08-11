@@ -158,7 +158,9 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
        */}
       <div
         className="titlebar-drag-region"
-        aria-hidden="true"
+        role="button"
+        tabIndex={-1}
+        aria-label="Window drag area; double-click to maximize or restore"
         title="Double-click to maximize or restore"
       />
       <div className="titlebar-left" data-tauri-drag-region="false">

@@ -71,7 +71,8 @@ describe("Toolbar Run health control", () => {
 
     expect(toolbar.hasAttribute("data-tauri-drag-region")).toBe(false);
     expect(dragRegion.getAttribute("data-tauri-drag-region")).toBeNull();
-    expect(dragRegion.getAttribute("aria-hidden")).toBe("true");
+    expect(dragRegion.getAttribute("role")).toBe("button");
+    expect(dragRegion.getAttribute("aria-label")).toContain("double-click");
     expect(dragRegion.getAttribute("title")).toContain("maximize or restore");
     for (const selector of [".titlebar-left", ".mode-toggle", ".titlebar-right"]) {
       expect(toolbar.querySelector(selector)?.getAttribute("data-tauri-drag-region")).toBe("false");
