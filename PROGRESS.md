@@ -1,38 +1,25 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-11**
+**Status: IN PROGRESS - 2026-08-11**
 
-Unit: **PDF-derived UI/UX remediation brief and isolated Luna fleet contract**.
-The authoritative baseline tag `live-simulator-baseline-2026-08-11`, local
-branch, and remote `auto/ltspice-parity` all resolved to
-`919f0e1070fdaa2310795f53ac56fa5431ba91ef`. Added the 24-item
-`UI_UX_FIXES.md` contract (7 shell + 17 component issues), 26 lossless embedded
-source images, and an active §8 parity entry. The tracker locks model safety,
-backward-compatible sources, native title-bar behavior, `Component ID`
-wording, evidence requirements, implementation waves, and engineering/visual
-acceptance criteria.
+Unit: **Bootstrap behavior-preserving shell seams for the UI/UX remediation
+fleet**. Base and remote are `8fb45f623baee1cd0429a0a161fcd28b5278fa62`;
+the tagged live-simulator baseline peels to
+`919f0e1070fdaa2310795f53ac56fa5431ba91ef`.
 
-Added project-scoped fleet configuration for a Luna Max orchestrator with three
-concurrent `gpt-5.6-luna` / `max` workers. `AGENTS.md` now contains the approved
-narrow exception: workers use isolated local-only `codex/tau-fleet-*`
-worktrees, never fetch/reset/push or edit orchestration files, and return one
-commit for controller integration. `auto/ltspice-parity` remains the only
-remote durable lineage. No application behavior changed.
+The bootstrap worker owns only the ShellPanels/Explorer/editor/inspector
+module-boundary split in an isolated temporary worktree. The orchestrator owns
+all tracking files, integration, gates, evidence, and pushes.
 
-**Files:** `UI_UX_FIXES.md`, `screenshots/ui-ux-fix-brief/`, `.codex/`,
-`AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`.
+**Files:** pending worker return packet; `PROGRESS.md` heartbeat.
 
-**Tests:** tracker validation reports 24 stable headings, 24 status fields,
-26 assets, and zero missing links; `git diff --check` clean;
-`pnpm -C apps/desktop typecheck` clean; `pnpm -C apps/desktop test` reports
-**255 files passed / 2 skipped, 4,256 tests passed / 8 skipped**.
+**Tests:** pending bootstrap worker; required frontend gates run after landing.
 
-**Parity items:** activated §8 PDF-directed UI/UX remediation; none of its
-behavioral boxes are claimed complete by this planning unit.
+**Parity items:** §8 PDF-directed UI/UX remediation bootstrap; no stable issue
+is claimed complete by this unit.
 
-**Next:** start the new GPT-5.6 Luna Max orchestration task from this pushed
-commit, execute bootstrap and fleet waves, then freeze the integrated diff for
-one fresh Sol High read-only review and Omar's inspection.
+**Next:** integrate the focused bootstrap commit, run gates, record and push it,
+then provision Wave 1 from the integrated tip.
 
 ---
 
