@@ -6,7 +6,14 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { Canvas } from "./Canvas";
 import { useSchematic } from "../store/useSchematic";
 import { getComponentPins } from "../schematic/pins";
+import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
+import type { AnalysisResult } from "../simulation/linearTransient";
+import {
+  SEVEN_SEGMENT_DIGIT_PATTERNS,
+  SEVEN_SEGMENT_SEGMENTS,
+  type SevenSegmentSegment,
+} from "./simulator/SevenSegmentDisplay";
 
 class ResizeObserverStub {
   static instances: ResizeObserverStub[] = [];
@@ -897,6 +904,130 @@ describe("Canvas - schematic selection chrome", () => {
 
     expect(screen.queryByRole("button", { name: "Delete selection" })).toBeNull();
     expect(document.querySelector(".selection-delete-pill")).toBeNull();
+  });
+});
+
+describe("Canvas - simulator seven-segment reflection", () => {
+  const display = {
+    id: "u1",
+    kind: "sevenSeg" as const,
+    x: 0,
+    y: 0,
+    rotation: 0 as const,
+    value: "",
+    label: "U1",
+  };
+
+  function displayCircuit(): { circuit: ExtractedCircuit; entry: ExtractedCircuit["components"][number] } {
+    const circuit = extractCircuit([display], [], []);
+    const entry = circuit.components.find(({ component }) => component.id === display.id);
+    if (!entry) throw new Error("seven-segment fixture did not extract its component");
+    return { circuit, entry };
+  }
+
+  function operatingPointFor(
+    activeSegments: readonly SevenSegmentSegment[],
+    commonVoltage: number,
+    activeVoltage: number,
+  ) {
+    const { circuit, entry } = displayCircuit();
+    const active = new Set(activeSegments);
+    const voltageByNet = new Map<string, number>();
+    for (const segment of SEVEN_SEGMENT_SEGMENTS) {
+      voltageByNet.set(entry.pins[segment], active.has(segment) ? activeVoltage : commonVoltage);
+    }
+    voltageByNet.set(entry.pins.com, commonVoltage);
+    return {
+      circuit,
+      result: {
+        ok: true as const,
+        nets: circuit.nets.map((net) => ({
+          id: net.id,
+          label: net.isGround ? "GND" : `V(${net.id})`,
+          voltage: voltageByNet.get(net.id) ?? 0,
+        })),
+        warnings: [],
+      },
+    };
+  }
+
+  function transientFor(
+    circuit: ExtractedCircuit,
+    entry: ExtractedCircuit["components"][number],
+    samples: readonly (readonly SevenSegmentSegment[])[],
+    commonVoltage: number,
+    activeVoltage: number,
+  ): AnalysisResult {
+    const traces = circuit.nets.filter((net) => !net.isGround).map((net) => ({
+      id: net.id,
+      label: `V(${net.id})`,
+      unit: "V" as const,
+      color: "var(--trace-green)",
+      values: samples.map((activeSegments) => {
+        const active = new Set(activeSegments);
+        const segment = SEVEN_SEGMENT_SEGMENTS.find((candidate) => entry.pins[candidate] === net.id);
+        return segment && active.has(segment) ? activeVoltage : commonVoltage;
+      }),
+    }));
+    return {
+      ok: true,
+      title: "Transient",
+      times: samples.map((_sample, index) => index),
+      traces,
+      currents: [],
+      stats: { netCount: circuit.nets.length, componentCount: 1, sampleCount: samples.length, stopTime: samples.length - 1, stepSize: 1 },
+      warnings: [],
+      circuit,
+    };
+  }
+
+  it("renders a valid digit from the actual operating-point nodes", () => {
+    useSchematic.setState({ components: [display], wires: [], netLabels: [] });
+    const { result } = operatingPointFor(SEVEN_SEGMENT_DIGIT_PATTERNS[5], 0, 5);
+    render(<Canvas interactive={false} op={result} />);
+
+    const rendered = screen.getByTestId("seven-segment-display");
+    expect(rendered.getAttribute("data-display-status")).toBe("digit");
+    expect(rendered.getAttribute("data-digit")).toBe("5");
+    expect(rendered.querySelector('[data-segment="a"]')?.classList.contains("is-active")).toBe(true);
+    expect(rendered.querySelector('[data-segment="b"]')?.classList.contains("is-active")).toBe(false);
+    expect(useSchematic.getState().components[0].value).toBe("");
+  });
+
+  it("shows common-anode active-low nodes without changing the schematic", () => {
+    useSchematic.setState({ components: [display], wires: [], netLabels: [] });
+    const { result } = operatingPointFor(SEVEN_SEGMENT_DIGIT_PATTERNS[3], 5, 0);
+    render(<Canvas interactive={false} op={result} />);
+
+    expect(screen.getByTestId("seven-segment-display").getAttribute("data-digit")).toBe("3");
+    expect(useSchematic.getState().components[0].value).toBe("");
+  });
+
+  it("tracks a live transient sample when the schematic readout moves", () => {
+    useSchematic.setState({ components: [display], wires: [], netLabels: [] });
+    const { circuit, entry } = displayCircuit();
+    const tran = transientFor(
+      circuit,
+      entry,
+      [SEVEN_SEGMENT_DIGIT_PATTERNS[1], SEVEN_SEGMENT_DIGIT_PATTERNS[8]],
+      0,
+      5,
+    );
+    const view = render(<Canvas interactive={false} tran={tran} readoutTime={0} />);
+
+    expect(screen.getByTestId("seven-segment-display").getAttribute("data-digit")).toBe("1");
+    view.rerender(<Canvas interactive={false} tran={tran} readoutTime={1} />);
+    expect(screen.getByTestId("seven-segment-display").getAttribute("data-digit")).toBe("8");
+  });
+
+  it("renders a blank unavailable display when no completed result exists", () => {
+    useSchematic.setState({ components: [display], wires: [], netLabels: [] });
+    render(<Canvas interactive={false} />);
+
+    const rendered = screen.getByTestId("seven-segment-display");
+    expect(rendered.getAttribute("data-display-status")).toBe("no-result");
+    expect(rendered.hasAttribute("data-digit")).toBe(false);
+    expect(rendered.querySelectorAll(".is-active")).toHaveLength(0);
   });
 });
 

@@ -35,6 +35,13 @@ import {
   type PinIndex,
 } from "../simulation/wireCurrentFlow";
 import { formatEngineering } from "../simulation/quantity";
+import {
+  deriveSevenSegmentDisplayState,
+  SEVEN_SEGMENT_SEGMENTS,
+  SevenSegmentDisplay,
+  type SevenSegmentDisplayState,
+  type SevenSegmentNodeVoltages,
+} from "./simulator/SevenSegmentDisplay";
 import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import {
@@ -81,6 +88,81 @@ interface View {
 }
 
 const clampZoom = (z: number) => Math.min(5, Math.max(0.25, z));
+
+/**
+ * Build simulator-only display state from the exact node values in the active
+ * result. The map is deliberately derived at render time and never written to
+ * the schematic store: a display is a view of a run, not a new circuit fact.
+ */
+function simulatorSevenSegmentStates({
+  components,
+  wires,
+  netLabels,
+  op,
+  tran,
+  readoutTime,
+}: {
+  components: SchematicComponent[];
+  wires: SchematicWire[];
+  netLabels: NetLabel[];
+  op: OperatingPointResult | null;
+  tran: AnalysisResult | null;
+  readoutTime: number | null;
+}): Map<string, SevenSegmentDisplayState> {
+  const displays = components.filter((component) => component.kind === "sevenSeg");
+  const states = new Map<string, SevenSegmentDisplayState>();
+  if (displays.length === 0) return states;
+
+  const transient = tran?.ok && tran.times.length > 0 ? tran : null;
+  const circuit = transient
+    ? transient.circuit
+    : op?.ok
+      ? extractCircuit(components, wires, netLabels)
+      : null;
+
+  if (!circuit) {
+    for (const display of displays) {
+      states.set(display.id, deriveSevenSegmentDisplayState(undefined, undefined));
+    }
+    return states;
+  }
+
+  const opVoltageByNet = op?.ok
+    ? new Map(op.nets.map((net) => [net.id, net.voltage]))
+    : null;
+  const transientTraceByNet = transient
+    ? new Map(transient.traces.map((trace) => [trace.id, trace]))
+    : null;
+  const transientSample = transient
+    ? readoutTime == null
+      ? transient.times.length - 1
+      : nearestSampleIndex(transient.times, readoutTime)
+    : -1;
+
+  const netVoltage = (netId: string | undefined): number | undefined => {
+    if (!netId) return undefined;
+    if (netId === "0" || netId === circuit.groundNetId) return 0;
+    if (transientTraceByNet) {
+      const value = transientTraceByNet.get(netId)?.values[transientSample];
+      return Number.isFinite(value) ? value : undefined;
+    }
+    const value = opVoltageByNet?.get(netId);
+    return Number.isFinite(value) ? value : undefined;
+  };
+
+  for (const display of displays) {
+    const entry = circuit.components.find(({ component }) => component.id === display.id);
+    const segmentVoltages: SevenSegmentNodeVoltages = {};
+    for (const segment of SEVEN_SEGMENT_SEGMENTS) {
+      segmentVoltages[segment] = netVoltage(entry?.pins[segment]);
+    }
+    states.set(
+      display.id,
+      deriveSevenSegmentDisplayState(segmentVoltages, netVoltage(entry?.pins.com)),
+    );
+  }
+  return states;
+}
 
 /** Anything at/right of this X is a flattened hierarchical-block body packed
  *  off-sheet by the ASC importer (placement starts at 1e6); authored circuits
@@ -288,6 +370,19 @@ export function Canvas({
   // currents. The schematic carries no numeric readouts - values belong in the
   // measurement panels, where they can be read without covering the drawing.
   const useTranReadout = Boolean(tran?.ok && tran.times.length > 0);
+  const sevenSegmentStates = useMemo(
+    () => interactive
+      ? null
+      : simulatorSevenSegmentStates({
+        components,
+        wires,
+        netLabels,
+        op,
+        tran,
+        readoutTime,
+      }),
+    [interactive, components, wires, netLabels, op, tran, readoutTime],
+  );
   const biasCircuit = useMemo(() => {
     if (!currentVisualizer) return null;
     if (useTranReadout || op?.ok) return extractCircuit(components, wires, netLabels);
@@ -1667,6 +1762,7 @@ export function Canvas({
               showPins={wiring || probing || labeling || placing}
               operable={simulatorOperability(c, interactive, tool.mode)}
               hovered={hoverOperable?.id === c.id}
+              sevenSegmentState={sevenSegmentStates?.get(c.id)}
             />
           ))}
 
@@ -1991,12 +2087,15 @@ function ComponentView({
   showPins,
   operable = null,
   hovered = false,
+  sevenSegmentState,
 }: {
   comp: SchematicComponent;
   selected: boolean;
   showPins: boolean;
   operable?: Operability;
   hovered?: boolean;
+  /** Present only on the read-only simulator canvas; absent in the editor. */
+  sevenSegmentState?: SevenSegmentDisplayState;
 }) {
   // Presentational only - selection/drag/edit are resolved centrally by
   // geometry in the SVG handlers, so render order never decides hit results.
@@ -2074,6 +2173,12 @@ function ComponentView({
             // from may expose the complementary pin and `com` too, and those
             // need a lead off the body to meet their repair lead above.
             imported={Boolean(overridePins)}
+          />
+        )}
+        {comp.kind === "sevenSeg" && sevenSegmentState && (
+          <SevenSegmentDisplay
+            state={sevenSegmentState}
+            label={`${comp.label || "7-segment display"} display`}
           />
         )}
       </g>

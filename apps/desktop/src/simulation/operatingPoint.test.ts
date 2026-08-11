@@ -10,6 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 import { runOperatingPoint } from "./operatingPoint";
+import { extractCircuit } from "../schematic/netlist";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 
 // ---------------------------------------------------------------------------
@@ -352,6 +353,42 @@ describe("DC operating point - T-resistor network", () => {
     if (sourceNet) {
       expect(Math.abs(sourceNet.voltage - 12) / 12).toBeLessThan(0.001);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Seven-segment loads preserve the solved pin voltages for simulator rendering
+// ---------------------------------------------------------------------------
+describe("DC operating point - seven-segment node voltages", () => {
+  it("returns the actual driven segment and common-reference voltages", () => {
+    const display: SchematicComponent = {
+      id: uid("seg"),
+      kind: "sevenSeg",
+      x: 96,
+      y: 0,
+      rotation: 0,
+      value: "",
+      label: "U1",
+    };
+    // U1.A=(56,-32), U1.COM=(56,32); V1.P=(0,0), V1.N=(0,64).
+    const components = [
+      vsource(0, 32, "5V", "V1"),
+      display,
+      ground(0, 64),
+      ground(56, 32),
+    ];
+    const wires = [wire([{ x: 0, y: 0 }, { x: 0, y: -32 }, { x: 56, y: -32 }])];
+    const circuit = extractCircuit(components, wires);
+    const entry = circuit.components.find(({ component }) => component.id === display.id);
+    const result = runOperatingPoint({ components, wires });
+
+    expect(result.ok).toBe(true);
+    expect(entry).toBeDefined();
+    if (!result.ok || !entry) return;
+    const segment = result.nets.find((net) => net.id === entry.pins.a);
+    const common = result.nets.find((net) => net.id === entry.pins.com);
+    expect(segment?.voltage).toBeCloseTo(5, 6);
+    expect(common?.voltage).toBeCloseTo(0, 6);
   });
 });
 

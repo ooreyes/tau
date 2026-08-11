@@ -58,6 +58,12 @@
   --led-blue:       #63a4ff;
   --led-white:      #f5f5f7;
 
+  /* Seven-segment readout - the active lamp stays physical red in either
+     theme; the inactive rail is a quieter mix of that lamp and the canvas ink. */
+  --display-active: var(--led-red);
+  --display-off:    color-mix(in srgb, var(--display-active) 18%, var(--comp));
+  --display-glow:   var(--danger-glow);
+
   /* Semantic - desaturated off Apple systemRed/systemGreen. These read as
      lamps, hairlines and small text now (never a full-saturation text run or
      a large tinted fill - see the status strip / Toolbar retheme), so the
@@ -342,6 +348,10 @@
     --led-blue:       #0068D6;
     --led-white:      #0B1017;
 
+    --display-active: var(--led-red);
+    --display-off:    color-mix(in srgb, var(--display-active) 18%, var(--comp));
+    --display-glow:   var(--danger-glow);
+
     --danger:       #c02718;
     --danger-soft:  rgba(192, 39, 24, 0.07);
     --danger-line:  rgba(192, 39, 24, 0.30);
@@ -475,6 +485,10 @@
   --led-blue:       #0068D6;
   --led-white:      #0B1017;
 
+  --display-active: var(--led-red);
+  --display-off:    color-mix(in srgb, var(--display-active) 18%, var(--comp));
+  --display-glow:   var(--danger-glow);
+
   --danger:       #c02718;
   --danger-soft:  rgba(192, 39, 24, 0.07);
   --danger-line:  rgba(192, 39, 24, 0.30);
@@ -592,6 +606,10 @@
   --led-green:      #62c370;
   --led-blue:       #63a4ff;
   --led-white:      #f5f5f7;
+
+  --display-active: var(--led-red);
+  --display-off:    color-mix(in srgb, var(--display-active) 18%, var(--comp));
+  --display-glow:   var(--danger-glow);
 
   --danger:       #e6564b;
   --danger-soft:  rgba(230, 86, 75, 0.10);
@@ -851,6 +869,35 @@ body {
 
 .component.selected .symbol .symbol-arrow {
   fill: var(--text);
+}
+
+/* Simulator-only seven-segment reflection. The face masks the static legend
+   bars in the schematic symbol, then the real run state paints each pin. */
+.seven-segment-display {
+  pointer-events: none;
+}
+
+.seven-segment-display__face {
+  fill: var(--canvas-surface);
+  stroke: none;
+}
+
+.seven-segment-display__segment {
+  fill: none;
+  stroke: var(--display-off);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.seven-segment-display__segment.is-active {
+  stroke: var(--display-active);
+  filter: drop-shadow(0 0 2px var(--display-glow));
+}
+
+.seven-segment-display--no-result .seven-segment-display__segment {
+  opacity: 0.7;
 }
 
 .component {
