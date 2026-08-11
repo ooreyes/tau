@@ -35,7 +35,8 @@ for responsive and console diagnosis but cannot prove ngspice or native chrome.
 The current packaged correction run is indexed in
 `screenshots/ui-ux-fixes/evidence-manifest.json` and
 `screenshots/ui-ux-fixes/QA-EVIDENCE.md`; it supersedes the historical worker
-paragraphs below. The durable code tip is `44333cf` (planning base `8fb45f6`).
+paragraphs below. The functional code/test tip is `44333cf`, and the evidence
+is recorded at `3687171` (planning base `8fb45f6`).
 The packaged binary was restarted from a clean recovery state after the
 laptop-overlap warning. The seven-segment generator was corrected so the
 physical A/F/G/E/B/C/D/DP pin order is explicit; a committed acceptance test

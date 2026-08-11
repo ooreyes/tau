@@ -2003,7 +2003,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Per-analysis ngspice option mapping
 
 ## 8. UX / app
-- 🟡 **PDF-directed UI/UX remediation current at `44333cf` (2026-08-11):**
+- 🟡 **PDF-directed UI/UX remediation evidence at `3687171` (2026-08-11; functional code/test tip `44333cf`):**
   all 24 stable rows have landed code, focused tests, and a current packaged
   evidence artifact in `UI_UX_FIXES.md` / `screenshots/ui-ux-fixes/evidence-manifest.json`.
   The latest correction also fixes the seven-segment fixture's physical pin

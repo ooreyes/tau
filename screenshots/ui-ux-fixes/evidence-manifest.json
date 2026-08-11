@@ -3,6 +3,7 @@
   "capturedAt": "2026-08-11T20:58:04Z",
   "planningBase": "8fb45f6",
   "codeTip": "44333cf",
+  "evidenceCommit": "3687171",
   "packagedBinarySource": "811b0c7",
   "packagedApp": "/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app",
   "nativeViewportConvention": {

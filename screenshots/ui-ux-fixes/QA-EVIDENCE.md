@@ -1,7 +1,9 @@
 # UI/UX correction QA evidence
 
 Capture date: 2026-08-11 (fresh packaged-app restart after the laptop-overlap
-warning). Planning base: `8fb45f6`. Current durable tip: `44333cf`.
+warning). Planning base: `8fb45f6`. Functional code/test tip: `44333cf`.
+The current evidence was recorded in commit `3687171`; the final heartbeat
+metadata commit is its direct descendant.
 
 The packaged binary was rebuilt from the same correction lineage and is at
 `/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app`.
@@ -145,7 +147,8 @@ has approved the work: **Final Sol High review: PENDING**.
 ## Literal gates
 
 All commands below returned exit 0 against the current correction tree before
-the tracker/evidence commit:
+the evidence commit `3687171`; the final descendant changes only tracker
+metadata and the heartbeat:
 
 - Focused correction suite: **9 files passed; 344 tests passed**.
 - `pnpm -C apps/desktop typecheck`: **exit 0**.
@@ -176,6 +179,7 @@ the tracker/evidence commit:
   packaged-engine-smoke 336 samples, out=0..5 V; Tau executable stayed alive
   for 5 seconds**.
 
-The tracker/evidence commit that records this block is the next commit after
-the code/test tip `44333cf`; the manifest is updated to that final SHA before
-the durable push. Final Sol High review remains **PENDING**.
+The evidence commit that records this block is `3687171`, directly after the
+code/test tip `44333cf`. The final descendant records the completed heartbeat
+and preserves this evidence unchanged. Final Sol High review remains
+**PENDING**.

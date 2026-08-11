@@ -1,10 +1,11 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-11**
+**Status: DONE - 2026-08-11**
 
 Unit: **Second Sol High correction — current evidence and tracker truth**. The
-review rejected `6c580f1`; correction code is pushed through `811b0c7`, and the
-physical seven-segment acceptance-fixture correction is pushed at `44333cf`.
+review rejected `6c580f1`; correction code is pushed through `811b0c7`, the
+physical seven-segment acceptance-fixture correction is pushed at `44333cf`,
+and current evidence is recorded at `3687171`.
 
 **Files:** current packaged/native and Chrome evidence is indexed in
 `screenshots/ui-ux-fixes/evidence-manifest.json`,
@@ -12,9 +13,11 @@ physical seven-segment acceptance-fixture correction is pushed at `44333cf`.
 Chrome logs. This primary checkout remains the only owner of
 `PROGRESS.md`, `FEATURE_PARITY.md`, and `UI_UX_FIXES.md`.
 
-**Tests:** focused source/seven-segment suites are green; final frontend,
-design, native/Rust/ngspice, packaged-bundle, tracker, and clean-push gates are
-still being rerun at the current tip and will be literalized before completion.
+**Tests:** focused correction suite 9 files/344 tests; frontend 262 files
+passed, 2 skipped, 4,405 tests passed, 8 skipped; typecheck, design drift,
+min-window 12/12, seven-segment 12/12, Vite/Tauri builds, fmt, clippy, Rust
+104 passed/42 ignored, real-ngspice 42 passed, codesign, DMG verification,
+mounted smoke (336 samples), and 5-second packaged stay-alive all passed.
 
 **Parity items:** source validation/PWL no-mutation, shared seven-segment
 polarity and directional loading, model recovery, bounded op-amp defaults,
@@ -22,11 +25,27 @@ zener identity, and selection-identity inspector placement remain covered by
 code/tests. Current packaged proof now covers connected edit/run, properties,
 digits 0–9, live/stopped state, themes, sizes, and Chrome responsive/console.
 
-**Next:** complete literal gates, append their results, remove only the
-orchestrator's QA copies, commit/push the clean tip, and leave Final Sol High
-review explicitly PENDING for the parent.
+**Next:** parent sends the final durable tip to a fresh Sol High reviewer;
+this run does not perform that review.
 
 ---
+
+**2026-08-11 — Current correction/evidence handoff:** Re-established a fresh
+packaged-app state after the laptop-overlap warning and recaptured authoritative
+native evidence for connected editing/simulation, source and component
+properties, Settings/model-library hiding, title-bar/window actions, seven-
+segment digits 0–9 plus live/stopped state, both themes, and the requested
+900×600/1280×800/1440×900 states. Chrome dev:web supplied the six responsive
+viewport/console records; no file-upload claim was made. The machine-readable
+manifest, title-bar action log, fixture generator/runner, and QA index landed
+at `3687171`. Final Sol High review remains **PENDING**.
+
+Files: `screenshots/ui-ux-fixes/evidence-manifest.json`,
+`screenshots/ui-ux-fixes/QA-EVIDENCE.md`, `UI_UX_FIXES.md`,
+`FEATURE_PARITY.md`, `PROGRESS.md`, native and Chrome evidence directories.
+Tests: literal results are recorded above and in `QA-EVIDENCE.md`.
+Parity items: all 24 stable UI/UX rows have current evidence-backed `FIXED`
+status; no item is marked as Sol-approved.
 
 **2026-08-11 — Sol correction completion:** Landed and pushed the correction
 stack through code tip `0b5d22b`, then captured fresh packaged evidence from
