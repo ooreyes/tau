@@ -52,7 +52,7 @@ open until all of its subchecks pass.
 
 ### [ ] SHELL-01 - Collapse All is a reversible toggle
 
-**Status:** IN PROGRESS  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** Untitled document, page 1, item 1  
 ![Collapse control](screenshots/ui-ux-fix-brief/shell-01-collapse-toggle.png)
@@ -96,7 +96,7 @@ fidelity QA.
 
 ### [ ] SHELL-03 - Preserve folder identity at narrow Explorer widths
 
-**Status:** IN PROGRESS  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** Untitled document, page 1, item 3  
 ![Narrow Explorer](screenshots/ui-ux-fix-brief/shell-03-narrow-explorer.png)
@@ -119,7 +119,7 @@ pending; no completion claim yet.
 
 ### [ ] SHELL-04 - Native macOS title-bar movement and zoom
 
-**Status:** IN PROGRESS  
+**Status:** IN PROGRESS
 **Priority:** P1 native  
 **Source:** Untitled document, page 1, item 4  
 ![Title bar](screenshots/ui-ux-fix-brief/shell-04-titlebar.png)
@@ -142,7 +142,7 @@ three sizes remains pending; no completion claim yet.
 
 ### [ ] SHELL-05 - Remove redundant bottom rail/settings/status clutter
 
-**Status:** IN PROGRESS  
+**Status:** IN PROGRESS
 **Priority:** P2  
 **Source:** Untitled document, page 1, item 5  
 ![Bottom rail and status](screenshots/ui-ux-fix-brief/shell-05-settings-status.png)
@@ -183,7 +183,7 @@ mirror states, common values, imported label positions, and overlapping wires.
 
 ### [ ] SHELL-07 - Refine the navigation rail
 
-**Status:** IN PROGRESS  
+**Status:** IN PROGRESS
 **Priority:** P2  
 **Source:** Untitled document, page 2, item 7  
 ![Navigation rail](screenshots/ui-ux-fix-brief/shell-07-navigation-rail.png)
