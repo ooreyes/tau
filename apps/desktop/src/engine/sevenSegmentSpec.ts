@@ -14,6 +14,8 @@ export type SevenSegmentPolarityInput = SevenSegmentPolarity | "auto" | string |
 export const SEVEN_SEGMENT_SERIES_OHMS = 220;
 /** Constant-forward-drop approximation used by the lightweight preview. */
 export const SEVEN_SEGMENT_FORWARD_DROP_VOLTS = 2;
+/** The renderer and preview agree that a segment is illuminated only above Vf. */
+export const SEVEN_SEGMENT_ILLUMINATION_THRESHOLD_VOLTS = SEVEN_SEGMENT_FORWARD_DROP_VOLTS;
 /** Off-state leakage keeps an isolated preview matrix numerically solvable. */
 export const SEVEN_SEGMENT_OFF_CONDUCTANCE = 1e-12;
 
@@ -54,7 +56,7 @@ export function sevenSegmentBranchCompanion(junctionVoltage: number): {
   equivalentCurrent: number;
   current: number;
 } {
-  if (!Number.isFinite(junctionVoltage) || junctionVoltage <= SEVEN_SEGMENT_FORWARD_DROP_VOLTS) {
+  if (!Number.isFinite(junctionVoltage) || junctionVoltage <= SEVEN_SEGMENT_ILLUMINATION_THRESHOLD_VOLTS) {
     return {
       conductance: SEVEN_SEGMENT_OFF_CONDUCTANCE,
       equivalentCurrent: 0,

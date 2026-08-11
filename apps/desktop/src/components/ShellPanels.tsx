@@ -1492,14 +1492,13 @@ function componentHeadline(component: SchematicComponent): string {
  */
 function ComponentPropertyGroup({
   component,
-  onOpenModelLibraries,
+  onAttachModelFile,
   manualModelControls = true,
   groupCount = 1,
 }: {
   component: SchematicComponent;
-  /** Legacy host opt-in; the product shell passes false so model authoring is
-   * kept behind the command palette while resolution remains read-only here. */
-  onOpenModelLibraries?: () => void;
+  /** Explicit file-driven recovery path; the default shell keeps it hidden. */
+  onAttachModelFile?: () => void;
   manualModelControls?: boolean;
   /** How many groups are on screen; see the aria-label note below. */
   groupCount?: number;
@@ -1686,10 +1685,10 @@ function ComponentPropertyGroup({
     </label>
   ) : null;
 
-  const attachLibraryAction = manualModelControls && onOpenModelLibraries
+  const attachLibraryAction = onAttachModelFile
     && (!selectedModelOption || selectedModelOption.source === "generic") ? (
-      <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
-        Attach Model Library
+      <Button type="button" variant="outline" size="sm" onClick={onAttachModelFile}>
+        Attach .lib/.sub file
       </Button>
     ) : null;
 
@@ -1945,14 +1944,14 @@ function ComponentPropertyGroup({
               {selectedSubcircuit && selectedSubcircuit.parameters.length === 0 && (
                 <p className="property-hint">This model defines terminals only; it has no instance parameters.</p>
               )}
-              {manualModelControls && onOpenModelLibraries && (
+              {onAttachModelFile && (
                 <>
                   <p className="property-hint">
-                    Attach a .lib or .sub file in Model Libraries and every subcircuit it defines
-                    joins the list above, terminals and parameters included.
+                    Open or drop a compatible .lib or .sub file while this schematic is active.
+                    Every subcircuit it defines joins the list above, terminals and parameters included.
                   </p>
-                  <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
-                    Attach Model Library
+                  <Button type="button" variant="outline" size="sm" onClick={onAttachModelFile}>
+                    Attach .lib/.sub file
                   </Button>
                 </>
               )}
@@ -2000,6 +1999,7 @@ function ComponentPropertyGroup({
               <>
                 <p className="property-hint" role="status">{modelStatusHint}</p>
                 {modelParamFields}
+                {attachLibraryAction}
               </>
             )
           ) : selected.kind === "opamp" ? (
@@ -2037,14 +2037,14 @@ function ComponentPropertyGroup({
                     </label>
                     <p className="property-hint" role="status">
                       {opampStatus?.kind === "ready"
-                        ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "Model Libraries" : "this document"}`
+                        ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "an attached vendor file" : "this document"}`
                         : opampStatus?.kind === "incompatible"
                           ? `Pin count · model has ${opampStatus.portCount} terminals; this symbol needs five`
                           : "Needs a library model · Tau will not substitute a generic gain block"}
                     </p>
-                    {opampStatus?.kind !== "ready" && onOpenModelLibraries && (
-                      <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
-                        Attach Model Library
+                    {opampStatus?.kind !== "ready" && onAttachModelFile && (
+                      <Button type="button" variant="outline" size="sm" onClick={onAttachModelFile}>
+                        Attach .lib/.sub file
                       </Button>
                     )}
                   </>
@@ -2118,11 +2118,16 @@ function ComponentPropertyGroup({
                     )}
                     <p className="property-hint" role="status">
                       {opampStatus?.kind === "ready"
-                        ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "Model Libraries" : "this document"}`
+                        ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "an attached vendor file" : "this document"}`
                         : opampStatus?.kind === "incompatible"
                           ? `Pin count · model has ${opampStatus.portCount} terminals; this symbol needs five`
                           : "Needs a library model · Tau will not substitute a generic gain block"}
                     </p>
+                    {opampStatus?.kind !== "ready" && onAttachModelFile && (
+                      <Button type="button" variant="outline" size="sm" onClick={onAttachModelFile}>
+                        Attach .lib/.sub file
+                      </Button>
+                    )}
                   </>
                 ) : opamp?.imported ? (
                   <p className="property-hint" role="status">
@@ -2199,11 +2204,11 @@ function ComponentPropertyGroup({
 // Exported for component tests only (same pattern as the plot components).
 export function ComponentInspector({
   selected,
-  onOpenModelLibraries,
+  onAttachModelFile,
   manualModelControls = false,
 }: {
   selected: SchematicComponent | readonly SchematicComponent[] | null;
-  onOpenModelLibraries?: () => void;
+  onAttachModelFile?: () => void;
   manualModelControls?: boolean;
 }) {
   const parts: readonly SchematicComponent[] = !selected
@@ -2240,7 +2245,7 @@ export function ComponentInspector({
           component={part}
           groupCount={parts.length}
           manualModelControls={manualModelControls}
-          onOpenModelLibraries={onOpenModelLibraries}
+          onAttachModelFile={onAttachModelFile}
         />
       ))}
     </div>

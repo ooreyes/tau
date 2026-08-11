@@ -146,11 +146,16 @@ import {
   serializeSchematicFile,
 } from "./project/types";
 import { isInteractiveSchematic, liveControlHint, liveControls } from "./schematic/liveControls";
-import { retiredKindNotices, validateSchematicDocument } from "./schematic/documentValidation";
+import {
+  MAX_MODEL_LIBRARIES,
+  MAX_MODEL_LIBRARY_TOTAL_LENGTH,
+  retiredKindNotices,
+  validateSchematicDocument,
+} from "./schematic/documentValidation";
 import { strandedTerminalNotices } from "./schematic/relocatedPins";
 import { importProjectAsc } from "./io/projectAscImport";
 import { importDroppedFile } from "./io/fileImport";
-import { pathExists, readTextFile } from "./project/fsBridge";
+import { pathExists, pickModelLibraryFile, readTextFile } from "./project/fsBridge";
 import { isWorkspacePath } from "./project/defaultWorkspace";
 import {
   carryAssistantProbes,
@@ -853,6 +858,33 @@ function App() {
     toast(message, { duration: 2600 });
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
   }, []);
+
+  // The default shell never exposes a model-file browser. An unresolved
+  // selected part still has one intentional, file-driven recovery route: the
+  // inspector can open a vendor `.lib`/`.sub` picker, and the chosen text is
+  // attached to the active schematic so exact resolution remains intact.
+  const attachModelFile = useCallback(async () => {
+    try {
+      const picked = await pickModelLibraryFile();
+      if (!picked) return;
+      const libraries = useSchematic.getState().userModelLibraries;
+      if (libraries.length >= MAX_MODEL_LIBRARIES && !libraries.some((library) => library.name === picked.name)) {
+        showNotice(`Tau supports up to ${MAX_MODEL_LIBRARIES} attached model files.`);
+        return;
+      }
+      const existingTotal = libraries
+        .filter((library) => library.name !== picked.name)
+        .reduce((sum, library) => sum + library.text.length, 0);
+      if (existingTotal + picked.text.length > MAX_MODEL_LIBRARY_TOTAL_LENGTH) {
+        showNotice(`Attaching ${picked.name} would exceed the ${MAX_MODEL_LIBRARY_TOTAL_LENGTH.toLocaleString("en-US")}-character limit for attached model files.`);
+        return;
+      }
+      useSchematic.getState().attachModelLibrary(picked);
+      showNotice(`Attached ${picked.name} to this schematic.`);
+    } catch (error) {
+      showNotice(userFacingErrorMessage(error, "Could not attach that .lib or .sub file."));
+    }
+  }, [showNotice]);
 
   // Radix only restores focus to a `<Dialog.Trigger>` automatically. Settings
   // has entry points living in components far from where `<Dialog>` mounts
@@ -2277,8 +2309,8 @@ function App() {
         ascSheet: result.sheet,
         probes: [],
         // Vendor models a `.include`/`.lib` named and the importer found beside
-        // the schematic. Surfaced in the Model Libraries dialog, whose header
-        // count is the user's confirmation that the file was picked up.
+        // the schematic. Surfaced in the attached-file recovery workflow, so
+        // the user can confirm the exact vendor text was picked up.
         ...(result.modelLibraries.length > 0 ? { userModelLibraries: result.modelLibraries } : {}),
       });
       // The resolver-aware carried set, not one re-derived from `text`: see
@@ -3781,6 +3813,7 @@ function App() {
                 <ComponentInspector
                   selected={inspectedParts}
                   manualModelControls={false}
+                  onAttachModelFile={attachModelFile}
                 />
               )}
           </SelectionInspector>
@@ -4097,7 +4130,7 @@ function ImportDropOverlay({ active }: { active: boolean }) {
           Drop to import
         </span>
         <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--fs-body)", color: "var(--muted)" }}>
-          Schematic, SPICE netlist, or model library
+          Schematic, SPICE netlist, or vendor model file (.lib/.sub)
         </span>
       </div>
     </div>

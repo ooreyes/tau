@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   normalizeSevenSegmentPolarity,
+  SEVEN_SEGMENT_ILLUMINATION_THRESHOLD_VOLTS,
   sevenSegmentBranchCompanion,
   sevenSegmentJunctionVoltage,
 } from "./sevenSegmentSpec";
@@ -34,5 +35,15 @@ describe("shared seven-segment polarity/electrical spec", () => {
     const reverse = sevenSegmentBranchCompanion(-5);
     expect(reverse.current).toBe(0);
     expect(reverse.conductance).toBeLessThan(1e-9);
+  });
+
+  it.each([0.5, 1, 2])("keeps %.1f V below the conduction threshold off", (voltage) => {
+    expect(sevenSegmentBranchCompanion(voltage).current).toBe(0);
+    expect(voltage).toBeLessThanOrEqual(SEVEN_SEGMENT_ILLUMINATION_THRESHOLD_VOLTS);
+  });
+
+  it("conducts only above the shared forward threshold", () => {
+    const branch = sevenSegmentBranchCompanion(SEVEN_SEGMENT_ILLUMINATION_THRESHOLD_VOLTS + 0.01);
+    expect(branch.current).toBeGreaterThan(0);
   });
 });

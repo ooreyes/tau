@@ -106,7 +106,7 @@ describe("buildSpiceDeck", () => {
     };
     const grounded: NetLabel[] = [{ id: "g", x: 0, y: 0, text: "0" }];
     expect(() => buildSpiceDeck({ components: [vendor], wires: [], netLabels: grounded }, { kind: "op" }))
-      .toThrow(/Simulation refused: U1 \(LT1001\).*no document definition or attached Model Library.*No approximate or partial circuit was run/);
+      .toThrow(/Simulation refused: U1 \(LT1001\).*no document definition or attached vendor file.*No approximate or partial circuit was run/);
     expect(() => buildSpiceDeck({
       components: [vendor],
       wires: [],
@@ -2237,7 +2237,7 @@ describe("unresolvedSubcktMessage", () => {
   it("names a single missing subcircuit and how to supply it", () => {
     const message = unresolvedSubcktMessage(["LT1001"]);
     expect(message).toBe(
-      'No imported library defines the subcircuit "LT1001". Attach the vendor model file (.lib or .subckt) that defines it under Model libraries, then run again.',
+      'No imported file defines the subcircuit "LT1001". Open or drop the vendor model file (.lib or .subckt) that defines it while this schematic is active, then run again.',
     );
     // Plain product copy: userFacingErrorMessage must be able to surface it
     // verbatim, so it carries no engine transcript markers or JS-error shapes.
@@ -2246,7 +2246,7 @@ describe("unresolvedSubcktMessage", () => {
 
   it("lists several missing subcircuits in the plural", () => {
     expect(unresolvedSubcktMessage(["AD8000", "LT1001"])).toBe(
-      'No imported library defines these subcircuits: "AD8000", "LT1001". Attach the vendor model files (.lib or .subckt) that define them under Model libraries, then run again.',
+      'No imported file defines these subcircuits: "AD8000", "LT1001". Open or drop the vendor model files (.lib or .subckt) that define them while this schematic is active, then run again.',
     );
   });
 
@@ -2292,7 +2292,7 @@ describe("unresolved named models", () => {
       { components: [grounded(), component("nmos", "M1", "IRF540", 128, 128)], wires: [] },
       { kind: "op" },
     )).toThrow(
-      'Simulation refused: M1 names model "IRF540", but Tau could not resolve it. Attach or select the exact vendor model under Model libraries, or explicitly choose Generic NMOS if an approximation is intentional.',
+      'Simulation refused: M1 names model "IRF540", but Tau could not resolve it. Open or drop the exact vendor .lib/.sub file while this schematic is active, or explicitly choose Generic NMOS if an approximation is intentional.',
     );
   });
 
@@ -2375,7 +2375,7 @@ describe("unresolved named models", () => {
       { ref: "M1", requested: "IRF540", substituted: "TAU_NMOS" },
       { ref: "Q1", requested: "BC847C", substituted: "TAU_NPN" },
     ])).toBe(
-      'Simulation refused: M1 names model "IRF540" and Q1 names model "BC847C", but Tau could not resolve them. Attach or select the exact vendor models under Model libraries, or explicitly choose the matching Generic device if an approximation is intentional.',
+      'Simulation refused: M1 names model "IRF540" and Q1 names model "BC847C", but Tau could not resolve them. Open or drop the exact vendor .lib/.sub files while this schematic is active, or explicitly choose the matching Generic device if an approximation is intentional.',
     );
   });
 

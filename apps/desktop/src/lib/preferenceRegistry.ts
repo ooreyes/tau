@@ -119,7 +119,7 @@ export const PRESERVED_PREFERENCES: readonly {
   },
   {
     key: "tau.local-ai.custom-models.v1",
-    label: "Imported local model library",
+    label: "Imported local model file",
     controlledAt: "Model configuration, per-item Remove",
   },
   {

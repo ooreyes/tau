@@ -1,11 +1,12 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-11**
+**Status: IN PROGRESS - 2026-08-11**
 
-Unit: **Second Sol High correction — current evidence and tracker truth**. The
-review rejected `6c580f1`; correction code is pushed through `811b0c7`, the
-physical seven-segment acceptance-fixture correction is pushed at `44333cf`,
-and current evidence is recorded at `3687171`.
+Unit: **Third Sol High correction — native title bar, full visual matrix, and
+model-recovery truth**. Sol rejected `3c4752b`; this unit adds deterministic
+native maximize/restore behavior, a shared seven-segment illumination
+threshold, reachable `.lib`/`.sub` file recovery, dead-surface cleanup, and
+honest fixture-runner semantics.
 
 **Files:** current packaged/native and Chrome evidence is indexed in
 `screenshots/ui-ux-fixes/evidence-manifest.json`,
@@ -13,11 +14,9 @@ and current evidence is recorded at `3687171`.
 Chrome logs. This primary checkout remains the only owner of
 `PROGRESS.md`, `FEATURE_PARITY.md`, and `UI_UX_FIXES.md`.
 
-**Tests:** focused correction suite 9 files/344 tests; frontend 262 files
-passed, 2 skipped, 4,405 tests passed, 8 skipped; typecheck, design drift,
-min-window 12/12, seven-segment 12/12, Vite/Tauri builds, fmt, clippy, Rust
-104 passed/42 ignored, real-ngspice 42 passed, codesign, DMG verification,
-mounted smoke (336 samples), and 5-second packaged stay-alive all passed.
+**Tests:** focused titlebar/model/seven-segment suite 7 files/298 tests passed;
+full frontend/native gates and the corrected packaged visual matrix remain in
+progress.
 
 **Parity items:** source validation/PWL no-mutation, shared seven-segment
 polarity and directional loading, model recovery, bounded op-amp defaults,
@@ -25,8 +24,8 @@ zener identity, and selection-identity inspector placement remain covered by
 code/tests. Current packaged proof now covers connected edit/run, properties,
 digits 0–9, live/stopped state, themes, sizes, and Chrome responsive/console.
 
-**Next:** parent sends the final durable tip to a fresh Sol High reviewer;
-this run does not perform that review.
+**Next:** rebuild, capture and validate the 30 packaged native states, then
+run full gates and push; Final Sol High review stays PENDING.
 
 ---
 

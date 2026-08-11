@@ -16,7 +16,8 @@ const MAX_HIERARCHY_SOURCE_CHARS = 20 * 1024 * 1024;
  * The directive is document text, so it is attacker-controllable in a shared
  * `.asc`; auto-reading therefore stays on suffixes that only ever hold SPICE
  * models. LTspice also lets a model live in a `.txt`/`.cir`, and those still
- * work - through Model Libraries, where the user picks the file themselves.
+ * work - through the explicit open/drop vendor-file workflow, where the user
+ * picks the file themselves.
  */
 const AUTO_MODEL_LIBRARY_EXTENSIONS = new Set(["lib", "sub", "subckt", "mod", "inc"]);
 

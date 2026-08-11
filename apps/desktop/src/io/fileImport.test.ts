@@ -83,7 +83,7 @@ describe("importDroppedFile", () => {
     );
     expect(outcome).toEqual({
       kind: "error",
-      message: "Open or create a schematic before attaching a model library.",
+      message: "Open or create a schematic before attaching a vendor model file.",
     });
     expect(useSchematic.getState().userModelLibraries).toEqual([]);
   });

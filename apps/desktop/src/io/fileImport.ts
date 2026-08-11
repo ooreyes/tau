@@ -76,7 +76,7 @@ export async function importDroppedFile(
 
   if (plan.kind === "model-library") {
     if (!options.hasActiveSchematic) {
-      return { kind: "error", message: "Open or create a schematic before attaching a model library." };
+      return { kind: "error", message: "Open or create a schematic before attaching a vendor model file." };
     }
     const libraries = useSchematic.getState().userModelLibraries;
     if (libraries.length >= MAX_MODEL_LIBRARIES && !libraries.some((library) => library.name === plan.name)) {

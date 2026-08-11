@@ -39,7 +39,7 @@ export function EmptyState({
     event.currentTarget.value = "";
     if (!file) return;
     // No project is open on this screen, so a schematic could not possibly be
-    // open either - a dropped model-library file is refused, not attached.
+    // open either - a dropped vendor model file is refused, not attached.
     const outcome = await importDroppedFile(file, { hasActiveSchematic: false });
     if (outcome.kind === "error") {
       onNotice?.(outcome.message);

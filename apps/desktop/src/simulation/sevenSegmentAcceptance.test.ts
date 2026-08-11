@@ -19,7 +19,7 @@ const FIXTURES = [
   "stopped.asc",
 ];
 
-describe("committed seven-segment packaged acceptance fixtures", () => {
+describe("committed seven-segment fixture/deck/preview gate", () => {
   it.each(FIXTURES)("imports, builds, and previews %s", (filename) => {
     const text = fs.readFileSync(path.join(FIXTURE_ROOT, filename), "utf8");
     const imported = importAsc(text);

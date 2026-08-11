@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Toolbar } from "./Toolbar";
+import { handleTitlebarDoubleClick } from "./titlebarWindow";
 import type { AnalysisResult } from "../simulation/linearTransient";
 
 afterEach(() => cleanup());
@@ -21,6 +22,18 @@ const baseProps = {
 };
 
 describe("Toolbar Run health control", () => {
+  it("turns a direct title-bar double-click into one native maximize toggle", async () => {
+    const preventDefault = vi.fn();
+    const stopPropagation = vi.fn();
+    const toggleMaximize = vi.fn(async () => {});
+
+    await handleTitlebarDoubleClick({ preventDefault, stopPropagation }, toggleMaximize);
+
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(stopPropagation).toHaveBeenCalledOnce();
+    expect(toggleMaximize).toHaveBeenCalledOnce();
+  });
+
   it("keeps native title-bar drag and zoom on an unused surface only", () => {
     const { container } = render(<Toolbar {...baseProps} />);
     const toolbar = container.querySelector(".toolbar")!;
@@ -29,6 +42,7 @@ describe("Toolbar Run health control", () => {
     expect(toolbar.hasAttribute("data-tauri-drag-region")).toBe(false);
     expect(dragRegion.getAttribute("data-tauri-drag-region")).toBe("true");
     expect(dragRegion.getAttribute("aria-hidden")).toBe("true");
+    expect(dragRegion.getAttribute("title")).toContain("maximize or restore");
     for (const selector of [".titlebar-left", ".mode-toggle", ".titlebar-right"]) {
       expect(toolbar.querySelector(selector)?.getAttribute("data-tauri-drag-region")).toBe("false");
     }

@@ -245,13 +245,13 @@ describe("ComponentInspector - imported op-amp parameters", () => {
     };
     const openLibraries = vi.fn();
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} manualModelControls />);
+    render(<ComponentInspector selected={selected} onAttachModelFile={openLibraries} manualModelControls />);
 
     expect((screen.getByRole("textbox", { name: "Op-amp part" }) as HTMLInputElement).value).toBe("OP07");
     const model = screen.getByRole("textbox", { name: "Op-amp simulation model" }) as HTMLInputElement;
     expect(model.value).toBe("LT1001");
     expect(screen.getByRole("status").textContent).toMatch(/Needs a library model · Tau will not substitute a generic gain block/);
-    fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
+    fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
 
     fireEvent.change(model, { target: { value: "MY_OP07" } });
@@ -301,14 +301,15 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     };
     const openLibraries = vi.fn();
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+    render(<ComponentInspector selected={selected} onAttachModelFile={openLibraries} />);
 
     expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Attach Model Library" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Attach .lib/.sub file" })).toBeTruthy();
     const status = screen.getByRole("status").textContent ?? "";
     expect(status).toContain("Needs an exact model · IRF540 isn't available. Run is refused");
     expect(status).toContain("Open or drop a compatible .lib or .sub");
-    expect(openLibraries).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
+    expect(openLibraries).toHaveBeenCalledOnce();
   });
 
   it("selects the exact bundled Class-D PMOS and drops inapplicable Level-1 geometry", async () => {
@@ -383,7 +384,7 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     };
     const openLibraries = vi.fn();
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} manualModelControls />);
+    render(<ComponentInspector selected={selected} onAttachModelFile={openLibraries} manualModelControls />);
 
     const chooser = screen.getByRole("combobox", { name: "Simulation model" });
     expect(chooser.tagName).toBe("BUTTON");
@@ -391,7 +392,7 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     expect(chooser.textContent).toContain("IRF540");
     expect(document.querySelector("select[aria-label='Simulation model']")).toBeNull();
     expect(screen.getByRole("status").textContent).toMatch(/Needs an exact model ·.*won't substitute a generic NMOS/);
-    fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
+    fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
 });
@@ -515,22 +516,22 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     };
     const openLibraries = vi.fn();
     useSchematic.setState({ components: [selected] });
-    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} manualModelControls />);
+    render(<ComponentInspector selected={selected} onAttachModelFile={openLibraries} manualModelControls />);
 
     expect(screen.getByRole("status").textContent).toContain("Ready · 2 named terminals");
-    expect(screen.getByText(/Attach a .lib or .sub file in Model Libraries/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
+    expect(screen.getByText(/Open or drop a compatible \.lib or \.sub file/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
 
-  it("blocks an unresolved model and routes the user to Model Libraries", () => {
+  it("blocks an unresolved model and routes the user to the file-driven recovery path", () => {
     const selected = {
       id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
       value: "vendor_driver", label: "X1",
     };
     const openLibraries = vi.fn();
     useSchematic.setState({ components: [selected] });
-    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} manualModelControls />);
+    render(<ComponentInspector selected={selected} onAttachModelFile={openLibraries} manualModelControls />);
 
     const chooser = screen.getByRole("combobox", { name: "Subcircuit model" });
     expect(chooser.tagName).toBe("BUTTON");
@@ -538,7 +539,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     expect(chooser.textContent).toContain("vendor_driver");
     expect(document.querySelector("select[aria-label='Subcircuit model']")).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("Run won't invent pins");
-    fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
+    fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
 });
@@ -1494,7 +1495,7 @@ describe("ComponentInspector - titled property groups", () => {
     expect((screen.getByRole("textbox", { name: "Minimum output" }) as HTMLInputElement).value).toBe("-15");
     expect((screen.getByRole("textbox", { name: "Maximum output" }) as HTMLInputElement).value).toBe("15");
     expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Attach Model Library" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
 
     const rows = [...document.querySelectorAll(".property-field")];
     expect(rows.length).toBeGreaterThanOrEqual(4);

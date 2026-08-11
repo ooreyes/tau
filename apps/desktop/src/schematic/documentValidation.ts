@@ -614,11 +614,11 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
 
   const validatedLibraries = userModelLibraries.map(modelLibrary);
   if (new Set(validatedLibraries.map((item) => item.name)).size !== validatedLibraries.length) {
-    fail("attached model library names must be unique.");
+    fail("attached model file names must be unique.");
   }
   const totalLibraryText = validatedLibraries.reduce((sum, item) => sum + item.text.length, 0);
   if (totalLibraryText > MAX_MODEL_LIBRARY_TOTAL_LENGTH) {
-    fail(`attached model libraries exceed the ${MAX_MODEL_LIBRARY_TOTAL_LENGTH}-character aggregate limit.`);
+    fail(`attached model files exceed the ${MAX_MODEL_LIBRARY_TOTAL_LENGTH}-character aggregate limit.`);
   }
 
   return {

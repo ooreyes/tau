@@ -13,6 +13,7 @@ import {
   type SevenSegmentNodeVoltages,
   type SevenSegmentSegment,
 } from "./SevenSegmentDisplay";
+import { SEVEN_SEGMENT_ILLUMINATION_THRESHOLD_VOLTS } from "../../engine/sevenSegmentSpec";
 
 afterEach(() => {
   cleanup();
@@ -68,6 +69,18 @@ describe("seven-segment node decoding", () => {
     expect(activeSevenSegmentSegments(activeLow, 5, { polarity: "cathode" })).toEqual([]);
     expect(activeSevenSegmentSegments(activeLow, 5, { polarity: "anode" })).toEqual(pattern);
     expect(activeSevenSegmentSegments(activeLow, 5, { polarity: "auto" })).toEqual([]);
+  });
+
+  it.each([0.5, 1, 2])("does not light common-cathode at %.1f V", (delta) => {
+    const voltages = voltagesFor(["a"], 0, delta);
+    expect(activeSevenSegmentSegments(voltages, 0, { polarity: "cathode" })).toEqual([]);
+    expect(activeSevenSegmentSegments(voltagesFor(["a"], delta, 0), delta, { polarity: "anode" })).toEqual([]);
+  });
+
+  it("lights both polarities only above the shared forward threshold", () => {
+    const delta = SEVEN_SEGMENT_ILLUMINATION_THRESHOLD_VOLTS + 0.01;
+    expect(activeSevenSegmentSegments(voltagesFor(["a"], 0, delta), 0, { polarity: "cathode" })).toEqual(["a"]);
+    expect(activeSevenSegmentSegments(voltagesFor(["a"], delta, 0), delta, { polarity: "anode" })).toEqual(["a"]);
   });
 
   it("keeps a blank display distinct from an unavailable result", () => {

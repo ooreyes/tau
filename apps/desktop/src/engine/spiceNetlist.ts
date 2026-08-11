@@ -1192,9 +1192,9 @@ export function unresolvedModelMessage(substitutions: readonly ModelSubstitution
     : enumerated;
   if (substitutions.length === 1) {
     const generic = GENERIC_MODEL_CHOICE[substitutions[0]!.substituted] ?? "the matching Generic device";
-    return `Simulation refused: ${withExtra}, but Tau could not resolve it. Attach or select the exact vendor model under Model libraries, or explicitly choose ${generic} if an approximation is intentional.`;
+    return `Simulation refused: ${withExtra}, but Tau could not resolve it. Open or drop the exact vendor .lib/.sub file while this schematic is active, or explicitly choose ${generic} if an approximation is intentional.`;
   }
-  return `Simulation refused: ${withExtra}, but Tau could not resolve them. Attach or select the exact vendor models under Model libraries, or explicitly choose the matching Generic device if an approximation is intentional.`;
+  return `Simulation refused: ${withExtra}, but Tau could not resolve them. Open or drop the exact vendor .lib/.sub files while this schematic is active, or explicitly choose the matching Generic device if an approximation is intentional.`;
 }
 
 /** Value tokens that name the *generic* device of a kind rather than a real
@@ -1228,8 +1228,8 @@ export function unresolvedSubcktMessage(names: readonly string[]): string {
   const extra = names.length - listed.length;
   const enumerated = extra > 0 ? `${listed.join(", ")}, and ${extra} more` : listed.join(", ");
   return names.length === 1
-    ? `No imported library defines the subcircuit ${enumerated}. Attach the vendor model file (.lib or .subckt) that defines it under Model libraries, then run again.`
-    : `No imported library defines these subcircuits: ${enumerated}. Attach the vendor model files (.lib or .subckt) that define them under Model libraries, then run again.`;
+    ? `No imported file defines the subcircuit ${enumerated}. Open or drop the vendor model file (.lib or .subckt) that defines it while this schematic is active, then run again.`
+    : `No imported file defines these subcircuits: ${enumerated}. Open or drop the vendor model files (.lib or .subckt) that define them while this schematic is active, then run again.`;
 }
 
 const MAX_LISTED_MISSING_SUBCKTS = 6;
@@ -1359,7 +1359,7 @@ export function libraryFileKey(ref: string): string {
  *  directive is dropped rather than passed through, so this is the only place
  *  the user learns that part of their document did not make it into the run. */
 export function unresolvedLibraryWarning(file: string): string {
-  return `Could not resolve the library file ${file}, so its models and subcircuits are not part of this run. Attach the file under Model Libraries to use its definitions.`;
+  return `Could not resolve the library file ${file}, so its models and subcircuits are not part of this run. Open or drop the file while this schematic is active to use its definitions.`;
 }
 
 /** LTspice's `load`/`load2` current-source flags clamp the source so it cannot

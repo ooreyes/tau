@@ -90,7 +90,7 @@ describe("EmptyState no-project import action", () => {
     fireEvent.change(input, { target: { files: [fileFrom("vendor.lib", ".subckt FOO a b\nR1 a b 1k\n.ends\n")] } });
 
     await waitFor(() => expect(onNotice).toHaveBeenCalledWith(
-      "Open or create a schematic before attaching a model library.",
+      "Open or create a schematic before attaching a vendor model file.",
     ));
     expect(useSchematic.getState().userModelLibraries).toEqual([]);
   });

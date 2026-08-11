@@ -44,7 +44,7 @@ export function GeneralPage({ onNotice }: { onNotice: (message: string) => void 
 
   const resetEverything = () => {
     const confirmed = window.confirm(
-      "Reset Tau's preferences to their defaults? Your API keys, schematics, model libraries, assistant conversations, run history, and panel sizes are not touched.",
+      "Reset Tau's preferences to their defaults? Your API keys, schematics, attached vendor model files, assistant conversations, run history, and panel sizes are not touched.",
     );
     if (!confirmed) return;
     resetAllPreferences();
@@ -97,7 +97,7 @@ export function GeneralPage({ onNotice }: { onNotice: (message: string) => void 
             The confirmation prompt carries the weight instead. */}
         <SettingsRow
           label="All Tau settings"
-          hint="Not affected: your API keys, your schematics, your imported model libraries, the unsaved-work recovery snapshot, your simulation run history, your assistant conversations, and the panel sizes in this window."
+          hint="Not affected: your API keys, your schematics, your attached vendor model files, the unsaved-work recovery snapshot, your simulation run history, your assistant conversations, and the panel sizes in this window."
         >
           <Button size="sm" variant="outline" onClick={resetEverything}>
             Reset to defaults

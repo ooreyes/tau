@@ -202,10 +202,10 @@ export function opampModelRefusal(component: SchematicComponent, status: Exclude
   const ref = component.label.trim() || component.id;
   const identity = status.identity;
   const reason = status.kind === "missing"
-    ? `no document definition or attached Model Library provides it`
+    ? `no document definition or attached vendor file provides it`
     : `the available definition exposes ${status.portCount} terminals instead of the required five`;
   return new Error(
-    `Simulation refused: ${ref} (${identity.partName}) requires the five-terminal subcircuit "${identity.modelName}", but ${reason}. Attach a compatible vendor .lib or .subckt under Model Libraries, then run again. No approximate or partial circuit was run.`,
+    `Simulation refused: ${ref} (${identity.partName}) requires the five-terminal subcircuit "${identity.modelName}", but ${reason}. Open or drop a compatible vendor .lib or .subckt while this schematic is active, then run again. No approximate or partial circuit was run.`,
   );
 }
 
@@ -217,5 +217,5 @@ export function previewVendorOpampMessage(components: readonly SchematicComponen
   );
   if (vendor.length === 0) return null;
   const refs = vendor.map((component) => component.label.trim() || opampIdentity(component).partName).join(", ");
-  return `${refs} ${vendor.length === 1 ? "uses a named vendor op-amp model" : "use named vendor op-amp models"}. The preview solver has only an ideal op-amp stamp and will not substitute it. Run the packaged desktop app with the matching Model Library attached.`;
+  return `${refs} ${vendor.length === 1 ? "uses a named vendor op-amp model" : "use named vendor op-amp models"}. The preview solver has only an ideal op-amp stamp and will not substitute it. Open or drop the matching vendor file in the packaged desktop app.`;
 }

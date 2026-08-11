@@ -3,6 +3,7 @@ import { Activity, CircuitBoard, MessageSquare, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { handleTitlebarDoubleClick, toggleCurrentWindowMaximize } from "./titlebarWindow";
 
 interface ToolbarProps {
   mode: "schematic" | "simulator";
@@ -91,7 +92,15 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
        * was clicked. Keep that element an empty surface so Run, mode, Bode, and
        * Settings remain ordinary controls (including the traffic-light inset).
        */}
-      <div className="titlebar-drag-region" data-tauri-drag-region="true" aria-hidden="true" />
+      <div
+        className="titlebar-drag-region"
+        data-tauri-drag-region="true"
+        aria-hidden="true"
+        title="Double-click to maximize or restore"
+        onDoubleClick={(event) => {
+          void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
+        }}
+      />
       <div className="titlebar-left" data-tauri-drag-region="false">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">τ</span>
