@@ -5,6 +5,7 @@ export interface TitlebarWindowControls {
   isMaximized: () => Promise<boolean>;
   maximize: () => Promise<void>;
   unmaximize: () => Promise<void>;
+  startDragging: () => Promise<void>;
 }
 
 export async function toggleTitlebarMaximize(window: TitlebarWindowControls): Promise<void> {
@@ -30,4 +31,14 @@ export async function toggleCurrentWindowMaximize(): Promise<void> {
   if (!isTauri()) return;
   const window = getCurrentWindow() as unknown as TitlebarWindowControls;
   await toggleTitlebarMaximize(window);
+}
+
+export async function startCurrentWindowDragging(): Promise<void> {
+  if (!isTauri()) return;
+  const window = getCurrentWindow() as unknown as TitlebarWindowControls;
+  await startTitlebarDragging(window);
+}
+
+export async function startTitlebarDragging(window: Pick<TitlebarWindowControls, "startDragging">): Promise<void> {
+  await window.startDragging();
 }

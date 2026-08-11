@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Toolbar } from "./Toolbar";
-import { handleTitlebarDoubleClick, toggleTitlebarMaximize } from "./titlebarWindow";
+import { handleTitlebarDoubleClick, startTitlebarDragging, toggleTitlebarMaximize } from "./titlebarWindow";
 import type { AnalysisResult } from "../simulation/linearTransient";
 
 afterEach(() => cleanup());
@@ -37,7 +37,7 @@ describe("Toolbar Run health control", () => {
   it("uses explicit maximize/unmaximize state for the native window", async () => {
     const maximize = vi.fn(async () => {});
     const unmaximize = vi.fn(async () => {});
-    const window = { isMaximized: vi.fn(async () => false), maximize, unmaximize };
+    const window = { isMaximized: vi.fn(async () => false), maximize, unmaximize, startDragging: vi.fn(async () => {}) };
 
     await toggleTitlebarMaximize(window);
     expect(maximize).toHaveBeenCalledOnce();
@@ -48,13 +48,19 @@ describe("Toolbar Run health control", () => {
     expect(unmaximize).toHaveBeenCalledOnce();
   });
 
+  it("starts native dragging through the explicit window API", async () => {
+    const startDragging = vi.fn(async () => {});
+    await startTitlebarDragging({ startDragging });
+    expect(startDragging).toHaveBeenCalledOnce();
+  });
+
   it("keeps native title-bar drag and zoom on an unused surface only", () => {
     const { container } = render(<Toolbar {...baseProps} />);
     const toolbar = container.querySelector(".toolbar")!;
     const dragRegion = container.querySelector(".titlebar-drag-region")!;
 
     expect(toolbar.hasAttribute("data-tauri-drag-region")).toBe(false);
-    expect(dragRegion.getAttribute("data-tauri-drag-region")).toBe("true");
+    expect(dragRegion.getAttribute("data-tauri-drag-region")).toBeNull();
     expect(dragRegion.getAttribute("aria-hidden")).toBe("true");
     expect(dragRegion.getAttribute("title")).toContain("maximize or restore");
     for (const selector of [".titlebar-left", ".mode-toggle", ".titlebar-right"]) {

@@ -4,7 +4,11 @@ import { Activity, CircuitBoard, MessageSquare, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { handleTitlebarDoubleClick, toggleCurrentWindowMaximize } from "./titlebarWindow";
+import {
+  handleTitlebarDoubleClick,
+  startCurrentWindowDragging,
+  toggleCurrentWindowMaximize,
+} from "./titlebarWindow";
 
 interface ToolbarProps {
   mode: "schematic" | "simulator";
@@ -78,26 +82,23 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
 
   return (
     /*
-     * The dedicated `.titlebar-drag-region` below carries
-     * `data-tauri-drag-region` because the native title bar is gone.
-     * `titleBarStyle: "Overlay"` in tauri.conf.json hides the bar and floats
-     * the traffic lights over this header, which removes the only thing the
-     * user could drag the window by - so this row has to become it. The
-     * attribute is inert outside Tauri, so the browser build is unaffected.
+     * The dedicated `.titlebar-drag-region` below is the drag surface because
+     * the native title bar is gone. `titleBarStyle: "Overlay"` in tauri.conf.json
+     * hides the bar and floats the traffic lights over this header. Dragging is
+     * started through Tauri's explicit startDragging API so the same surface
+     * can deterministically reserve a second mouse-down for zoom/restore.
      *
-     * It stays a sibling of the controls: Tauri starts a drag only when the
-     * clicked element is the drag region, so Run and the mode toggle remain
-     * ordinary interactive controls.
+     * It stays a sibling of the controls: only this surface calls the native
+     * window API, so Run and the mode toggle remain ordinary controls.
      */
     <header className="toolbar">
       {/*
-       * Tauri's native drag/maximize contract applies only to the element that
-       * was clicked. Keep that element an empty surface so Run, mode, Bode, and
-       * Settings remain ordinary controls (including the traffic-light inset).
+       * Keep this element an empty surface so Run, mode, Bode, and Settings
+       * remain ordinary interactive controls (including the traffic-light
+       * inset). The explicit API call preserves the native drag contract.
        */}
       <div
         className="titlebar-drag-region"
-        data-tauri-drag-region="true"
         aria-hidden="true"
         title="Double-click to maximize or restore"
         onMouseDown={(event) => {
@@ -110,6 +111,9 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
             void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
           } else {
             lastTitlebarMouseDownRef.current = now;
+            event.preventDefault();
+            event.stopPropagation();
+            void startCurrentWindowDragging();
           }
         }}
         onDoubleClick={(event) => {
