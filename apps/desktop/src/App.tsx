@@ -3128,7 +3128,7 @@ function App() {
       }
       if (mode !== "schematic") return; // place-shortcuts (R/C/L/V/…) are schematic-only edits
 
-      const entry = CATALOG.find((c) => c.hotkey === e.key.toLowerCase());
+      const entry = CATALOG.find((c) => c.paletteVisible !== false && c.hotkey === e.key.toLowerCase());
       if (entry) {
         e.preventDefault();
         startPlacing(entry.kind);
@@ -3786,7 +3786,7 @@ function App() {
               : (
                 <ComponentInspector
                   selected={inspectedParts}
-                  onOpenModelLibraries={() => setModelLibrariesOpen(true)}
+                  manualModelControls={false}
                 />
               )}
           </SelectionInspector>

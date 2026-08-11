@@ -22,7 +22,9 @@ interface Entry {
 }
 
 const ENTRIES: Entry[] = [
-  ...CATALOG.map((c) => ({ kind: c.kind, name: c.name, section: c.section, hotkey: c.hotkey })),
+  ...CATALOG
+    .filter((entry) => entry.paletteVisible !== false)
+    .map((entry) => ({ kind: entry.kind, name: entry.name, section: entry.section, hotkey: entry.hotkey })),
   { kind: "__wire__", name: "Wire", section: "Tools", hotkey: "w" },
   { kind: "__probe__", name: "Probe", section: "Tools", hotkey: "" },
   { kind: "__label__", name: "Net label", section: "Tools", hotkey: "f4" },

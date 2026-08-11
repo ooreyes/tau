@@ -74,6 +74,8 @@ export interface ParamField {
   /** Show and accept this field in another unit - see {@link ParamDisplayUnit}. */
   display?: ParamDisplayUnit;
   advanced?: boolean;
+  /** Stored identity used by the codec, never an editable generic knob. */
+  internal?: boolean;
   description?: string;
   /** Name used in the `Name=value` form. Defaults to `key`. */
   token?: string;
@@ -210,13 +212,144 @@ const LAPLACE_TRANSFER = (description: string): ParamSpec => ({
 const MOSFET = (model: string): ParamSpec => ({
   // `MODEL W=<w> L=<l> KP=<kp> VTO=<vto>`; omitted keys keep netlist defaults.
   fields: [
-    { key: "model", label: "Model", unit: "", bare: true, fallback: model },
-    { key: "w", label: "Width (W)", unit: "m", kind: "number", token: "W" },
-    { key: "l", label: "Length (L)", unit: "m", kind: "number", token: "L" },
-    { key: "kp", label: "KP", unit: "A/V²", kind: "number", token: "KP" },
-    { key: "vto", label: "Vt (VTO)", unit: "V", kind: "number", token: "VTO" },
+    { key: "model", label: "Model", unit: "", bare: true, fallback: model, internal: true },
+    { key: "w", label: "Width (W)", unit: "m", kind: "number", token: "W", min: 1e-12, max: 1 },
+    { key: "l", label: "Length (L)", unit: "m", kind: "number", token: "L", min: 1e-12, max: 1 },
+    { key: "kp", label: "KP", unit: "A/V²", kind: "number", token: "KP", min: 0, max: 1e3 },
+    { key: "vto", label: "Vt (VTO)", unit: "V", kind: "number", token: "VTO", min: -100, max: 100 },
   ],
 });
+
+const GENERIC_DIODE: ParamSpec = {
+  when: /^(?:d|diode)(?:\s|$)/i,
+  fields: [
+    { key: "model", label: "Model", unit: "", bare: true, fallback: "D", internal: true },
+    { key: "is", label: "Saturation current", unit: "A", kind: "number", token: "Is", fallback: "1e-14", min: 0, max: 1, omitWhenFallback: true },
+    { key: "n", label: "Emission coefficient", unit: "", kind: "number", token: "N", fallback: "1", min: 0.1, max: 10, omitWhenFallback: true },
+  ],
+};
+
+const GENERIC_LED: ParamSpec = {
+  when: /^led(?:\s|$)/i,
+  fields: [
+    { key: "model", label: "Model", unit: "", bare: true, fallback: "LED", internal: true },
+    {
+      key: "color",
+      label: "Color",
+      unit: "",
+      kind: "choice",
+      fallback: "red",
+      omitWhenFallback: true,
+      choices: [
+        { value: "red", label: "Red" },
+        { value: "amber", label: "Amber" },
+        { value: "green", label: "Green" },
+        { value: "blue", label: "Blue" },
+        { value: "white", label: "White" },
+      ],
+    },
+    { key: "vfwd", label: "Forward voltage", unit: "V", kind: "number", token: "Vfwd", fallback: "2", min: 0.1, max: 20, omitWhenFallback: true },
+  ],
+};
+
+const parseVoltageMarking = (text: string): number | null => {
+  const rNotation = /^(\d{1,3})V(\d{1,2})$/i.exec(text.trim());
+  const decimal = /^(\d{1,3}(?:\.\d{1,2})?)V$/i.exec(text.trim());
+  const volts = rNotation ? Number(`${rNotation[1]}.${rNotation[2]}`) : decimal ? Number(decimal[1]) : NaN;
+  return Number.isFinite(volts) && volts > 0 && volts <= 400 ? volts : null;
+};
+
+const keyedValue = (value: string, names: readonly string[]): string | undefined => {
+  const pattern = names.join("|");
+  return new RegExp(`(?:^|[\\s,;])(?:${pattern})\\s*=\\s*([^\\s,;]+)`, "i").exec(` ${value}`)?.[1];
+};
+
+const GENERIC_ZENER: ParamSpec = {
+  when: /^(?:zener|\d{1,3}(?:\.\d{1,2})?v(?:\d{1,2})?)(?:\s|$)/i,
+  fields: [
+    { key: "model", label: "Model", unit: "", bare: true, fallback: "5V1", internal: true },
+    { key: "breakdown", label: "Breakdown voltage", unit: "V", kind: "number", fallback: "5.1", min: 0.1, max: 400 },
+    { key: "vfwd", label: "Forward voltage", unit: "V", kind: "number", token: "Vfwd", fallback: "0.7", min: 0.1, max: 20, omitWhenFallback: true },
+  ],
+  codec: {
+    form: "custom",
+    decode: (value) => {
+      const tokens = value.trim().split(/[\s,;]+/).filter(Boolean);
+      const model = tokens.find((token) => !token.includes("=")) ?? "5V1";
+      const breakdown = keyedValue(value, ["Vrev", "Bv", "Breakdown"])
+        ?? String(parseVoltageMarking(model) ?? 5.1);
+      const vfwd = keyedValue(value, ["Vfwd", "Forward"] ) ?? "0.7";
+      const known = new Set([model.toLowerCase(), "vrev", "bv", "breakdown", "vfwd", "forward"]);
+      const extras = tokens.filter((token) => {
+        const [name] = token.split("=", 1);
+        return !known.has(name.toLowerCase()) && token !== model;
+      });
+      return { model, breakdown, vfwd, ...(extras.length > 0 ? { [EXTRA_PARAM_KEY]: extras.join(" ") } : {}) };
+    },
+    encode: (values) => {
+      const model = (values.model ?? "5V1").trim() || "5V1";
+      const breakdown = (values.breakdown ?? "5.1").trim() || "5.1";
+      const vfwd = (values.vfwd ?? "0.7").trim() || "0.7";
+      const modelVolts = parseVoltageMarking(model);
+      const parts = [model];
+      const breakdownNumber = Number(breakdown);
+      if (modelVolts === null || !Number.isFinite(breakdownNumber) || Math.abs(modelVolts - breakdownNumber) > 1e-9) {
+        parts.push(`Vrev=${breakdown}`);
+      }
+      if (vfwd !== "0.7") parts.push(`Vfwd=${vfwd}`);
+      const extras = (values[EXTRA_PARAM_KEY] ?? "").trim();
+      if (extras) parts.push(extras);
+      return parts.join(" ");
+    },
+  },
+};
+
+const GENERIC_BJT = (model: string): ParamSpec => ({
+  when: new RegExp(`^${model}(?:\\s|$)`, "i"),
+  fields: [
+    { key: "model", label: "Model", unit: "", bare: true, fallback: model, internal: true },
+    { key: "beta", label: "Forward gain (β)", unit: "", kind: "number", token: "Bf", fallback: "100", min: 0.1, max: 1e6, omitWhenFallback: true },
+    { key: "vaf", label: "Early voltage", unit: "V", kind: "number", token: "Vaf", fallback: "100", min: 0.1, max: 1e6, omitWhenFallback: true },
+  ],
+});
+
+const GENERIC_JFET = (model: string, defaultVto: string): ParamSpec => ({
+  when: new RegExp(`^${model}(?:\\s|$)`, "i"),
+  fields: [
+    { key: "model", label: "Model", unit: "", bare: true, fallback: model, internal: true },
+    { key: "vto", label: "Pinch-off voltage", unit: "V", kind: "number", token: "Vto", fallback: defaultVto, min: -100, max: 100, omitWhenFallback: true },
+    { key: "beta", label: "Beta", unit: "A/V²", kind: "number", token: "Beta", fallback: "1m", min: 1e-12, max: 1e3, omitWhenFallback: true },
+  ],
+});
+
+const GENERIC_OPAMP: ParamSpec = {
+  when: /^(?:ideal|(?:gain|avol|vmin|vmax|min|max)\s*=)/i,
+  fields: [
+    { key: "model", label: "Model", unit: "", kind: "text", bare: true, fallback: "ideal", internal: true },
+    { key: "gain", label: "Open-loop gain", unit: "V/V", kind: "number", token: "Gain", fallback: "1Meg", min: 1, max: 1e12 },
+    { key: "vmin", label: "Minimum output", unit: "V", kind: "number", token: "Vmin", fallback: "-15", min: -1e3, max: 1e3 },
+    { key: "vmax", label: "Maximum output", unit: "V", kind: "number", token: "Vmax", fallback: "15", min: -1e3, max: 1e3 },
+  ],
+  codec: {
+    form: "custom",
+    decode: (value) => {
+      const tokens = value.trim().split(/[\s,;]+/).filter(Boolean);
+      const model = tokens.find((token) => !token.includes("=")) ?? "ideal";
+      return {
+        model,
+        gain: keyedValue(value, ["Gain", "Avol"]) ?? "1Meg",
+        vmin: keyedValue(value, ["Vmin", "Min", "Vlo"]) ?? "-15",
+        vmax: keyedValue(value, ["Vmax", "Max", "Vhi"]) ?? "15",
+      };
+    },
+    encode: (values) => [
+      (values.model ?? "ideal").trim() || "ideal",
+      (values.gain && values.gain.trim() !== "1Meg") ? `Gain=${values.gain.trim()}` : "",
+      (values.vmin && values.vmin.trim() !== "-15") ? `Vmin=${values.vmin.trim()}` : "",
+      (values.vmax && values.vmax.trim() !== "15") ? `Vmax=${values.vmax.trim()}` : "",
+    ].filter(Boolean).join(" "),
+  },
+};
 
 const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   resistor: { fields: [{ key: "r", label: "Resistance", unit: "Ω", kind: "number" }] },
@@ -255,7 +388,17 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   bulb: { fields: [{ key: "r", label: "Filament R (cold)", unit: "Ω", kind: "number" }] },
   vsource: { fields: [{ key: "dc", label: "DC level", unit: "V", kind: "number" }] },
   isource: { fields: [{ key: "dc", label: "DC level", unit: "A", kind: "number" }] },
-  logicConstant: { fields: [{ key: "level", label: "Level (0 / 1)", unit: "V" }] },
+  logicConstant: {
+    fields: [{
+      key: "level",
+      label: "Level",
+      unit: "",
+      kind: "choice",
+      bare: true,
+      fallback: "1",
+      choices: [{ value: "0", label: "0 · low" }, { value: "1", label: "1 · high" }],
+    }],
+  },
   // The gate function is the leading bare token the deck already reads; the
   // input count rides the same keyed grammar. `omitWhenFallback` keeps a plain
   // two-input gate spelled exactly "and" on disk, as every saved file has it.
@@ -470,9 +613,17 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
       description: "Output voltage is the transresistance times the current sensed at the control pins C+ and C-, so 1k gives 1 V per mA. That sense path is Tau's own zero-volt source, so a CCVS cannot watch an existing source such as V1. Wire C+ and C- in series with the branch whose current you want.",
     }],
   },
+  diode: GENERIC_DIODE,
+  led: GENERIC_LED,
+  zener: GENERIC_ZENER,
+  npn: GENERIC_BJT("NPN"),
+  pnp: GENERIC_BJT("PNP"),
   nmos: MOSFET("NMOS"),
   pmos: MOSFET("PMOS"),
-  // opamp uses a dedicated model chooser; ground takes no parameters.
+  njf: GENERIC_JFET("NJF", "-2"),
+  pjf: GENERIC_JFET("PJF", "2"),
+  opamp: GENERIC_OPAMP,
+  // ground takes no parameters.
 };
 
 const specsFor = (kind: ComponentKind): ParamSpec[] => {
@@ -513,7 +664,66 @@ const fallbackOf = (field: ParamField): string => field.fallback ?? "";
 const blankOf = (field: ParamField): string => field.blank ?? fallbackOf(field);
 
 export function paramFields(kind: ComponentKind, value = ""): ParamField[] {
-  return specForValue(kind, value)?.fields ?? [];
+  return specForValue(kind, value)?.fields.filter((field) => !field.internal) ?? [];
+}
+
+/**
+ * Validate a single draft before it reaches the document. The solver still
+ * owns model semantics, but the inspector must not write a non-finite number,
+ * an out-of-range value, or an enum token that its symbol cannot represent.
+ * Empty values are only allowed for explicitly optional fields.
+ */
+export function paramValidationMessage(field: ParamField, raw: string): string | null {
+  const text = raw.trim();
+  // Empty is the explicit way to omit an optional keyed token (and is also
+  // how the existing single-value editor clears a field). The encoder decides
+  // whether an omitted value gets a model fallback; validation must not turn a
+  // half-typed or intentionally blank draft into a document mutation.
+  if (!text) return null;
+  if (field.kind === "choice") {
+    return field.choices?.some((choice) => choice.value.toLowerCase() === text.toLowerCase())
+      ? null
+      : `Choose ${field.choices?.map((choice) => choice.label).join(", ") || "a listed option"}.`;
+  }
+  if (field.kind !== "number") return null;
+  let numeric: number;
+  try {
+    numeric = parseQuantity(text, field.unit);
+  } catch {
+    return `Enter a finite ${field.unit || "number"}.`;
+  }
+  if (!Number.isFinite(numeric)) return `Enter a finite ${field.unit || "number"}.`;
+  if (field.integer && !Number.isInteger(numeric)) return "Enter a whole number.";
+  if (field.min !== undefined && numeric < field.min) return `Enter a value at or above ${field.min}.`;
+  if (field.max !== undefined && numeric > field.max) return `Enter a value at or below ${field.max}.`;
+  return null;
+}
+
+/** Cross-field checks for schemas whose fields constrain one another. */
+export function paramValuesValidationMessage(
+  kind: ComponentKind,
+  values: Record<string, string>,
+): string | null {
+  const fields = specForValues(kind, values)?.fields ?? [];
+  for (const field of fields) {
+    const message = paramValidationMessage(field, values[field.key] ?? "");
+    if (message) return `${field.label}: ${message}`;
+  }
+  if (kind === "opamp") {
+    let min = Number.NaN;
+    let max = Number.NaN;
+    try {
+      min = parseQuantity(values.vmin ?? "", "V");
+      max = parseQuantity(values.vmax ?? "", "V");
+    } catch {
+      // The per-field validator reports the malformed value below; there is no
+      // useful cross-field message until both rails are numeric.
+    }
+    if (Number.isFinite(min) && Number.isFinite(max) && min >= max) {
+      return "Minimum output must be below maximum output.";
+    }
+  }
+  return null;
 }
 
 /** What this field set's part does, or "" when the fields speak for themselves. */

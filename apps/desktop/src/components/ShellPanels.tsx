@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent } from "react";
 import { userFacingErrorMessage } from "../lib/errorMessage";
 import {
   ChevronRight,
@@ -22,7 +22,6 @@ import { engineeringSpelling } from "../schematic/engineering";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 import {
-  clampParamValue,
   decodeParams,
   displayParamField,
   encodeParams,
@@ -31,6 +30,8 @@ import {
   paramFields,
   paramRangeLabel,
   paramSummary,
+  paramValidationMessage,
+  paramValuesValidationMessage,
   toDisplayParamValue,
   type ParamField,
 } from "../schematic/params";
@@ -1131,15 +1132,21 @@ function junctionModelSummary(
   ideal: IdealJunctionModel | null,
 ): string {
   if (ideal) {
-    const breakdown = ideal.breakdownVolts ? `, ${ideal.breakdownVolts} V reverse breakdown` : "";
-    return `Ideal model · a fixed ${ideal.forwardVolts} V forward drop${breakdown}, no junction capacitance and no reverse recovery.`
-      + " A part placed in Tau is the textbook device; one imported from an LTspice schematic keeps its real model.";
+    if (component.kind === "zener") {
+      return `Generic Zener · ${ideal.forwardVolts} V forward · ${ideal.breakdownVolts ?? 5.1} V reverse.`;
+    }
+    if (component.kind === "led") {
+      return `Generic LED · ${ideal.forwardVolts} V forward · color changes appearance only.`;
+    }
+    return `Generic diode · ${ideal.forwardVolts} V forward.`;
   }
   if (hasLtspiceProvenance(component)) {
-    return "Generic starter · Tau's own Shockley junction, whose forward drop moves with current."
-      + " This part came from an LTspice schematic, so it keeps that real model rather than Tau's ideal one.";
+    return "Imported exact model · identity and provenance are read-only; the authored device is preserved.";
   }
-  return "Defined by this schematic · a .model of this name is declared here, so Tau runs that card rather than its ideal part.";
+  if (component.kind === "diode" && /(?:^|[\s,;])(?:is|n)\s*=/i.test(` ${component.value}`)) {
+    return "Generic diode · validated Shockley parameters.";
+  }
+  return "Document model · the authored .model card is used exactly.";
 }
 
 /**
@@ -1168,11 +1175,11 @@ function subcircuitPortSides(
  * comment: typing 21000 stored 21000, the symbol drew its five-lead maximum,
  * and the file and the drawing were describing different parts.
  *
- * Draft state committed on Enter or blur is the shape `OutputPointsControl`
- * already uses for exactly this problem. It CLAMPS rather than refuses -
- * rejecting per keystroke makes the box uneditable, because every half-typed
- * number is out of range - and the bound is printed next to the field, so it
- * is something you can see instead of something you hit.
+ * Draft state is kept locally until Enter or blur. Invalid values remain visible
+ * with an associated error and never reach the document; rejecting per
+ * keystroke would make the box uneditable because every half-typed number is
+ * temporarily invalid. The bound is printed next to the field, so it is
+ * something you can see instead of something you hit.
  */
 function BoundedParamInput({
   field,
@@ -1189,45 +1196,121 @@ function BoundedParamInput({
 }) {
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
+  const errorId = useId();
   useEffect(() => {
     if (!focused.current) setDraft(value);
   }, [value]);
 
   const commit = () => {
-    const next = clampParamValue(field, draft);
-    setDraft(next);
+    const error = paramValidationMessage(field, draft);
+    // Invalid finite values are drafts too: the schema's range is a contract,
+    // not a request to silently change what the user typed.
+    if (error) return;
+    const next = draft;
     if (next.trim() === value.trim()) return;
     onBeginChange();
     onCommit(next);
   };
 
+  const error = paramValidationMessage(field, draft);
+
   return (
-    <input
-      className="mono-num"
-      value={draft}
-      aria-label={field.label}
-      inputMode="decimal"
-      spellCheck={false}
-      onFocus={() => {
-        focused.current = true;
-        onFocusField();
+    <>
+      <input
+        className="mono-num"
+        value={draft}
+        aria-label={field.label}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        inputMode="decimal"
+        spellCheck={false}
+        onFocus={() => {
+          focused.current = true;
+          onFocusField();
+        }}
+        onBlur={() => {
+          focused.current = false;
+          commit();
+        }}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setDraft(value);
+          }
+        }}
+      />
+      {error && <span id={errorId} className="property-validation-error" role="alert">{error}</span>}
+    </>
+  );
+}
+
+function ChoiceParamInput({
+  field,
+  value,
+  onBeginChange,
+  onFocusField,
+  onValueChange,
+}: {
+  field: ParamField;
+  value: string;
+  onBeginChange: () => void;
+  onFocusField: () => void;
+  onValueChange: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const errorId = useId();
+  const valid = !paramValidationMessage(field, draft);
+  useEffect(() => setDraft(value), [value]);
+  if (!valid) {
+    const error = paramValidationMessage(field, draft) ?? "Choose a listed option.";
+    return (
+      <>
+        <input
+          className="mono-num property-text"
+          value={draft}
+          aria-label={field.label}
+          aria-invalid="true"
+          aria-describedby={errorId}
+          spellCheck={false}
+          onFocus={onFocusField}
+          onChange={(event) => {
+            const next = event.currentTarget.value;
+            setDraft(next);
+            if (!paramValidationMessage(field, next)) {
+              onBeginChange();
+              onValueChange(next);
+            }
+          }}
+        />
+        <span id={errorId} className="property-validation-error" role="alert">{error}</span>
+      </>
+    );
+  }
+  return (
+    <Select
+      value={value}
+      onOpenChange={(open) => {
+        if (open) onFocusField();
       }}
-      onBlur={() => {
-        focused.current = false;
-        commit();
+      onValueChange={(next) => {
+        onBeginChange();
+        onValueChange(next);
       }}
-      onChange={(event) => setDraft(event.currentTarget.value)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          event.currentTarget.blur();
-        }
-        if (event.key === "Escape") {
-          event.preventDefault();
-          setDraft(value);
-        }
-      }}
-    />
+    >
+      <SelectTrigger size="sm" className="property-select mono-num w-full max-w-[168px]" aria-label={field.label}>
+        <SelectValue placeholder={field.label} />
+      </SelectTrigger>
+      <SelectContent>
+        {field.choices?.map((choice) => (
+          <SelectItem key={choice.value} value={choice.value}>{choice.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -1259,7 +1342,15 @@ function ParamValueControl({
   const shownValue = toDisplayParamValue(field, value);
   const commit = (next: string) => onValueChange(fromDisplayParamValue(field, next));
   const range = paramRangeLabel(shown);
-  const control = field.display ? (
+  const control = field.kind === "choice" ? (
+    <ChoiceParamInput
+      field={shown}
+      value={shownValue}
+      onBeginChange={onBeginChange}
+      onFocusField={onFocusField}
+      onValueChange={commit}
+    />
+  ) : field.display ? (
     // A display unit is deliberately NOT SI-prefixable - "m%" is not a quantity
     // - so it is a static suffix beside a clamped box rather than the prefix
     // picker an engineering field gets.
@@ -1285,7 +1376,7 @@ function ParamValueControl({
       onBeginChange={onBeginChange}
       onValueChange={commit}
     />
-  ) : isBoundedParamField(shown) ? (
+  ) : isBoundedParamField(shown) || field.kind === "number" ? (
     <BoundedParamInput
       field={shown}
       value={shownValue}
@@ -1362,10 +1453,14 @@ function componentHeadline(component: SchematicComponent): string {
 function ComponentPropertyGroup({
   component,
   onOpenModelLibraries,
+  manualModelControls = true,
   groupCount = 1,
 }: {
   component: SchematicComponent;
+  /** Legacy host opt-in; the product shell passes false so model authoring is
+   * kept behind the command palette while resolution remains read-only here. */
   onOpenModelLibraries?: () => void;
+  manualModelControls?: boolean;
   /** How many groups are on screen; see the aria-label note below. */
   groupCount?: number;
 }) {
@@ -1435,7 +1530,11 @@ function ComponentPropertyGroup({
   const updateParam = (key: string, value: string) => {
     if (!selected) return;
     const base = selected.value.trim() || entry?.defaultValue || "";
-    setValue(selected.id, encodeParams(selected.kind, { ...decodeParams(selected.kind, base), [key]: value }));
+    const values = { ...decodeParams(selected.kind, base), [key]: value };
+    const field = fields.find((candidate) => candidate.key === key);
+    if (field && paramValidationMessage(field, value)) return;
+    if (paramValuesValidationMessage(selected.kind, values)) return;
+    setValue(selected.id, encodeParams(selected.kind, values));
   };
 
   const updateSubcircuitParameter = (name: string, value: string, defaultValue: string) => {
@@ -1458,11 +1557,34 @@ function ComponentPropertyGroup({
     ? inspectOpampModel(selected, directives, modelLibraries.map((library) => library.text))
     : null;
 
-  // The model chooser, its per-field knobs and the library action are one set
-  // of controls that live in two places: inline for a part whose real model is
-  // the point, and behind Advanced for a part that is ideal until you go
-  // looking. Built once so the two placements cannot drift apart.
-  const modelChooserField = selected && modelKind ? (
+  const genericModel = Boolean(
+    selected
+    && !hasLtspiceProvenance(selected)
+    && selectedModelOption?.source === "generic",
+  );
+  const modelParamFields = modelKind && (genericModel || manualModelControls) ? visibleFields.filter((field) => {
+    if (field.key === "model") return false;
+    if (selectedModelOption?.modelType === "vdmos") return false;
+    if (!genericModel && (field.key === "kp" || field.key === "vto")) return false;
+    return true;
+  }).map((field) => (
+    <label key={field.key} className="property-field">
+      <span>{field.label}</span>
+      <ParamValueControl
+        field={field}
+        value={field.value}
+        onBeginChange={() => beginParamChange(field.key)}
+        onFocusField={() => { editKeyRef.current = null; }}
+        onValueChange={(value) => updateParam(field.key, value)}
+      />
+    </label>
+  )) : null;
+
+  // The full chooser is intentionally an explicit host opt-in. The desktop
+  // shell keeps it out of the default inspector, but the small compatibility
+  // surface remains usable for library-management tests/embedders that pass a
+  // callback. No selection here changes the exact resolver's precedence.
+  const modelChooserField = manualModelControls && selected && modelKind ? (
     <label className="property-field">
       <span>Simulation model</span>
       <Select
@@ -1478,11 +1600,6 @@ function ComponentPropertyGroup({
               ...decodeParams(modelKind, selected.value.trim() || entry?.defaultValue || ""),
               model: nextModel,
             };
-            // KP/VTO belong to Tau's editable generic Level-1 model,
-            // never to an exact vendor model. A VDMOS also has no W/L
-            // instance geometry in ngspice. Drop stale, inapplicable
-            // values at the model transition instead of emitting a
-            // plausible-looking card the selected model ignores.
             if (choice?.source !== "generic") {
               next.kp = "";
               next.vto = "";
@@ -1507,9 +1624,7 @@ function ComponentPropertyGroup({
         <SelectContent>
           {!selectedModelOption && selectedModelName && (
             <SelectItem value={selectedModelName}>
-              {/* A marking the ideal path understands (a zener's `12V`) names
-                  no library part, but it is not missing - the deck runs it. */}
-              {selectedModelName} · {idealJunction ? "Tau ideal part" : "missing or incompatible"}
+              {selectedModelName} · missing or incompatible
             </SelectItem>
           )}
           {modelOptions.map((option) => (
@@ -1525,37 +1640,34 @@ function ComponentPropertyGroup({
     </label>
   ) : null;
 
-  const modelParamFields = modelKind ? visibleFields.filter((field) => {
-    if (field.key === "model") return false;
-    if (selectedModelOption?.modelType === "vdmos") return false;
-    if (selectedModelOption?.source !== "generic" && (field.key === "kp" || field.key === "vto")) return false;
-    return true;
-  }).map((field) => (
-    <label key={field.key} className="property-field">
-      <span>{field.label}</span>
-      <ParamValueControl
-        field={field}
-        value={field.value}
-        onBeginChange={() => beginParamChange(field.key)}
-        onFocusField={() => { editKeyRef.current = null; }}
-        onValueChange={(value) => updateParam(field.key, value)}
-      />
-    </label>
-  )) : null;
-
-  const attachLibraryAction = onOpenModelLibraries
+  const attachLibraryAction = manualModelControls && onOpenModelLibraries
     && (!selectedModelOption || selectedModelOption.source === "generic") ? (
       <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
         Attach Model Library
       </Button>
     ) : null;
 
+  const genericOpampFields = selected?.kind === "opamp" && !opamp?.imported
+    ? visibleFields.filter((field) => field.key !== "model").map((field) => (
+      <label key={field.key} className="property-field">
+        <span>{field.label}</span>
+        <ParamValueControl
+          field={field}
+          value={field.value}
+          onBeginChange={() => beginParamChange(field.key)}
+          onFocusField={() => { editKeyRef.current = null; }}
+          onValueChange={(value) => updateParam(field.key, value)}
+        />
+      </label>
+    ))
+    : null;
+
   // Ideal is tested FIRST: a zener marked `12V` names no library part, so the
   // missing-model branch would otherwise report a part the deck runs happily.
   const modelStatusHint = !selected || !modelKind ? "" : idealJunction
     ? junctionModelSummary(selected, idealJunction)
     : !selectedModelOption
-      ? `Needs a model · ${selectedModelName || "No model"} isn't available. Run won't substitute a generic ${modelKind.toUpperCase()} — attach the library or choose Generic.`
+      ? `Needs an exact model · ${selectedModelName || "No model"} isn't available. Run is refused; Tau won't substitute a generic ${modelKind.toUpperCase()}.`
       : selectedModelOption.source !== "generic"
         ? `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`
         : JUNCTION_KINDS.has(modelKind)
@@ -1605,29 +1717,54 @@ function ComponentPropertyGroup({
       </button>
       {groupOpen && (
         <div className="property-grid">
-          <label className="property-field">
-            <span>Refdes</span>
-            <input
-              className="mono-num"
-              value={selected.label}
-              aria-label="Reference designator"
-              // An empty box says nothing; "none" says the part has no
-              // designator yet, which is a different and true statement.
-              placeholder="none"
-              spellCheck={false}
-              onFocus={() => {
-                editKeyRef.current = null;
-              }}
-              onChange={(event) => {
-                beginParamChange("label");
-                setLabel(selected.id, event.currentTarget.value);
-              }}
-            />
-          </label>
-          {selected.kind === "vsource" || selected.kind === "isource" ? (
+          {selected.kind === "ground" ? (
+            <>
+              <div className="property-field">
+                <span>Electrical node</span>
+                <span className="mono-num property-readonly" aria-label="Electrical node">0 · ground</span>
+              </div>
+              <label className="property-field">
+                <span>Display label</span>
+                <input
+                  className="mono-num property-text"
+                  value={selected.label}
+                  aria-label="Ground display label"
+                  placeholder="optional"
+                  spellCheck={false}
+                  onFocus={() => { editKeyRef.current = null; }}
+                  onChange={(event) => {
+                    beginParamChange("label");
+                    setLabel(selected.id, event.currentTarget.value);
+                  }}
+                />
+              </label>
+            </>
+          ) : (
+            <label className="property-field">
+              <span>Refdes</span>
+              <input
+                className="mono-num"
+                value={selected.label}
+                aria-label="Reference designator"
+                // An empty box says nothing; "none" says the part has no
+                // designator yet, which is a different and true statement.
+                placeholder="none"
+                spellCheck={false}
+                onFocus={() => {
+                  editKeyRef.current = null;
+                }}
+                onChange={(event) => {
+                  beginParamChange("label");
+                  setLabel(selected.id, event.currentTarget.value);
+                }}
+              />
+            </label>
+          )}
+          {selected.kind === "vsource" || selected.kind === "isource" || selected.kind === "vac" || selected.kind === "iac" || selected.kind === "vpulse" ? (
             <IndependentSourceEditor
               value={valueSource}
-              unit={selected.kind === "vsource" ? "V" : "A"}
+              unit={selected.kind === "isource" || selected.kind === "iac" ? "A" : "V"}
+              legacyKind={selected.kind === "vac" || selected.kind === "iac" || selected.kind === "vpulse" ? selected.kind : undefined}
               onBeginChange={beginParamChange}
               onValueChange={(value) => setValue(selected.id, value)}
             />
@@ -1639,44 +1776,51 @@ function ComponentPropertyGroup({
             />
           ) : selected.kind === "subckt" ? (
             <>
-              <label className="property-field">
-                <span>Subcircuit model</span>
-                <Select
-                  value={(selectedSubcircuit?.name ?? subcircuitInstance?.name) || undefined}
-                  onOpenChange={(open) => {
-                    if (open) editKeyRef.current = null;
-                  }}
-                  onValueChange={(nextName) => {
-                    const choice = availableSubcircuits.find((option) => option.name === nextName);
-                    if (!choice) return;
-                    beginParamChange("subcircuit-model");
-                    setSubcircuitModel(selected.id, choice.name, choice.ports);
-                  }}
-                >
-                  <SelectTrigger
-                    size="sm"
-                    className="property-select mono-num w-full max-w-[168px]"
-                    aria-label="Subcircuit model"
+              {manualModelControls ? (
+                <label className="property-field">
+                  <span>Subcircuit model</span>
+                  <Select
+                    value={(selectedSubcircuit?.name ?? subcircuitInstance?.name) || undefined}
+                    onOpenChange={(open) => {
+                      if (open) editKeyRef.current = null;
+                    }}
+                    onValueChange={(nextName) => {
+                      const choice = availableSubcircuits.find((option) => option.name === nextName);
+                      if (!choice) return;
+                      beginParamChange("subcircuit-model");
+                      setSubcircuitModel(selected.id, choice.name, choice.ports);
+                    }}
                   >
-                    <SelectValue placeholder="Model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {!selectedSubcircuit && subcircuitInstance?.name && (
-                      <SelectItem value={subcircuitInstance.name}>
-                        {subcircuitInstance.name} · missing
-                      </SelectItem>
-                    )}
-                    {availableSubcircuits.map((option) => (
-                      <SelectItem
-                        key={`${option.source}:${option.sourceLabel}:${option.name}`}
-                        value={option.name}
-                      >
-                        {option.name} · {option.ports.length} terminals · {option.sourceLabel}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
+                    <SelectTrigger
+                      size="sm"
+                      className="property-select mono-num w-full max-w-[168px]"
+                      aria-label="Subcircuit model"
+                    >
+                      <SelectValue placeholder="Model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!selectedSubcircuit && subcircuitInstance?.name && (
+                        <SelectItem value={subcircuitInstance.name}>
+                          {subcircuitInstance.name} · missing
+                        </SelectItem>
+                      )}
+                      {availableSubcircuits.map((option) => (
+                        <SelectItem
+                          key={`${option.source}:${option.sourceLabel}:${option.name}`}
+                          value={option.name}
+                        >
+                          {option.name} · {option.ports.length} terminals · {option.sourceLabel}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+              ) : (
+                <div className="property-field">
+                  <span>Subcircuit identity</span>
+                  <span className="mono-num property-readonly">{subcircuitInstance?.name || "none"}</span>
+                </div>
+              )}
               <p className="property-hint" role="status">
                 {selectedSubcircuit
                   ? `Ready · ${selectedSubcircuit.ports.length} named terminals (${selectedSubcircuit.ports.join(", ")}) from ${selectedSubcircuit.sourceLabel}`
@@ -1747,11 +1891,7 @@ function ComponentPropertyGroup({
               {selectedSubcircuit && selectedSubcircuit.parameters.length === 0 && (
                 <p className="property-hint">This model defines terminals only; it has no instance parameters.</p>
               )}
-              {/* The route from "I have a .lib" to "it is on my sheet" was only
-                  offered once the value was already broken. It is the same two
-                  steps whether or not a model is resolved, so it is stated
-                  whenever this panel is open. */}
-              {onOpenModelLibraries && (
+              {manualModelControls && onOpenModelLibraries && (
                 <>
                   <p className="property-hint">
                     Attach a .lib or .sub file in Model Libraries and every subcircuit it defines
@@ -1764,156 +1904,176 @@ function ComponentPropertyGroup({
               )}
             </>
           ) : modelKind ? (
-            idealJunction ? (
-              // Ideal by default, real behind Advanced: the part already
-              // behaves as the textbook device, so the headline states that in
-              // numbers and the controls that take it off the ideal path are
-              // the disclosed ones. A part that is NOT ideal keeps them inline
-              // below - hiding the only control that describes it would be the
-              // opposite of this rule.
-              <>
-                <p className="property-hint" role="status">{modelStatusHint}</p>
-                <div className="advanced-settings property-advanced">
-                  <button
-                    type="button"
-                    className="disclosure-header"
-                    onClick={() => setAdvancedOpen((open) => !open)}
-                    aria-expanded={advancedOpen}
-                    aria-label="Toggle advanced settings"
-                  >
-                    <span className="disclosure-label">Advanced</span>
-                    <span className="disclosure-rule" aria-hidden="true" />
-                    <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
-                  </button>
-                  {advancedOpen && (
-                    <div className="advanced-body">
-                      <p className="property-hint">
-                        Naming a manufacturer part, or attaching a library that defines one,
-                        replaces the ideal device with its measured curve: the forward drop
-                        then moves with current and temperature.
-                      </p>
-                      {modelChooserField}
-                      {modelParamFields}
-                      {attachLibraryAction}
-                    </div>
-                  )}
-                </div>
-              </>
+            manualModelControls ? (
+              idealJunction ? (
+                <>
+                  <p className="property-hint" role="status">{modelStatusHint}</p>
+                  <div className="advanced-settings property-advanced">
+                    <button
+                      type="button"
+                      className="disclosure-header"
+                      onClick={() => setAdvancedOpen((open) => !open)}
+                      aria-expanded={advancedOpen}
+                      aria-label="Toggle advanced settings"
+                    >
+                      <span className="disclosure-label">Advanced</span>
+                      <span className="disclosure-rule" aria-hidden="true" />
+                      <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
+                    </button>
+                    {advancedOpen && (
+                      <div className="advanced-body">
+                        <p className="property-hint">
+                          Naming a manufacturer part, or attaching a library that defines one,
+                          replaces the ideal device with its measured curve. Tau never silently
+                          substitutes a generic model for a named part.
+                        </p>
+                        {modelChooserField}
+                        {modelParamFields}
+                        {attachLibraryAction}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {modelChooserField}
+                  <p className="property-hint" role="status">{modelStatusHint}</p>
+                  {modelParamFields}
+                  {attachLibraryAction}
+                </>
+              )
             ) : (
               <>
-                {modelChooserField}
                 <p className="property-hint" role="status">{modelStatusHint}</p>
                 {modelParamFields}
-                {attachLibraryAction}
               </>
             )
           ) : selected.kind === "opamp" ? (
-            <>
-              {opamp?.mode === "vendor" ? (
-                <>
+            manualModelControls ? (
+              <>
+                {opamp?.mode === "vendor" ? (
+                  <>
+                    <label className="property-field">
+                      <span>Part</span>
+                      <input
+                        className="mono-num property-text"
+                        value={opamp.partName}
+                        aria-label="Op-amp part"
+                        readOnly
+                      />
+                    </label>
+                    <label className="property-field">
+                      <span>Simulation model</span>
+                      <input
+                        className="mono-num property-text"
+                        value={opamp.modelName}
+                        aria-label="Op-amp simulation model"
+                        spellCheck={false}
+                        maxLength={160}
+                        pattern="[^\\s=(){};]+"
+                        title="Use one SPICE subcircuit name (no spaces or parameter syntax)."
+                        onFocus={() => {
+                          editKeyRef.current = null;
+                        }}
+                        onChange={(event) => {
+                          beginParamChange("model");
+                          setOpampModel(selected.id, event.currentTarget.value);
+                        }}
+                      />
+                    </label>
+                    <p className="property-hint" role="status">
+                      {opampStatus?.kind === "ready"
+                        ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "Model Libraries" : "this document"}`
+                        : opampStatus?.kind === "incompatible"
+                          ? `Pin count · model has ${opampStatus.portCount} terminals; this symbol needs five`
+                          : "Needs a library model · Tau will not substitute a generic gain block"}
+                    </p>
+                    {opampStatus?.kind !== "ready" && onOpenModelLibraries && (
+                      <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
+                        Attach Model Library
+                      </Button>
+                    )}
+                  </>
+                ) : (
                   <label className="property-field">
-                    <span>Part</span>
-                    <input
-                      className="mono-num property-text"
-                      value={opamp.partName}
-                      aria-label="Op-amp part"
-                      readOnly
-                    />
+                    <span>Model</span>
+                    <Select
+                      value={customOpamp ? "__custom__" : selected.value}
+                      onValueChange={(next) => {
+                        beginParamChange("model");
+                        setValue(selected.id, next);
+                      }}
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        className="property-select mono-num w-full max-w-[168px]"
+                        aria-label="Op-amp model"
+                      >
+                        <SelectValue placeholder="Model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {customOpamp && <SelectItem value="__custom__">Universal / behavioral</SelectItem>}
+                        {OPAMP_LIBRARY.map((part) => (
+                          <SelectItem key={part.part} value={part.part}>
+                            {part.part}{part.part === "Ideal" ? "" : ` · ${part.manufacturer}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
+                )}
+                {customOpamp && opamp?.mode === "behavioral" && (
                   <label className="property-field">
-                    <span>Simulation model</span>
+                    <span>Advanced parameters</span>
                     <input
                       className="mono-num property-text"
-                      value={opamp.modelName}
-                      aria-label="Op-amp simulation model"
+                      value={selected.value}
+                      aria-label="Advanced op-amp parameters"
                       spellCheck={false}
-                      maxLength={160}
-                      pattern="[^\\s=(){};]+"
-                      title="Use one SPICE subcircuit name (no spaces or parameter syntax)."
                       onFocus={() => {
                         editKeyRef.current = null;
                       }}
                       onChange={(event) => {
-                        beginParamChange("model");
-                        setOpampModel(selected.id, event.currentTarget.value);
+                        beginParamChange("parameters");
+                        setValue(selected.id, event.currentTarget.value);
                       }}
                     />
                   </label>
-                  <p className="property-hint" role="status">
-                    {opampStatus?.kind === "ready"
-                      ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "Model Libraries" : "this document"}`
-                      : opampStatus?.kind === "incompatible"
-                        ? `Pin count · model has ${opampStatus.portCount} terminals; this symbol needs five`
-                        : "Needs a library model · Tau will not substitute a generic gain block"}
+                )}
+                {opampPart && (
+                  <p className="property-hint">
+                    {Number.isFinite(opampPart.gbwHz) && opampPart.gbwHz > 0
+                      ? `${formatEngineering(opampPart.gbwHz, "Hz", 2)} GBW · ${opampPart.slewRate} V/µs · ±${opampPart.supplyMax} V · ${opampPart.package}`
+                      : "Ideal - infinite gain & bandwidth"}
                   </p>
-                  {opampStatus?.kind !== "ready" && onOpenModelLibraries && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={onOpenModelLibraries}
-                    >
-                      Attach Model Library
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <label className="property-field">
-                  <span>Model</span>
-                  <Select
-                    value={customOpamp ? "__custom__" : selected.value}
-                    onValueChange={(next) => {
-                      beginParamChange("model");
-                      setValue(selected.id, next);
-                    }}
-                  >
-                    <SelectTrigger
-                      size="sm"
-                      className="property-select mono-num w-full max-w-[168px]"
-                      aria-label="Op-amp model"
-                    >
-                      <SelectValue placeholder="Model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customOpamp && (
-                        <SelectItem value="__custom__">Universal / behavioral</SelectItem>
-                      )}
-                      {OPAMP_LIBRARY.map((p) => (
-                        <SelectItem key={p.part} value={p.part}>
-                          {p.part}
-                          {p.part === "Ideal" ? "" : ` · ${p.manufacturer}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-              )}
-              {customOpamp && opamp?.mode === "behavioral" && (
-                <label className="property-field">
-                  <span>Advanced parameters</span>
-                  <input
-                    className="mono-num property-text"
-                    value={selected.value}
-                    aria-label="Advanced op-amp parameters"
-                    spellCheck={false}
-                    onFocus={() => {
-                      editKeyRef.current = null;
-                    }}
-                    onChange={(event) => {
-                      beginParamChange("parameters");
-                      setValue(selected.id, event.currentTarget.value);
-                    }}
-                  />
-                </label>
-              )}
-              {opampPart && (
-                <p className="property-hint">
-                  {Number.isFinite(opampPart.gbwHz) && opampPart.gbwHz > 0
-                    ? `${formatEngineering(opampPart.gbwHz, "Hz", 2)} GBW · ${opampPart.slewRate} V/µs · ±${opampPart.supplyMax} V · ${opampPart.package}`
-                    : "Ideal - infinite gain & bandwidth"}
-                </p>
-              )}
-            </>
+                )}
+              </>
+            ) : (
+              <>
+                {opamp?.mode === "vendor" ? (
+                  <>
+                    <div className="property-field">
+                      <span>Exact identity</span>
+                      <span className="mono-num property-readonly">{opamp.partName}</span>
+                    </div>
+                    <p className="property-hint" role="status">
+                      {opampStatus?.kind === "ready"
+                        ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "Model Libraries" : "this document"}`
+                        : opampStatus?.kind === "incompatible"
+                          ? `Pin count · model has ${opampStatus.portCount} terminals; this symbol needs five`
+                          : "Needs a library model · Tau will not substitute a generic gain block"}
+                    </p>
+                  </>
+                ) : opamp?.imported ? (
+                  <p className="property-hint" role="status">Imported behavioral op-amp · exact identity and provenance are read-only.</p>
+                ) : (
+                  <>
+                    <p className="property-hint" role="status">Generic Tau op-amp · validated gain and output limits.</p>
+                    {genericOpampFields}
+                  </>
+                )}
+              </>
+            )
           ) : (
             <>
               {/* A part whose meaning lives in pins the panel has no field for
@@ -1978,9 +2138,11 @@ function ComponentPropertyGroup({
 export function ComponentInspector({
   selected,
   onOpenModelLibraries,
+  manualModelControls = false,
 }: {
   selected: SchematicComponent | readonly SchematicComponent[] | null;
   onOpenModelLibraries?: () => void;
+  manualModelControls?: boolean;
 }) {
   const parts: readonly SchematicComponent[] = !selected
     ? []
@@ -2015,6 +2177,7 @@ export function ComponentInspector({
           key={part.id}
           component={part}
           groupCount={parts.length}
+          manualModelControls={manualModelControls}
           onOpenModelLibraries={onOpenModelLibraries}
         />
       ))}

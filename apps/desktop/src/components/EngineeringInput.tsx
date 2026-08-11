@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FocusEvent } from "react";
+import { useEffect, useId, useRef, useState, type FocusEvent } from "react";
 import {
   ENGINEERING_PREFIXES,
   compactEngineeringMantissa,
@@ -80,7 +80,24 @@ export function EngineeringInput({
     return true;
   };
   const emptyAllowed = allowEmpty && parts.mantissa.trim() === "";
-  const valid = emptyAllowed || validParts(parts);
+  const errorId = useId();
+  const validationMessage = (() => {
+    if (emptyAllowed) return null;
+    if (!isEngineeringMantissa(parts.mantissa)) return `Enter a finite ${unit || "number"}.`;
+    let numeric: number;
+    try {
+      numeric = parseQuantity(composeEngineeringValue(parts.mantissa, parts.prefix), unit);
+    } catch {
+      return `Enter a finite ${unit || "number"}.`;
+    }
+    if (!Number.isFinite(numeric)) return `Enter a finite ${unit || "number"}.`;
+    if (min !== undefined && (minExclusive ? numeric <= min : numeric < min)) {
+      return `Enter a value ${minExclusive ? "above" : "at or above"} ${min}.`;
+    }
+    if (max !== undefined && numeric > max) return `Enter a value at or below ${max}.`;
+    return null;
+  })();
+  const valid = validationMessage === null;
   // `field-sizing: content` is not reliable in the macOS WebView. Give WebKit
   // an explicit character width so the complete mantissa remains visible.
   const inputSize = Math.max(2, Math.min(14, parts.mantissa.length + 1));
@@ -112,10 +129,7 @@ export function EngineeringInput({
     if (prefixOpenRef.current) return;
     focused.current = false;
     changeStarted.current = false;
-    if (!validParts(parts)) {
-      setParts(splitEngineeringValue(value, unit));
-      return;
-    }
+    if (!validParts(parts)) return;
     setParts((current) => ({
       ...current,
       mantissa: compactEngineeringMantissa(current.mantissa),
@@ -133,13 +147,19 @@ export function EngineeringInput({
         inputMode="decimal"
         spellCheck={false}
         aria-invalid={!valid}
+        aria-describedby={validationMessage ? errorId : undefined}
         onChange={(event) => {
           if (!isEngineeringMantissaDraft(event.currentTarget.value)) return;
           const next = { ...parts, mantissa: event.currentTarget.value };
           setParts(next);
           commit(next);
         }}
-      />
+        />
+      {validationMessage && (
+        <span id={errorId} className="property-validation-error" role="alert">
+          {validationMessage}
+        </span>
+      )}
       {unit && (
         <Select
           value={prefixSelectValue(parts.prefix)}

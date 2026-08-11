@@ -138,6 +138,27 @@ describe("schematic document store", () => {
     ]);
   });
 
+  it("places new ground upward without changing imported-or-tool orientation history", () => {
+    useSchematic.setState({
+      tool: { mode: "place", kind: "ground" },
+      placeRotation: 90,
+    });
+
+    useSchematic.getState().addComponent("ground", 32, 48);
+
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      kind: "ground",
+      x: 32,
+      y: 48,
+      rotation: 0,
+      value: "",
+    });
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components).toEqual([]);
+    useSchematic.getState().redo();
+    expect(useSchematic.getState().components[0]).toMatchObject({ kind: "ground", rotation: 0 });
+  });
+
   it("removes the bypass even when a redundant vertex subdivides the conductor between the pins", () => {
     useSchematic.setState({
       wires: [{ id: "subdivided", points: [{ x: -96, y: 0 }, { x: 0, y: 0 }, { x: 96, y: 0 }] }],

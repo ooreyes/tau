@@ -13,6 +13,8 @@ import { parseQuantity } from "../simulation/quantity";
 
 /** LTspice UniversalOpamp default open-loop gain (Avol). */
 export const DEFAULT_OPAMP_AVOL = 1e6;
+export const DEFAULT_OPAMP_VMIN = -15;
+export const DEFAULT_OPAMP_VMAX = 15;
 
 /**
  * Extract the open-loop gain from an op-amp value string of key=value tokens
@@ -22,7 +24,7 @@ export const DEFAULT_OPAMP_AVOL = 1e6;
  * a partial spec still yields a usable amplifier.
  */
 export function parseOpampAvol(value: string): number {
-  const match = /(?:^|[\s,])avol\s*=\s*([^\s,]+)/i.exec(value ?? "");
+  const match = /(?:^|[\s,])(?:avol|gain)\s*=\s*([^\s,]+)/i.exec(value ?? "");
   if (!match) return DEFAULT_OPAMP_AVOL;
   try {
     const avol = parseQuantity(match[1]);
@@ -30,6 +32,22 @@ export function parseOpampAvol(value: string): number {
   } catch {
     return DEFAULT_OPAMP_AVOL;
   }
+}
+
+export function parseOpampOutputLimits(value: string): { min: number; max: number } {
+  const read = (names: string[], fallback: number) => {
+    const match = new RegExp(`(?:^|[\\s,])(?:${names.join("|")})\\s*=\\s*([^\\s,]+)`, "i").exec(value ?? "");
+    if (!match) return fallback;
+    try {
+      const parsed = parseQuantity(match[1]!);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const min = read(["vmin", "vlow", "min"], DEFAULT_OPAMP_VMIN);
+  const max = read(["vmax", "vhigh", "max"], DEFAULT_OPAMP_VMAX);
+  return min < max ? { min, max } : { min: DEFAULT_OPAMP_VMIN, max: DEFAULT_OPAMP_VMAX };
 }
 
 /**
@@ -59,9 +77,29 @@ export function railClampedOpampLine(
   vPlus: string,
   vMinus: string,
   avol: number,
+  outputMin?: number,
+  outputMax?: number,
 ): string {
-  const mid = `(V(${vPlus})+V(${vMinus}))/2`;
-  const half = `(V(${vPlus})-V(${vMinus}))/2`;
+  const low = outputMin === undefined ? `V(${vMinus})` : `max(V(${vMinus}),${outputMin})`;
+  const high = outputMax === undefined ? `V(${vPlus})` : `min(V(${vPlus}),${outputMax})`;
+  const mid = `(${high}+${low})/2`;
+  const half = `(${high}-${low})/2`;
+  const diff = `(V(${inPlus})-V(${inMinus}))`;
+  return `${name} ${outNode} 0 V=${mid}+${half}*tanh(${avol}*${diff}/max(abs(${half}),0.5))`;
+}
+
+/** Bounded generic op-amp used when no physical supply pins are wired. */
+export function boundedOpampLine(
+  name: string,
+  outNode: string,
+  inPlus: string,
+  inMinus: string,
+  avol: number,
+  outputMin: number,
+  outputMax: number,
+): string {
+  const mid = (outputMax + outputMin) / 2;
+  const half = (outputMax - outputMin) / 2;
   const diff = `(V(${inPlus})-V(${inMinus}))`;
   return `${name} ${outNode} 0 V=${mid}+${half}*tanh(${avol}*${diff}/max(abs(${half}),0.5))`;
 }

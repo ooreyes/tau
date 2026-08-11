@@ -52,6 +52,11 @@
      the black instrument face and subtractively on paper. See DESIGN_SYSTEM §1.6. */
   --led-glow-core:  #ffd9a0;
   --led-glow-blend: screen;
+  --led-red:        #ff6b6b;
+  --led-amber:      #e6a23c;
+  --led-green:      #62c370;
+  --led-blue:       #63a4ff;
+  --led-white:      #f5f5f7;
 
   /* Semantic - desaturated off Apple systemRed/systemGreen. These read as
      lamps, hairlines and small text now (never a full-saturation text run or
@@ -331,6 +336,11 @@
     --signal-glow:  rgba(143, 92, 8, 0.14);
     --led-glow-core:  #E39A20;
     --led-glow-blend: multiply;
+    --led-red:        #c02718;
+    --led-amber:      #8F5C08;
+    --led-green:      #248a3d;
+    --led-blue:       #0068D6;
+    --led-white:      #0B1017;
 
     --danger:       #c02718;
     --danger-soft:  rgba(192, 39, 24, 0.07);
@@ -459,6 +469,11 @@
   --signal-glow:  rgba(143, 92, 8, 0.14);
   --led-glow-core:  #E39A20;
   --led-glow-blend: multiply;
+  --led-red:        #c02718;
+  --led-amber:      #8F5C08;
+  --led-green:      #248a3d;
+  --led-blue:       #0068D6;
+  --led-white:      #0B1017;
 
   --danger:       #c02718;
   --danger-soft:  rgba(192, 39, 24, 0.07);
@@ -572,6 +587,11 @@
   --signal-glow:  rgba(230, 162, 60, 0.22);
   --led-glow-core:  #ffd9a0;
   --led-glow-blend: screen;
+  --led-red:        #ff6b6b;
+  --led-amber:      #e6a23c;
+  --led-green:      #62c370;
+  --led-blue:       #63a4ff;
+  --led-white:      #f5f5f7;
 
   --danger:       #e6564b;
   --danger-soft:  rgba(230, 86, 75, 0.10);
@@ -807,6 +827,19 @@ body {
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
+
+.symbol .logic-state {
+  fill: var(--comp);
+  stroke: none;
+  font: 600 12px var(--font-mono);
+  user-select: none;
+}
+
+.symbol .led-artwork.led-color-red { stroke: var(--led-red); }
+.symbol .led-artwork.led-color-amber { stroke: var(--led-amber); }
+.symbol .led-artwork.led-color-green { stroke: var(--led-green); }
+.symbol .led-artwork.led-color-blue { stroke: var(--led-blue); }
+.symbol .led-artwork.led-color-white { stroke: var(--led-white); }
 
 /* Polarity arrows inside transistor/JFET symbols are FILLED triangles - as
    unfilled open paths they read as stray broken strokes. They inherit the
@@ -7008,6 +7041,26 @@ button.bottom-panel-head:focus-visible {
   justify-self: start;
 }
 
+.property-readonly {
+  justify-self: end;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.property-validation-error {
+  grid-column: 2;
+  justify-self: start;
+  max-width: 168px;
+  color: var(--diagnostic-error-text);
+  font-size: var(--fs-caption);
+  line-height: 1.2;
+  white-space: normal;
+}
+
 /* An unset value is a fact, not a blank: "none" says the part has no
    designator yet, where an empty box says nothing at all. */
 .property-field input::placeholder {
@@ -10222,6 +10275,16 @@ button.bottom-panel-head:focus-visible {
    the die and keeps its hue in the bloom. */
 .led-glow-core { stop-color: var(--led-glow-core); }
 .led-glow-halo { stop-color: var(--signal); }
+.led-color-red .led-glow-core,
+.led-color-red .led-glow-halo { stop-color: var(--led-red); }
+.led-color-amber .led-glow-core,
+.led-color-amber .led-glow-halo { stop-color: var(--led-amber); }
+.led-color-green .led-glow-core,
+.led-color-green .led-glow-halo { stop-color: var(--led-green); }
+.led-color-blue .led-glow-core,
+.led-color-blue .led-glow-halo { stop-color: var(--led-blue); }
+.led-color-white .led-glow-core,
+.led-color-white .led-glow-halo { stop-color: var(--led-white); }
 
 /* The halo is measured data, not decoration, so it does not animate: a pulsing
    readout reads as unstable and on a measured value it actively misleads. */

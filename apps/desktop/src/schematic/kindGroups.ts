@@ -15,15 +15,16 @@ export function isIndependentVoltageBranchKind(kind: ComponentKind): boolean {
   return kind === "vsource" || kind === "vac" || kind === "logicConstant";
 }
 
-/** Parse a logic-constant value to volts. EveryCircuit-style 0/1, plus optional
- *  engineering voltage (e.g. "5" for 5 V logic). */
+/** Parse the binary UI value while retaining the historical aliases accepted
+ * by imported EveryCircuit documents. New edits are constrained to 0/1 by the
+ * schema; reading an older `high`/`low` spelling must not break its netlist. */
 export function logicConstantVolts(value: string): number {
   const t = value.trim().toLowerCase();
   if (t === "" || t === "0" || t === "low" || t === "l" || t === "false") return 0;
   if (t === "1" || t === "high" || t === "h" || t === "true") return 1;
-  const n = Number(t);
-  if (Number.isFinite(n)) return n;
-  throw new Error(`Logic constant value must be 0, 1, or a voltage number (got "${value}").`);
+  const voltage = Number(t);
+  if (Number.isFinite(voltage)) return voltage;
+  throw new Error(`Logic constant value must be exactly 0 or 1 (got "${value}").`);
 }
 
 /** Two-terminal static contact (switch / push-button) held open or closed. */

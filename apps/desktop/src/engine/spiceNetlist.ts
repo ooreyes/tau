@@ -35,7 +35,7 @@ import {
   timer555InstanceLine,
 } from "./everyCircuitIcSpec";
 import { parseModulator, modulatorDeckLines } from "./modulatorSpec";
-import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
+import { boundedOpampLine, parseOpampAvol, parseOpampOutputLimits, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { solverOptionOverrides } from "../lib/simulationPreferences";
 import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes, definedSubcktNames } from "./modelDirectives";
@@ -43,7 +43,7 @@ import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { assertLaplaceAnalysisSupported, classifyLaplaceTransfer, laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductorRefusalMessage, isCoreInductor } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
-import { idealJunctionModel, IDEAL_SENSE_PREFIX, isIdealSenseSourceName } from "./idealModels";
+import { hasLtspiceProvenance, idealJunctionModel, IDEAL_SENSE_PREFIX, isIdealSenseSourceName } from "./idealModels";
 import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
 import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL_REFUSAL_MARKER, TAU_NOISE_REFUSAL_MARKER, translateContinuousSwitchDeckLines, translateIdealDiodeDeckLines, translateSwitchModelCard } from "./userModelLibrary";
 import { tlineDeckParams } from "./tlineSpec";
@@ -1572,12 +1572,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       return [`${name} ${node("p")} ${node("n")} DC ${low} PULSE(${low} ${high} 0 ${edge} ${edge} ${width} ${period})`];
     }
     case "logicConstant": {
-      let voltsText: string;
-      try {
-        voltsText = String(logicConstantVolts(component.value));
-      } catch {
-        voltsText = numberFromText(component, component.value.trim() || "0", "V");
-      }
+      const voltsText = String(logicConstantVolts(component.value));
       return [`${name} ${node("p")} ${node("n")} DC ${voltsText}`];
     }
     case "diode":
@@ -1599,6 +1594,15 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         return [
           `${name} ${node("a")} ${midpoint} ${ideal.model}`,
           `${IDEAL_SENSE_PREFIX}${base} ${midpoint} ${node("k")} 0`,
+        ];
+      }
+      if (component.kind === "diode" && !hasLtspiceProvenance(component)
+        && /(?:^|[\s,;])(?:is|n)\s*=/i.test(` ${component.value}`)) {
+        const junction = decodeParams("diode", component.value);
+        const model = `TAU_DIODE_${safeName(name)}`;
+        return [
+          `.model ${model} D(Is=${genericModelParam(junction.is, "1e-14", params, "diode Is")} N=${genericModelParam(junction.n, "1", params, "diode N")})`,
+          `${name} ${node("a")} ${node("k")} ${model}`,
         ];
       }
       const starter = component.kind === "diode"
@@ -1653,19 +1657,42 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       return modelLine ? [modelLine, ...deviceLine] : deviceLine;
     }
     case "njf":
-      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${deviceModel("TAU_NJF")}`];
-    case "pjf":
-      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${deviceModel("TAU_PJF")}`];
+    case "pjf": {
+      const jfet = decodeParams(component.kind, component.value);
+      const generic = component.kind === "njf" ? "NJF" : "PJF";
+      const hasOverride = !hasLtspiceProvenance(component)
+        && /(?:^|[\s,;])(?:vto|beta)\s*=/i.test(` ${component.value}`);
+      if (hasOverride) {
+        const model = `TAU_${generic}_${safeName(name)}`;
+        const fallbackVto = component.kind === "njf" ? "-2" : "2";
+        return [
+          `.model ${model} ${generic}(Vto=${genericModelParam(jfet.vto, fallbackVto, params, `${generic} Vto`)} Beta=${genericModelParam(jfet.beta, "1m", params, `${generic} Beta`)} Lambda=1e-4)`,
+          `${name} ${node("d")} ${node("g")} ${node("s")} ${model}`,
+        ];
+      }
+      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${deviceModel(`TAU_${generic}`)}`];
+    }
     case "npn":
     case "pnp": {
       // LTspice lets a BJT's Value name a `.subckt` (UHFpreamp's MRF901 macro-
       // model) and silently emits an X instance with the same C B E node order;
       // ngspice's Q line rejects a subckt name, so mirror that rewrite here.
-      const named = component.value.trim().split(/\s+/)[0] ?? "";
+      const bjt = decodeParams(component.kind, component.value);
+      const named = (bjt.model ?? component.value.trim().split(/\s+/)[0] ?? "").trim();
       if (named && subcktModels.has(named.toLowerCase())) {
         return [`X${name} ${node("c")} ${node("b")} ${node("e")} ${named}`];
       }
-      return [`${name} ${node("c")} ${node("b")} ${node("e")} ${deviceModel(component.kind === "npn" ? "TAU_NPN" : "TAU_PNP")}`];
+      const generic = component.kind === "npn" ? "NPN" : "PNP";
+      const hasOverride = !hasLtspiceProvenance(component)
+        && /(?:^|[\s,;])(?:bf|beta|vaf)\s*=/i.test(` ${component.value}`);
+      if (hasOverride) {
+        const model = `TAU_${generic}_${safeName(name)}`;
+        return [
+          `.model ${model} ${generic}(Is=1e-14 Bf=${genericModelParam(bjt.beta, "100", params, `${generic} Bf`)} Vaf=${genericModelParam(bjt.vaf, "100", params, `${generic} Vaf`)})`,
+          `${name} ${node("c")} ${node("b")} ${node("e")} ${model}`,
+        ];
+      }
+      return [`${name} ${node("c")} ${node("b")} ${node("e")} ${deviceModel(`TAU_${generic}`)}`];
     }
     case "opamp": {
       const base = safeName(component.label || `U${index + 1}`);
@@ -1684,9 +1711,36 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         !!netId && (netId === "0" || (netPinCount.get(netId) ?? 0) >= 2);
       const vPlus = entry.pins["v+"];
       const vMinus = entry.pins["v-"];
+      const genericOpamp = !hasLtspiceProvenance(component)
+        && /^(?:ideal\b|(?:gain|avol|vmin|vmax|min|max)\s*=)/i.test(component.value.trim());
       if (driven(vPlus) && driven(vMinus)) {
         const avol = parseOpampAvol(component.value);
-        return [railClampedOpampLine(`B_${base}`, node("out"), node("in+"), node("in-"), vPlus.toLowerCase(), vMinus.toLowerCase(), avol)];
+        const limits = genericOpamp && /(?:^|[\s,])(?:gain|vmin|vmax|min|max)\s*=/i.test(component.value)
+          ? parseOpampOutputLimits(component.value)
+          : undefined;
+        return [railClampedOpampLine(
+          `B_${base}`,
+          node("out"),
+          node("in+"),
+          node("in-"),
+          vPlus.toLowerCase(),
+          vMinus.toLowerCase(),
+          avol,
+          limits?.min,
+          limits?.max,
+        )];
+      }
+      if (genericOpamp && /(?:^|[\s,])(?:gain|vmin|vmax|min|max)\s*=/i.test(component.value)) {
+        const limits = parseOpampOutputLimits(component.value);
+        return [boundedOpampLine(
+          `B_${base}`,
+          node("out"),
+          node("in+"),
+          node("in-"),
+          parseOpampAvol(component.value),
+          limits.min,
+          limits.max,
+        )];
       }
       return [
         `E_${base} ${node("out")} 0 ${node("in+")} ${node("in-")} 1e6`,
@@ -2726,6 +2780,20 @@ function mosfetModelParam(value: string | undefined, fallback: string, params: P
   const resolved = substituteKnownBraces(value?.trim() || fallback, params).replace(/µ/g, "u");
   if (!/^[+\-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+\-]?\d+|[a-z]+)?$/i.test(resolved)) {
     throw new Error(`MOS model parameter "${value}" is not a finite SPICE quantity.`);
+  }
+  return resolved;
+}
+
+/** Shared finite SPICE-token guard for editable generic semiconductor cards. */
+function genericModelParam(
+  value: string | undefined,
+  fallback: string,
+  params: ParamScope,
+  label: string,
+): string {
+  const resolved = substituteKnownBraces(value?.trim() || fallback, params).replace(/µ/g, "u");
+  if (!/^[+\-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+\-]?\d+|[a-z]+)?$/i.test(resolved)) {
+    throw new Error(`${label} must be a finite SPICE quantity.`);
   }
   return resolved;
 }

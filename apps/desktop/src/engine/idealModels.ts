@@ -74,6 +74,7 @@
  */
 
 import type { SchematicComponent } from "../schematic/types";
+import { parseQuantity } from "../simulation/quantity";
 
 /** Textbook forward drop of a silicon diode. */
 export const IDEAL_DIODE_FORWARD_VOLTS = 0.7;
@@ -81,6 +82,16 @@ export const IDEAL_DIODE_FORWARD_VOLTS = 0.7;
 export const IDEAL_LED_FORWARD_VOLTS = 2;
 /** Fallback zener breakdown when the part names none - Tau's palette default. */
 export const IDEAL_ZENER_BREAKDOWN_VOLTS = 5.1;
+
+export const LED_COLORS = ["red", "amber", "green", "blue", "white"] as const;
+export type LedColor = (typeof LED_COLORS)[number];
+
+/** Color is a visual property of a generic LED, never a model selector. */
+export function ledColorFromValue(value: string): LedColor {
+  const match = /(?:^|[\s,;])color\s*=\s*([^\s,;]+)/i.exec(value ?? "");
+  const candidate = match?.[1]?.toLowerCase();
+  return LED_COLORS.includes(candidate as LedColor) ? candidate as LedColor : "red";
+}
 
 /** Conducting-contact resistance. Matches `TAU_SW`'s `Ron`, which is the number
  *  Tau has always used for an ideal closed contact. */
@@ -178,6 +189,18 @@ const GENERIC_VALUES: Readonly<Record<string, ReadonlySet<string>>> = {
   zener: new Set(["", "zener"]),
 };
 
+function keyedNumber(value: string, names: readonly string[], fallback: number): number {
+  const pattern = names.join("|");
+  const match = new RegExp(`(?:^|[\\s,;])(?:${pattern})\\s*=\\s*([^\\s,;]+)`, "i").exec(` ${value}`);
+  if (!match) return fallback;
+  try {
+    const parsed = parseQuantity(match[1]!);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export interface IdealJunctionModel {
   /** `.model` name the device line references. */
   readonly model: string;
@@ -208,29 +231,45 @@ export function idealJunctionModel(component: SchematicComponent): IdealJunction
   if (hasLtspiceProvenance(component)) return null;
 
   const value = component.value.trim();
-  const coded = parseIdealVoltageCode(value);
-  if (coded === null && !generic.has(value.toLowerCase())) return null;
+  const firstToken = value.split(/[\s,;]+/).find(Boolean) ?? "";
+  const coded = parseIdealVoltageCode(firstToken);
+  if (coded === null && !generic.has(firstToken.toLowerCase())) return null;
+  // Explicit Shockley parameters opt out of the textbook ideal path. The deck
+  // builder emits those as a per-instance generic card instead of silently
+  // dropping them.
+  if (component.kind === "diode") {
+    const extraKeys = value.split(/[\s,;]+/)
+      .filter((token) => token.includes("="))
+      .map((token) => token.slice(0, token.indexOf("=")).toLowerCase());
+    if (extraKeys.some((key) => key !== "is" && key !== "n")) return null;
+    if (extraKeys.length > 0) return null;
+  }
 
   if (component.kind === "zener") {
     // A zener's marking is its BREAKDOWN, not its forward drop: `5V1` is a
     // 5.1 V zener that still drops ~0.7 V the other way round. Emitting Bv from
     // the part's own name is the whole point - the deck used to pin every
     // generic zener at 5.1 V no matter what the schematic said.
-    const breakdownVolts = coded ?? IDEAL_ZENER_BREAKDOWN_VOLTS;
+    const breakdownVolts = keyedNumber(value, ["Vrev", "Bv", "Breakdown"], coded ?? IDEAL_ZENER_BREAKDOWN_VOLTS);
+    const forwardVolts = keyedNumber(value, ["Vfwd", "Forward"], IDEAL_DIODE_FORWARD_VOLTS);
     const model = `TAU_ZENER_IDEAL_${formatIdealVoltageCode(breakdownVolts)}`;
     return {
       model,
       card: `.model ${model} D(Ron=${IDEAL_ON_OHMS} Roff=${IDEAL_OFF_OHMS}`
-        + ` Vfwd=${deckNumber(IDEAL_DIODE_FORWARD_VOLTS)}`
+        + ` Vfwd=${deckNumber(forwardVolts)}`
         + ` Vrev=${deckNumber(breakdownVolts)} Rrev=${IDEAL_ON_OHMS}`
         + ` epsilon=${IDEAL_EPSILON} revepsilon=${IDEAL_EPSILON})`,
-      forwardVolts: IDEAL_DIODE_FORWARD_VOLTS,
+      forwardVolts,
       breakdownVolts,
     };
   }
 
   const isLed = component.kind === "led";
-  const forwardVolts = coded ?? (isLed ? IDEAL_LED_FORWARD_VOLTS : IDEAL_DIODE_FORWARD_VOLTS);
+  const forwardVolts = keyedNumber(
+    value,
+    ["Vfwd", "Forward"],
+    coded ?? (isLed ? IDEAL_LED_FORWARD_VOLTS : IDEAL_DIODE_FORWARD_VOLTS),
+  );
   const model = `TAU_${isLed ? "LED" : "DIODE"}_IDEAL_${formatIdealVoltageCode(forwardVolts)}`;
   return {
     model,

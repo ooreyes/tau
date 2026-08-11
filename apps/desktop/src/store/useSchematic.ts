@@ -1146,7 +1146,11 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           kind,
           x,
           y,
-          rotation: s.placeRotation,
+          // Ground is the one symbol whose electrical identity depends on its
+          // anchor being above the body. A new placement must not inherit a
+          // previous tool rotation; imported components keep their own ASC
+          // orientation because this path only creates native parts.
+          rotation: kind === "ground" ? 0 : s.placeRotation,
           mirrored: s.placeMirror,
           value: placeValue,
           label,

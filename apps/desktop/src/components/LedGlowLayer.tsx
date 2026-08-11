@@ -1,4 +1,5 @@
 import type { SchematicComponent } from "../schematic/types";
+import { ledColorFromValue, type LedColor } from "../engine/idealModels";
 import { ledGlowField } from "../simulation/ledGlow";
 import { componentVisualPlacement } from "./Canvas.geometry";
 
@@ -39,6 +40,7 @@ const GLOW_STOPS: readonly { offset: number; alpha: number; core?: boolean }[] =
 
 /** The gradient is identical for every LED, so it is defined once per layer. */
 const GLOW_GRADIENT_ID = "tau-led-glow";
+const gradientId = (color: LedColor) => color === "red" ? GLOW_GRADIENT_ID : `${GLOW_GRADIENT_ID}-${color}`;
 
 /**
  * Halo extent in schematic units. The LED body is ~28 units across, and the
@@ -76,20 +78,28 @@ export function LedGlowLayer({
   const glow = ledGlowField(components, currents);
   if (glow.size === 0) return null;
   const byId = new Map(components.map((component) => [component.id, component]));
+  const colors = new Set(
+    [...glow.keys()]
+      .map((id) => byId.get(id))
+      .filter((component): component is SchematicComponent => Boolean(component))
+      .map((component) => ledColorFromValue(component.value)),
+  );
 
   return (
     <g className="led-glow-layer" aria-hidden="true">
       <defs>
-        <radialGradient id={GLOW_GRADIENT_ID} cx="50%" cy="50%" r="50%">
-          {GLOW_STOPS.map((stop) => (
-            <stop
-              key={stop.offset}
-              className={stop.core ? "led-glow-core" : "led-glow-halo"}
-              offset={`${stop.offset * 100}%`}
-              stopOpacity={stop.alpha}
-            />
-          ))}
-        </radialGradient>
+        {[...colors].map((color) => (
+          <radialGradient key={color} id={gradientId(color)} className={`led-color-${color}`} cx="50%" cy="50%" r="50%">
+            {GLOW_STOPS.map((stop) => (
+              <stop
+                key={`${color}-${stop.offset}`}
+                className={stop.core ? "led-glow-core" : "led-glow-halo"}
+                offset={`${stop.offset * 100}%`}
+                stopOpacity={stop.alpha}
+              />
+            ))}
+          </radialGradient>
+        ))}
       </defs>
       {[...glow].map(([id, brightness]) => {
         const component = byId.get(id);
@@ -103,12 +113,14 @@ export function LedGlowLayer({
         // the part. The same call the canvas uses is the only way these two
         // cannot disagree.
         const placement = componentVisualPlacement(component);
+        const color = ledColorFromValue(component.value);
         return (
           <circle
             key={`led-glow-${id}`}
-            className="led-glow"
+            className={`led-glow led-color-${color}`}
             cx={placement.x}
             cy={placement.y}
+            fill={`url(#${gradientId(color)})`}
             // The halo grows with brightness as well as brightening; a disc
             // that only changes opacity reads as a rendering artifact rather
             // than as a lamp.

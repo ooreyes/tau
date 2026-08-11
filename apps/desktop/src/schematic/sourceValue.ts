@@ -1,5 +1,7 @@
 export type IndependentSourceUnit = "V" | "A";
 export type IndependentSourceMode = "dc" | "sine" | "pulse" | "pwl" | "exp" | "sffm";
+/** Import-only spellings which predate the unified source editor. */
+export type IndependentSourceLegacyKind = "vac" | "iac" | "vpulse";
 
 export interface PwlPointValue {
   time: string;
@@ -16,6 +18,9 @@ export interface IndependentSourceValue {
   modifiers: string;
   parameters: Record<string, string>;
   pwlPoints: PwlPointValue[];
+  /** Present only while an untouched legacy source can still round-trip its
+   * compact LTspice token form. Switching waveform mode clears it. */
+  legacyKind?: IndependentSourceLegacyKind;
 }
 
 const AC_TEXT_RE = /\bAC\b\s+([^\s,;]+)(?:\s+([+-]?\d[\w.+-]*))?/i;
@@ -137,6 +142,7 @@ function withCommon(
 export function decodeIndependentSourceValue(
   rawValue: string,
   unit: IndependentSourceUnit,
+  legacyKind?: IndependentSourceLegacyKind,
 ): IndependentSourceValue {
   const raw = rawValue.trim();
   const acMatch = AC_TEXT_RE.exec(raw);
@@ -151,6 +157,48 @@ export function decodeIndependentSourceValue(
     dcExplicit = true;
     explicitBias = dcMatch[1];
     remaining = remaining.slice(dcMatch[0].length).trim();
+  }
+
+  // `vac`, `iac`, and `vpulse` are old storage kinds, not different source
+  // semantics. Decode their compact positional values into the same waveform
+  // controls as a unified source, but retain the kind privately so an
+  // untouched edit still writes the original LTspice spelling. No migration is
+  // performed at import or render time.
+  if (legacyKind && !FUNCTION_RE.test(remaining)) {
+    const tokens = remaining.split(/\s+/).filter(Boolean);
+    if (legacyKind === "vac" || legacyKind === "iac") {
+      const offset = tokens.length >= 3 ? tokens[0] ?? "0" : "0";
+      const amplitude = tokens.length >= 3 ? tokens[1] ?? "1" : tokens[0] ?? "1";
+      const frequency = tokens.length >= 3 ? tokens[2] ?? "1k" : tokens[1] ?? "1k";
+      const source = sourceDefaults("sine", unit, offset);
+      source.parameters = {
+        ...source.parameters,
+        offset,
+        amplitude,
+        frequency,
+      };
+      source.dcBias = offset;
+      source.dcExplicit = dcExplicit;
+      source.acMagnitude = acMagnitude;
+      source.acPhase = acPhase;
+      source.modifiers = tokens.length > 3 ? tokens.slice(3).join(" ") : "";
+      source.legacyKind = legacyKind;
+      return source;
+    }
+    const source = sourceDefaults("pulse", unit, tokens[0] ?? "0");
+    source.parameters = {
+      low: tokens[0] ?? "0",
+      high: tokens[1] ?? "5",
+      frequency: tokens[2] ?? "100k",
+      duty: tokens[3] ?? "0.5",
+    };
+    source.dcBias = source.parameters.low;
+    source.dcExplicit = dcExplicit;
+    source.acMagnitude = acMagnitude;
+    source.acPhase = acPhase;
+    source.modifiers = tokens.length > 4 ? tokens.slice(4).join(" ") : "";
+    source.legacyKind = legacyKind;
+    return source;
   }
 
   const functionMatch = FUNCTION_RE.exec(remaining);
@@ -247,21 +295,31 @@ export function encodeIndependentSourceValue(source: IndependentSourceValue): st
       break;
     case "sine": {
       const p = source.parameters;
-      const args = trimOptionalZeros([
-        p.offset || "0", p.amplitude || "1", p.frequency || "1k", p.delay || "0",
-        p.damping || "0", p.phase || "0", p.cycles || "",
-      ], 3);
-      transient = `SINE(${args.join(" ")})`;
+      if ((source.legacyKind === "vac" || source.legacyKind === "iac")
+        && !p.delay && !p.damping && !p.phase && !p.cycles) {
+        const args = [p.offset || "0", p.amplitude || "1", p.frequency || "1k"];
+        transient = args[0] === "0" ? args.slice(1).join(" ") : args.join(" ");
+      } else {
+        const args = trimOptionalZeros([
+          p.offset || "0", p.amplitude || "1", p.frequency || "1k", p.delay || "0",
+          p.damping || "0", p.phase || "0", p.cycles || "",
+        ], 3);
+        transient = `SINE(${args.join(" ")})`;
+      }
       break;
     }
     case "pulse": {
       const p = source.parameters;
-      const args = [
-        p.low || "0", p.high || "5", p.delay || "0", p.rise || "1n",
-        p.fall || "1n", p.width || "5u", p.period || "10u",
-      ];
-      if (p.cycles) args.push(p.cycles);
-      transient = `PULSE(${args.join(" ")})`;
+      if (source.legacyKind === "vpulse" && p.frequency) {
+        transient = [p.low || "0", p.high || "5", p.frequency, p.duty || "0.5"].join(" ");
+      } else {
+        const args = [
+          p.low || "0", p.high || "5", p.delay || "0", p.rise || "1n",
+          p.fall || "1n", p.width || "5u", p.period || "10u",
+        ];
+        if (p.cycles) args.push(p.cycles);
+        transient = `PULSE(${args.join(" ")})`;
+      }
       break;
     }
     case "pwl": {

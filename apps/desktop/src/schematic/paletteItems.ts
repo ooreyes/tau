@@ -60,7 +60,7 @@ export function paletteItemsForSection(section: CatalogSection): PaletteItemSpec
 
 /** Flat list for search; includes preset names (AND, NAND, …). */
 export function allPaletteItems(): PaletteItemSpec[] {
-  return CATALOG.flatMap(expandCatalogEntry);
+  return CATALOG.filter((entry) => entry.paletteVisible !== false).flatMap(expandCatalogEntry);
 }
 
 export function matchPaletteItems(query: string): PaletteItemSpec[] {

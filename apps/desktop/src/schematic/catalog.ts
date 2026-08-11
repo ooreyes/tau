@@ -5,6 +5,8 @@ export interface CatalogEntry {
   kind: ComponentKind;
   name: string;
   section: CatalogSection;
+  /** Legacy/import-only kinds stay readable but do not create duplicate palette rows. */
+  paletteVisible?: boolean;
   /** Single-key shortcut to start placing this component. */
   hotkey: string;
   /** Reference-designator prefix, e.g. "R" → R1, R2, ... */
@@ -34,17 +36,17 @@ export type CatalogSection = (typeof PALETTE_SECTIONS)[number];
 
 export const CATALOG: CatalogEntry[] = [
   // ── Sources ──────────────────────────────────────────────────────────────
-  { kind: "vsource",       section: "Sources",           name: "DC Voltage",      hotkey: "v", prefix: "V",   defaultValue: "5",     unit: "V" },
-  { kind: "isource",       section: "Sources",           name: "DC Current",      hotkey: "i", prefix: "I",   defaultValue: "1m",    unit: "A" },
+  { kind: "vsource",       section: "Sources",           name: "Voltage source",  hotkey: "v", prefix: "V",   defaultValue: "5",     unit: "V" },
+  { kind: "isource",       section: "Sources",           name: "Current source",  hotkey: "i", prefix: "I",   defaultValue: "1m",    unit: "A" },
   // Literal AC source: places `vac` with amplitude + frequency (sine). Not a
   // DC source with small-signal AC stimulus toggled on — that stays on DC Voltage.
-  { kind: "vac",           section: "Sources",           name: "AC Voltage",      hotkey: "a", prefix: "V",   defaultValue: "1 1k",  unit: "V Hz" },
-  { kind: "iac",           section: "Sources",           name: "AC Current",      hotkey: "y", prefix: "I",   defaultValue: "1m 1k", unit: "A Hz" },
+  { kind: "vac",           section: "Sources",           name: "AC Voltage",      hotkey: "a", prefix: "V",   defaultValue: "1 1k",  unit: "V Hz", paletteVisible: false },
+  { kind: "iac",           section: "Sources",           name: "AC Current",      hotkey: "y", prefix: "I",   defaultValue: "1m 1k", unit: "A Hz", paletteVisible: false },
   // unit is "" (not "V"): the value is the 4-token PULSE spec (low high freq
   // duty), not a single voltage - Canvas.tsx's sourceValueLabel gives it a
   // bespoke "low→high @ freq" canvas label instead of suffixing one unit
   // onto the whole token string.
-  { kind: "vpulse",        section: "Sources",           name: "Pulse Voltage",   hotkey: "k", prefix: "V",   defaultValue: "0 5 100k 0.5", unit: "" },
+  { kind: "vpulse",        section: "Sources",           name: "Pulse Voltage",   hotkey: "k", prefix: "V",   defaultValue: "0 5 100k 0.5", unit: "", paletteVisible: false },
   { kind: "ground",        section: "Sources",           name: "Ground",          hotkey: "g", prefix: "GND", defaultValue: "",      unit: "" },
 
   // ── Passives ─────────────────────────────────────────────────────────────
@@ -140,5 +142,5 @@ export const CATALOG_BY_KIND: Record<ComponentKind, CatalogEntry> =
 
 /** Catalog entries belonging to one palette section, in browse order. */
 export function catalogSectionEntries(section: CatalogSection): CatalogEntry[] {
-  return CATALOG.filter((e) => e.section === section);
+  return CATALOG.filter((e) => e.section === section && e.paletteVisible !== false);
 }

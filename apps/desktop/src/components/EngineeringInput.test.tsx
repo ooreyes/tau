@@ -66,7 +66,7 @@ describe("EngineeringInput", () => {
     expect(onValueChange).not.toHaveBeenCalled();
   });
 
-  it("reverts an incomplete mantissa to the stored value on blur", () => {
+  it("keeps an incomplete mantissa visible with an accessible explanation", () => {
     const onValueChange = vi.fn();
     render(
       <div>
@@ -80,7 +80,11 @@ describe("EngineeringInput", () => {
     expect(input.value).toBe("1e-");
 
     fireEvent.blur(input, { relatedTarget: screen.getByText("elsewhere") });
-    expect(input.value).toBe("4.7");
+    expect(input.value).toBe("1e-");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    const errorId = input.getAttribute("aria-describedby");
+    expect(errorId).toBeTruthy();
+    expect(document.getElementById(errorId!)?.textContent).toContain("finite");
   });
 
   it("sizes the input to the mantissa length so long values are not clipped", () => {
@@ -108,7 +112,7 @@ describe("EngineeringInput", () => {
     expect(input.value).toBe("1.23456789e11");
   });
 
-  it("marks an out-of-range draft invalid, refuses it, and restores the committed value", () => {
+  it("marks an out-of-range draft invalid, refuses it, and keeps the draft visible", () => {
     const onValueChange = vi.fn();
     render(
       <div>
@@ -128,7 +132,8 @@ describe("EngineeringInput", () => {
     expect(input.getAttribute("aria-invalid")).toBe("true");
     expect(onValueChange).not.toHaveBeenCalled();
     fireEvent.blur(input, { relatedTarget: screen.getByText("elsewhere") });
-    expect(input.value).toBe("200");
+    expect(input.value).toBe("0");
+    expect(screen.getByRole("alert").textContent).toContain("at or above");
   });
 
   it("uses a bounded unitless field without an irrelevant SI-prefix chooser", () => {

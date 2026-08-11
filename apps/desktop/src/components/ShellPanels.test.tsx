@@ -223,7 +223,7 @@ describe("ComponentInspector - imported op-amp parameters", () => {
       },
     };
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    render(<ComponentInspector selected={selected} />);
+    render(<ComponentInspector selected={selected} manualModelControls />);
 
     const model = screen.getByRole("combobox", { name: "Op-amp model" });
     expect(model.tagName).toBe("BUTTON");
@@ -258,7 +258,7 @@ describe("ComponentInspector - imported op-amp parameters", () => {
     };
     const openLibraries = vi.fn();
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} manualModelControls />);
 
     expect((screen.getByRole("textbox", { name: "Op-amp part" }) as HTMLInputElement).value).toBe("OP07");
     const model = screen.getByRole("textbox", { name: "Op-amp simulation model" }) as HTMLInputElement;
@@ -276,6 +276,27 @@ describe("ComponentInspector - imported op-amp parameters", () => {
 });
 
 describe("ComponentInspector - semiconductor model chooser", () => {
+  it("hides manual model controls by default while preserving exact refusal", () => {
+    const selected = {
+      id: "m-default",
+      kind: "nmos" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "IRF540",
+      label: "M1",
+    };
+    const openLibraries = vi.fn();
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+
+    expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Attach Model Library" })).toBeNull();
+    expect(screen.getByRole("status").textContent)
+      .toContain("Needs an exact model · IRF540 isn't available. Run is refused");
+    expect(openLibraries).not.toHaveBeenCalled();
+  });
+
   it("selects the exact bundled Class-D PMOS and drops inapplicable Level-1 geometry", async () => {
     const selected = {
       id: "m-p",
@@ -287,7 +308,7 @@ describe("ComponentInspector - semiconductor model chooser", () => {
       label: "M1",
     };
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    render(<ComponentInspector selected={selected} />);
+    render(<ComponentInspector selected={selected} manualModelControls />);
 
     const chooser = screen.getByRole("combobox", { name: "Simulation model" });
     expect(chooser.tagName).toBe("BUTTON");
@@ -323,7 +344,7 @@ describe("ComponentInspector - semiconductor model chooser", () => {
         text: ".model MY_NPN NPN(Bf=175)\n.model NOT_FOR_Q1 PNP(Bf=90)",
       }],
     });
-    render(<ComponentInspector selected={selected} />);
+    render(<ComponentInspector selected={selected} manualModelControls />);
 
     const chooser = screen.getByRole("combobox", { name: "Simulation model" });
     expect(chooser.tagName).toBe("BUTTON");
@@ -348,14 +369,14 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     };
     const openLibraries = vi.fn();
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} manualModelControls />);
 
     const chooser = screen.getByRole("combobox", { name: "Simulation model" });
     expect(chooser.tagName).toBe("BUTTON");
     expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
     expect(chooser.textContent).toContain("IRF540");
     expect(document.querySelector("select[aria-label='Simulation model']")).toBeNull();
-    expect(screen.getByRole("status").textContent).toMatch(/Needs a model ·.*won't substitute a generic NMOS/);
+    expect(screen.getByRole("status").textContent).toMatch(/Needs an exact model ·.*won't substitute a generic NMOS/);
     fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
@@ -368,7 +389,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       value: "tau_passthrough", label: "X1",
     };
     useSchematic.setState({ components: [selected] });
-    const { rerender } = render(<ComponentInspector selected={selected} />);
+    const { rerender } = render(<ComponentInspector selected={selected} manualModelControls />);
     const chooser = screen.getByRole("combobox", { name: "Subcircuit model" });
     expect(chooser.tagName).toBe("BUTTON");
     expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
@@ -389,7 +410,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
         { id: "p5", label: "gn" },
       ],
     });
-    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} manualModelControls />);
 
     const dead = screen.getByRole("textbox", { name: "Dead time" }) as HTMLInputElement;
     expect(dead.value).toBe("200");
@@ -415,7 +436,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       directives: [`.subckt deadtime vcc vee pwm gp gn params: dead=250n\\n.ends deadtime`],
     });
 
-    const { rerender } = render(<ComponentInspector selected={selected} />);
+    const { rerender } = render(<ComponentInspector selected={selected} manualModelControls />);
     const chooser = screen.getByRole("combobox", { name: "Subcircuit model" });
     expect(chooser.tagName).toBe("BUTTON");
     expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
@@ -429,7 +450,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     fireEvent.change(dead, { target: { value: "400n" } });
     expect(useSchematic.getState().components[0].value).toBe("deadtime dead=400n");
 
-    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} manualModelControls />);
     const nextChooser = screen.getByRole("combobox", { name: "Subcircuit model" });
     fireEvent.pointerDown(nextChooser, { button: 0, pointerId: 1, pointerType: "mouse" });
     const passthrough = await screen.findByRole("option", { name: /tau_passthrough · 2 terminals/ });
@@ -455,14 +476,14 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       value: "tau_passthrough", label: "X1",
     };
     useSchematic.setState({ components: [selected] });
-    const { rerender } = render(<ComponentInspector selected={selected} />);
+    const { rerender } = render(<ComponentInspector selected={selected} manualModelControls />);
 
     const chooser = screen.getByRole("combobox", { name: "Subcircuit model" });
     fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });
     const driver = await screen.findByRole("option", { name: /TauDeadtimeDriver · 5 terminals/ });
     fireEvent.pointerUp(driver, { button: 0, pointerId: 1, pointerType: "mouse" });
     fireEvent.click(driver);
-    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} manualModelControls />);
 
     const ports = screen.getByRole("list", { name: "Terminal order" });
     const rows = [...ports.querySelectorAll("li")].map((row) => row.textContent);
@@ -480,7 +501,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     };
     const openLibraries = vi.fn();
     useSchematic.setState({ components: [selected] });
-    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} manualModelControls />);
 
     expect(screen.getByRole("status").textContent).toContain("Ready · 2 named terminals");
     expect(screen.getByText(/Attach a .lib or .sub file in Model Libraries/)).toBeTruthy();
@@ -495,7 +516,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     };
     const openLibraries = vi.fn();
     useSchematic.setState({ components: [selected] });
-    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} manualModelControls />);
 
     const chooser = screen.getByRole("combobox", { name: "Subcircuit model" });
     expect(chooser.tagName).toBe("BUTTON");
@@ -642,41 +663,45 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
     extra: Record<string, unknown> = {},
   ) => ({ id: `${kind}-1`, kind, x: 160, y: 160, rotation: 0 as const, value, label: "D1", ...extra });
 
-  const show = (component: ReturnType<typeof junction>, directives: string[] = []) => {
+  const show = (
+    component: ReturnType<typeof junction>,
+    directives: string[] = [],
+    manualModelControls = false,
+  ) => {
     useSchematic.setState({
       components: [component],
       selectedId: component.id,
       selectedIds: [component.id],
       directives,
     });
-    render(<ComponentInspector selected={component} />);
+    render(<ComponentInspector selected={component} manualModelControls={manualModelControls} />);
   };
 
   it("says a placed diode is ideal, in the volts it will actually drop", () => {
     show(junction("diode", "D"));
     expect(screen.getByRole("status").textContent)
-      .toContain("Ideal model · a fixed 0.7 V forward drop, no junction capacitance and no reverse recovery.");
+      .toContain("Generic diode · 0.7 V forward.");
   });
 
   it("states the LED's own drop and the zener's marked breakdown", () => {
     show(junction("led", "LED"));
-    expect(screen.getByRole("status").textContent).toContain("a fixed 2 V forward drop");
+    expect(screen.getByRole("status").textContent).toContain("Generic LED · 2 V forward");
 
     cleanup();
     show(junction("zener", "5V1"));
     expect(screen.getByRole("status").textContent)
-      .toContain("a fixed 0.7 V forward drop, 5.1 V reverse breakdown");
+      .toContain("Generic Zener · 0.7 V forward · 5.1 V reverse.");
 
     // A marking that names no library part is still a part the deck runs, so
     // it must not be reported as a missing model.
     cleanup();
     show(junction("zener", "12V"));
-    expect(screen.getByRole("status").textContent).toContain("12 V reverse breakdown");
-    expect(screen.getByRole("status").textContent).not.toContain("Needs a model");
+    expect(screen.getByRole("status").textContent).toContain("Generic Zener · 0.7 V forward · 12 V reverse.");
+    expect(screen.getByRole("status").textContent).not.toContain("Needs an exact model");
   });
 
   it("keeps the model chooser behind Advanced while the part is ideal", async () => {
-    show(junction("diode", "D"));
+    show(junction("diode", "D"), [], true);
     expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
 
     const disclosure = screen.getByRole("button", { name: "Toggle advanced settings" });
@@ -700,8 +725,8 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
 
     const status = screen.getByRole("status").textContent ?? "";
     expect(status).not.toContain("Ideal model");
-    expect(status).toContain("This part came from an LTspice schematic, so it keeps that real model");
-    expect(screen.getByRole("combobox", { name: "Simulation model" })).toBeTruthy();
+    expect(status).toContain("Imported exact model · identity and provenance are read-only");
+    expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Toggle advanced settings" })).toBeNull();
   });
 
@@ -710,8 +735,8 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
 
     const status = screen.getByRole("status").textContent ?? "";
     expect(status).not.toContain("Ideal model");
-    expect(status).toContain("Defined by this schematic");
-    expect(screen.getByRole("combobox", { name: "Simulation model" })).toBeTruthy();
+    expect(status).toContain("Document model · the authored .model card is used exactly");
+    expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
   });
 });
 
@@ -1152,8 +1177,8 @@ describe("BottomPanel - errors tab states", () => {
  * number it could not draw and then drew its five-lead maximum instead: the
  * saved value and the picture disagreed about the same part.
  *
- * These drive the panel, not the helper, because the helper was never the
- * missing piece - the wiring to it was.
+ * These drive the panel, not the helper, because the panel must keep invalid
+ * drafts visible and refuse to mutate the document until the value is valid.
  */
 describe("ComponentInspector - a field with declared bounds enforces them", () => {
   const gate = (value = "and") => ({
@@ -1179,19 +1204,24 @@ describe("ComponentInspector - a field with declared bounds enforces them", () =
 
   const storedValue = () => useSchematic.getState().components[0].value;
 
-  it("commits the maximum when the typed number is far above it", () => {
+  it("keeps an over-range draft visible and refuses the document mutation", () => {
     const inputs = showGate();
     fireEvent.change(inputs, { target: { value: "21000" } });
     fireEvent.blur(inputs);
-    expect(storedValue()).toBe("and Inputs=5");
+    expect((inputs as HTMLInputElement).value).toBe("21000");
+    expect(inputs.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("alert").textContent).toContain("at or below 5");
+    expect(storedValue()).toBe("and");
   });
 
-  it("commits the minimum when the typed number is below it", () => {
+  it("keeps an under-range draft visible and refuses the document mutation", () => {
     const inputs = showGate("and Inputs=4");
     fireEvent.change(inputs, { target: { value: "0" } });
     fireEvent.blur(inputs);
-    // Two is the fallback, so the token drops back out of the value string.
-    expect(storedValue()).toBe("and");
+    expect((inputs as HTMLInputElement).value).toBe("0");
+    expect(inputs.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("alert").textContent).toContain("at or above 2");
+    expect(storedValue()).toBe("and Inputs=4");
   });
 
   it("commits on Enter as well as on blur", () => {
@@ -1205,9 +1235,7 @@ describe("ComponentInspector - a field with declared bounds enforces them", () =
     expect(storedValue()).toBe("and Inputs=4");
   });
 
-  it("lets a half-typed number exist without snapping the box back", () => {
-    // The old control rejected every intermediate state, so selecting the
-    // field and typing a two-digit number was impossible.
+  it("keeps a half-typed out-of-range number visible with an explanation", () => {
     const inputs = showGate();
     fireEvent.change(inputs, { target: { value: "" } });
     expect((inputs as HTMLInputElement).value).toBe("");
@@ -1216,7 +1244,9 @@ describe("ComponentInspector - a field with declared bounds enforces them", () =
     expect(storedValue()).toBe("and");
     fireEvent.change(inputs, { target: { value: "15" } });
     fireEvent.blur(inputs);
-    expect(storedValue()).toBe("and Inputs=5");
+    expect((inputs as HTMLInputElement).value).toBe("15");
+    expect(screen.getByRole("alert").textContent).toContain("at or below 5");
+    expect(storedValue()).toBe("and");
   });
 
   it("abandons the edit on Escape", () => {
@@ -1253,7 +1283,10 @@ describe("ComponentInspector - a field with declared bounds enforces them", () =
     const wiper = screen.getByRole("textbox", { name: "Wiper position" });
     fireEvent.change(wiper, { target: { value: "900" } });
     fireEvent.blur(wiper);
-    expect(useSchematic.getState().components[0].value).toBe("10k Wiper=1");
+    expect((wiper as HTMLInputElement).value).toBe("900");
+    expect(wiper.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("alert").textContent).toContain("at or below 100");
+    expect(useSchematic.getState().components[0].value).toBe("10k Wiper=0.25");
   });
 
   it("leaves an unbounded field committing as you type", () => {

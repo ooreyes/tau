@@ -9,6 +9,8 @@ import {
   paramFields,
   paramRangeLabel,
   paramSummary,
+  paramValidationMessage,
+  paramValuesValidationMessage,
   toDisplayParamValue,
 } from "./params";
 import { CATALOG } from "./catalog";
@@ -399,6 +401,40 @@ describe("kinds without a parameter schema", () => {
     expect(paramFields("diode", "1N4148")).toEqual([]);
     expect(decodeParams("diode", "1N4148")).toEqual({});
     expect(decodeParams("ground", "")).toEqual({});
+  });
+});
+
+describe("generic model-backed parameter schemas", () => {
+  it("exposes generic LED, Zener, semiconductor, and op-amp controls without model identity", () => {
+    expect(paramFields("led", "LED").map((field) => field.key)).toEqual(["color", "vfwd"]);
+    expect(paramFields("zener", "5V1").map((field) => field.key)).toEqual(["breakdown", "vfwd"]);
+    expect(paramFields("npn", "NPN").map((field) => field.key)).toEqual(["beta", "vaf"]);
+    expect(paramFields("njf", "NJF").map((field) => field.key)).toEqual(["vto", "beta"]);
+    expect(paramFields("opamp", "ideal").map((field) => field.key)).toEqual(["gain", "vmin", "vmax"]);
+  });
+
+  it("round-trips a Zener marking and generic op-amp limits", () => {
+    expect(decodeParams("zener", "12V Vrev=12 Vfwd=0.8")).toMatchObject({
+      model: "12V",
+      breakdown: "12",
+      vfwd: "0.8",
+    });
+    expect(encodeParams("opamp", { model: "ideal", gain: "2Meg", vmin: "-5", vmax: "5" }))
+      .toBe("ideal Gain=2Meg Vmin=-5 Vmax=5");
+  });
+
+  it("rejects invalid enum, numeric, and cross-field drafts before the document layer", () => {
+    const color = paramFields("led", "LED").find((field) => field.key === "color")!;
+    const vfwd = paramFields("led", "LED").find((field) => field.key === "vfwd")!;
+    const level = paramFields("logicConstant", "1")[0]!;
+    expect(paramValidationMessage(color, "purple")).toContain("Choose");
+    expect(paramValidationMessage(color, "blue")).toBeNull();
+    expect(paramValidationMessage(vfwd, "NaN")).toContain("finite");
+    expect(paramValidationMessage(vfwd, "0")).toContain("at or above");
+    expect(paramValidationMessage(level, "3.3")).toContain("Choose");
+    expect(paramValuesValidationMessage("opamp", {
+      model: "ideal", gain: "1Meg", vmin: "5", vmax: "5",
+    })).toContain("below maximum");
   });
 });
 

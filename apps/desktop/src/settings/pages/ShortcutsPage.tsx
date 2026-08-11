@@ -56,7 +56,7 @@ export function ShortcutsPage() {
   // keycaps, which is worse than omitting them.
   const placement = useMemo(
     () =>
-      CATALOG.filter((entry) => entry.hotkey.trim().length > 0).sort((a, b) =>
+      CATALOG.filter((entry) => entry.paletteVisible !== false && entry.hotkey.trim().length > 0).sort((a, b) =>
         a.hotkey.localeCompare(b.hotkey),
       ),
     [],

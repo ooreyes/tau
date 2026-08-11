@@ -17,6 +17,7 @@ import {
   updateIndependentSourceField,
   updatePwlPoint,
   type IndependentSourceMode,
+  type IndependentSourceLegacyKind,
   type IndependentSourceUnit,
   type IndependentSourceValue,
 } from "../schematic/sourceValue";
@@ -70,15 +71,17 @@ function SourceField({ label, value, unit = "", onBeginChange, onValueChange }: 
 export function IndependentSourceEditor({
   value,
   unit,
+  legacyKind,
   onBeginChange,
   onValueChange,
 }: {
   value: string;
   unit: IndependentSourceUnit;
+  legacyKind?: IndependentSourceLegacyKind;
   onBeginChange: (key: string) => void;
   onValueChange: (value: string) => void;
 }) {
-  const source = decodeIndependentSourceValue(value, unit);
+  const source = decodeIndependentSourceValue(value, unit, legacyKind);
   const commit = (key: string, next: IndependentSourceValue) => {
     onBeginChange(key);
     onValueChange(encodeIndependentSourceValue(next));
@@ -145,16 +148,25 @@ export function IndependentSourceEditor({
       )}
 
       {source.mode === "pulse" && (
-        <>
-          {parameter("low", "Low level", unit)}
-          {parameter("high", "High level", unit)}
-          {parameter("delay", "Start delay", "s")}
-          {parameter("rise", "Rise time", "s")}
-          {parameter("fall", "Fall time", "s")}
-          {parameter("width", "On time", "s")}
-          {parameter("period", "Period", "s")}
-          {parameter("cycles", "Cycles")}
-        </>
+        source.legacyKind === "vpulse" ? (
+          <>
+            {parameter("low", "Low level", unit)}
+            {parameter("high", "High level", unit)}
+            {parameter("frequency", "Frequency", "Hz")}
+            {parameter("duty", "Duty (0–1)")}
+          </>
+        ) : (
+          <>
+            {parameter("low", "Low level", unit)}
+            {parameter("high", "High level", unit)}
+            {parameter("delay", "Start delay", "s")}
+            {parameter("rise", "Rise time", "s")}
+            {parameter("fall", "Fall time", "s")}
+            {parameter("width", "On time", "s")}
+            {parameter("period", "Period", "s")}
+            {parameter("cycles", "Cycles")}
+          </>
+        )
       )}
 
       {source.mode === "pwl" && (

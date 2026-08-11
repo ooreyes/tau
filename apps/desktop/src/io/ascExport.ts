@@ -348,6 +348,18 @@ function isStaticStateSwitch(component: SchematicComponent): boolean {
   return state.startsWith("open") || state.startsWith("closed");
 }
 
+/** Keep Tau-only generic knobs in TauValue while giving LTspice a valid
+ * junction marking in the visible Value slot. Imported symbols take the
+ * verbatim branch above and are never rewritten here. */
+function ltspiceJunctionValue(component: SchematicComponent): string {
+  const value = component.value.trim();
+  const first = value.split(/[\s,;]+/).find(Boolean) ?? "";
+  if (component.kind === "diode" && /^(?:d|diode)$/i.test(first)) return "D";
+  if (component.kind === "led" && /^led$/i.test(first)) return "LED";
+  if (component.kind === "zener" && /^(?:zener|\d{1,3}(?:\.\d{1,2})?v(?:\d{1,2})?)$/i.test(first)) return first;
+  return component.value;
+}
+
 function componentToLtspiceSymbol(component: SchematicComponent): LtspiceComponentSymbol | null {
   if (
     component.ltSymbolType &&
@@ -471,7 +483,7 @@ function componentToLtspiceSymbol(component: SchematicComponent): LtspiceCompone
     return { type: `Digital\\\\${leaf}`, value: params };
   }
   const type = kindToLtspiceType(component.kind);
-  return type ? { type, value: component.value } : null;
+  return type ? { type, value: ltspiceJunctionValue(component) } : null;
 }
 
 /**

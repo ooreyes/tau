@@ -1,4 +1,5 @@
 import { nativelyPlacedGateSpec, parseDigitalGate } from "../engine/digitalGateSpec";
+import { ledColorFromValue } from "../engine/idealModels";
 import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { isSpdtThrowToNo, isStaticContactClosed } from "./kindGroups";
 import type { ComponentKind, Rotation } from "./types";
@@ -1049,8 +1050,9 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
         <>
           <line x1={0} y1={-pin} x2={0} y2={-14} />
           <rect x={-12} y={-14} width={24} height={28} rx={2} />
-          <path d="M -4 -4 H 4 M 0 -8 V 0" />
-          <line x1={-5} y1={7} x2={5} y2={7} />
+          <text x={0} y={4} textAnchor="middle" className="logic-state">
+            {value?.trim() === "0" ? "0" : value?.trim() === "1" ? "1" : "?"}
+          </text>
           <line x1={0} y1={14} x2={0} y2={pin} />
         </>
       );
@@ -1067,7 +1069,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
 
     case "led":
       return (
-        <>
+        <g className={`led-artwork led-color-${ledColorFromValue(value ?? "")}`}>
           <line x1={-32} y1={0} x2={-12} y2={0} />
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <line x1={10} y1={-14} x2={10} y2={14} />
@@ -1076,7 +1078,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
               between their heads at selected stroke weight. */}
           <path data-light-arrow="one" d="M 18 -20 L 31 -33 M 31 -33 L 29 -25 M 31 -33 L 23 -31" />
           <path data-light-arrow="two" d="M 5 -20 L 18 -33 M 18 -33 L 16 -25 M 18 -33 L 10 -31" />
-        </>
+        </g>
       );
 
     case "zener":
