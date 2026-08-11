@@ -2003,6 +2003,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Per-analysis ngspice option mapping
 
 ## 8. UX / app
+- 🟡 **PDF-directed UI/UX remediation fleet (active 2026-08-11):** the
+  authoritative 24-item tracker is `UI_UX_FIXES.md`, with lossless source images
+  under `screenshots/ui-ux-fix-brief/`. The fleet starts from tagged baseline
+  `live-simulator-baseline-2026-08-11` (`919f0e1`), preserves exact model
+  resolution and `.asc` compatibility, and lands through the isolated-worktree
+  exception in `AGENTS.md`. Only evidence-backed `FIXED` or
+  `ALREADY SATISFIED` items count; the packaged native app, both themes, and the
+  900×600 floor are mandatory.
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - 🟡 **Visual QA on the actual desktop app:** the current Tauri hot-reload app
   stays alive on `auto/ltspice-parity`; live browser QA verified centered

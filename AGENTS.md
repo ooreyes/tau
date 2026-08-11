@@ -66,6 +66,38 @@ reproducing LTspice results. UI breadth without that path is not progress.
 - The **heartbeat** in `PROGRESS.md` makes a mid‑unit death visible to the next
   run. Always update it at claim and at done.
 
+## Parallel Luna fleet exception (UI/UX remediation only)
+
+This narrow exception applies only when a primary orchestrator explicitly
+starts a run from `UI_UX_FIXES.md` and assigns each worker a unique run ID,
+lane, worktree path, and base commit. It does not authorize another durable
+lineage.
+
+- The orchestrator alone works in the primary checkout, owns `PROGRESS.md`,
+  `FEATURE_PARITY.md`, and `UI_UX_FIXES.md`, integrates commits, runs full
+  gates, and pushes `auto/ltspice-parity`.
+- Each parallel worker receives an isolated temporary worktree created from the
+  orchestrator's recorded integration commit on a local-only
+  `codex/tau-fleet-<lane>-<run-id>` branch. Workers must use that assigned
+  worktree for every command and edit.
+- A fleet worker **must not run step 1 of the normal loop**: it may not fetch,
+  switch/reset `auto/ltspice-parity`, push, or edit the three orchestrator-owned
+  tracking files. Its branch and worktree are the synchronization boundary.
+- Workers commit one assigned unit with focused tests and return the commit SHA,
+  changed-file list, tests, screenshots, and risks. The required co-author
+  trailer still applies. A worker never merges or cherry-picks its own lane.
+- The orchestrator cherry-picks one worker commit at a time. On conflict it
+  aborts that integration attempt and sends the lane back to its worker to
+  rebase onto the current integration tip and recommit. After a clean landing,
+  the orchestrator tests, records, commits/pushes any tracking update, removes
+  the temporary worktree, and deletes its local branch.
+- Worker branches are never pushed. Their local commits are integrated promptly
+  so `auto/ltspice-parity` remains the only remote durable store. No worker may
+  use the `auto/*` prefix because the checkpoint hook would push it.
+- Computer Use and Chrome control are serialized through dedicated QA lanes;
+  parallel workers must not compete for the same desktop application or browser
+  session.
+
 ## Token discipline
 
 - Start with `git status`, the `PROGRESS.md` heartbeat, the active
