@@ -36,6 +36,24 @@ const MODE_BY_FUNCTION: Record<string, IndependentSourceMode> = {
 
 const splitArgs = (text: string): string[] => text.trim().split(/[\s,]+/).filter(Boolean);
 
+function legacyTokens(text: string): { values: string[]; modifiers: string } {
+  const tokens = text.trim().split(/[\s,]+/).filter(Boolean);
+  const values: string[] = [];
+  const modifiers: string[] = [];
+  for (const token of tokens) {
+    if (/[A-Za-z_]\w*\s*=/.test(token) || /^(?:load2?|noiseless)$/i.test(token)) {
+      modifiers.push(token);
+    } else {
+      values.push(token);
+    }
+  }
+  return { values, modifiers: modifiers.join(" ") };
+}
+
+function isZeroText(value: string | undefined): boolean {
+  return !value?.trim() || value.trim() === "0";
+}
+
 function sourceDefaults(
   mode: IndependentSourceMode,
   unit: IndependentSourceUnit,
@@ -165,11 +183,11 @@ export function decodeIndependentSourceValue(
   // untouched edit still writes the original LTspice spelling. No migration is
   // performed at import or render time.
   if (legacyKind && !FUNCTION_RE.test(remaining)) {
-    const tokens = remaining.split(/\s+/).filter(Boolean);
+    const tokens = legacyTokens(remaining);
     if (legacyKind === "vac" || legacyKind === "iac") {
-      const offset = tokens.length >= 3 ? tokens[0] ?? "0" : "0";
-      const amplitude = tokens.length >= 3 ? tokens[1] ?? "1" : tokens[0] ?? "1";
-      const frequency = tokens.length >= 3 ? tokens[2] ?? "1k" : tokens[1] ?? "1k";
+      const offset = tokens.values.length >= 3 ? tokens.values[0] ?? "0" : "0";
+      const amplitude = tokens.values.length >= 3 ? tokens.values[1] ?? "1" : tokens.values[0] ?? "1";
+      const frequency = tokens.values.length >= 3 ? tokens.values[2] ?? "1k" : tokens.values[1] ?? "1k";
       const source = sourceDefaults("sine", unit, offset);
       source.parameters = {
         ...source.parameters,
@@ -177,26 +195,26 @@ export function decodeIndependentSourceValue(
         amplitude,
         frequency,
       };
-      source.dcBias = offset;
+      source.dcBias = dcExplicit ? explicitBias : offset;
       source.dcExplicit = dcExplicit;
       source.acMagnitude = acMagnitude;
       source.acPhase = acPhase;
-      source.modifiers = tokens.length > 3 ? tokens.slice(3).join(" ") : "";
+      source.modifiers = tokens.modifiers;
       source.legacyKind = legacyKind;
       return source;
     }
-    const source = sourceDefaults("pulse", unit, tokens[0] ?? "0");
+    const source = sourceDefaults("pulse", unit, tokens.values[0] ?? "0");
     source.parameters = {
-      low: tokens[0] ?? "0",
-      high: tokens[1] ?? "5",
-      frequency: tokens[2] ?? "100k",
-      duty: tokens[3] ?? "0.5",
+      low: tokens.values[0] ?? "0",
+      high: tokens.values[1] ?? "5",
+      frequency: tokens.values[2] ?? "100k",
+      duty: tokens.values[3] ?? "0.5",
     };
-    source.dcBias = source.parameters.low;
+    source.dcBias = dcExplicit ? explicitBias : source.parameters.low;
     source.dcExplicit = dcExplicit;
     source.acMagnitude = acMagnitude;
     source.acPhase = acPhase;
-    source.modifiers = tokens.length > 4 ? tokens.slice(4).join(" ") : "";
+    source.modifiers = tokens.modifiers;
     source.legacyKind = legacyKind;
     return source;
   }
@@ -296,7 +314,7 @@ export function encodeIndependentSourceValue(source: IndependentSourceValue): st
     case "sine": {
       const p = source.parameters;
       if ((source.legacyKind === "vac" || source.legacyKind === "iac")
-        && !p.delay && !p.damping && !p.phase && !p.cycles) {
+        && isZeroText(p.delay) && isZeroText(p.damping) && isZeroText(p.phase) && isZeroText(p.cycles)) {
         const args = [p.offset || "0", p.amplitude || "1", p.frequency || "1k"];
         transient = args[0] === "0" ? args.slice(1).join(" ") : args.join(" ");
       } else {
@@ -380,9 +398,14 @@ export function changeIndependentSourceMode(
   source: IndependentSourceValue,
   mode: IndependentSourceMode,
 ): IndependentSourceValue {
-  return withCommon(sourceDefaults(mode, source.unit, source.dcBias), {
+  // A waveform switch is a migration of the transient function, not a license
+  // to discard an explicitly authored operating-point bias. Seed the new
+  // waveform from its old inferred level, then carry the separate DC field and
+  // explicitness bit through unchanged so `DC 2 SINE(0 …)` cannot become an
+  // un-biased pulse on the next save.
+  return withCommon(sourceDefaults(mode, source.unit, inferredBias(source)), {
     dcBias: source.dcBias,
-    dcExplicit: false,
+    dcExplicit: source.dcExplicit,
     acMagnitude: source.acMagnitude,
     acPhase: source.acPhase,
     modifiers: source.modifiers,

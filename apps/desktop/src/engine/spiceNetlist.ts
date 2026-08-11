@@ -18,6 +18,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbo
 import { isCapacitorKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps, relayCoilOhms } from "../schematic/kindGroups";
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
+import { decodeIndependentSourceValue, type IndependentSourceLegacyKind } from "../schematic/sourceValue";
 import { parseSourceFunction, MalformedPwlError, type SourceUnit, type SourceSpec } from "./sourceFunction";
 import { stripAcSpec, acSpecDeckText, stripSourceModifiers, stripLtspiceInlineComment } from "./acSpec";
 import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
@@ -1367,6 +1368,85 @@ export function clampedLoadSourceWarning(ref: string, flag: string): string {
   return `${ref} carries LTspice's "${flag}" flag, which clamps it so it only ever draws current. Tau's engine has no equivalent, so it ran as an ideal current source that can also deliver current. Results are unaffected while the source stays forward-biased.`;
 }
 
+interface LegacySourceDeckSpec {
+  spec: SourceSpec;
+  /** Legacy AC sources imply an AC magnitude equal to their amplitude. */
+  implicitAcMagnitude?: string;
+  /** Keep the historical compact deck ordering (`DC … AC … SIN/PULSE`). */
+  legacyCompact?: boolean;
+}
+
+function legacySourceText(source: LegacySourceDeckSpec, ac: string): string {
+  if (!source.legacyCompact || !ac) return `${source.spec.text}${ac}`;
+  const moved = source.spec.text.replace(
+    /\s+(SINE|SIN|PULSE|PWL|EXP|SFFM)\s*\(/i,
+    (_match, functionName: string) => `${ac} ${functionName}(`,
+  );
+  return moved === source.spec.text ? `${source.spec.text}${ac}` : moved;
+}
+
+function legacySourceNumber(raw: string, unit: string, ref: string, field: string): number {
+  try {
+    const value = parseQuantity(raw, unit);
+    if (!Number.isFinite(value)) throw new Error("not finite");
+    return value;
+  } catch {
+    throw new Error(`${ref} needs a valid ${field} value.`);
+  }
+}
+
+/**
+ * Keep the three historical source kinds as storage aliases while giving the
+ * native deck builder the same normalized waveform text as a unified source.
+ * A mode switch leaves the component kind untouched, so these branches must
+ * accept both their old positional spelling and the new function spelling.
+ */
+function legacySourceDeckSpec(
+  rawValue: string,
+  unit: SourceUnit,
+  legacyKind: IndependentSourceLegacyKind,
+  ref: string,
+): LegacySourceDeckSpec {
+  const withoutAc = stripAcSpec(rawValue);
+  const clean = stripLtspiceInlineComment(stripSourceModifiers(withoutAc));
+  const functionSpec = parseSourceFunctionForDeck(clean, unit, ref);
+  if (functionSpec) return { spec: functionSpec };
+
+  const source = decodeIndependentSourceValue(clean, unit, legacyKind);
+  if (legacyKind === "vac" || legacyKind === "iac") {
+    const p = source.parameters;
+    const text = `${source.dcExplicit ? `DC ${source.dcBias} ` : ""}SINE(${[
+      p.offset || "0",
+      p.amplitude || "1",
+      p.frequency || "1k",
+    ].join(" ")})`;
+    const spec = parseSourceFunctionForDeck(text, unit, ref);
+    if (!spec) throw new Error(`${ref} has an unsupported legacy AC source value.`);
+    const explicitAc = acSpecDeckText(rawValue);
+    return {
+      spec,
+      implicitAcMagnitude: explicitAc ? undefined : String(legacySourceNumber(p.amplitude || "1", unit, ref, "amplitude")),
+      legacyCompact: true,
+    };
+  }
+
+  const p = source.parameters;
+  const low = legacySourceNumber(p.low || "0", unit, ref, "low level");
+  const high = legacySourceNumber(p.high || "5", unit, ref, "high level");
+  const frequency = legacySourceNumber(p.frequency || "100k", "Hz", ref, "positive frequency");
+  if (!(frequency > 0)) throw new Error(`${ref} needs a positive frequency value.`);
+  const duty = legacySourceNumber(p.duty || "0.5", "", ref, "duty cycle");
+  if (duty < 0 || duty > 1) throw new Error(`${ref} duty cycle must be between 0 and 1.`);
+  const period = 1 / frequency;
+  const edge = period * 0.01;
+  const width = Math.max(period * duty - edge, period * 0.005);
+  const dc = source.dcExplicit ? source.dcBias : p.low || "0";
+  const text = `DC ${dc} PULSE(${low} ${high} 0 ${edge} ${edge} ${width} ${period})`;
+  const spec = parseSourceFunctionForDeck(text, unit, ref);
+  if (!spec) throw new Error(`${ref} has an unsupported legacy pulse source value.`);
+  return { spec, legacyCompact: true };
+}
+
 function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec, vendorOpampModel?: string, warnings: string[] = [], emitNativeLaplace = false, idealModelCards: Map<string, string> = new Map()): string[] {
   const { component } = entry;
   const node = (pin: string) => requiredNode(entry, pin);
@@ -1551,26 +1631,43 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       return [`${name} ${node("n")} ${node("p")} DC ${dc}${startup}${ac}`];
     }
     case "vac": {
-      const signal = sourceSignal(component, "V");
-      return [`${name} ${node("p")} ${node("n")} DC ${signal.offset} AC ${signal.amplitude} SIN(${signal.offset} ${signal.amplitude} ${signal.frequency})`];
+      const series = passiveSeriesResistance(component);
+      const source = legacySourceDeckSpec(series.value, "V", "vac", component.label.trim() || name);
+      const ac = acSpecDeckText(series.value)
+        || (source.implicitAcMagnitude ? ` AC ${source.implicitAcMagnitude}` : "");
+      const positive = node("p");
+      const negative = node("n");
+      const internal = `tau_${safeName(name).toLowerCase()}_rser`;
+      const positiveNode = series.ohms !== null && series.ohms > 0 ? internal : positive;
+      const sourceLine = `${name} ${positiveNode} ${negative} ${legacySourceText(source, ac)}`;
+      if (series.ohms === null || series.ohms === 0) return [sourceLine];
+      return [
+        sourceLine,
+        `RTAU_${safeName(name)}_RSER ${positive} ${internal} ${series.ohms}`,
+      ];
     }
     case "iac": {
       // Same polarity swap as isource: emit n before p so ngspice gives V(p) > 0 for
       // positive amplitude, consistent with the TS AC solver.
-      const signal = sourceSignal(component, "A");
-      return [`${name} ${node("n")} ${node("p")} DC ${signal.offset} AC ${signal.amplitude} SIN(${signal.offset} ${signal.amplitude} ${signal.frequency})`];
+      const source = legacySourceDeckSpec(component.value, "A", "iac", component.label.trim() || name);
+      const ac = acSpecDeckText(component.value)
+        || (source.implicitAcMagnitude ? ` AC ${source.implicitAcMagnitude}` : "");
+      return [`${name} ${node("n")} ${node("p")} ${legacySourceText(source, ac)}`];
     }
     case "vpulse": {
-      const p = decodeParams("vpulse", component.value);
-      const low = parseQuantity(p.low ?? "0", "V");
-      const high = parseQuantity(p.high ?? "5", "V");
-      const freq = parseQuantity(p.frequency ?? "100k", "Hz");
-      const duty = Math.min(0.99, Math.max(0.01, Number(p.duty ?? "0.5") || 0.5));
-      const period = freq > 0 ? 1 / freq : 1e-5;
-      const edge = period * 0.01;
-      const width = Math.max(period * duty - edge, period * 0.005);
-      // PULSE(V1 V2 TD TR TF PW PER)
-      return [`${name} ${node("p")} ${node("n")} DC ${low} PULSE(${low} ${high} 0 ${edge} ${edge} ${width} ${period})`];
+      const series = passiveSeriesResistance(component);
+      const source = legacySourceDeckSpec(series.value, "V", "vpulse", component.label.trim() || name);
+      const ac = acSpecDeckText(series.value);
+      const positive = node("p");
+      const negative = node("n");
+      const internal = `tau_${safeName(name).toLowerCase()}_rser`;
+      const positiveNode = series.ohms !== null && series.ohms > 0 ? internal : positive;
+      const sourceLine = `${name} ${positiveNode} ${negative} ${legacySourceText(source, ac)}`;
+      if (series.ohms === null || series.ohms === 0) return [sourceLine];
+      return [
+        sourceLine,
+        `RTAU_${safeName(name)}_RSER ${positive} ${internal} ${series.ohms}`,
+      ];
     }
     case "logicConstant": {
       const voltsText = String(logicConstantVolts(component.value));
@@ -2815,24 +2912,6 @@ function parseWireResistanceOhms(text: string): number {
   } catch (error) {
     throw new Error(`Wire resistance "${text}" is invalid: ${error instanceof Error ? error.message : "could not parse value"}.`);
   }
-}
-
-function sourceSignal(component: SchematicComponent, unit: "V" | "A") {
-  const tokens = component.value.trim().split(/[\s,;@]+/).filter(Boolean);
-  try {
-    if (tokens.length >= 3) {
-      return { offset: parseQuantity(tokens[0], unit), amplitude: parseQuantity(tokens[1], unit), frequency: parseQuantity(tokens[2], "Hz") };
-    }
-    if (tokens.length === 2) {
-      return { offset: 0, amplitude: parseQuantity(tokens[0], unit), frequency: parseQuantity(tokens[1], "Hz") };
-    }
-    if (tokens.length === 1) {
-      return { offset: 0, amplitude: parseQuantity(tokens[0], unit), frequency: 1e3 };
-    }
-  } catch {
-    // Re-throw below with a component-aware message.
-  }
-  throw new Error(`${component.label || component.kind} needs amplitude and frequency values.`);
 }
 
 function turnsRatio(value: string) {

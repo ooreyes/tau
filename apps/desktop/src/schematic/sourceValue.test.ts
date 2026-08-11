@@ -63,4 +63,58 @@ describe("independent-source value controls", () => {
     expect(source.parameters).toMatchObject({ offset: "5", amplitude: "1", frequency: "1k" });
     expect(encodeIndependentSourceValue(source)).toBe("SINE(5 1 1k)");
   });
+
+  it.each([
+    ["vac", "V", "1 1k"],
+    ["iac", "A", "2m 5k"],
+    ["vpulse", "V", "0 3.3 20k 0.25"],
+  ] as const)("round-trips the legacy %s positional spelling", (legacyKind, unit, raw) => {
+    const source = decodeIndependentSourceValue(raw, unit, legacyKind);
+
+    expect(encodeIndependentSourceValue(source)).toBe(raw);
+    expect(source.legacyKind).toBe(legacyKind);
+  });
+
+  it.each([
+    ["vac", "V", "DC 2 1 1k AC 3 45 Rser=50"],
+    ["iac", "A", "DC 2 2m 5k AC 4 30 load"],
+    ["vpulse", "V", "DC 1.2 0 3.3 20k 0.25 AC 2 15 Rser=10"],
+  ] as const)("preserves explicit DC, AC, and modifiers for legacy %s", (legacyKind, unit, raw) => {
+    const source = decodeIndependentSourceValue(raw, unit, legacyKind);
+
+    expect(source.dcBias).toBe(legacyKind === "vpulse" ? "1.2" : "2");
+    expect(source.dcExplicit).toBe(true);
+    expect(source.modifiers).toContain(legacyKind === "iac" ? "load" : "Rser");
+    expect(encodeIndependentSourceValue(source)).toBe(raw);
+  });
+
+  it.each([
+    ["vac", "V", "1 1k", ["offset", "2"], ["amplitude", "3"], ["frequency", "4k"]],
+    ["iac", "A", "2m 5k", ["offset", "1m"], ["amplitude", "4m"], ["frequency", "8k"]],
+    ["vpulse", "V", "0 3.3 20k 0.25", ["low", "1"], ["high", "4"], ["frequency", "10k"], ["duty", "0.75"]],
+  ] as const)("edits every legacy %s waveform field without migrating its kind", (legacyKind, unit, raw, ...edits) => {
+    let source = decodeIndependentSourceValue(raw, unit, legacyKind);
+    for (const [key, value] of edits) source = updateIndependentSourceField(source, key, value);
+
+    expect(source.legacyKind).toBe(legacyKind);
+    expect(encodeIndependentSourceValue(source)).toContain(
+      legacyKind === "vpulse" ? "0.75" : edits[edits.length - 1]![1],
+    );
+  });
+
+  it.each([
+    ["vac", "V", "DC 2 0 1 1k", "pulse"],
+    ["iac", "A", "DC 2 0 1m 1k", "pulse"],
+    ["vpulse", "V", "DC 2 0 3.3 20k 0.25", "sine"],
+  ] as const)("switches legacy %s to a unified waveform without losing DC bias", (legacyKind, unit, raw, mode) => {
+    const switched = changeIndependentSourceMode(
+      decodeIndependentSourceValue(raw, unit, legacyKind),
+      mode,
+    );
+
+    expect(switched.legacyKind).toBeUndefined();
+    expect(switched.dcBias).toBe("2");
+    expect(switched.dcExplicit).toBe(true);
+    expect(encodeIndependentSourceValue(switched)).toMatch(/^DC 2 (?:PULSE|SINE)\(/);
+  });
 });

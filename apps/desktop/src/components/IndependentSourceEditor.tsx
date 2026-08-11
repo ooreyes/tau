@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import {
   type IndependentSourceValue,
 } from "../schematic/sourceValue";
 import { EngineeringInput } from "./EngineeringInput";
+import { parseQuantity } from "../simulation/quantity";
 
 const WAVEFORM_MODES: readonly { value: IndependentSourceMode; label: string }[] = [
   { value: "dc", label: "DC" },
@@ -36,11 +38,105 @@ interface SourceFieldProps {
   label: string;
   value: string;
   unit?: string;
+  fieldKey?: string;
   onBeginChange: () => void;
   onValueChange: (value: string) => void;
 }
 
-function SourceField({ label, value, unit = "", onBeginChange, onValueChange }: SourceFieldProps) {
+interface SourceFieldConstraint {
+  min?: number;
+  minExclusive?: boolean;
+  max?: number;
+  allowEmpty?: boolean;
+}
+
+const SOURCE_FIELD_CONSTRAINTS: Record<string, SourceFieldConstraint> = {
+  // A zero delay is meaningful, but a period, edge, time constant, or
+  // frequency of zero cannot describe a runnable waveform.
+  frequency: { min: 0, minExclusive: true },
+  carrierFrequency: { min: 0, minExclusive: true },
+  signalFrequency: { min: 0, minExclusive: true },
+  rise: { min: 0, minExclusive: true },
+  fall: { min: 0, minExclusive: true },
+  width: { min: 0, minExclusive: true },
+  period: { min: 0, minExclusive: true },
+  riseTau: { min: 0, minExclusive: true },
+  fallTau: { min: 0, minExclusive: true },
+  delay: { min: 0 },
+  riseDelay: { min: 0 },
+  fallDelay: { min: 0 },
+  duty: { min: 0, max: 1 },
+  cycles: { min: 0, minExclusive: true, allowEmpty: true },
+  acPhase: { allowEmpty: true },
+  "pwl-time": { min: 0 },
+};
+
+function sourceFieldConstraint(fieldKey?: string): SourceFieldConstraint {
+  return fieldKey ? SOURCE_FIELD_CONSTRAINTS[fieldKey] ?? {} : {};
+}
+
+function sourceFieldValidationMessage(fieldKey: string, raw: string): string | null {
+  const constraint = sourceFieldConstraint(fieldKey);
+  const text = raw.trim();
+  if (!text) return constraint.allowEmpty ? null : "Enter a finite number.";
+  let numeric: number;
+  try {
+    numeric = parseQuantity(text, "");
+  } catch {
+    return "Enter a finite number.";
+  }
+  if (!Number.isFinite(numeric)) return "Enter a finite number.";
+  if (constraint.min !== undefined && (constraint.minExclusive ? numeric <= constraint.min : numeric < constraint.min)) {
+    return `Enter a value ${constraint.minExclusive ? "above" : "at or above"} ${constraint.min}.`;
+  }
+  if (constraint.max !== undefined && numeric > constraint.max) {
+    return `Enter a value at or below ${constraint.max}.`;
+  }
+  return null;
+}
+
+function UnitlessSourceField({
+  fieldKey,
+  label,
+  value,
+  onValueChange,
+}: Pick<SourceFieldProps, "fieldKey" | "label" | "value" | "onValueChange">) {
+  const [draft, setDraft] = useState(value);
+  const focused = useRef(false);
+  const errorId = useId();
+  useEffect(() => {
+    if (!focused.current) setDraft(value);
+  }, [value]);
+
+  const validationKey = fieldKey ?? label;
+  const error = sourceFieldValidationMessage(validationKey, draft);
+  return (
+    <>
+      <input
+        className="mono-num"
+        aria-label={label}
+        value={draft}
+        // Keep incomplete/invalid text visible locally. Only a finite,
+        // in-range value is allowed to reach the schematic through the parent.
+        placeholder="none"
+        spellCheck={false}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        onFocus={() => { focused.current = true; }}
+        onBlur={() => { focused.current = false; }}
+        onChange={(event) => {
+          const next = event.currentTarget.value;
+          setDraft(next);
+          if (!sourceFieldValidationMessage(validationKey, next)) onValueChange(next);
+        }}
+      />
+      {error && <span id={errorId} className="property-validation-error" role="alert">{error}</span>}
+    </>
+  );
+}
+
+function SourceField({ label, value, unit = "", fieldKey, onBeginChange, onValueChange }: SourceFieldProps) {
+  const constraint = sourceFieldConstraint(fieldKey);
   return (
     <label className="property-field">
       <span title={label}>{label}</span>
@@ -49,19 +145,19 @@ function SourceField({ label, value, unit = "", onBeginChange, onValueChange }: 
           label={label}
           value={value}
           unit={unit}
+          min={constraint.min}
+          minExclusive={constraint.minExclusive}
+          max={constraint.max}
+          allowEmpty={constraint.allowEmpty}
           onBeginChange={onBeginChange}
           onValueChange={onValueChange}
         />
       ) : (
-        <input
-          className="mono-num"
-          aria-label={label}
+        <UnitlessSourceField
+          fieldKey={fieldKey}
+          label={label}
           value={value}
-          // Same treatment as the rest of the panel: an unset optional field
-          // reads "none" rather than as an empty box that says nothing.
-          placeholder="none"
-          spellCheck={false}
-          onChange={(event) => onValueChange(event.currentTarget.value)}
+          onValueChange={onValueChange}
         />
       )}
     </label>
@@ -94,6 +190,7 @@ export function IndependentSourceEditor({
       label={label}
       value={source.parameters[key] ?? ""}
       unit={fieldUnit}
+      fieldKey={key}
       onBeginChange={() => onBeginChange(key)}
       onValueChange={(nextValue) => update(key, nextValue)}
     />
@@ -131,6 +228,7 @@ export function IndependentSourceEditor({
         label="DC operating point"
         value={source.dcBias}
         unit={unit}
+        fieldKey="dcBias"
         onBeginChange={() => onBeginChange("dcBias")}
         onValueChange={(nextValue) => update("dcBias", nextValue)}
       />
@@ -178,6 +276,7 @@ export function IndependentSourceEditor({
                 label={`PWL time ${index + 1}`}
                 value={point.time}
                 unit="s"
+                min={0}
                 onBeginChange={() => onBeginChange(`pwl-time-${index}`)}
                 onValueChange={(nextValue) => commit(
                   `pwl-time-${index}`,
@@ -264,12 +363,14 @@ export function IndependentSourceEditor({
             label="AC amplitude (.ac)"
             value={source.acMagnitude}
             unit={unit}
+            fieldKey="acMagnitude"
             onBeginChange={() => onBeginChange("acMagnitude")}
             onValueChange={(nextValue) => update("acMagnitude", nextValue)}
           />
           <SourceField
             label="AC phase (°)"
             value={source.acPhase}
+            fieldKey="acPhase"
             onBeginChange={() => onBeginChange("acPhase")}
             onValueChange={(nextValue) => update("acPhase", nextValue)}
           />

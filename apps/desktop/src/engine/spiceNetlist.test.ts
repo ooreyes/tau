@@ -1096,6 +1096,57 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain(".ac dec 20 10 1000000");
   });
 
+  it.each([
+    ["vac", "V1", "DC 2 1 1k", /^V1 n001 0 DC 2 AC 1 SIN\(0 1 1000\)$/m],
+    ["iac", "I1", "DC 2 2m 5k", /^I1 0 n001 DC 2 AC 0\.002 SIN\(0 0\.002 5000\)$/m],
+    ["vpulse", "V1", "DC 1.2 0 3.3 20k 0.25", /^V1 n001 0 DC 1\.2 PULSE\(0 3\.3 /m],
+  ] as const)("emits an explicit DC bias for legacy %s", (kind, label, value, expected) => {
+    const deck = buildSpiceDeck(
+      { components: [component(kind, label, value, 0, 32), component("ground", "", "", 0, 64)], wires: [] },
+      { kind: "tran", stopTime: 100e-6, steps: 10 },
+    );
+
+    expect(deck.netlist).toMatch(expected);
+  });
+
+  it.each([
+    ["vac", "V1", "DC 2 PULSE(0 1 0 1n 1n 1u 2u)", /^V1 n001 0 DC 2 PULSE\(0 1 /m],
+    ["iac", "I1", "DC 2 SFFM(0 1m 2k 0.5 100)", /^I1 0 n001 DC 2 SFFM\(0 0\.001 2000 /m],
+    ["vpulse", "V1", "DC 2 SINE(0 3 4k)", /^V1 n001 0 DC 2 SIN\(0 3 4000\)$/m],
+  ] as const)("runs a unified waveform after switching legacy %s", (kind, label, value, expected) => {
+    const deck = buildSpiceDeck(
+      { components: [component(kind, label, value, 0, 32), component("ground", "", "", 0, 64)], wires: [] },
+      { kind: "tran", stopTime: 100e-6, steps: 10 },
+    );
+
+    expect(deck.netlist).toMatch(expected);
+    expect(deck.netlist).toContain(".tran");
+  });
+
+  it("expands legacy AC voltage-source modifiers without leaking them into ngspice", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          component("vac", "V1", "1 1k AC 2 Rser=50", 0, 32),
+          component("ground", "", "", 0, 64),
+        ],
+        wires: [],
+      },
+      { kind: "ac", startHz: 10, stopHz: 1e6, pointsPerDecade: 10 },
+    );
+
+    expect(deck.netlist).toMatch(/^V1 tau_v1_rser 0 DC 0 AC 2 SIN\(0 1 1000\)$/m);
+    expect(deck.netlist).toMatch(/^RTAU_V1_RSER n001 tau_v1_rser 50$/m);
+    expect(deck.netlist).not.toContain("Rser=");
+  });
+
+  it("refuses a non-binary logic constant instead of emitting an arbitrary voltage", () => {
+    expect(() => buildSpiceDeck(
+      { components: [component("logicConstant", "V1", "3.3", 0, 32), component("ground", "", "", 0, 64)], wires: [] },
+      { kind: "op" },
+    )).toThrow('Logic constant value must be exactly 0 or 1');
+  });
+
   it("writes a .dc source-sweep directive with a stop-directed increment", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

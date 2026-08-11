@@ -36,7 +36,7 @@ describe("EveryCircuit library — polarized capacitor + logic constant", () => 
     expect(logicConstantVolts("1")).toBe(1);
     expect(logicConstantVolts("high")).toBe(1);
     expect(logicConstantVolts("low")).toBe(0);
-    expect(logicConstantVolts("3.3")).toBe(3.3);
+    expect(() => logicConstantVolts("3.3")).toThrow(/exactly 0 or 1/);
   });
 
   it("emits polarizedCapacitor as a real C device (same as capacitor)", () => {
