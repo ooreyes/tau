@@ -1,25 +1,40 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-11**
+**Status: DONE - 2026-08-11**
 
 Unit: **Bootstrap behavior-preserving shell seams for the UI/UX remediation
-fleet**. Base and remote are `8fb45f623baee1cd0429a0a161fcd28b5278fa62`;
-the tagged live-simulator baseline peels to
-`919f0e1070fdaa2310795f53ac56fa5431ba91ef`.
+fleet**. Integrated worker commit `d9a64fa2fb3a9784a62eafe8c69ab74926cd47f7`
+as `9dd589d`; `auto/ltspice-parity` is pushed and the bootstrap worktree and
+local branch are removed.
 
-The bootstrap worker owns only the ShellPanels/Explorer/editor/inspector
-module-boundary split in an isolated temporary worktree. The orchestrator owns
-all tracking files, integration, gates, evidence, and pushes.
+`EditorChrome` now owns the editor toolbar/tabs/transport surface previously
+embedded in `ShellPanels`, while historical exports remain compatible. No
+stable issue was claimed complete and no model, importer, schematic, or
+simulation behavior changed.
 
-**Files:** pending worker return packet; `PROGRESS.md` heartbeat.
+**Files:** `apps/desktop/src/components/editor/EditorChrome.tsx`,
+`apps/desktop/src/components/ShellPanels.tsx`,
+`apps/desktop/src/components/ShellPanels.test.tsx`, `apps/desktop/src/App.tsx`.
 
-**Tests:** pending bootstrap worker; required frontend gates run after landing.
+**Tests:** worker focused gate: ShellPanels + Explorer **2 files / 101 passed**;
+App shell contract **1 file / 14 passed**; typecheck **exit 0**; diff-check
+**exit 0**. Integrated full frontend gates: typecheck **exit 0**;
+`pnpm -C apps/desktop test` **255 passed / 2 skipped, 4,256 passed / 8
+skipped**.
 
-**Parity items:** §8 PDF-directed UI/UX remediation bootstrap; no stable issue
-is claimed complete by this unit.
+**Parity items:** §8 fleet bootstrap complete; stable issue statuses remain
+unchanged and evidence work begins in Wave 1.
 
-**Next:** integrate the focused bootstrap commit, run gates, record and push it,
-then provision Wave 1 from the integrated tip.
+**Next:** provision Wave 1 from `9dd589d` for shell, electrical-schema, and
+symbol lanes.
+
+---
+
+**2026-08-11 — Bootstrap fleet landing:** isolated `bootstrap-shell-seams`
+worker (`gpt-5.6-luna` / max) returned `d9a64fa2`; the orchestrator
+cherry-picked it as `9dd589d`, ran the full frontend gates, pushed
+`auto/ltspice-parity`, and removed the worker worktree and local branch. No
+screenshots were needed for this behavior-preserving module-boundary unit.
 
 ---
 
