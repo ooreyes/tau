@@ -424,7 +424,7 @@ export function buildSpiceDeck(
     optionsLineFromDirectives(flatDirectives, solverOptionOverrides(), maxResistanceOhms),
   ];
   const usedKinds = new Set(components.map((component) => component.kind));
-  const needsModels = ["diode", "led", "zener", "photodiode", "nmos", "pmos", "njf", "pjf", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind))
+  const needsModels = ["diode", "led", "zener", "photodiode", "nmos", "pmos", "njf", "pjf", "npn", "pnp", "sevenSeg"].some((kind) => usedKinds.has(kind as ComponentKind))
     || components.some((component) =>
       (component.kind === "switch" && !isLtspiceCurrentControlledSwitch(component))
       || component.kind === "relay");
