@@ -2,26 +2,48 @@
 
 **Status: DONE - 2026-08-11**
 
-Unit: **Wave 1 shell lane landing and evidence handoff**. Worker commit
-`159e9088e4fd5d0121fae64f1d2c619faa30e7e2` is integrated as `cad4a69` and
-pushed. SHELL-01/03/04/05/07 implementation is landed; matching packaged,
-both-theme, three-viewport visual evidence remains for Wave 3 QA.
+Unit: **Wave 1 shell Settings follow-up and symbol geometry landing**. The
+Settings command-palette/native-menu delta is integrated as `6d96e3c` from
+worker tree `232eae2`, and symbol geometry is integrated as `71ad682` from
+worker commit `2d80d0f598b9265359a60a705ff2c84606f7cc83`. SHELL-05 now has both
+renderer entry points in the landed tree; SHELL-06, COMP-03, COMP-07, COMP-08A,
+COMP-10, COMP-15, and COMP-17 implementations are landed. Packaged,
+both-theme, three-viewport visual/native evidence remains for Wave 3 QA.
 
-**Files:** shell/App/Explorer/Toolbar/NavRail and focused shell tests from
-`159e9088`; `UI_UX_FIXES.md`, `FEATURE_PARITY.md`, and this heartbeat now record
-the implementation landing without claiming visual completion.
+**Files:** shell Settings routes and tests from `232eae2`; symbol geometry,
+label anchors, and catalog contract tests from `2d80d0f`; `UI_UX_FIXES.md`,
+`FEATURE_PARITY.md`, and this heartbeat record implementation evidence without
+claiming visual completion.
 
-**Tests:** worker focused shell suite **5 files / 75 passed**; design drift
-**9 checks + 46 tests passed**; integrated focused suite **6 files / 46 passed**;
-integrated typecheck **exit 0**; full frontend **256 files passed / 2 skipped,
-4,261 tests passed / 8 skipped**; `git diff --check` **exit 0**.
+**Tests:** shell Settings focused suite **3 files / 48 passed**; integrated
+frontend **256 files passed / 2 skipped, 4,268 tests passed / 8 skipped**;
+typecheck **exit 0**; design drift **9 checks + 46 tests passed**;
+`git diff --check` **exit 0**.
 
-**Parity items:** SHELL-01, SHELL-03, SHELL-04, SHELL-05, and SHELL-07
-implementation landed; statuses remain `IN PROGRESS` until required
-visual/native evidence exists.
+**Parity items:** SHELL-05 Settings reachability is implemented but remains
+`IN PROGRESS` pending packaged menu proof. SHELL-06, COMP-03, COMP-07,
+COMP-08A, COMP-10, COMP-15, and COMP-17 remain `IN PROGRESS` pending packaged
+visual/native evidence and their remaining acceptance checks.
 
-**Next:** integrate the next clean Wave 1 worker packet while electrical-schema
-and symbols continue in isolation.
+**Next:** integrate the clean electrical-schema Wave 1 packet, then run the
+Wave 1 full frontend gates before starting Wave 2.
+
+---
+
+**2026-08-11 — Wave 1 shell Settings follow-up:** the authoritative shell
+worktree preserved the command-palette and native application-menu Settings
+routes in worker tree `232eae2`; the orchestrator cherry-picked the missing
+four-file delta as `6d96e3c`. Command-palette/App-shell tests, typecheck, and
+design drift passed; packaged native reachability remains a QA obligation.
+
+---
+
+**2026-08-11 — Wave 1 symbols landing:** authoritative Luna Max worker
+`019ff181-c2d6-7d62-acbf-f7ae1166473c` returned `2d80d0f`; the orchestrator
+cherry-picked it as `71ad682`, ran the integrated frontend suite and typecheck,
+and recorded SHELL-06, COMP-03, COMP-07, COMP-08A, COMP-10, COMP-15, and
+COMP-17 as `IN PROGRESS` pending visual/native evidence. No screenshots were
+claimed by the implementation lane.
 
 ---
 

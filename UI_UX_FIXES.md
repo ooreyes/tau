@@ -157,15 +157,17 @@ and application menu. Preserve meaningful simulation/document status elsewhere.
 **Acceptance/tests:** Settings remains reachable by mouse and keyboard; no
 orphan separator or blank reserved area; both themes and minimum height pass.
 
-**Evidence:** implementation landed in `cad4a69` from worker `159e9088`;
-focused shell suite **5 files / 75 passed**, design drift **9 checks + 46 tests
-passed**, and typecheck **exit 0**. Both-theme/minimum-height screenshots and
-command-palette/application-menu reachability evidence remain pending; no
-completion claim yet.
+**Evidence:** implementation landed in `cad4a69` from worker `159e9088`, with
+the Settings routes integrated as `6d96e3c` from worker tree `232eae2`;
+focused shell suite **5 files / 75 passed**, command-palette reachability
+**1 file / 3 passed**, design drift **9 checks + 46 tests passed**, and
+typecheck **exit 0**. Both-theme/minimum-height screenshots and packaged
+application-menu reachability evidence remain pending; no completion claim
+yet.
 
 ### [ ] SHELL-06 - Keep component labels visually attached to symbols
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** Untitled document, page 2, item 6  
 ![Capacitor label spacing](screenshots/ui-ux-fix-brief/shell-06-capacitor-label.png)
@@ -179,7 +181,12 @@ designator/value clear of wires while visually attached to the component.
 **Acceptance/tests:** Cover regular and polarized capacitors in all rotations,
 mirror states, common values, imported label positions, and overlapping wires.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** symbol geometry and label-anchor implementation landed in
+`71ad682` from worker `2d80d0f`; the worker covered **5 files / 215 passed**,
+and the integrated frontend suite passed **256 files / 2 skipped, 4,268 tests /
+8 skipped**, with typecheck **exit 0** and `git diff --check` **exit 0**.
+Matching packaged light/dark 900×600/1280×800/1440×900 before/after shots and
+rotation/mirror native QA remain pending; no completion claim yet.
 
 ### [ ] SHELL-07 - Refine the navigation rail
 
@@ -249,7 +256,7 @@ long unit, and 900×600 screenshots in both themes.
 
 ### [ ] COMP-03 - Give the current-source glyph enough interior space
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 2, item 3  
 ![Current source glyph](screenshots/ui-ux-fix-brief/comp-03-current-source-spacing.png)
@@ -263,7 +270,12 @@ both marks clear separation at normal and selected stroke widths.
 **Acceptance/tests:** DC/sine current sources, rotations, mirror, selected,
 dark/light, hit bounds, pin geometry, and snapshot/geometry tests.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** geometry remediation landed in `71ad682` from worker `2d80d0f`
+(`symbols.tsx`, geometry, and contract tests); focused worker coverage was
+**5 files / 215 passed**, and the integrated frontend suite passed **256 files /
+2 skipped, 4,268 tests / 8 skipped** with typecheck **exit 0**. Visual
+light/dark, selected-stroke, rotation/mirror, and hit-bound evidence remains
+pending; no completion claim yet.
 
 ### [ ] COMP-04 - Apply inspector alignment to every component family
 
@@ -324,7 +336,7 @@ keyboard access, 900×600, and no persistence/schema rename.
 
 ### [ ] COMP-07 - Correct polarized-capacitor geometry
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 7  
 ![Polarized capacitor](screenshots/ui-ux-fix-brief/comp-07-polarized-capacitor.png)
@@ -337,11 +349,16 @@ retain polarity clarity, pin coordinates, hit bounds, rotation, and mirror.
 **Acceptance/tests:** Geometry assertions plus selected/unselected screenshots
 at every orientation in both themes.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** polarized-capacitor geometry remediation landed in `71ad682` from
+worker `2d80d0f`; geometry/symbol contract coverage was included in **5 files /
+215 passed**, with integrated frontend **256 files / 2 skipped, 4,268 tests /
+8 skipped** and typecheck **exit 0**. Every-orientation light/dark screenshots
+and native selected/unselected evidence remain pending; no completion claim
+yet.
 
 ### [ ] COMP-08 - LED geometry and useful electrical properties
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 8  
 ![LED properties](screenshots/ui-ux-fix-brief/comp-08-led-properties.png)
@@ -358,7 +375,13 @@ visual emission only unless an explicit physical model defines behavior.
 deck behavior, save/reopen, simulator indication, both themes, and no silent
 replacement of named models.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** `COMP-08A` LED arrow geometry landed in `71ad682` from worker
+`2d80d0f`; symbol/catalog contract coverage was included in **5 files / 215
+passed**, with integrated frontend **256 files / 2 skipped, 4,268 tests / 8
+skipped** and typecheck **exit 0**. `COMP-08B` electrical properties remains
+owned by the electrical-schema lane; LED color/forward-voltage, exact-model,
+deck, save/reopen, and packaged visual evidence remain pending; no completion
+claim yet.
 
 ### [ ] COMP-09 - Replace Zener prose with editable parameters
 
@@ -379,7 +402,7 @@ save/reopen, exact-model preservation, and inspector density.
 
 ### [ ] COMP-10 - Correct photodiode arrow spacing
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 5, item 10 (same geometry class as LED)  
 ![Related LED arrow geometry](screenshots/ui-ux-fix-brief/comp-08-led-properties.png)
@@ -392,7 +415,11 @@ and keep geometry clear at all rotations and selection strokes.
 **Acceptance/tests:** Geometry assertions and both-theme screenshots for every
 orientation, with pin/hit bounds unchanged.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** photodiode arrow-spacing geometry landed in `71ad682` from worker
+`2d80d0f`; the symbols lane passed **5 files / 215 tests** and the integrated
+frontend suite passed **256 files / 2 skipped, 4,268 tests / 8 skipped** with
+typecheck **exit 0**. Every-orientation light/dark screenshots, selected
+stroke, and pin/hit-bound evidence remain pending; no completion claim yet.
 
 ### [ ] COMP-11 - Hide manual model pickers while preserving fidelity
 
@@ -481,7 +508,7 @@ contextual help and all failure diagnostics remain reachable.
 
 ### [ ] COMP-15 - Make dense digital symbols legible
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, pages 6-7, item 15  
 ![Dense digital labels](screenshots/ui-ux-fix-brief/comp-15-digital-labels.png)
@@ -497,7 +524,12 @@ must not change.
 **Acceptance/tests:** Every rotation/mirror, all latch/flip-flop kinds,
 pin-connection tests, imported mapping, collision geometry, and both themes.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** dense digital-symbol geometry remediation landed in `71ad682`
+from worker `2d80d0f`; symbol/catalog contract coverage was included in **5
+files / 215 passed**, with integrated frontend **256 files / 2 skipped, 4,268
+tests / 8 skipped** and typecheck **exit 0**. Rotation/mirror, pin-mapping,
+collision, and both-theme packaged screenshots remain pending; no completion
+claim yet.
 
 ### [ ] COMP-16 - Simulate a real seven-segment display
 
@@ -522,7 +554,7 @@ live updates, both themes, and no hardcoded color outside token policy.
 
 ### [ ] COMP-17 - Remove the unnecessary switch rectangle
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P2  
 **Source:** edits-to-fix, page 7, item 17  
 ![Switch rectangle](screenshots/ui-ux-fix-brief/comp-17-switch-rectangle.png)
@@ -537,7 +569,11 @@ than deleting a pin or capability.
 **Acceptance/tests:** Static and controlled switches, open/closed simulator
 states, pin/hit bounds, rotation/mirror, imported mappings, and both themes.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** switch geometry cleanup landed in `71ad682` from worker
+`2d80d0f`; geometry/symbol contract coverage was included in **5 files / 215
+passed**, with integrated frontend **256 files / 2 skipped, 4,268 tests / 8
+skipped** and typecheck **exit 0**. Packaged visual, bounds, and electrical
+control-port QA remain pending; no completion claim yet.
 
 ## Completion matrix
 
