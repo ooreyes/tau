@@ -250,7 +250,7 @@ remain pending; no completion claim yet.
 
 ### [ ] COMP-02 - Align property controls into stable columns
 
-**Status:** UNVERIFIED
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 2, item 2  
 ![Property alignment](screenshots/ui-ux-fix-brief/comp-02-property-alignment.png)
@@ -265,7 +265,12 @@ overlap at narrow inspector widths.
 **Acceptance/tests:** DC, sine, pulse, checkbox, select, text, invalid state,
 long unit, and 900×600 screenshots in both themes.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** shared inspector presentation landed in `02371ec` from worker
+`3b8e97c`; the focused inspector suite passed **3 files / 114 tests** and
+typecheck plus design drift passed (**9 checks + 48 tests**). Engineering
+inputs now keep label/control/unit columns stable and validation messages on a
+separate predictable row. Narrow-width, every-family, and packaged
+light/dark screenshots remain pending; no completion claim yet.
 
 ### [ ] COMP-03 - Give the current-source glyph enough interior space
 
@@ -292,7 +297,7 @@ pending; no completion claim yet.
 
 ### [ ] COMP-04 - Apply inspector alignment to every component family
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 3, item 4  
 ![Pulse inspector alignment](screenshots/ui-ux-fix-brief/comp-04-inspector-alignment.png)
@@ -308,7 +313,11 @@ the value/unit columns.
 inputs/selects, overflow, missing labels/units, and shared row usage; visually
 sample each family.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** shared inspector-row presentation and validation layout landed in
+`02371ec` from worker `3b8e97c`; focused inspector coverage passed **3 files /
+114 tests**, typecheck passed, and design drift passed (**9 checks + 48 tests**).
+The lane includes stable error/help rows and shared label/control/unit layout;
+the full catalog audit and packaged family screenshots remain pending.
 
 ### [ ] COMP-05 - Ground has identity, not an electrical value
 
@@ -335,7 +344,7 @@ evidence remain pending; no completion claim yet.
 
 ### [ ] COMP-06 - Movable properties and friendly component identity
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 6  
 ![Movable properties](screenshots/ui-ux-fix-brief/comp-06-movable-properties.png)
@@ -350,7 +359,11 @@ to `Component ID` while retaining `refdes` internally and in file formats.
 **Acceptance/tests:** Mouse and pointer drag, resize clamping, close/reopen,
 keyboard access, 900×600, and no persistence/schema rename.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** draggable, keyboard-movable, resize-clamped inspector placement
+and user-facing `Component ID` labels landed in `02371ec` from worker
+`3b8e97c`; focused inspector coverage passed **3 files / 114 tests**, typecheck
+passed, and design drift passed (**9 checks + 48 tests**). Pointer/native
+movement, resize matrix, and packaged 900×600 screenshots remain pending.
 
 ### [ ] COMP-07 - Correct polarized-capacitor geometry
 
@@ -395,10 +408,10 @@ replacement of named models.
 
 **Evidence:** `COMP-08A` LED arrow geometry landed in `71ad682` from worker
 `2d80d0f`; `COMP-08B` color/forward-voltage schema, generic defaults, and
-exact-model preservation landed in `d6fbcfd` from worker `ec86d30`. The
-electrical worker’s focused coverage was **12 files / 723 passed**, integrated
-frontend **256 files / 2 skipped, 4,297 tests / 8 skipped**, typecheck **exit
-0**, desktop build **exit 0**, and real-ngspice smoke **42 passed / 0 failed**.
+exact-model preservation landed in `d6fbcfd` from worker `ec86d30`, with shared
+inspector presentation in `02371ec` from worker `3b8e97c`. Electrical focused
+coverage was **12 files / 723 passed** and inspector focused coverage was **3
+files / 114 passed**; integrated frontend and native gates remain green.
 LED property interaction, save/reopen, simulator indication, and packaged
 both-theme visual evidence remain pending; no completion claim yet.
 
@@ -418,12 +431,12 @@ show concise provenance rather than editable fake equivalents.
 save/reopen, exact-model preservation, and inspector density.
 
 **Evidence:** concise validated generic Zener parameters and exact-model
-provenance handling landed in `d6fbcfd` from worker `ec86d30`; focused worker
-coverage was **12 files / 723 passed**, integrated frontend **256 files / 2
-skipped, 4,297 tests / 8 skipped**, typecheck **exit 0**, and native/Rust plus
-real-ngspice gates were green. Generic/named inspector screenshots, invalid
-range interaction, and save/reopen evidence remain pending; no completion
-claim yet.
+provenance handling landed in `d6fbcfd` from worker `ec86d30`, with the shared
+inspector presentation in `02371ec` from worker `3b8e97c`. Electrical focused
+coverage was **12 files / 723 passed** and inspector focused coverage was **3
+files / 114 passed**; typecheck and design drift passed. Generic/named
+inspector screenshots, invalid range interaction, and save/reopen evidence
+remain pending; no completion claim yet.
 
 ### [ ] COMP-10 - Correct photodiode arrow spacing
 
@@ -470,11 +483,13 @@ named-device-fidelity zero-silent-substitution proof.
 
 **Evidence:** default inspector model controls are hidden while explicit model
 library management, immutable exact identity, and fail-closed diagnostics are
-preserved by `d6fbcfd` from worker `ec86d30`; focused worker coverage was **12
-files / 723 passed**, integrated frontend **256 files / 2 skipped, 4,297 tests /
-8 skipped**, typecheck **exit 0**, and ignored real-ngspice smoke **42 passed /
-0 failed**. Packaged named-device fidelity, attached-library, missing-model,
-and both-theme inspector evidence remain pending; no completion claim yet.
+preserved by `d6fbcfd` from worker `ec86d30`; shared exact-model provenance and
+generic-field presentation landed in `02371ec` from worker `3b8e97c`. Focused
+coverage was **12 files / 723 passed** for electrical behavior plus **3 files /
+114 passed** for inspector presentation; typecheck/design drift and ignored
+real-ngspice **42 passed / 0 failed**. Packaged named-device fidelity,
+attached-library, missing-model, and both-theme inspector evidence remain
+pending; no completion claim yet.
 
 ### [ ] COMP-12 - Type and range validation for every property
 
@@ -523,18 +538,17 @@ Tau must not pretend the generic controls describe a vendor macro-model.
 **Acceptance/tests:** Generic op-amp deck and clipping behavior, invalid
 min/max order, named/imported models, save/reopen, both themes, and narrow width.
 
-**Evidence:** `COMP-13A` validated generic gain/min/max definitions and exact
-model-safe encoding landed in `d6fbcfd` from worker `ec86d30`; `COMP-13B`
-shared inspector presentation remains with the Wave 2 inspector lane. The
-electrical worker’s focused suite passed **12 files / 723 tests**, integrated
-frontend **256 files / 2 skipped, 4,297 tests / 8 skipped**, typecheck **exit
-0**, and real-ngspice smoke **42 passed / 0 failed**. Generic clipping,
-invalid rail order, named/imported models, narrow-width, and packaged visual
-evidence remain pending; no completion claim yet.
+**Evidence:** `COMP-13A` validated generic gain/min/max definitions and
+exact-model-safe encoding landed in `d6fbcfd` from worker `ec86d30`; `COMP-13B`
+shared inspector presentation landed in `02371ec` from worker `3b8e97c`.
+Electrical focused coverage passed **12 files / 723 tests**, inspector focused
+coverage passed **3 files / 114 tests**, and typecheck/design drift passed.
+Generic clipping, invalid rail order, named/imported models, narrow-width, and
+packaged visual evidence remain pending; no completion claim yet.
 
 ### [ ] COMP-14 - Remove long component-property essays
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS
 **Priority:** P2  
 **Source:** edits-to-fix, page 6, item 14  
 ![Long description](screenshots/ui-ux-fix-brief/comp-14-long-description.png)
@@ -548,7 +562,12 @@ Unsupported or refusal diagnostics remain explicit and are not hidden.
 **Acceptance/tests:** Automated inspector audit for long description blocks;
 contextual help and all failure diagnostics remain reachable.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** concise field-help/tooltip presentation and long-description
+removal landed in `02371ec` from worker `3b8e97c`; focused inspector coverage
+passed **3 files / 114 tests**, including the long-help audit, typecheck passed,
+and design drift passed (**9 checks + 48 tests**). Unsupported/refusal
+diagnostics remain explicit in the implementation; packaged contextual-help and
+both-theme screenshots remain pending.
 
 ### [ ] COMP-15 - Make dense digital symbols legible
 

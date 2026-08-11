@@ -3,8 +3,8 @@
 **Status: IN PROGRESS - 2026-08-11**
 
 Unit: **Wave 2 inspector, simulator, and regression fleet**. Wave 1 is fully
-integrated and pushed through `8481721`; the next three isolated Luna Max lanes
-start from that exact tracker-inclusive tip. Wave 2 owns the remaining shared
+integrated and pushed through `8481721`; all three Wave 2 implementation lanes
+are now integrated through `02371ec`. Wave 2 owns the remaining shared
 inspector presentation, seven-segment simulator rendering, and cross-lane
 accessibility/render/performance regression proof.
 
@@ -17,15 +17,28 @@ remains the only owner of `PROGRESS.md`, `FEATURE_PARITY.md`, and
 skipped, 4,297 tests passed / 8 skipped**; typecheck **exit 0**; desktop build
 **exit 0**; design drift **9 checks + 47 tests passed**; cargo fmt/clippy
 **exit 0**; native Rust **104 passed / 0 failed / 42 ignored**; ignored
-real-ngspice smoke **42 passed / 0 failed**.
+real-ngspice smoke **42 passed / 0 failed**. Wave 2 focused landings are
+regression **8 tests**, simulator **92 tests**, and inspector **114 tests**;
+full Wave 2 gates are next.
 
 **Parity items:** Wave 1 implementation items remain `IN PROGRESS` pending
 packaged/browser/native evidence. Wave 2 will target COMP-02, COMP-04,
 COMP-06, COMP-08B, COMP-09, COMP-11, COMP-13B, COMP-14, COMP-12 rendering,
 COMP-16, and regression/a11y/performance coverage.
 
-**Next:** integrate the remaining inspector commit, then run the full Wave 2
-frontend/native gates before serialized QA.
+**Next:** run the full Wave 2 frontend/native gates, then begin serialized
+packaged Computer Use, Chrome, and engineering QA.
+
+---
+
+**2026-08-11 — Wave 2 inspector landing:** Luna Max inspector worker returned
+`3b8e97c` from exact base `b60be53`; the orchestrator integrated it as
+`02371ec`. Focused inspector coverage passed **3 files / 114 tests**, typecheck
+passed, and design drift passed (**9 checks + 48 tests**). The lane adds
+shared property columns, separate validation/help rows, keyboard/pointer
+inspector movement with resize clamping, `Component ID` copy, concise exact
+model provenance, and generic op-amp presentation. Packaged/native/browser
+visual evidence remains pending.
 
 ---
 
