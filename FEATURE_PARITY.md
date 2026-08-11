@@ -2010,7 +2010,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   resolution and `.asc` compatibility, and lands through the isolated-worktree
   exception in `AGENTS.md`. Only evidence-backed `FIXED` or
   `ALREADY SATISFIED` items count; the packaged native app, both themes, and the
-  900×600 floor are mandatory.
+  900×600 floor are mandatory. **Wave 1 shell implementation landed in
+  `cad4a69` (SHELL-01/03/04/05/07); visual/native evidence remains pending.**
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - 🟡 **Visual QA on the actual desktop app:** the current Tauri hot-reload app
   stays alive on `auto/ltspice-parity`; live browser QA verified centered

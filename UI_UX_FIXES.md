@@ -52,7 +52,7 @@ open until all of its subchecks pass.
 
 ### [ ] SHELL-01 - Collapse All is a reversible toggle
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS  
 **Priority:** P1  
 **Source:** Untitled document, page 1, item 1  
 ![Collapse control](screenshots/ui-ux-fix-brief/shell-01-collapse-toggle.png)
@@ -67,7 +67,11 @@ stable; changing projects clears stale restoration state.
 **Acceptance/tests:** Cover nested folders, an already-collapsed tree, project
 switching, keyboard activation, accessible label/state, and 900px-wide UI.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** implementation landed in `cad4a69` from worker `159e9088`;
+focused shell suite **5 files / 75 passed**, integrated shell suite **6 files /
+46 passed**, typecheck **exit 0**, and design drift **9 checks + 46 tests
+passed**. Matching packaged light/dark 900×600/1280×800/1440×900 before/after
+shots and keyboard/native QA remain pending; no completion claim yet.
 
 ### [ ] SHELL-02 - Simplify model-library UI without weakening the engine
 
@@ -87,11 +91,12 @@ refusal when a named model is unresolved. Do not substitute generic devices.
 remain green; default catalog/settings/inspectors expose no manual picker;
 imported exact models still simulate or fail closed with the same diagnostics.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** pending electrical-schema lane implementation and Wave 3 model
+fidelity QA.
 
 ### [ ] SHELL-03 - Preserve folder identity at narrow Explorer widths
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS  
 **Priority:** P1  
 **Source:** Untitled document, page 1, item 3  
 ![Narrow Explorer](screenshots/ui-ux-fix-brief/shell-03-narrow-explorer.png)
@@ -106,11 +111,15 @@ keeping every action keyboard-accessible through an overflow menu.
 **Acceptance/tests:** Verify long Unicode folder names, 900×600, keyboard focus,
 tooltips, and no horizontal page overflow.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** implementation landed in `cad4a69` from worker `159e9088`;
+Explorer/shell focused assertions are green within the worker’s **5 files /
+75 passed** and integrated **6 files / 46 passed** suites. Long Unicode and
+900×600 packaged before/after evidence plus keyboard overflow QA remain
+pending; no completion claim yet.
 
 ### [ ] SHELL-04 - Native macOS title-bar movement and zoom
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS  
 **Priority:** P1 native  
 **Source:** Untitled document, page 1, item 4  
 ![Title bar](screenshots/ui-ux-fix-brief/shell-04-titlebar.png)
@@ -125,11 +134,15 @@ controls remain excluded from the drag region and traffic lights stay usable.
 **Acceptance/tests:** Prove in packaged Tauri with Computer Use at all three
 sizes; test click, drag, double-click, traffic lights, tab controls, and focus.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** implementation landed in `cad4a69` from worker `159e9088`; native
+title-bar contract assertions are included, worker focused shell suite is **5
+files / 75 passed**, and typecheck is **exit 0**. Packaged Computer Use proof
+of drag, double-click zoom/restore, traffic lights, controls, focus, and all
+three sizes remains pending; no completion claim yet.
 
 ### [ ] SHELL-05 - Remove redundant bottom rail/settings/status clutter
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS  
 **Priority:** P2  
 **Source:** Untitled document, page 1, item 5  
 ![Bottom rail and status](screenshots/ui-ux-fix-brief/shell-05-settings-status.png)
@@ -144,7 +157,11 @@ and application menu. Preserve meaningful simulation/document status elsewhere.
 **Acceptance/tests:** Settings remains reachable by mouse and keyboard; no
 orphan separator or blank reserved area; both themes and minimum height pass.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** implementation landed in `cad4a69` from worker `159e9088`;
+focused shell suite **5 files / 75 passed**, design drift **9 checks + 46 tests
+passed**, and typecheck **exit 0**. Both-theme/minimum-height screenshots and
+command-palette/application-menu reachability evidence remain pending; no
+completion claim yet.
 
 ### [ ] SHELL-06 - Keep component labels visually attached to symbols
 
@@ -166,7 +183,7 @@ mirror states, common values, imported label positions, and overlapping wires.
 
 ### [ ] SHELL-07 - Refine the navigation rail
 
-**Status:** UNVERIFIED  
+**Status:** IN PROGRESS  
 **Priority:** P2  
 **Source:** Untitled document, page 2, item 7  
 ![Navigation rail](screenshots/ui-ux-fix-brief/shell-07-navigation-rail.png)
@@ -181,7 +198,10 @@ and tooltips. Do not imitate VS Code colors literally.
 **Acceptance/tests:** 44px-class targets where practical, visible keyboard
 focus, no hardcoded colors, both themes, 900×600, and design-drift gate.
 
-**Evidence:** commit / tests / before / after / risks
+**Evidence:** implementation landed in `cad4a69` from worker `159e9088`;
+worker shell suite **5 files / 75 passed**, design drift **9 checks + 46 tests
+passed**, and typecheck **exit 0**. Matching light/dark 900×600/1280×800/1440×900
+shots plus keyboard focus/hit-target QA remain pending; no completion claim yet.
 
 ## Components and properties
 

@@ -2,31 +2,35 @@
 
 **Status: DONE - 2026-08-11**
 
-Unit: **Bootstrap behavior-preserving shell seams for the UI/UX remediation
-fleet**. Integrated worker commit `d9a64fa2fb3a9784a62eafe8c69ab74926cd47f7`
-as `9dd589d`; `auto/ltspice-parity` is pushed and the bootstrap worktree and
-local branch are removed.
+Unit: **Wave 1 shell lane landing and evidence handoff**. Worker commit
+`159e9088e4fd5d0121fae64f1d2c619faa30e7e2` is integrated as `cad4a69` and
+pushed. SHELL-01/03/04/05/07 implementation is landed; matching packaged,
+both-theme, three-viewport visual evidence remains for Wave 3 QA.
 
-`EditorChrome` now owns the editor toolbar/tabs/transport surface previously
-embedded in `ShellPanels`, while historical exports remain compatible. No
-stable issue was claimed complete and no model, importer, schematic, or
-simulation behavior changed.
+**Files:** shell/App/Explorer/Toolbar/NavRail and focused shell tests from
+`159e9088`; `UI_UX_FIXES.md`, `FEATURE_PARITY.md`, and this heartbeat now record
+the implementation landing without claiming visual completion.
 
-**Files:** `apps/desktop/src/components/editor/EditorChrome.tsx`,
-`apps/desktop/src/components/ShellPanels.tsx`,
-`apps/desktop/src/components/ShellPanels.test.tsx`, `apps/desktop/src/App.tsx`.
+**Tests:** worker focused shell suite **5 files / 75 passed**; design drift
+**9 checks + 46 tests passed**; integrated focused suite **6 files / 46 passed**;
+integrated typecheck **exit 0**; full frontend **256 files passed / 2 skipped,
+4,261 tests passed / 8 skipped**; `git diff --check` **exit 0**.
 
-**Tests:** worker focused gate: ShellPanels + Explorer **2 files / 101 passed**;
-App shell contract **1 file / 14 passed**; typecheck **exit 0**; diff-check
-**exit 0**. Integrated full frontend gates: typecheck **exit 0**;
-`pnpm -C apps/desktop test` **255 passed / 2 skipped, 4,256 passed / 8
-skipped**.
+**Parity items:** SHELL-01, SHELL-03, SHELL-04, SHELL-05, and SHELL-07
+implementation landed; statuses remain `IN PROGRESS` until required
+visual/native evidence exists.
 
-**Parity items:** §8 fleet bootstrap complete; stable issue statuses remain
-unchanged and evidence work begins in Wave 1.
+**Next:** integrate the next clean Wave 1 worker packet while electrical-schema
+and symbols continue in isolation.
 
-**Next:** provision Wave 1 from `9dd589d` for shell, electrical-schema, and
-symbol lanes.
+---
+
+**2026-08-11 — Wave 1 shell landing:** authoritative Luna Max shell worker
+`019ff17f-9f66-70b3-a62a-7f6a3e4ecad2` returned `159e9088`; the orchestrator
+cherry-picked it as `cad4a69`, ran focused shell/design-drift gates and the full
+frontend suite, pushed the durable branch, and recorded SHELL-01/03/04/05/07
+as `IN PROGRESS` pending Wave 3 packaged/native/browser evidence. No screenshots
+were claimed by the implementation lane.
 
 ---
 
