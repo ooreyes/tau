@@ -116,7 +116,7 @@ above; native paths are represented by the current packaged evidence index.
 | COMP-03 | `71ad682` | current-source glyph geometry tests and selected packaged glyph capture |
 | COMP-04 | `02371ec` | all-family inspector audit and validation-row tests; selected packaged properties |
 | COMP-05 | `d6fbcfd` | ground identity/node-zero tests; connected packaged run |
-| COMP-06 | `02371ec`, `551ec0a` | drag/clamp and selection-identity tests; packaged selected inspector/title-bar captures |
+| COMP-06 | `22f7366`, `02371ec`, `551ec0a` | drag/clamp and selection-identity tests; packaged selected inspector/title-bar captures |
 | COMP-07 | `71ad682` | polarized-capacitor geometry tests; current design-token/minimum-window matrix |
 | COMP-08 | `71ad682`, `d6fbcfd` | LED geometry/schema/model tests; current packaged selected-properties matrix |
 | COMP-09 | `66e96aa`, `d6fbcfd` | zener identity/deck/range tests; exact-model safety gates |
