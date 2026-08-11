@@ -23,19 +23,47 @@ and check whether someone is already inside it - and note the durability net wil
 force-commit whatever is in the tree, including scratch files
 (`zzscratch.test.ts` shipped that way in `2d43b93` and was removed here).
 
-**Gate caveat, now measured rather than asserted:** the full suite completed
-this fire at `--maxWorkers=2` in 19.5 minutes - **3478 passed, 22 failed, 8
-skipped over 222 files**. Every one of the 22 is `Test timed out in 5000ms` with
-no assertion failure, at 5.3 s to 25.8 s, spread across unrelated jsdom-heavy
-files. Treat the full suite as a gate this host delivers slowly and noisily, not
-as a failing gate: judge by per-test duration against the 5 s limit, not by the
-failure count. **Do not run two vitest instances at once** - doing so
-manufactured two more timeouts in an already-passing file this fire.
+**Gate caveat - re-measured 2026-08-10, and the old number was the harness, not
+the host.** Plain `pnpm -C apps/desktop test` (default workers, 8 cores) now
+runs three times in a row at **255 files passed / 2 skipped, 4256 tests passed /
+8 skipped, 48.4 s / 48.8 s / 48.2 s, zero failures**.
 
-`cargo test --lib` also cannot run on this host -
-`build.rs` panics on a stale, gitignored `resources/ngspice/build-info.json`
-that predates the `files` digest. See FIX_BUGS.md 2026-08-08. Needs one full
-`scripts/build-ngspice.sh` run to clear; it is not a code regression.
+The note this replaces recorded the 2026-08-08 fire: `--maxWorkers=2`, 19.5
+minutes, **3478 passed, 22 failed, 8 skipped over 222 files**, every failure a
+bare `Test timed out in 5000ms` at 5.3-25.8 s with no assertion failure, spread
+across unrelated jsdom-heavy files. Keep that history - the failure MODE is
+real and will come back the moment the host is busy, because a 5 s per-test
+limit is a wall-clock limit. But 19.5 min vs 48 s is 24x, and pinning the pool
+to two workers on an eight-core machine is most of it. **Do not quote 19.5
+minutes as this suite's cost.**
+
+Two rules survive unchanged, both learned the hard way:
+**judge a suspected timeout by per-test duration against the 5 s limit, not by
+the failure count**, and **do not run two vitest instances at once** - doing so
+manufactured two extra timeouts in an already-passing file on 2026-08-08.
+
+The deeper lesson from 2026-08-10: a test that waits with `findBy*`/`waitFor` is
+polling a wall clock, so a stalled worker reads as a product failure. Where the
+awaited work is a resolved mock promise, drain it inside `act` and assert
+synchronously - see `components/SettingsPanel.test.tsx`. That removes the race
+instead of widening the window it hides in.
+
+**`cargo test --lib` RUNS on this host. Corrected 2026-08-10 by running it:**
+`104 passed; 0 failed; 42 ignored` in 0.11 s. Do not skip it.
+
+The note it replaces said the lib target could not run at all, because on
+2026-08-08 `build.rs` panicked on a stale, gitignored
+`resources/ngspice/build-info.json` that predated the `files` digest
+(FIX_BUGS.md 2026-08-08), and the remedy was one full
+`scripts/build-ngspice.sh`. That history is kept here on purpose: it was never
+a code regression, it is a build-artifact staleness failure, and it will look
+exactly the same if it recurs on a fresh clone or after the ngspice pin moves.
+The staging artifacts have since been rebuilt, so the panic is gone.
+
+The count is the tree's, not a constant: this measurement was taken with
+another session's uncommitted `live_spice.rs` work in the worktree, so expect
+it to differ by a test or two from a clean checkout. Re-measure rather than
+quote it.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.

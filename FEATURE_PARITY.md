@@ -20,11 +20,25 @@
 > of Done). The old "≥80/82" deck/op DoD wording is retired — honest ceiling
 > on this 82-set is **79** deck/op; do not weaken the three refusals.
 
-> **✅ CANONICAL GATE GREEN — re-proven 2026‑08‑10 on
+> **🔴 CANONICAL GATE RED — measured 2026‑08‑10 (late) on
 > `auto/ltspice-parity`.** `CORPUS_CANONICAL_ONLY=1
-> scripts/acceptance-corpus.sh` reports **82 imported / 81 warning-clean / 79
-> deck-built / 79 op-converged**; capability **success 79 · refusal 3 ·
-> deck-guard-leak 0 · failure 0**, with zero model substitutions. Commit
+> scripts/acceptance-corpus.sh` now **exits 1**: **83 imported / 82
+> warning-clean / 79 deck-built / 79 op-converged**; capability **success 79 ·
+> refusal 3 · deck-guard-leak 0 · failure 1**, still with zero model
+> substitutions. The one failure is `LTspice_export/untitled.asc`, a 26-byte
+> component-less schematic saved into a corpus root on 2026‑08‑10; Tau correctly
+> answers "Place components before running analysis", but the classifier files
+> that as a *failure* rather than a capability refusal. Nothing about Tau's
+> capability changed — deck-built and op-converged are unmoved at 79/79 — but
+> the DoD wants `failure 0`, so the box cannot be called green while this reads
+> 1. The same file takes the recursive corpus from `hard-failure=0` to
+> `hard-failure=1`. **Unresolved on purpose:** both fixes (skip component-less
+> schematics in the corpus roots, or move the stray file) restore the exact
+> previously-published denominator, so a human should choose. The earlier
+> **82/81/79/79 · 79/3/0/0** reading below is the last green measurement, not
+> the current one.
+>
+> Prior green context, still accurate as to cause: commit
 > `29879ff` closed the final leak: attached-library normalization now treats
 > `.subckt`, named `.ends`, and nested `X` targets (including `+` continuation
 > lines) as one sanitized identifier system. Distinct LTspice names that would
@@ -646,7 +660,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   non-passive stamp explicitly. Still to add: browser-solver ESR stamps and
   behavioral R/L.
 - 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). **TS-fallback solver now evaluates the same families in the time domain** (`simulation/sourceWaveform.ts` `parseTransientSource` → `{ dc, at(t), maxFrequencyHz }`): the `.tran` loop drives `vsource`/`isource` (and the `vac`/`iac` AC symbols) from the parsed waveform instead of DC-only, `.op` seeds the t=0 bias, and `inspectTransientResolution` derives the sampling requirement from a function source's own frequency. ngspice-verified: PULSE(0 5 1m 0 0 2m 4m) node = 0/5/0 V at t=0.5/2/3.5 ms in both engines. **Named source editor landed (2026-08-03):** Waveform selector plus unit-aware DC operating point, Sine/Pulse/EXP/SFFM parameters, PWL time/level rows, and optional AC amplitude/phase. The DC bias is electrically separate from the transient waveform in both engines; imported text stays byte-stable until edited and edited ASC round-trips. **AC Voltage palette UX (2026-08-05):** palette `vac` places a real sine source (amplitude/frequency props); DC Voltage's former "AC stimulus" toggle is labeled **Small-signal AC (.ac)** so it is not confused with the AC source; DC/AC/pulse/current share `SOURCE_CIRCLE_R`/`SOURCE_PIN_Y` and imported voltage.asy bodies scale-to-fit pinOverride so they match native AC footprint. Still missing: PWL FILE, source noise, and named controls for imported source parasitics such as Rser/Cpar (**arbitrary behavioral B-source `V=…`/`I=…` also landed** — see the dedicated B item below)
-- 🟡 **EveryCircuit library gaps (honest, 2026-08-05)** — Tau has DC/AC V/I, pulse/clock, ground, R/pot, C/**polarized C**/L/**bulb**, transformer/**CT transformer**, tline, switch/**push-button NO+NC**/**SPDT**/**relay**, **motor**, opamp, comparator, E/F/G/H, B, diode/LED/zener/**photodiode**, BJT/MOS/JFET, **palette gate presets AND/OR/NOT/NAND/NOR/XOR/XNOR** (shared `digitalGate` kind; NAND/NOR/XNOR/NOT invert primary Q), **logic constant**, dflop/**SR latch** (Q/Q̅ — no fake gated SR)/**T FF**/**JK FF**, **4-bit ripple counter**, **Tau-owned `tau_555`**, **4-bit ADC/DAC**, **7-segment (raw pins + 1G loads)**, sample-hold, modulator, subckt. OP + post-`.tran` schematic current mode (labels + flow; **Live scrub through real `.tran` samples**; **scope cursor → `readoutTime`**; **editor + simulator** after a successful run — not simulator-only; Circuit header **Current mode** + **Live** badges). **Palette grouping polish:** explicit `PALETTE_SECTIONS` browse order Sources → Passives → Semiconductors → Analog → Digital → Electromechanical; gate/push presets via `paletteItems.ts` + `startPlacing(kind, value?)`; ICs after JK before sample-hold. **Omar (2026-08-05): Analog.com plaintext macromodel install abandoned** — DoD named-device ≥95% stays open; do not nag for ADI downloads. **Landed Tau-owned IC pack:** counter = four XSPICE `d_tff` ripple; 555 = bundled `.subckt tau_555` (not vendor NE555); ADC/DAC = behavioral B; 7-seg = raw segments (no BCD decode). ASC lossy carriers OK. Still **not** full EveryCircuit interactive live-sim / co-sim-while-dragging.
+- 🟡 **EveryCircuit library gaps (honest, 2026-08-05)** — Tau has DC/AC V/I, pulse/clock, ground, R/pot, C/**polarized C**/L/**bulb**, transformer/**CT transformer**, tline, switch/**push-button NO+NC**/**SPDT**/**relay**, **motor**, opamp, comparator, E/F/G/H, B, diode/LED/zener/**photodiode**, BJT/MOS/JFET, **palette gate presets AND/OR/NOT/NAND/NOR/XOR/XNOR** (shared `digitalGate` kind; NAND/NOR/XNOR/NOT invert primary Q), **logic constant**, dflop/**SR latch** (Q/Q̅ — no fake gated SR)/**T FF**/**JK FF**, **4-bit ripple counter**, **Tau-owned `tau_555`**, **4-bit ADC/DAC**, **7-segment (raw pins + 1G loads)**, sample-hold, modulator, subckt. OP + post-`.tran` schematic current mode (labels + flow; **Live scrub through real `.tran` samples**; **scope cursor → `readoutTime`**; **editor + simulator** after a successful run — not simulator-only; Circuit header **Current mode** + **Live** badges). **Palette grouping polish:** explicit `PALETTE_SECTIONS` browse order Sources → Passives → Semiconductors → Analog → Digital → Electromechanical; gate/push presets via `paletteItems.ts` + `startPlacing(kind, value?)`; ICs after JK before sample-hold. **Omar (2026-08-05): Analog.com plaintext macromodel install abandoned** — DoD named-device ≥95% stays open; do not nag for ADI downloads. **Landed Tau-owned IC pack:** counter = four XSPICE `d_tff` ripple; 555 = bundled `.subckt tau_555` (not vendor NE555); ADC/DAC = behavioral B; 7-seg = raw segments (no BCD decode). ASC lossy carriers OK. **Interactive live-sim (2026-08-10):** a free-running ngspice run with mid-run switch/pot actuation now exists (see "Free-running live simulation with mid-run actuation" in §4) and is proven against real ngspice; it is still **not** EveryCircuit co-sim-while-dragging parity, and it has not been driven once in the packaged desktop app.
 - 🟡 Semiconductors — diode/BJT/MOS/zener present; **bundled LTspice standard
   models landed** (`engine/standardModels.ts`): common parts referenced by name
   with no inline `.model` (1N4148/1N914, 1N5817-19 Schottky, BAT54, 1N750/4733/
@@ -1176,8 +1190,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   results exist (not gated behind simulator-only); Circuit header shows a
   **Current mode** badge. Native `.op` also
   requests device bias/small-signal data. Divider unit tests: V(out)=Vin/2,
-  I(V1)=−5 mA, I(R1)/I(R2)=5 mA. Not full EveryCircuit live-sim parity;
-  SHIPPABLE? **NO**.
+  I(V1)=−5 mA, I(R1)/I(R2)=5 mA. This entry is about *annotating a finished
+  run*; the free-running live solver is a separate item below. SHIPPABLE? **NO**.
 - 🟡 **Transient schematic current mode** (2026-08-05) — after a successful
   `.tran`, editor + simulator canvases prefer a real waveform sample for the same
   cyan V / green I labels + wire flow dots (`tranAnnotations` /
@@ -1186,8 +1200,35 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   the real `result.times` axis (~3.2 s wall loop) so schematic V/I/flow animate
   from engine samples — never invented (`liveSchematicPlayback.ts`). **Scope
   cursors open → cursor time wins** over Live. Live off / no ok transient → final
-  sample (or OP fallback). Not interactive ngspice co-sim / EveryCircuit
-  live-solve; SHIPPABLE? **NO**.
+  sample (or OP fallback). This is *replay of a finished run*, which is a
+  different thing from the free-running solver in the entry below — keep the two
+  distinct when reading either. SHIPPABLE? **NO**.
+- 🟡 **Free-running live simulation with mid-run actuation** (2026-08-10) — Run
+  now starts a continuously-solving ngspice child instead of only queueing a
+  bounded analysis. `RunTransport` exposes Run/Stop and a visible **Live |
+  Window** mode control with an editable duration; a document carrying an
+  authored `.tran` pre-selects **Window** and shows the end time it came from,
+  so the engineer is never guessing which of the two they are in. Frames stream
+  from the worker child through `engine/nativeLive.ts` into a fixed-size sample
+  ring (`simulation/liveRun.ts`) and onto `LiveScopePane`. Actuating a switch or
+  dragging a pot rewrites the corresponding instance mid-run
+  (`simulation/liveActuation.ts`), so the trace bends from that sample onward
+  and earlier samples are left alone. Leaving the simulator stops the run and
+  releases the engine lease.
+  **Proven against real ngspice, not a mock** (`live_f*` in
+  `src-tauri/src/live_spice.rs`, 22/22 with `TAU_NGSPICE_LIB` set): the app's
+  requested vector spellings resolve onto what the engine actually publishes;
+  switch and pot alters move only post-alter samples; Stop leaves no worker
+  process and no held lease; a self-ended run is not reported as a user stop;
+  a non-finite sample stops the run instead of being plotted.
+  **Not yet true, deliberately recorded:** nobody has driven a live run in the
+  packaged desktop app — every frontend test mocks the Tauri boundary, and the
+  Rust proof drives the worker directly rather than through the app's own IPC
+  command surface. A run that **ngspice aborts** (e.g. "Timestep too small") is
+  still reported to the engineer as `analysis-complete`; that is a false
+  statement of the kind AGENTS.md forbids and it is open, not fixed. This is
+  therefore not EveryCircuit-grade co-sim-while-dragging parity. SHIPPABLE?
+  **NO**.
 - 🟡 Initial conditions **`.ic` / `.nodeset`** — `buildSpiceDeck` carries node
   voltages and `.nodeset` through to native ngspice. LTspice-only inductor
   current assignments (`.ic I(L1)=…`) are translated to the winding's instance
@@ -2616,6 +2657,21 @@ Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   **Creation-tools follow-up (2026-07-15):** Components and Assistant now remain
   simultaneously reachable at 900px by yielding Explorer first; the Explorer
   rail action explicitly swaps the passive/creation column when requested.
+  **Split-simulator follow-up (2026-08-10):** the simulator is now two panes —
+  circuit left, analysis right — separated by a draggable divider, replacing the
+  arrangement where results sat on top of the schematic. Below the responsive
+  breakpoint the two panes stack instead of shrinking past legibility.
+  Re-proven at the floor: `scripts/min-window-dod.sh` is 12/12 at 900×600, and
+  `node scripts/design-shot.mjs unitH` shots were read by eye in both themes at
+  1440×900 and 900×600 — the split holds, the transport row stays fully legible
+  (Run · Live|Window · editable duration · unit), and the left toolbar degrades
+  to icon-only at the floor rather than clipping. One honest wart visible in
+  those shots: the global header's green **Run** pill and the transport's **Run**
+  button both read "Run" and are both present in the simulator at once. The
+  collision is only visual — they carry distinct accessible names ("Run
+  simulation" vs "Run this circuit") and `Toolbar` disables the header pill
+  while a live run holds the engine lease, explaining why in its tooltip — but
+  two buttons a foot apart wearing the same word is still a thing to look at.
 - ✅ **Sweep (2026-07-08, Phase 4b):** hex gate —
   `rg -n "#[0-9a-fA-F]{3,8}" apps/desktop/src` (ts/tsx/css) — confirms **zero
   hardcoded colors outside the single `:root`** in `App.css`; the only other

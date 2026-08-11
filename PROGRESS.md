@@ -2,6 +2,104 @@
 
 **Status: DONE - 2026-08-10**
 
+Unit: **live simulation, the split simulator, and the closing gate audit (unit H)**.
+Four things landed against direct requests. The DC motor is drawn as a real,
+mirror-symmetric letter **M** instead of a glyph that only suggested one. The
+simulator is now **two panes — circuit left, analysis right** — with a draggable
+divider and a stacked fallback below the responsive breakpoint, replacing the
+arrangement that put results on top of the schematic. **Run now starts a live,
+free-running ngspice child** rather than only queueing a bounded analysis:
+`RunTransport` gives Run/Stop plus a visible **Live | Window** control with an
+editable duration, an authored `.tran` pre-selects Window and says which end time
+it came from, actuating a switch or dragging a pot bends the running trace from
+that sample onward, and leaving the simulator stops the run and releases the
+engine lease. Frames stream through `engine/nativeLive.ts` into a fixed-size ring
+(`simulation/liveRun.ts`) and onto `LiveScopePane`.
+
+The fourth was a reported bug: a plotted trace that stopped about **1.75 ms into
+a 6 ms axis**. It was a memo missing its width dependency (`239520c`) — a pane
+mounting hidden inside `ResultsDrawer` built its path against the 340 px
+fallback while the axis relabelled to 940, drawing 29% of the run and reading to
+an engineer as a simulation that gave up early. The same stale width reached
+`glideFromPointer` and `trackHover`, so the cursor and hover readouts misreported
+time under the pointer by **2.8×** — a measurement tool reporting wrong
+measurements. Auto-resolution now also sees composite parts (motor armature,
+relay coil, transformer windings), so a DC-motor circuit gets a settling-driven
+window instead of 6 ms of flat line.
+
+**Gates on this tree, observed literally.** Typecheck clean. Frontend **4,256
+passed / 8 skipped** across 255 files (2 files skipped) in 55.0 s. `cargo fmt
+--check` and `clippy --all-targets -D warnings` clean; Rust **104 passed / 0
+failed / 42 ignored**. Real-ngspice **22/22** `live_` tests in 10.9 s. Minimum
+window **12/12** at 900×600. Design-system drift ok (9 checks + 46 tests).
+Differential parity **pass=117 sibling=5 gap=0**. Fresh shots under
+`screenshots/unitH/` (8 states × 2 themes × 3 viewports), read by eye in both
+themes at 1440×900 and 900×600: the split holds, the transport row stays legible,
+the left toolbar degrades to icon-only at the floor rather than clipping, and the
+trace now spans its full axis.
+
+**The acceptance corpus gate is RED and today's headline numbers moved.**
+`CORPUS_CANONICAL_ONLY=1 scripts/acceptance-corpus.sh` exits **1**: total 83 ·
+imported 83 · warning-clean 82 · deck-built 79 · op-converged 79 · CAPABILITY
+success 79 · capability-refusal 3 · deck-guard-leak 0 · **failure 1**. The
+previously published **82/81/79/79 · 79/3/0/0** baseline is therefore stale, and
+the claim in the entry below that it "remains the current corpus baseline" is no
+longer true. The single failure is `LTspice_export/untitled.asc`, a 26-byte,
+two-line, component-less schematic saved into a corpus root at 08:35 today; Tau
+correctly says "Place components before running analysis," but the classifier
+files that as a *failure* rather than a refusal. The same file is the whole of
+the recursive corpus's regression from `hard-failure=0` to
+**`hard-failure=1`** (`unencrypted=2542 exact=1223 refuse=1318 silent=0
+hard-failure=1 encrypted-excluded=1471 exact-rate=48.1%`). This is not a Tau
+defect and it was **not** fixed here: both candidate resolutions — excluding
+component-less schematics from the corpus roots, or moving the stray file —
+change a DoD-gating denominator back to the number that was already published,
+which is not a change an agent should make on its own authority.
+
+**Four defects that a green suite did not catch, which is the durable lesson.**
+The fatal one: a frontend mock declared ngspice's vectors as `v(out)`, but the
+engine publishes them **bare and lowercase** — the real latched list is
+`["v1#branch", "mid", "n001", "out", "in", "time"]`, and no latched name contains
+a parenthesis. Every live-run test agreed with the bug because the mock and the
+code shared the same wrong assumption. Only driving real libngspice found it, and
+polling the app's own `v(out)` is now proven to be *refused* by the run it was
+computed for. Second: an ngspice-**aborted** run is reported to the engineer as
+`analysis-complete` / "The transient analysis in this deck reached its own end
+time," because `fatal_engine_messages` (`spice.rs:1915`) matches only "stderr
+error" / "mif-error" / "circuit not parsed" / "fatal error" while ngspice
+announces this as "doAnalyses: TRAN: Timestep too small" + "run simulation(s)
+aborted". Measured on six decks. Nothing false is plotted, but the *reason* is a
+false statement, which AGENTS.md forbids. Reported, not fixed — it needs a new
+stop reason and a matching arm in `nativeLive.ts`, which is a product decision.
+Third: the corpus gate prints `hard-failure=N` but never asserts it is zero, so
+the number AGENTS.md's DoD depends on can regress while the test stays green —
+which is exactly what happened above. Fourth: `.symbol` was declared twice in
+`App.css` with conflicting stroke widths, so the 1.45 tuned seven weeks ago has
+been dead ever since and every screenshot review since approved the 1.55 that
+actually shipped; 1.55 was kept as the intent that shipped, and eight further
+top-level selectors in `App.css` are still duplicated with conflicting
+declarations.
+
+One process note worth keeping: these gate scripts declare their stdout the
+source of truth, but Vitest 4's default reporter swallows `console.log` from
+passing tests — `scripts/differential-parity.sh` and `scripts/dod-parity.sh`
+print only "1 passed" unless run with `--disable-console-intercept`. The
+coverage matrix and the named-device counters were invisible until then.
+
+**SHIPPABLE? NO** — and now for one more reason than yesterday. Named-device
+exact fidelity stays honestly blocked at **48.1%** against a 95% floor by
+encrypted vendor models that cannot be substituted, and the broad
+authored-analysis matrix is still incomplete; both are unrelated to today. Added
+today: the canonical acceptance gate exits non-zero, and no one has driven a live
+run in the packaged desktop app — every frontend test mocks the Tauri boundary
+and the Rust proof drives the worker directly rather than through the app's own
+IPC command surface. Next: decide the corpus-classification question above, then
+give the aborted-run defect a real stop reason.
+
+---
+
+**Status: DONE - 2026-08-10**
+
 Unit: **seventh production-hardening pass**. Parent-side worker framing now finds
 the final structured-response marker with a fixed-table linear scan (`b33a6a4`)
 instead of an overlapping 22-byte window comparison at every possible offset.
