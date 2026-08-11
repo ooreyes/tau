@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { Toolbar } from "./Toolbar";
+import { isTitlebarControlTarget, Toolbar } from "./Toolbar";
 import { handleTitlebarDoubleClick, startTitlebarDragging, toggleTitlebarMaximize } from "./titlebarWindow";
 import type { AnalysisResult } from "../simulation/linearTransient";
 
@@ -35,27 +35,24 @@ describe("Toolbar Run health control", () => {
   });
 
   it("toggles physical native window bounds and restores them", async () => {
-    const toggleMaximize = vi.fn(async () => {});
-    const setPosition = vi.fn(async () => {});
-    const setSize = vi.fn(async () => {});
+    const isMaximized = vi.fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const maximize = vi.fn(async () => {});
+    const unmaximize = vi.fn(async () => {});
     const window = {
-      toggleMaximize,
+      isMaximized,
+      maximize,
+      unmaximize,
       startDragging: vi.fn(async () => {}),
-      outerPosition: vi.fn(async () => ({ x: 20, y: 30 })),
-      outerSize: vi.fn(async () => ({ width: 1182, height: 768 })),
-      setPosition,
-      setSize,
-      currentMonitor: vi.fn(async () => ({ workArea: { position: { x: 0, y: 24 }, size: { width: 1512, height: 944 } } })),
     };
 
     await toggleTitlebarMaximize(window);
-    expect(setPosition).toHaveBeenCalledOnce();
-    expect(setSize).toHaveBeenCalledOnce();
-    expect(toggleMaximize).not.toHaveBeenCalled();
+    expect(maximize).toHaveBeenCalledOnce();
+    expect(unmaximize).not.toHaveBeenCalled();
 
     await toggleTitlebarMaximize(window);
-    expect(setPosition).toHaveBeenCalledTimes(2);
-    expect(setSize).toHaveBeenCalledTimes(2);
+    expect(unmaximize).toHaveBeenCalledOnce();
   });
 
   it("starts native dragging through the explicit window API", async () => {
@@ -71,7 +68,8 @@ describe("Toolbar Run health control", () => {
 
     expect(toolbar.hasAttribute("data-tauri-drag-region")).toBe(false);
     expect(dragRegion.getAttribute("data-tauri-drag-region")).toBeNull();
-    expect(dragRegion.getAttribute("role")).toBe("button");
+    expect(dragRegion.tagName).toBe("BUTTON");
+    expect(dragRegion.getAttribute("type")).toBe("button");
     expect(dragRegion.getAttribute("aria-label")).toContain("double-click");
     expect(dragRegion.getAttribute("title")).toContain("maximize or restore");
     for (const selector of [".titlebar-left", ".mode-toggle", ".titlebar-right"]) {
@@ -79,6 +77,15 @@ describe("Toolbar Run health control", () => {
     }
     expect(screen.getByRole("button", { name: "Run simulation" }).closest(".titlebar-drag-region")).toBeNull();
     expect(screen.getByRole("button", { name: "Settings" }).closest(".titlebar-drag-region")).toBeNull();
+  });
+
+  it("treats the labeled drag surface as a gesture target even though it is button-shaped for AX", () => {
+    const { container } = render(<Toolbar {...baseProps} />);
+    const dragRegion = container.querySelector(".titlebar-drag-region")!;
+    const ordinaryButton = screen.getByRole("button", { name: "Run simulation" });
+
+    expect(isTitlebarControlTarget(dragRegion)).toBe(false);
+    expect(isTitlebarControlTarget(ordinaryButton)).toBe(true);
   });
 
   it("stays neutral before validation and still invokes Run", () => {

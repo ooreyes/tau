@@ -42,6 +42,14 @@ interface ToolbarProps {
 type LampState = "idle" | "running" | "ok" | "error" | "warn";
 
 const ICON = { size: 13, strokeWidth: 1.6 } as const;
+const TITLEBAR_GESTURE_SURFACE = ".titlebar-drag-region";
+
+export function isTitlebarControlTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  if (!element) return false;
+  if (element.closest(TITLEBAR_GESTURE_SURFACE)) return false;
+  return Boolean(element.closest("button, a, input, select, textarea, [role=button], .mode-toggle"));
+}
 
 export function Toolbar({ mode, result, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
   const lastTitlebarMouseDownRef = useRef<number | null>(null);
@@ -85,7 +93,8 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
   const handleTitlebarMouseDown = (event: ReactMouseEvent<HTMLElement>) => {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
-    if (target.closest("button, a, input, select, textarea, [role=button], .mode-toggle")) return;
+    if (target.closest(TITLEBAR_GESTURE_SURFACE) && event.currentTarget !== event.target) return;
+    if (isTitlebarControlTarget(target)) return;
 
     const now = Date.now();
     const previous = lastTitlebarMouseDownRef.current;
@@ -104,7 +113,8 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
 
   const handleTitlebarDoubleClickCapture = (event: ReactMouseEvent<HTMLElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest("button, a, input, select, textarea, [role=button], .mode-toggle")) return;
+    if (target.closest(TITLEBAR_GESTURE_SURFACE) && event.currentTarget !== event.target) return;
+    if (isTitlebarControlTarget(target)) return;
     if (suppressNativeDoubleClickRef.current) {
       suppressNativeDoubleClickRef.current = false;
       event.preventDefault();
@@ -116,7 +126,8 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
 
   const handleTitlebarClickCapture = (event: ReactMouseEvent<HTMLElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest("button, a, input, select, textarea, [role=button], .mode-toggle")) return;
+    if (target.closest(TITLEBAR_GESTURE_SURFACE) && event.currentTarget !== event.target) return;
+    if (isTitlebarControlTarget(target)) return;
     if (suppressNativeDoubleClickRef.current) {
       suppressNativeDoubleClickRef.current = false;
       event.preventDefault();
@@ -156,12 +167,15 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
        * remain ordinary interactive controls (including the traffic-light
        * inset). The explicit API call preserves the native drag contract.
        */}
-      <div
+      <button
+        type="button"
         className="titlebar-drag-region"
-        role="button"
         tabIndex={-1}
         aria-label="Window drag area; double-click to maximize or restore"
         title="Double-click to maximize or restore"
+        onMouseDown={handleTitlebarMouseDown}
+        onDoubleClick={handleTitlebarDoubleClickCapture}
+        onClick={handleTitlebarClickCapture}
       />
       <div className="titlebar-left" data-tauri-drag-region="false">
         <div className="brand">
