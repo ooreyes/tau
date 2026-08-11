@@ -860,12 +860,11 @@ function App() {
   }, []);
 
   // Radix only restores focus to a `<Dialog.Trigger>` automatically. Settings
-  // has three separate entry points (toolbar gear, rail button, and any
-  // future one) living in components far from where `<Dialog>` mounts below,
-  // so none of them is a `Dialog.Trigger` - Radix's own restoration is a
-  // silent no-op here. This ref plus `Dialog`'s `onCloseAutoFocus` (below)
-  // is the manual equivalent: remember what had focus when Settings opened,
-  // and hand it back when Settings closes.
+  // has entry points living in components far from where `<Dialog>` mounts
+  // below, so none of them is a `Dialog.Trigger` - Radix's own restoration is
+  // a silent no-op here. This ref plus `Dialog`'s `onCloseAutoFocus` (below) is
+  // the manual equivalent: remember what had focus when Settings opened, and
+  // hand it back when Settings closes.
   const settingsOpenerRef = useRef<HTMLElement | null>(null);
 
   /**
@@ -3388,7 +3387,6 @@ function App() {
               return next;
             });
           }}
-          onOpenSettings={openSettingsSurface}
         />
         {explorerColumnOpen && (
           <ExplorerPanel

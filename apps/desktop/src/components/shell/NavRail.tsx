@@ -10,7 +10,7 @@
  * `ModeProps` travels with it: every field is something the rail needs.
  */
 import type { ReactNode } from "react";
-import { Activity, CircuitBoard, FolderOpen, Search, Settings } from "lucide-react";
+import { Activity, CircuitBoard, FolderOpen, Search } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ModeProps {
@@ -23,7 +23,6 @@ interface ModeProps {
   onModeChange: (mode: "schematic" | "simulator") => void;
   onSearch: () => void;
   onFocusComponents: () => void;
-  onOpenSettings: () => void;
 }
 
 export function ActivityRail({
@@ -36,7 +35,6 @@ export function ActivityRail({
   onModeChange,
   onSearch,
   onFocusComponents,
-  onOpenSettings,
 }: ModeProps) {
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
@@ -46,18 +44,19 @@ export function ActivityRail({
       <RailButton label="Search" shortcut="⌘K" onClick={onSearch} disabled={!projectOpen}>
         <Search size={18} strokeWidth={1.6} />
       </RailButton>
+      <RailSeparator />
       <RailButton active={partsOpen && schematicOpen} label="Components" onClick={onFocusComponents} disabled={!schematicOpen}>
         <CircuitBoard size={18} strokeWidth={1.6} />
       </RailButton>
       <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")} disabled={!schematicOpen}>
         <Activity size={18} strokeWidth={1.6} />
       </RailButton>
-      <div className="rail-spacer" />
-      <RailButton label="Settings" onClick={onOpenSettings}>
-        <Settings size={18} strokeWidth={1.6} />
-      </RailButton>
     </nav>
   );
+}
+
+function RailSeparator() {
+  return <span className="rail-separator" aria-hidden="true" />;
 }
 
 function RailButton({
@@ -78,7 +77,14 @@ function RailButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button className={`rail-btn${active ? " active" : ""}`} aria-label={label} onClick={onClick} disabled={disabled}>
+        <button
+          type="button"
+          className={`rail-btn${active ? " active" : ""}`}
+          aria-label={label}
+          aria-current={active ? "page" : undefined}
+          onClick={onClick}
+          disabled={disabled}
+        >
           {active && <span className="rail-active" />}
           <span className="rail-lucide" aria-hidden="true">
             {children}

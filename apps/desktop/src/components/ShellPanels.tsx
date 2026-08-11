@@ -11,6 +11,7 @@ import {
   FolderInput,
   FileInput,
   FoldVertical,
+  MoreHorizontal,
   Pencil,
   RefreshCw,
   Trash2,
@@ -65,6 +66,12 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useSchematic } from "../store/useSchematic";
 import { useProject } from "../store/useProject";
 import { basename, isAscFile, type ProjectNode } from "../project/types";
@@ -246,6 +253,7 @@ export function ExplorerPanel({
     dragging: boolean;
   } | null>(null);
   const suppressClickPathRef = useRef<string | null>(null);
+  const collapseSnapshotRef = useRef<{ rootPath: string; expanded: string[] } | null>(null);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const explorerWidthConfig = {
     ...EXPLORER_PANEL_WIDTH,
@@ -276,6 +284,12 @@ export function ExplorerPanel({
   useEffect(() => {
     void detectCapability();
   }, [detectCapability]);
+
+  useEffect(() => {
+    // A restoration set belongs to one project. Never let a project switch
+    // restore folders from the previous root.
+    collapseSnapshotRef.current = null;
+  }, [rootPath]);
 
   const openNode = async (path: string, name: string) => {
     try {
@@ -470,6 +484,41 @@ export function ExplorerPanel({
     }
   };
 
+  const startNewSchematic = () => {
+    if (!rootPath) return;
+    if (!expanded.includes(rootPath)) toggleExpanded(rootPath);
+    setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.asc" });
+  };
+
+  const startNewFolder = () => {
+    if (!rootPath) return;
+    if (!expanded.includes(rootPath)) toggleExpanded(rootPath);
+    setCreateDraft({ kind: "folder", parentPath: rootPath, name: "New Folder" });
+  };
+
+  const refreshExplorer = async () => {
+    const ok = await refresh();
+    if (ok) onNotice("Explorer refreshed.");
+  };
+
+  const toggleCollapseFolders = () => {
+    if (!rootPath) return;
+    const snapshot = collapseSnapshotRef.current;
+    if (snapshot?.rootPath === rootPath) {
+      collapseSnapshotRef.current = null;
+      useProject.setState({ expanded: snapshot.expanded });
+      return;
+    }
+    if (expanded.length === 0) return;
+    collapseSnapshotRef.current = { rootPath, expanded: [...expanded] };
+    collapseAll();
+  };
+
+  const collapseRestorationAvailable = collapseSnapshotRef.current?.rootPath === rootPath;
+  const collapseActionLabel = collapseRestorationAvailable
+    ? "Restore expanded folders in explorer"
+    : "Collapse folders in explorer";
+
   const markDropTarget = (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => {
     const source = dragSource(event);
     // During dragover, getData is empty - accept if the MIME type is present
@@ -549,16 +598,13 @@ export function ExplorerPanel({
   return (
     <aside className="explorer-panel" aria-label="Project explorer" style={{ width: explorerWidth }}>
       <div className="explorer-head">
-        <span>{rootName ?? "Schematics"}</span>
-        <div className="explorer-icons">
+        <span className="explorer-root-name">{rootName ?? "Schematics"}</span>
+        <div className="explorer-icons explorer-primary-actions" aria-label="Explorer actions">
           <button
             type="button"
             title="New schematic file"
             aria-label="New schematic file"
-            onClick={() => {
-              if (!expanded.includes(rootPath)) toggleExpanded(rootPath);
-              setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.asc" });
-            }}
+            onClick={startNewSchematic}
           >
             <FilePlus size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
@@ -566,10 +612,7 @@ export function ExplorerPanel({
             type="button"
             title="New folder"
             aria-label="New folder"
-            onClick={() => {
-              if (!expanded.includes(rootPath)) toggleExpanded(rootPath);
-              setCreateDraft({ kind: "folder", parentPath: rootPath, name: "New Folder" });
-            }}
+            onClick={startNewFolder}
           >
             <FolderPlus size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
@@ -585,22 +628,54 @@ export function ExplorerPanel({
             type="button"
             title="Refresh explorer"
             aria-label="Refresh explorer"
-            onClick={async () => {
-              const ok = await refresh();
-              if (ok) onNotice("Explorer refreshed.");
-            }}
+            onClick={() => void refreshExplorer()}
           >
             <RefreshCw size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
           <button
             type="button"
-            title="Collapse folders in explorer"
-            aria-label="Collapse folders in explorer"
-            onClick={collapseAll}
+            title={collapseActionLabel}
+            aria-label={collapseActionLabel}
+            aria-pressed={collapseRestorationAvailable}
+            onClick={toggleCollapseFolders}
           >
             <FoldVertical size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
         </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="explorer-overflow-trigger"
+              title="More explorer actions"
+              aria-label="More explorer actions"
+            >
+              <MoreHorizontal size={16} strokeWidth={1.6} aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="explorer-overflow-menu">
+            <DropdownMenuItem onSelect={startNewSchematic}>
+              <FilePlus size={16} strokeWidth={1.6} aria-hidden="true" />
+              New schematic file
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={startNewFolder}>
+              <FolderPlus size={16} strokeWidth={1.6} aria-hidden="true" />
+              New folder
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => ascInputRef.current?.click()}>
+              <FileInput size={16} strokeWidth={1.6} aria-hidden="true" />
+              {IMPORT_BUTTON_LABEL}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void refreshExplorer()}>
+              <RefreshCw size={16} strokeWidth={1.6} aria-hidden="true" />
+              Refresh explorer
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={toggleCollapseFolders}>
+              <FoldVertical size={16} strokeWidth={1.6} aria-hidden="true" />
+              {collapseActionLabel}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <input

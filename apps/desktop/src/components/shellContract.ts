@@ -177,7 +177,6 @@ export const SHELL_CONTROLS = {
   railSearch: "Search",
   railComponents: "Components",
   railWaveforms: "Waveforms",
-  railSettings: "Settings",
   transportRun: "Run simulation",
   transportSettings: "Settings",
   /**

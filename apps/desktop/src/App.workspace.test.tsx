@@ -725,11 +725,10 @@ describe("Settings is a surface in this window", () => {
   it("opens Settings over the schematic and closes it again, from every entry point", async () => {
     await renderOpenProject();
 
-    // The toolbar gear and the rail button are separate affordances; both have
-    // to reach the same in-window surface, because there is no longer a second
-    // window for either of them to fall back to.
+    // Settings remains a single, keyboard-addressable toolbar affordance after
+    // the redundant activity-rail gear is removed.
     const entryPoints = screen.getAllByRole("button", { name: "Settings" }).length;
-    expect(entryPoints).toBeGreaterThan(1);
+    expect(entryPoints).toBe(1);
 
     for (let index = 0; index < entryPoints; index += 1) {
       fireEvent.click(screen.getAllByRole("button", { name: "Settings" })[index]);
@@ -754,8 +753,7 @@ describe("Settings is a surface in this window", () => {
   it("keeps focus inside Settings while it is open", async () => {
     await renderOpenProject();
 
-    const rail = screen.getByRole("navigation", { name: "Workspace sections" });
-    fireEvent.click(within(rail).getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
 
     const settingsDialog = await screen.findByRole("dialog", { name: "Settings" });
     await waitFor(() => expect(settingsDialog.contains(document.activeElement)).toBe(true));
@@ -764,11 +762,9 @@ describe("Settings is a surface in this window", () => {
   it("returns focus to the control that opened Settings", async () => {
     await renderOpenProject();
 
-    // The rail button is the control under test; it is its own affordance
-    // (see the entry-point loop above), so it stays addressable after the
-    // dialog unmounts and can be compared by reference below.
-    const rail = screen.getByRole("navigation", { name: "Workspace sections" });
-    const openSettingsButton = within(rail).getByRole("button", { name: "Settings" });
+    // The toolbar button is the surviving shell affordance; it stays
+    // addressable after the dialog unmounts and can be compared below.
+    const openSettingsButton = screen.getByRole("button", { name: "Settings" });
     // `fireEvent.click` (unlike a real click, or `userEvent.click`) does not
     // focus its target, but Radix's FocusScope captures whatever element is
     // focused at mount time as the thing to restore focus to on unmount.

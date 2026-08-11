@@ -74,19 +74,25 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
 
   return (
     /*
+     * The dedicated `.titlebar-drag-region` below carries
      * `data-tauri-drag-region` because the native title bar is gone.
      * `titleBarStyle: "Overlay"` in tauri.conf.json hides the bar and floats
      * the traffic lights over this header, which removes the only thing the
      * user could drag the window by - so this row has to become it. The
      * attribute is inert outside Tauri, so the browser build is unaffected.
      *
-     * Only the header background carries it, never a control: Tauri treats a
-     * drag region as a drag region even over a button, so tagging the whole
-     * subtree would make Run and the mode toggle move the window instead of
-     * clicking.
+     * It stays a sibling of the controls: Tauri starts a drag only when the
+     * clicked element is the drag region, so Run and the mode toggle remain
+     * ordinary interactive controls.
      */
-    <header className="toolbar" data-tauri-drag-region>
-      <div className="titlebar-left">
+    <header className="toolbar">
+      {/*
+       * Tauri's native drag/maximize contract applies only to the element that
+       * was clicked. Keep that element an empty surface so Run, mode, Bode, and
+       * Settings remain ordinary controls (including the traffic-light inset).
+       */}
+      <div className="titlebar-drag-region" data-tauri-drag-region="true" aria-hidden="true" />
+      <div className="titlebar-left" data-tauri-drag-region="false">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">τ</span>
           <span className="brand-name">tau</span>
@@ -94,7 +100,7 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
         </div>
       </div>
 
-      <div className="mode-toggle" aria-label="Editor mode">
+      <div className="mode-toggle" aria-label="Editor mode" data-tauri-drag-region="false">
         <button
           className={`mode-btn${mode === "schematic" ? " active" : ""}`}
           onClick={() => onModeChange("schematic")}
@@ -121,7 +127,7 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
         </button>
       </div>
 
-      <div className="titlebar-right">
+      <div className="titlebar-right" data-tauri-drag-region="false">
         {statusText && (
           <span className={cn("status-lamp", `status-lamp--${lampState}`)}>
             <i className="status-lamp-dot" aria-hidden="true" />

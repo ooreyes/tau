@@ -46,7 +46,7 @@ const renderExplorer = ({ onMoveNode, onRenameNode }: {
   const onOpenSimFile = vi.fn();
   const onOpenAscText = vi.fn();
   const onNotice = vi.fn();
-  render(
+  const rendered = render(
     <ExplorerPanel
       activeFilePath={null}
       onOpenSimFile={onOpenSimFile}
@@ -56,7 +56,7 @@ const renderExplorer = ({ onMoveNode, onRenameNode }: {
       onRenameNode={onRenameNode}
     />,
   );
-  return { onOpenSimFile, onOpenAscText, onNotice };
+  return { ...rendered, onOpenSimFile, onOpenAscText, onNotice };
 };
 
 function dataTransferStub(): DataTransfer {
@@ -88,12 +88,65 @@ describe("ExplorerPanel action row", () => {
     expect(screen.getByRole("button", { name: "Import circuit" }).querySelector("svg")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Open Schematics folder" })).toBeNull();
 
-    expect(useProject.getState().expanded.length).toBeGreaterThan(0);
+    const initiallyExpanded = [...useProject.getState().expanded];
+    expect(initiallyExpanded.length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Collapse folders in explorer" }));
     expect(useProject.getState().expanded).toEqual([]);
 
+    const restore = screen.getByRole("button", { name: "Restore expanded folders in explorer" });
+    expect(restore.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(restore);
+    expect(useProject.getState().expanded).toEqual(initiallyExpanded);
+
     fireEvent.click(screen.getByRole("button", { name: "Refresh explorer" }));
     await waitFor(() => expect(onNotice).toHaveBeenCalledWith("Explorer refreshed."));
+
+    // The toggle remains deterministic when repeated, and a new project gets
+    // its own restoration set rather than inheriting the old root's folders.
+    fireEvent.click(screen.getByRole("button", { name: "Collapse folders in explorer" }));
+    useProject.setState({
+      rootPath: "web://workspace/other-project",
+      rootName: "Other Project",
+      tree: [],
+      expanded: ["web://workspace/other-project"],
+    });
+    await waitFor(() => expect(screen.getAllByText("Other Project").length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole("button", { name: "Collapse folders in explorer" }));
+    expect(useProject.getState().expanded).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Restore expanded folders in explorer" }));
+    expect(useProject.getState().expanded).toEqual(["web://workspace/other-project"]);
+  });
+
+  it("does not invent a restoration set for an already-collapsed tree", () => {
+    useProject.setState({ expanded: [] });
+    renderExplorer();
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse folders in explorer" }));
+    expect(useProject.getState().expanded).toEqual([]);
+    expect(screen.queryByRole("button", { name: "Restore expanded folders in explorer" })).toBeNull();
+  });
+
+  it("keeps a long root identity while routing narrow actions through an overflow menu", async () => {
+    const rootName = "工程 Δ — 测试项目";
+    useProject.setState({ rootName });
+    const { container } = renderExplorer();
+
+    expect(container.querySelector(".explorer-root-name")?.textContent).toBe(rootName);
+    expect(container.querySelector(".explorer-primary-actions")).toBeTruthy();
+    const overflow = screen.getByRole("button", { name: "More explorer actions" });
+    expect(overflow.classList.contains("explorer-overflow-trigger")).toBe(true);
+
+    fireEvent.pointerDown(overflow, { button: 0, ctrlKey: false });
+    await screen.findByRole("menu");
+    for (const label of [
+      "New schematic file",
+      "New folder",
+      "Import circuit",
+      "Refresh explorer",
+      "Collapse folders in explorer",
+    ]) {
+      expect(screen.getByRole("menuitem", { name: label })).toBeTruthy();
+    }
   });
 
   it("creates and opens an ASC schematic from the New File control", async () => {

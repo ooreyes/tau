@@ -21,6 +21,21 @@ const baseProps = {
 };
 
 describe("Toolbar Run health control", () => {
+  it("keeps native title-bar drag and zoom on an unused surface only", () => {
+    const { container } = render(<Toolbar {...baseProps} />);
+    const toolbar = container.querySelector(".toolbar")!;
+    const dragRegion = container.querySelector(".titlebar-drag-region")!;
+
+    expect(toolbar.hasAttribute("data-tauri-drag-region")).toBe(false);
+    expect(dragRegion.getAttribute("data-tauri-drag-region")).toBe("true");
+    expect(dragRegion.getAttribute("aria-hidden")).toBe("true");
+    for (const selector of [".titlebar-left", ".mode-toggle", ".titlebar-right"]) {
+      expect(toolbar.querySelector(selector)?.getAttribute("data-tauri-drag-region")).toBe("false");
+    }
+    expect(screen.getByRole("button", { name: "Run simulation" }).closest(".titlebar-drag-region")).toBeNull();
+    expect(screen.getByRole("button", { name: "Settings" }).closest(".titlebar-drag-region")).toBeNull();
+  });
+
   it("stays neutral before validation and still invokes Run", () => {
     const onRun = vi.fn();
     render(<Toolbar {...baseProps} onRun={onRun} />);

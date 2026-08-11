@@ -4687,6 +4687,17 @@ body {
   box-shadow: none;
 }
 
+.titlebar-drag-region {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.toolbar > :not(.titlebar-drag-region) {
+  position: relative;
+  z-index: 1;
+}
+
 .titlebar-left,
 .titlebar-right {
   min-width: 0;
@@ -4980,8 +4991,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 10px 0;
+  gap: var(--sp-1);
+  padding: var(--sp-2) 0;
   /* Veil, not panel (DESIGN_SYSTEM.md section 1.8). This was an opaque
      --panel-3 column with a hard right edge, which is what a docked sidebar
      looks like. The canvas is the substrate, so the rail sits ON it: the
@@ -4995,8 +5006,8 @@ body {
 }
 
 .rail-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   position: relative;
   display: grid;
   place-items: center;
@@ -5035,6 +5046,12 @@ body {
   background: var(--overlay-hover);
 }
 
+.rail-btn:focus-visible {
+  outline: none;
+  color: var(--text);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
+}
+
 .rail-btn.active {
   color: var(--accent);
   background: var(--accent-soft);
@@ -5042,17 +5059,21 @@ body {
 
 .rail-active {
   position: absolute;
-  left: -8px;
-  top: 8px;
+  left: -4px;
+  top: 10px;
   width: 3px;
-  height: 20px;
+  height: 24px;
   border-radius: 0 2px 2px 0;
   background: var(--accent);
   box-shadow: none;
 }
 
-.rail-spacer {
-  flex: 1;
+.rail-separator {
+  width: 28px;
+  height: 1px;
+  flex: none;
+  margin: var(--sp-1) 0;
+  background: var(--border-subtle);
 }
 
 .explorer-panel {
@@ -5062,12 +5083,14 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  container: explorer-shell / inline-size;
   background: var(--panel);
   border-right: 0.5px solid var(--border);
 }
 
 .explorer-head {
   height: 34px;
+  min-width: 0;
   padding: 0 8px 0 10px;
   display: flex;
   align-items: center;
@@ -5088,6 +5111,7 @@ body {
 }
 
 .explorer-head > span {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5143,6 +5167,55 @@ body {
   outline: none;
   color: var(--text);
   box-shadow: 0 0 0 1px var(--accent-line);
+}
+
+.explorer-overflow-trigger {
+  width: 22px;
+  height: 22px;
+  display: none;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.explorer-overflow-trigger:hover {
+  color: var(--text);
+  background: var(--overlay-hover);
+}
+
+.explorer-overflow-trigger:focus-visible {
+  outline: none;
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+
+.explorer-overflow-trigger svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+}
+
+/* Keep the root identity readable at the 900px floor and on a user-narrowed
+   Explorer. Secondary actions remain available from the keyboard-safe menu. */
+@container explorer-shell (max-width: 280px) {
+  .explorer-primary-actions {
+    display: none;
+  }
+
+  .explorer-overflow-trigger {
+    display: grid;
+  }
+
+  .tree-project-root-kind {
+    display: none;
+  }
 }
 
 

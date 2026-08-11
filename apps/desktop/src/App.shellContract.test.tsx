@@ -283,9 +283,7 @@ describe("shell inventory by app state", () => {
 
   it("with Settings open, the shell behind it leaves the accessibility tree", async () => {
     await openProject();
-    fireEvent.click(
-      screen.getByRole("navigation", { name: SHELL.navRail.name }).querySelector("button[aria-label='Settings']")!,
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     await screen.findByRole("dialog", { name: SHELL.settings.name });
 
     // A real modal takes the rest of the document out of the accessibility
@@ -454,8 +452,9 @@ describe("placement assertions a grep cannot make", () => {
     // The rail is the one surface REDESIGN.md says never collapses, so its
     // controls are the fallback way back to anything that does.
     const rail = screen.getByRole("navigation", { name: SHELL.navRail.name });
-    for (const label of [SHELL_CONTROLS.railExplorer, SHELL_CONTROLS.railSettings]) {
+    for (const label of [SHELL_CONTROLS.railExplorer]) {
       expect(rail.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
     }
+    expect(rail.querySelector("button[aria-label=\"Settings\"]")).toBeNull();
   });
 });
