@@ -26,8 +26,22 @@ packaged/browser/native evidence. Wave 2 will target COMP-02, COMP-04,
 COMP-06, COMP-08B, COMP-09, COMP-11, COMP-13B, COMP-14, COMP-12 rendering,
 COMP-16, and regression/a11y/performance coverage.
 
-**Next:** run the full Wave 2 frontend/native gates, then begin serialized
-packaged Computer Use, Chrome, and engineering QA.
+**Next:** after the Mac is manually unlocked, begin serialized packaged
+Computer Use, Chrome, and engineering QA; do not close any tracker item until
+matching evidence exists.
+
+---
+
+**2026-08-11 — Wave 2 full gates and packaged artifact:** the integrated
+frontend gate passed **258 files / 2 skipped, 4,337 tests / 8 skipped**;
+typecheck passed; the desktop web build and Tauri bundle both exited 0; and
+design drift passed (**9 checks + 48 tests**). The unsigned packaged outputs
+are `apps/desktop/src-tauri/target/release/bundle/macos/Tau.app` and
+`Tau_1.0.0_aarch64.dmg`; `codesign --verify --deep --strict` passed, `hdiutil
+verify` reported a valid checksum, and packaged engine smoke passed (**336
+samples, 0..5 V**). Native UI QA is currently blocked because macOS is locked
+and Computer Use automatic unlock failed; no tracker item is marked complete
+from this partial evidence.
 
 ---
 
