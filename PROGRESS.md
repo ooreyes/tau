@@ -1,33 +1,31 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-11**
+**Status: IN PROGRESS - 2026-08-11**
 
-Unit: **Wave 1 electrical-schema landing and full native gates**. Electrical
-schema/model UI implementation is integrated as `d6fbcfd` from rebased worker
-commit `ec86d30414df9489904309d3fc41941f1140aef1`, parent `fc0b47b`. SHELL-02,
-COMP-01, COMP-05, COMP-08B, COMP-09, COMP-11, COMP-12, and COMP-13A
-implementation is landed; the stable tracker statuses remain `IN PROGRESS`
-until packaged, both-theme, three-viewport, and remaining inspector/native QA.
+Unit: **Wave 2 inspector, simulator, and regression fleet**. Wave 1 is fully
+integrated and pushed through `8481721`; the next three isolated Luna Max lanes
+start from that exact tracker-inclusive tip. Wave 2 owns the remaining shared
+inspector presentation, seven-segment simulator rendering, and cross-lane
+accessibility/render/performance regression proof.
 
-**Files:** electrical-schema worker’s 24 application/test files, including
-source round-trip, parameter validation, model resolution/netlisting, LED
-rendering, inspector, and preserved EngineeringInput validation changes;
-`UI_UX_FIXES.md`, `FEATURE_PARITY.md`, and this heartbeat record evidence
-without claiming visual completion.
+**Files:** Wave 2 workers will use disjoint temporary worktrees and the issue
+ownership/file boundaries recorded in `UI_UX_FIXES.md`; this primary checkout
+remains the only owner of `PROGRESS.md`, `FEATURE_PARITY.md`, and
+`UI_UX_FIXES.md`.
 
-**Tests:** integrated frontend **256 files passed / 2 skipped, 4,297 tests
-passed / 8 skipped**; typecheck **exit 0**; desktop build **exit 0**; design
-drift **9 checks + 47 tests passed**; `cargo fmt --check` **exit 0**; clippy
+**Tests:** Wave 1 handoff gates remain green: frontend **256 files passed / 2
+skipped, 4,297 tests passed / 8 skipped**; typecheck **exit 0**; desktop build
+**exit 0**; design drift **9 checks + 47 tests passed**; cargo fmt/clippy
 **exit 0**; native Rust **104 passed / 0 failed / 42 ignored**; ignored
-real-ngspice smoke **42 passed / 0 failed**; `git diff --check` **exit 0**.
+real-ngspice smoke **42 passed / 0 failed**.
 
-**Parity items:** SHELL-02, COMP-01, COMP-05, COMP-08B, COMP-09, COMP-11,
-COMP-12, and COMP-13A implementations landed and are recorded as `IN PROGRESS`
-pending packaged/native/browser evidence. COMP-13B and the remaining shared
-inspector issues continue in Wave 2.
+**Parity items:** Wave 1 implementation items remain `IN PROGRESS` pending
+packaged/browser/native evidence. Wave 2 will target COMP-02, COMP-04,
+COMP-06, COMP-08B, COMP-09, COMP-11, COMP-13B, COMP-14, COMP-12 rendering,
+COMP-16, and regression/a11y/performance coverage.
 
-**Next:** finish the Wave 1 tracker record and push it, then provision Wave 2
-inspector, simulator, and regression worktrees from this exact integration tip.
+**Next:** provision all three Wave 2 worktrees from the exact base, collect one
+focused commit per lane, and integrate them one at a time.
 
 ---
 
@@ -46,6 +44,12 @@ sent the lane back to rebase, and integrated its clean rebased commit
 `ec86d30` as `d6fbcfd` from parent `fc0b47b`. The integrated frontend, desktop
 build, Rust/native gates, and ignored real-ngspice smoke passed. No screenshots
 were claimed by the implementation lane.
+
+---
+
+**2026-08-11 — Wave 2 claim:** the orchestrator recorded the Wave 2 ownership
+and will provision inspector, simulator, and regression worktrees from the
+exact Wave 1 tip `8481721`. GUI ownership remains serialized for Wave 3 QA.
 
 ---
 

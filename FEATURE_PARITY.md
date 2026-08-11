@@ -2015,7 +2015,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   symbol geometry in `71ad682` (SHELL-06/COMP-03/COMP-07/COMP-08A/COMP-10/
   COMP-15/COMP-17), and electrical-schema implementation in `d6fbcfd`
   (SHELL-02/COMP-01/COMP-05/COMP-08B/COMP-09/COMP-11/COMP-12/COMP-13A);
-  visual/native evidence remains pending.**
+  Wave 2 inspector/simulator/regression lanes are now claimed from
+  `8481721`; visual/native evidence remains pending.**
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - 🟡 **Visual QA on the actual desktop app:** the current Tauri hot-reload app
   stays alive on `auto/ltspice-parity`; live browser QA verified centered
