@@ -4783,6 +4783,17 @@ body {
   min-width: 0;
   display: flex;
   align-items: center;
+  /* Transparent grid cells must not occlude the explicit drag surface. */
+  pointer-events: none;
+}
+
+.titlebar-left > *,
+.titlebar-right > * {
+  pointer-events: auto;
+}
+
+.titlebar-left .brand {
+  pointer-events: none;
 }
 
 .titlebar-left {
