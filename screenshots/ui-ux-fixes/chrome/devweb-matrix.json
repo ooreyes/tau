@@ -1,0 +1,19 @@
+{
+  "schema": "tau.chrome-responsive-qa.v1",
+  "capturedAt": "2026-08-11T20:58:04Z",
+  "url": "http://127.0.0.1:1420/",
+  "state": "Settings sheet on empty dev:web shell",
+  "matrix": [
+    {"theme":"light","requestedViewport":"900x600","capturePixels":"900x600","path":"screenshots/ui-ux-fixes/chrome/corrected-devweb-settings-light-900x600.png","innerWidth":900,"innerHeight":600,"scrollWidth":900,"scrollHeight":600,"settingsVisible":true,"modelLibrariesHidden":true,"noOverflow":true},
+    {"theme":"light","requestedViewport":"1280x800","capturePixels":"1280x800","path":"screenshots/ui-ux-fixes/chrome/corrected-devweb-settings-light-1280x800.png","innerWidth":1280,"innerHeight":800,"scrollWidth":1280,"scrollHeight":800,"settingsVisible":true,"modelLibrariesHidden":true,"noOverflow":true},
+    {"theme":"light","requestedViewport":"1440x900","capturePixels":"1440x900","path":"screenshots/ui-ux-fixes/chrome/corrected-devweb-settings-light-1440x900.png","innerWidth":1440,"innerHeight":900,"scrollWidth":1440,"scrollHeight":900,"settingsVisible":true,"modelLibrariesHidden":true,"noOverflow":true},
+    {"theme":"dark","requestedViewport":"900x600","capturePixels":"900x600","path":"screenshots/ui-ux-fixes/chrome/corrected-devweb-settings-dark-900x600.png","innerWidth":900,"innerHeight":600,"scrollWidth":900,"scrollHeight":600,"settingsVisible":true,"modelLibrariesHidden":true,"noOverflow":true},
+    {"theme":"dark","requestedViewport":"1280x800","capturePixels":"1280x800","path":"screenshots/ui-ux-fixes/chrome/corrected-devweb-settings-dark-1280x800.png","innerWidth":1280,"innerHeight":800,"scrollWidth":1280,"scrollHeight":800,"settingsVisible":true,"modelLibrariesHidden":true,"noOverflow":true},
+    {"theme":"dark","requestedViewport":"1440x900","capturePixels":"1440x900","path":"screenshots/ui-ux-fixes/chrome/corrected-devweb-settings-dark-1440x900.png","innerWidth":1440,"innerHeight":900,"scrollWidth":1440,"scrollHeight":900,"settingsVisible":true,"modelLibrariesHidden":true,"noOverflow":true}
+  ],
+  "pageOriginConsoleErrors": 0,
+  "extensionTransportErrors": 2,
+  "extensionTransportMessage": "Could not establish connection. Receiving end does not exist",
+  "viewportResetAfterCapture": true,
+  "fileUploadClaim": false
+}

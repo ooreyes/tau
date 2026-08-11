@@ -1,28 +1,30 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-11**
+**Status: IN PROGRESS - 2026-08-11**
 
-Unit: **Sol High review correction pass**. The review rejected `5f5fd20`; the
-correction code and acceptance evidence are now complete at code tip `0b5d22b`.
+Unit: **Second Sol High correction — current evidence and tracker truth**. The
+review rejected `6c580f1`; correction code is pushed through `811b0c7`, and the
+physical seven-segment acceptance-fixture correction is pushed at `44333cf`.
 
-**Files:** correction commits and the current packaged/Chrome evidence index in
-`screenshots/ui-ux-fixes/QA-EVIDENCE.md`; this primary checkout remained the
-only owner of `PROGRESS.md`, `FEATURE_PARITY.md`, and `UI_UX_FIXES.md`.
+**Files:** current packaged/native and Chrome evidence is indexed in
+`screenshots/ui-ux-fixes/evidence-manifest.json`,
+`screenshots/ui-ux-fixes/QA-EVIDENCE.md`, and the machine-readable native/
+Chrome logs. This primary checkout remains the only owner of
+`PROGRESS.md`, `FEATURE_PARITY.md`, and `UI_UX_FIXES.md`.
 
-**Tests:** focused correction suite **10 files / 312 passed**; frontend
-**260 files passed / 2 skipped, 4,368 passed / 8 skipped**; typecheck,
-design drift, minimum-window, packaged build, Rust, real-ngspice, mounted
-packaged smoke, and Chrome responsive/console results are literalized in
-`QA-EVIDENCE.md`.
+**Tests:** focused source/seven-segment suites are green; final frontend,
+design, native/Rust/ngspice, packaged-bundle, tracker, and clean-push gates are
+still being rerun at the current tip and will be literalized before completion.
 
-**Parity items:** all 24 stable UI/UX issues are `FIXED`; legacy source
-round-trips, bounded op-amp defaults, hidden default model authoring,
-validation-before-mutation, zener identity, directional seven-segment loading,
-and selection-identity inspector placement are covered by code/tests and the
-current native evidence map.
+**Parity items:** source validation/PWL no-mutation, shared seven-segment
+polarity and directional loading, model recovery, bounded op-amp defaults,
+zener identity, and selection-identity inspector placement remain covered by
+code/tests. Current packaged proof now covers connected edit/run, properties,
+digits 0–9, live/stopped state, themes, sizes, and Chrome responsive/console.
 
-**Next:** return the clean pushed tip to the parent for a fresh Sol High review;
-this orchestrator does not perform that review.
+**Next:** complete literal gates, append their results, remove only the
+orchestrator's QA copies, commit/push the clean tip, and leave Final Sol High
+review explicitly PENDING for the parent.
 
 ---
 

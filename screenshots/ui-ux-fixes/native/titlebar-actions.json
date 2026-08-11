@@ -1,0 +1,15 @@
+{
+  "schema": "tau.native-window-actions.v1",
+  "capturedAt": "2026-08-11T20:58:04Z",
+  "app": "/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app",
+  "requestedLogicalBounds": {"width": 900, "height": 600},
+  "actions": [
+    {"action":"fresh-state-before","screenshot":"screenshots/ui-ux-fixes/native/corrected-titlebar-before-light-900x600.png","capturePixels":"979x653","windowState":"standard"},
+    {"action":"drag-titlebar","from":{"x":500,"y":16},"to":{"x":620,"y":80},"screenshot":"screenshots/ui-ux-fixes/native/corrected-titlebar-moved-light-900x600.png","capturePixels":"979x653","windowState":"standard","assertion":"app remained alive and content bounds stayed stable after move"},
+    {"action":"double-click-titlebar","at":{"x":600,"y":30},"screenshot":"screenshots/ui-ux-fixes/native/corrected-titlebar-doubleclick-y30-light-1440x900.png","capturePixels":"979x653","windowState":"standard","assertion":"gesture was delivered; this window-manager session did not resize on the direct gesture"},
+    {"action":"window-menu-Zoom","menuItem":"Window > Zoom","screenshot":"screenshots/ui-ux-fixes/native/corrected-titlebar-window-menu-zoom-light-1440x900.png","capturePixels":"1224x768","windowState":"zoomed","assertion":"native zoom command changed measured content bounds"},
+    {"action":"double-click-titlebar-restore-attempt","at":{"x":500,"y":16},"screenshot":"screenshots/ui-ux-fixes/native/corrected-titlebar-doubleclick-restore-light-900x600.png","capturePixels":"1224x768","windowState":"zoomed","assertion":"direct restore gesture was delivered but remained zoomed in this backend"},
+    {"action":"window-menu-Zoom-restore","menuItem":"Window > Zoom","screenshot":"screenshots/ui-ux-fixes/native/corrected-titlebar-gesture-base-light-900x600.png","capturePixels":"979x653","windowState":"standard","assertion":"native zoom command restored the measured standard bounds"}
+  ],
+  "boundsSource": "Computer Use screenshot file metadata plus requested logical size; no unverified OS-coordinate claim is made"
+}

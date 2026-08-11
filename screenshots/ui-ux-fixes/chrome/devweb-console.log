@@ -1,0 +1,5 @@
+2026-08-11T20:56:34.020Z ERROR chrome-extension://bgnkhhnnamicmpeenaelnjfhikgbkllg/pages/content-script-start.js
+Error: Could not establish connection. Receiving end does not exist.
+2026-08-11T20:56:34.020Z ERROR chrome-extension://bgnkhhnnamicmpeenaelnjfhikgbkllg/pages/content-script-start.js
+Error: Could not establish connection. Receiving end does not exist.
+CLASSIFICATION: Chrome extension transport noise; page-origin Tau console errors = 0.

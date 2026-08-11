@@ -30,24 +30,26 @@ empty editor, populated schematic, selected component, properties, and
 simulator. Native Tauri/packaged evidence is authoritative; `dev:web` is useful
 for responsive and console diagnosis but cannot prove ngspice or native chrome.
 
-## Correction-pass acceptance record — 2026-08-11
+## Correction-pass acceptance record — 2026-08-11 (current)
 
 The current packaged correction run is indexed in
-`screenshots/ui-ux-fixes/QA-EVIDENCE.md` and supersedes the historical worker
-paragraphs below. The focused correction suite is **10 files / 312 tests
-passed**; the integrated frontend suite is **260 files passed / 2 skipped,
-4,368 tests passed / 8 skipped**; typecheck, design drift, minimum-window,
-desktop build, Rust, ignored real-ngspice, mounted packaged smoke, and bundle
-verification are all recorded there with literal results. Computer Use imported
-and edited a connected `Draft2.asc` circuit and reran it with **980 samples,
-zero Errors diagnostics**. It also imported separate connected seven-segment
-fixtures and rendered every digit **0–9**, plus a real live run and an explicit
-stopped run, in the packaged app. Current-source glyph, Settings, command
-palette, title-bar, light/dark, and minimum-window captures are indexed there.
-Chrome `dev:web` was inspected at all three sizes in both themes; all measured
-viewports had no overflow and **0 page-origin console errors**. Extension
-transport noise is disclosed rather than counted as app output. No Chrome file
-upload is claimed.
+`screenshots/ui-ux-fixes/evidence-manifest.json` and
+`screenshots/ui-ux-fixes/QA-EVIDENCE.md`; it supersedes the historical worker
+paragraphs below. The durable code tip is `44333cf` (planning base `8fb45f6`).
+The packaged binary was restarted from a clean recovery state after the
+laptop-overlap warning. The seven-segment generator was corrected so the
+physical A/F/G/E/B/C/D/DP pin order is explicit; a committed acceptance test
+now decodes every imported digit 0–9, not merely the deck shape.
+
+Computer Use current evidence includes a connected RC/PULSE edit and clean
+ngspice rerun, real Settings sheets in both themes, source/op-amp/LED/zener/
+photodiode/polarized-capacitor/switch property states, seven-segment digits
+0–9, live/stopped runs, symbol placement previews, and title-bar/window
+actions. Chrome `dev:web` has exact 900×600, 1280×800, and 1440×900 settings
+captures in both themes with no overflow and zero page-origin console errors;
+the two extension transport messages are recorded verbatim. No Chrome file
+upload is claimed. Final Sol High review is **PENDING** and is intentionally
+not checked here.
 
 ## Fleet ownership
 
@@ -672,6 +674,7 @@ control-port QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-
 - [x] Typecheck, frontend tests, design drift, minimum-window, production build,
       applicable Rust/native gates, and packaged-ngspice smoke pass.
 - [x] Exact model/import behavior and named-device fail-closed guarantees remain.
-- [x] Final Sol High review has no unresolved actionable findings.
+- [ ] Final Sol High review has no unresolved actionable findings. **PENDING —
+      parent must send the current tip to a fresh Sol High reviewer.**
 - [x] `auto/ltspice-parity` is clean and pushed; no fleet worktrees or branches
       remain; nothing is merged to `main`.

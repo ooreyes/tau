@@ -2003,17 +2003,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Per-analysis ngspice option mapping
 
 ## 8. UX / app
-- ✅ **PDF-directed UI/UX remediation complete (2026-08-11):** all 24 stable
-  issues are `FIXED` in `UI_UX_FIXES.md`. Correction commits cover lossless
-  legacy sources (`fd2193a`), bounded generic op-amp decks (`f173b18`), hidden
-  default model-library authoring (`22f7366`/`6d96e3c`), validation-before-
-  mutation, zener identity (`66e96aa`), directional seven-segment loading and
-  native model cards (`1bd9327`/`0b5d22b`), and selection-identity inspector
-  placement (`22f7366`/`551ec0a`). The current packaged evidence and literal
-  gate results are indexed in `screenshots/ui-ux-fixes/QA-EVIDENCE.md`; native
-  Computer Use proves a connected edit/run, current-source geometry, digits
-  0–9, live/stopped simulation, and both themes. Chrome `dev:web` proves the
-  requested responsive/console matrix without claiming file upload.
+- 🟡 **PDF-directed UI/UX remediation current at `44333cf` (2026-08-11):**
+  all 24 stable rows have landed code, focused tests, and a current packaged
+  evidence artifact in `UI_UX_FIXES.md` / `screenshots/ui-ux-fixes/evidence-manifest.json`.
+  The latest correction also fixes the seven-segment fixture's physical pin
+  order and asserts imported digits 0–9. Native Computer Use proves a
+  connected edit/run, current-source and component property states, digits
+  0–9, live/stopped simulation, both themes, and window actions. Chrome
+  `dev:web` proves the exact responsive/console matrix without claiming file
+  upload. **Final Sol High review remains PENDING and is not a completion
+  claim.**
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - ✅ **Visual QA on the actual desktop app:** the current Tauri hot-reload app
   stays alive on `auto/ltspice-parity`; live browser QA verified centered

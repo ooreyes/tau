@@ -1,135 +1,181 @@
 # UI/UX correction QA evidence
 
-Run date: 2026-08-11
-Code tip exercised by QA: `0b5d22b`
-Planning base: `8fb45f623baee1cd0429a0a161fcd28b5278fa62`
-Packaged app: `/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app`
+Capture date: 2026-08-11 (fresh packaged-app restart after the laptop-overlap
+warning). Planning base: `8fb45f6`. Current durable tip: `44333cf`.
 
-## Acceptance policy
+The packaged binary was rebuilt from the same correction lineage and is at
+`/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app`.
+The current binary code is `811b0c7`; `44333cf` adds the corrected physical
+pin-order fixtures and their decode assertions. Native screenshots are JPEG
+payloads retained with the repository's `.png` naming convention, as are the
+existing screenshot-pipeline artifacts. Their measured pixel bounds are in
+`evidence-manifest.json`.
 
-This is the correction-pass record after Sol High rejected `5f5fd20`. Native
-Tauri/Computer Use is authoritative for import, editing, simulation, model
-resolution, and macOS chrome. Chrome `dev:web` is recorded only for responsive
-layout and console diagnosis. No Chrome file-upload claim is made.
+## Acceptance policy and truth status
 
-The old captures remain in `native/` and `chrome/` for historical comparison,
-but the `packaged-*` and `devweb-*` files below were captured from the current
-unsigned release bundle or the current Vite server after the correction code
-landed. Native screenshots named `1280x800` are the 1182×768 content capture
-inside the 1280×800 logical app window; Chrome captures are exact viewport
-dimensions.
+Computer Use on the packaged Tauri app is authoritative for import, editing,
+properties, simulation, model recovery, and macOS chrome. Chrome `dev:web` is
+responsive/console evidence only; no Chrome file-upload claim is made.
 
-## Literal gate results
+This file supersedes the earlier `0b5d22b` QA prose. The current evidence was
+recaptured after a clean packaged restart and after correcting the fixture
+generator's physical pin order. The 24 stable issue rows below are now
+`FIXED_WITH_CURRENT_EVIDENCE`; the final Sol High review remains explicitly
+`PENDING` and is not represented as a passed gate.
 
-- Focused correction suite: **10 files passed; 312 tests passed**.
-- Frontend suite: **260 files passed; 2 skipped; 4,368 tests passed; 8 skipped**.
-- `pnpm -C apps/desktop typecheck`: **exit 0**.
-- `bash scripts/design-system-drift.sh`: **DESIGN-SYSTEM-DRIFT: ok**.
-- `bash scripts/min-window-dod.sh`: **MIN-WINDOW: 900x600 fail=0/12; MIN-WINDOW-DOD: ok**.
-- `pnpm --filter @tau/desktop build`: **exit 0**.
-- `cargo fmt --check`: **exit 0**; `cargo clippy -- -D warnings`: **exit 0**.
-- Native Rust tests: **104 passed; 0 failed; 42 ignored**.
-- Ignored real-ngspice tests with the packaged dylib: **42 passed; 0 failed; 0 ignored**.
-- Tauri bundle: **exit 0**; app strict codesign verification **passed**;
-  DMG `hdiutil verify` **VALID**; mounted deployment target **11.0 arm64**.
-- Mounted packaged engine smoke: **passed, 336 samples, 0..5 V**; mounted
-  app stayed alive for **5 seconds**.
+## Current native evidence
 
-## Current packaged native evidence
+### Packaged circuits and simulation
 
-### Connected edit and shell/model proof
+- Digits 0–9: `native/corrected-packaged-sevenseg-{0,1,2,3,4,5,6,7,8,9}-dark-1280x800.png`.
+  Each was opened from the project-owned fixture corpus, run in the packaged
+  app, and returned `COMPLETE`, `ngspice`, and the matching `image U1 display:
+  digit N` accessibility assertion.
+- Live/stopped: `native/corrected-packaged-sevenseg-live-dark-1280x800.png`,
+  `native/corrected-packaged-sevenseg-stopped-dark-1280x800.png`, and the
+  light stopped counterpart. The live capture contains a live scope and
+  `Running — t = 343.33 s`; the stopped capture names `stopped.asc`, shows
+  `digit 8`, `COMPLETE`, and `ngspice`.
+- Connected RC/PULSE circuit: `native/corrected-packaged-edited-circuit-light-900x600.png`
+  (before run), `native/corrected-packaged-edited-circuit-run-light-900x600.png`,
+  `native/corrected-packaged-edited-circuit-run-dark-900x600.png`, and
+  `native/corrected-packaged-edited-circuit-run-dark-1440x900.png`. The run
+  returned `3,079 samples`, `3 nets · 4 parts`, `COMPLETE`, and `ngspice`.
+- Property edit and rerun: `native/corrected-packaged-source-properties-light-900x600.png`
+  and `native/corrected-packaged-edited-pulse-run-light-900x600.png`. Computer
+  Use changed V1 high level `5 → 4`; the packaged inspector retained `High
+  level = 4`, and the rerun returned `COMPLETE`, `3 nets · 4 parts`, and
+  `ngspice`.
 
-- `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-edited-circuit-dark-1280x800.png`
-  and `.../packaged-edited-circuit-light-1280x800.png`: imported authored
-  `Draft2.asc`, selected V1, changed amplitude `1 → 2`, saved, and reran. The
-  connected circuit completed with **980 samples, 3 nets, 4 parts**, ngspice,
-  and no Errors count.
-- `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-current-source-dark-1280x800.png`:
-  current-source glyph selected with its editable properties visible.
-- `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-settings-dark-1280x800.png`
-  and `.../packaged-settings-light-1280x800.png`: current Settings navigation
-  has no Model libraries authoring page.
-- `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-command-palette-dark-1280x800.png`:
-  current palette contains component/settings commands and no Model libraries
-  authoring command.
-- `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-empty-dark-900x600.png`:
-  packaged empty-editor minimum-window baseline.
-- `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-titlebar-before-dark-1280x800.png`,
-  `.../packaged-titlebar-after-drag-dark-1280x800.png`, and
-  `.../packaged-titlebar-doubleclick-dark-1280x800.png`: Computer Use title-bar
-  drag and double-click gestures on the packaged window; controls remained
-  reachable and the app stayed alive.
+### Packaged Settings, shell, and component states
 
-### Seven-segment native simulation proof
+- Settings: `native/corrected-packaged-settings-dark-1280x800.png` and
+  `native/corrected-packaged-settings-light-1280x800.png`. Both are real
+  Settings sheets; neither exposes a `Model Libraries` authoring page.
+- Source/palette: `native/corrected-packaged-component-palette-dark-900x600.png`
+  and `native/corrected-packaged-source-properties-light-900x600.png` show the
+  current-source glyph, populated editor, Explorer, and the source inspector.
+- Component previews: `native/corrected-packaged-symbol-polarized-cap-dark-900x600.png`,
+  `...symbol-led-dark-900x600.png`, `...symbol-zener-dark-900x600.png`,
+  `...symbol-photodiode-dark-900x600.png`, `...symbol-opamp-dark-900x600.png`,
+  `...symbol-seven-segment-dark-900x600.png`, and
+  `...symbol-switch-dark-900x600.png` are current packaged placement states.
+- Component properties: `native/corrected-packaged-polarized-cap-properties-dark-900x600.png`,
+  `...led-properties...`, `...zener-properties...`,
+  `...photodiode-properties...`, `...opamp-properties...`, and
+  `...switch-properties...` show current packaged inspectors. The op-amp
+  inspector exposes bounded gain/min/max defaults (`1 MegV/V`, `-15 V`,
+  `15 V`); the zener exposes both breakdown and forward voltage; the switch
+  exposes open/closed state.
+- Title-bar/window actions: `native/titlebar-actions.json` indexes the fresh
+  before/move/double-click/system-zoom/restore screenshots and measured bounds.
+  A title-bar drag was exercised. The automation backend's direct double-click
+  gesture was also exercised; the native Window → Zoom command is the measured
+  zoom/restore control because the direct gesture did not change bounds in this
+  window-manager session. This limitation is disclosed rather than inferred
+  from cursor artwork.
 
-Each fixture was imported through the packaged file picker and run separately;
-the accessibility result for every run was `COMPLETE` with the matching
-rendered digit. The fixtures are connected to eight independent voltage
-sources and ground, so this is an electrical run, not a static display shot.
+### Native viewport convention
 
-- Digits 0–4: `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-sevenseg-{0,1,2,3,4}-light-1280x800.png`
-- Digits 5–9: `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-sevenseg-{5,6,7,8,9}-light-1280x800.png`
-- Dark-theme digit 9: `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-sevenseg-9-dark-1280x800.png`
-- Live run: `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-sevenseg-live-light-1280x800.png`,
-  showing `Running — t = 214.726 s`, a live scope, and `Live — newest sample
-  at the right edge`.
-- Stopped run: `/Users/omarreyes/Desktop/Tau/screenshots/ui-ux-fixes/native/packaged-sevenseg-stopped-light-1280x800.png`,
-  showing `Stopped at 975.667 s` and the explicit sample-budget reason.
+The app was exercised at requested logical 900×600, 1280×800, and 1440×900
+states. Computer Use returns the app-content screenshot bounds rather than the
+logical window bounds; the exact requested viewport, screenshot pixel bounds,
+gesture coordinates, and assertions are machine-readable in
+`evidence-manifest.json`.
 
-### Responsive and console proof in Chrome
+## Current Chrome responsive/console evidence
 
-The current `dev:web` server was inspected at all requested sizes in both
-themes. Screenshots:
+`chrome/devweb-matrix.json` records all six exact combinations and
+`chrome/devweb-console.log` records the complete warning/error readout. The
+settings sheet was visible at every exact viewport; `scrollWidth == innerWidth`
+and `scrollHeight == innerHeight` for all six. `Model Libraries` was absent.
+The only two console errors were Chrome-extension transport messages:
+`Could not establish connection. Receiving end does not exist`; they are
+recorded verbatim and are not page-origin Tau errors. The Chrome tab was
+finalized after resetting the temporary viewport override.
 
-- 900×600 settings: `chrome/devweb-settings-light-900x600.png`,
-  `chrome/devweb-settings-dark-900x600.png`.
-- 1280×800 settings: `chrome/devweb-settings-light-1280x800.png`,
-  `chrome/devweb-settings-dark-1280x800.png`.
-- 1440×900 settings: `chrome/devweb-settings-light-1440x900.png`,
-  `chrome/devweb-settings-dark-1440x900.png`.
-- 1440×900 empty editor: `chrome/devweb-empty-light-1440x900.png`,
-  `chrome/devweb-empty-dark-1440x900.png`.
+## Reproducible seven-segment corpus
 
-Measured DOM results were exact `900×600`, `1280×800`, and `1440×900` with
-`scrollWidth == innerWidth`, `scrollHeight == innerHeight`, and no horizontal
-or vertical overflow at any size. Page-origin console errors were **0**. Two
-Chrome-extension transport messages (`Could not establish connection;
-Receiving end does not exist`) were observed and are recorded as tooling noise,
-not hidden as application output.
+The stable fixture source is `fixtures/ui-ux/seven-segment/`, generated and
+checked by `scripts/generate-sevenseg-fixtures.mjs`. The acceptance command is:
 
-## Issue-to-commit and evidence map
+```text
+scripts/sevenseg-acceptance.sh /Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app
+```
 
-All 24 stable issues are FIXED below. Focused tests are the correction suite
-above; native paths are represented by the current packaged evidence index.
+It checks 12/12 committed fixtures, runs the Vitest acceptance test, verifies
+the directional 220-ohm deck (no obsolete `1G` stamp), and requires the
+packaged app path. The acceptance test now decodes every imported `digit-0`
+through `digit-9` fixture against the shared renderer patterns, in addition to
+the live/stopped fixture checks.
 
-| Issue | Landed code | Acceptance evidence |
+## Issue-to-commit and current evidence map
+
+| Issue | Code/test landing | Current packaged evidence |
 | --- | --- | --- |
-| SHELL-01 | `cad4a69` | shell contract tests; current minimum-window matrix |
-| SHELL-02 | `22f7366`, `6d96e3c` | Command Palette/Settings tests; current Settings and palette captures; exact-model/native smoke gates |
-| SHELL-03 | `cad4a69` | shell tests; 900×600 packaged and Chrome no-overflow matrix |
-| SHELL-04 | `cad4a69` | packaged title-bar drag/double-click captures above |
-| SHELL-05 | `cad4a69`, `6d96e3c` | command/settings reachability tests and packaged captures |
-| SHELL-06 | `71ad682` | rotation/mirror label geometry tests; current populated packaged editor |
-| SHELL-07 | `cad4a69` | shell/design-token tests; packaged light/dark minimum-window matrix |
-| COMP-01 | `fd2193a` | sourceValue, editor, deck, and legacy regression tests; imported/run edited circuit |
-| COMP-02 | `02371ec` | shared inspector-row tests; selected packaged properties in both themes |
-| COMP-03 | `71ad682` | current-source glyph geometry tests and selected packaged glyph capture |
-| COMP-04 | `02371ec` | all-family inspector audit and validation-row tests; selected packaged properties |
-| COMP-05 | `d6fbcfd` | ground identity/node-zero tests; connected packaged run |
-| COMP-06 | `22f7366`, `02371ec`, `551ec0a` | drag/clamp and selection-identity tests; packaged selected inspector/title-bar captures |
-| COMP-07 | `71ad682` | polarized-capacitor geometry tests; current design-token/minimum-window matrix |
-| COMP-08 | `71ad682`, `d6fbcfd` | LED geometry/schema/model tests; current packaged selected-properties matrix |
-| COMP-09 | `66e96aa`, `d6fbcfd` | zener identity/deck/range tests; exact-model safety gates |
-| COMP-10 | `71ad682` | photodiode geometry and hit-bound tests; current packaged design matrix |
-| COMP-11 | `22f7366`, `02371ec` | hidden picker tests; exact-model/refusal tests; packaged Settings/palette proof |
-| COMP-12 | `fd2193a` | draft validation, binary logic, legacy source, and deck tests; packaged edit/run proof |
-| COMP-13 | `f173b18`, `02371ec`, `551ec0a` | bounded op-amp model/deck/inspector tests and native gates |
-| COMP-14 | `02371ec` | concise-help/long-description audit; packaged Settings/properties matrix |
-| COMP-15 | `71ad682` | dense digital symbol rotation/mirror/collision tests; seven-segment packaged matrix |
-| COMP-16 | `1bd9327`, `be88bbe`, `0b5d22b` | directional LED/deck tests; connected native 0–9/live/stopped proof |
-| COMP-17 | `71ad682` | switch geometry/control-port tests; current packaged editor matrix |
+| SHELL-01 | `cad4a69`, shell tests | RC populated Explorer/minimum capture |
+| SHELL-02 | `22f7366`, `6d96e3c`, `811b0c7` | current Settings light/dark; Chrome six-state absence check |
+| SHELL-03 | `cad4a69` | RC Explorer at 900 and 1440 |
+| SHELL-04 | `cad4a69` | `native/titlebar-actions.json` and current bounds captures |
+| SHELL-05 | `cad4a69`, `6d96e3c` | Settings and populated editor captures |
+| SHELL-06 | `71ad682` | current symbol placement states plus geometry tests |
+| SHELL-07 | `cad4a69` | current packaged rail/settings light/dark |
+| COMP-01 | `fd2193a`, `811b0c7` | source properties, edit `5→4`, clean packaged rerun |
+| COMP-02 | `02371ec` | current source and component-property inspectors |
+| COMP-03 | `71ad682` | current-source palette/glyph capture |
+| COMP-04 | `02371ec` | current polarized-cap/LED/zener/photodiode/op-amp/switch inspectors |
+| COMP-05 | `d6fbcfd` | connected RC ground and ngspice run |
+| COMP-06 | `22f7366`, `551ec0a` | movable inspector chrome and selection-identity tests |
+| COMP-07 | `71ad682` | polarized-cap placement/properties capture |
+| COMP-08 | `71ad682`, `d6fbcfd` | LED placement/properties capture and electrical tests |
+| COMP-09 | `66e96aa`, `d6fbcfd` | zener placement/properties capture and identity tests |
+| COMP-10 | `71ad682` | photodiode placement/properties capture |
+| COMP-11 | `22f7366`, `02371ec`, `811b0c7` | Settings absence plus exact-model recovery copy |
+| COMP-12 | `fd2193a`, `811b0c7` | PULSE property edit/rerun and source/PWL validation tests |
+| COMP-13 | `f173b18`, `811b0c7` | bounded op-amp inspector plus deck/unit tests |
+| COMP-14 | `02371ec` | current concise inspectors |
+| COMP-15 | `71ad682`, `811b0c7` | seven-segment symbol and digit matrix |
+| COMP-16 | `1bd9327`, `be88bbe`, `0b5d22b`, `44333cf` | digits 0–9/live/stopped packaged corpus |
+| COMP-17 | `71ad682` | switch placement/properties capture |
 
-The pre-correction captures are retained for audit history but are not used to
-support this table. No Chrome upload is claimed. No named-device fallback was
-introduced; exact imported/attached model resolution and fail-closed refusal
-tests remain in the integrated suite.
+All 24 stable rows have a current packaged artifact or a current packaged
+shell/state artifact plus focused code tests. This is not a claim that Sol High
+has approved the work: **Final Sol High review: PENDING**.
+
+## Literal gates
+
+All commands below returned exit 0 against the current correction tree before
+the tracker/evidence commit:
+
+- Focused correction suite: **9 files passed; 344 tests passed**.
+- `pnpm -C apps/desktop typecheck`: **exit 0**.
+- `pnpm -C apps/desktop test`: **262 files passed; 2 skipped; 4,405 tests
+  passed; 8 skipped**.
+- `bash scripts/design-system-drift.sh`: **DESIGN-SYSTEM-DRIFT: ok**;
+  6 files / 49 tests passed.
+- `bash scripts/min-window-dod.sh`: **MIN-WINDOW: 900x600 fail=0/12**;
+  **MIN-WINDOW-DOD: ok**.
+- `scripts/sevenseg-acceptance.sh .../Tau.app`: **12/12 fixtures current; 1
+  file / 22 tests passed; packaged app present**.
+- `pnpm --filter @tau/desktop build`: **exit 0** (2,243 modules; normal Vite
+  externalization/chunk-size warnings only).
+- `pnpm --filter @tau/desktop tauri build`: **exit 0**; Tau.app and
+  `Tau_1.0.0_aarch64.dmg` produced.
+- `cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check`:
+  **exit 0**.
+- `cargo clippy --all-targets --manifest-path apps/desktop/src-tauri/Cargo.toml
+  -- -D warnings`: **exit 0**.
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`: **104
+  passed; 0 failed; 42 ignored** (plus zero-test main/doc-test targets).
+- `TAU_NGSPICE_LIB=.../libngspice.dylib cargo test ... --ignored`: **42
+  passed; 0 failed; 0 ignored**.
+- `codesign --verify --deep --strict Tau.app`: **exit 0**; deployment target
+  **macOS 11.0 arm64, 9 files**.
+- `hdiutil verify Tau_1.0.0_aarch64.dmg`: **VALID**.
+- Mounted DMG proof: **resource diff clean; mounted ignored ngspice 42 passed;
+  packaged-engine-smoke 336 samples, out=0..5 V; Tau executable stayed alive
+  for 5 seconds**.
+
+The tracker/evidence commit that records this block is the next commit after
+the code/test tip `44333cf`; the manifest is updated to that final SHA before
+the durable push. Final Sol High review remains **PENDING**.
