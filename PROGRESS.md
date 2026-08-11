@@ -24,8 +24,18 @@ packaged/browser/native evidence. Wave 2 will target COMP-02, COMP-04,
 COMP-06, COMP-08B, COMP-09, COMP-11, COMP-13B, COMP-14, COMP-12 rendering,
 COMP-16, and regression/a11y/performance coverage.
 
-**Next:** provision all three Wave 2 worktrees from the exact base, collect one
-focused commit per lane, and integrate them one at a time.
+**Next:** integrate the remaining inspector and simulator commits one at a
+time, then run the full Wave 2 frontend/native gates before serialized QA.
+
+---
+
+**2026-08-11 — Wave 2 regression proof landed:** Luna Max regression worker
+returned `de57dc0` from exact base `b60be53`. The focused cross-lane suite passed
+**1 file / 8 tests**, adjacent shell/live-waveform coverage passed **73 tests**,
+and the worker's full desktop run passed **4,305 tests / 8 skipped**. The
+commit adds only `Wave2Regression.test.tsx` and `Wave2Regression.ts`; typecheck
+and the design-system drift gate pass. Inspector and simulator lanes remain
+active; packaged/native/browser evidence is still pending.
 
 ---
 
