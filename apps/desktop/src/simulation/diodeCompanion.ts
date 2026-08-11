@@ -42,8 +42,15 @@ export function parseZenerBreakdown(value: string): number | null {
  *  Photodiode uses the silicon junction; illumination is a parallel Iph. */
 export function diodeSpecFor(kind: string, value: string): DiodeSpec {
   switch (kind) {
-    case "led":
-      return { isat: 1e-16, emission: 2.4 };
+    case "led": {
+      // Keep the preview's Shockley curve anchored at the same typical/default
+      // Vf the native generic deck emits at its 10 mA reference current.
+      const forwardVolts = ledForwardVoltsFromValue(value);
+      const emission = 2.4;
+      const referenceCurrent = 10e-3;
+      const isat = referenceCurrent / (Math.exp(forwardVolts / (emission * THERMAL_VOLTAGE)) - 1);
+      return { isat, emission };
+    }
     case "zener":
       return { isat: 1e-14, emission: 1, breakdown: parseZenerBreakdown(value) ?? 5.1 };
     case "photodiode":
@@ -112,3 +119,4 @@ export function limitDiodeVoltage(spec: DiodeSpec, vnew: number, vold: number): 
   }
   return limited;
 }
+import { ledForwardVoltsFromValue } from "../engine/ledSpec";

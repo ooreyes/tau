@@ -75,23 +75,29 @@
 
 import type { SchematicComponent } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
+import {
+  DEFAULT_LED_FORWARD_VOLTS,
+  ledForwardVoltsFromValue,
+} from "./ledSpec";
+export {
+  DEFAULT_LED_FORWARD_VOLTS,
+  LED_COLOR_CHOICES,
+  LED_COLORS,
+  LED_COLOR_SPECS,
+  ledColorFromValue,
+  ledForwardVoltsFromValue,
+  ledHasExplicitForwardVoltage,
+  ledTypicalForwardVolts,
+  normalizeLedColor,
+} from "./ledSpec";
+export type { LedColor } from "./ledSpec";
 
 /** Textbook forward drop of a silicon diode. */
 export const IDEAL_DIODE_FORWARD_VOLTS = 0.7;
-/** Textbook forward drop of an indicator LED (red/green, ~10 mA). */
-export const IDEAL_LED_FORWARD_VOLTS = 2;
+/** Backward-compatible alias for the default red generic LED value. */
+export const IDEAL_LED_FORWARD_VOLTS = DEFAULT_LED_FORWARD_VOLTS;
 /** Fallback zener breakdown when the part names none - Tau's palette default. */
 export const IDEAL_ZENER_BREAKDOWN_VOLTS = 5.1;
-
-export const LED_COLORS = ["red", "amber", "green", "blue", "white"] as const;
-export type LedColor = (typeof LED_COLORS)[number];
-
-/** Color is a visual property of a generic LED, never a model selector. */
-export function ledColorFromValue(value: string): LedColor {
-  const match = /(?:^|[\s,;])color\s*=\s*([^\s,;]+)/i.exec(value ?? "");
-  const candidate = match?.[1]?.toLowerCase();
-  return LED_COLORS.includes(candidate as LedColor) ? candidate as LedColor : "red";
-}
 
 /** Conducting-contact resistance. Matches `TAU_SW`'s `Ron`, which is the number
  *  Tau has always used for an ideal closed contact. */
@@ -268,11 +274,9 @@ export function idealJunctionModel(component: SchematicComponent): IdealJunction
   }
 
   const isLed = component.kind === "led";
-  const forwardVolts = keyedNumber(
-    value,
-    ["Vfwd", "Forward"],
-    coded ?? (isLed ? IDEAL_LED_FORWARD_VOLTS : IDEAL_DIODE_FORWARD_VOLTS),
-  );
+  const forwardVolts = isLed
+    ? ledForwardVoltsFromValue(value)
+    : keyedNumber(value, ["Vfwd", "Forward"], coded ?? IDEAL_DIODE_FORWARD_VOLTS);
   const model = `TAU_${isLed ? "LED" : "DIODE"}_IDEAL_${formatIdealVoltageCode(forwardVolts)}`;
   return {
     model,

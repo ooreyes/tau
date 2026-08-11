@@ -1,5 +1,5 @@
 import { nativelyPlacedGateSpec, parseDigitalGate } from "../engine/digitalGateSpec";
-import { ledColorFromValue } from "../engine/idealModels";
+import { ledColorFromValue } from "../engine/ledSpec";
 import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { isSpdtThrowToNo, isStaticContactClosed } from "./kindGroups";
 import type { ComponentKind, Rotation } from "./types";

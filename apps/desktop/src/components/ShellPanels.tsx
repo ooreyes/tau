@@ -26,6 +26,7 @@ import {
   displayParamField,
   encodeParams,
   fromDisplayParamValue,
+  applyLedColorDefault,
   isBoundedParamField,
   paramFields,
   paramRangeLabel,
@@ -1136,7 +1137,7 @@ function junctionModelSummary(
       return `Generic Zener · ${ideal.forwardVolts} V forward · ${ideal.breakdownVolts ?? 5.1} V reverse.`;
     }
     if (component.kind === "led") {
-      return `Generic LED · ${ideal.forwardVolts} V forward · color changes appearance only.`;
+      return `Generic LED · Vf ${ideal.forwardVolts} V typical/default; color sets the default, Vfwd overrides.`;
     }
     return `Generic diode · ${ideal.forwardVolts} V forward.`;
   }
@@ -1172,11 +1173,12 @@ function subcircuitPortSides(
 }
 
 /**
- * Keep routine inspector help to one scan-friendly line. The full engineering
- * explanation remains available as a tooltip and accessible name, while the
- * visible grid does not turn a single property into a paragraph-sized card.
+ * Keep routine inspector help to one scan-friendly line. The schema remains
+ * the source of truth, while the visible grid does not turn a property into a
+ * paragraph-sized card or repeat the same explanation in several rows.
  */
 function compactInspectorHint(text: string): string {
+  const maxLength = 120;
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.startsWith("Q outputs a sine")) {
     return "Q outputs a sine of ±1 V; FM sets frequency, AM scales the amplitude, and COM is the reference.";
@@ -1186,16 +1188,16 @@ function compactInspectorHint(text: string): string {
     return "Tau supplies the current-sense pair; wire C+ and C- in series with the branch.";
   }
   const firstSentence = normalized.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim();
-  if (firstSentence && firstSentence.length <= 150) return firstSentence;
-  if (firstSentence) return `${firstSentence.slice(0, 147).trimEnd()}…`;
-  if (normalized.length <= 150) return normalized;
-  return `${normalized.slice(0, 147).trimEnd()}…`;
+  const candidate = firstSentence || normalized;
+  if (candidate.length <= maxLength) return candidate;
+  return `${candidate.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
 function InspectorHint({ text }: { text: string }) {
+  const compact = compactInspectorHint(text);
   return (
-    <p className="property-hint" title={text} aria-label={text}>
-      {compactInspectorHint(text)}
+    <p className="property-hint" title={compact} aria-label={compact}>
+      {compact}
     </p>
   );
 }
@@ -1570,7 +1572,7 @@ function ComponentPropertyGroup({
   const updateParam = (key: string, value: string) => {
     if (!selected) return;
     const base = selected.value.trim() || entry?.defaultValue || "";
-    const values = { ...decodeParams(selected.kind, base), [key]: value };
+    const values = applyLedColorDefault(selected.kind, base, decodeParams(selected.kind, base), key, value);
     const field = fields.find((candidate) => candidate.key === key);
     if (field && paramValidationMessage(field, value)) return;
     const crossError = paramValuesValidationMessage(selected.kind, values);
@@ -1720,7 +1722,7 @@ function ComponentPropertyGroup({
   const modelStatusHint = !selected || !modelKind ? "" : idealJunction
     ? junctionModelSummary(selected, idealJunction)
     : !selectedModelOption
-      ? `Needs an exact model · ${selectedModelName || "No model"} isn't available. Run is refused; Tau won't substitute a generic ${modelKind.toUpperCase()}. Open or drop a compatible .lib or .sub while this schematic is active to attach it to this document.`
+      ? `Needs exact ${modelKind.toUpperCase()} "${selectedModelName || "No model"}"; attach .lib/.sub. Run is refused; no generic substitution.`
       : selectedModelOption.source !== "generic"
         ? `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`
         : JUNCTION_KINDS.has(modelKind)
@@ -1876,8 +1878,8 @@ function ComponentPropertyGroup({
               )}
               <p className="property-hint" role="status">
                 {selectedSubcircuit
-                  ? `Ready · ${selectedSubcircuit.ports.length} named terminals (${selectedSubcircuit.ports.join(", ")}) from ${selectedSubcircuit.sourceLabel}`
-                  : `Needs a definition · ${subcircuitInstance?.name || "No subcircuit"} isn't in an attached library or this sheet. Run won't invent pins.`}
+                  ? `Ready · ${selectedSubcircuit.ports.length} terminals from ${selectedSubcircuit.sourceLabel}`
+                  : `Needs definition · ${subcircuitInstance?.name || "No subcircuit"} is not attached; Run is refused.`}
               </p>
               {/* The status line names the terminals; it cannot say which pin on
                   the drawing is which. This does, in the declaration order the
@@ -1942,14 +1944,11 @@ function ComponentPropertyGroup({
                 );
               })}
               {selectedSubcircuit && selectedSubcircuit.parameters.length === 0 && (
-                <p className="property-hint">This model defines terminals only; it has no instance parameters.</p>
+                <p className="property-hint">Terminals only; this model has no instance parameters.</p>
               )}
               {onAttachModelFile && (
                 <>
-                  <p className="property-hint">
-                    Open or drop a compatible .lib or .sub file while this schematic is active.
-                    Every subcircuit it defines joins the list above, terminals and parameters included.
-                  </p>
+                  <p className="property-hint">Open or drop a compatible .lib/.sub into this schematic.</p>
                   <Button type="button" variant="outline" size="sm" onClick={onAttachModelFile}>
                     Attach .lib/.sub file
                   </Button>
@@ -1976,9 +1975,7 @@ function ComponentPropertyGroup({
                     {advancedOpen && (
                       <div className="advanced-body">
                         <p className="property-hint">
-                          Naming a manufacturer part, or attaching a library that defines one,
-                          replaces the ideal device with its measured curve. Tau never silently
-                          substitutes a generic model for a named part.
+                          Named or attached models replace this ideal; Tau never substitutes a generic named device.
                         </p>
                         {modelChooserField}
                         {modelParamFields}

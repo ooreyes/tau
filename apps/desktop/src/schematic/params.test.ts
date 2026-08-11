@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clampParamValue,
+  applyLedColorDefault,
   decodeParams,
   displayParamField,
   encodeParams,
@@ -456,6 +457,20 @@ describe("generic model-backed parameter schemas", () => {
     expect(paramValuesValidationMessage("opamp", {
       model: "ideal", gain: "1Meg", vmin: "5", vmax: "5",
     })).toContain("below maximum");
+  });
+
+  it("offers engineering LED colors and changes only the implicit typical Vf", () => {
+    const choices = paramFields("led", "LED").find((field) => field.key === "color")?.choices ?? [];
+    expect(choices.map((choice) => choice.label)).toEqual([
+      "Red", "Amber / Orange", "Yellow", "Green", "Blue", "White", "Custom",
+    ]);
+    expect(applyLedColorDefault("led", "LED", decodeParams("led", "LED"), "color", "blue"))
+      .toMatchObject({ color: "blue", vfwd: "3" });
+    expect(applyLedColorDefault("led", "LED color=red Vfwd=1.8", decodeParams("led", "LED color=red Vfwd=1.8"), "color", "blue"))
+      .toMatchObject({ color: "blue", vfwd: "1.8" });
+    expect(decodeParams("led", "LED color=yellow Vfwd=2.15")).toMatchObject({ color: "yellow", vfwd: "2.15" });
+    expect(encodeParams("led", { model: "LED", color: "yellow", vfwd: "2.15" }))
+      .toBe("LED color=yellow Vfwd=2.15");
   });
 });
 

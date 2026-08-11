@@ -306,8 +306,7 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
     expect(screen.getByRole("button", { name: "Attach .lib/.sub file" })).toBeTruthy();
     const status = screen.getByRole("status").textContent ?? "";
-    expect(status).toContain("Needs an exact model · IRF540 isn't available. Run is refused");
-    expect(status).toContain("Open or drop a compatible .lib or .sub");
+    expect(status).toContain('Needs exact NMOS "IRF540"; attach .lib/.sub. Run is refused');
     fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
@@ -391,7 +390,7 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
     expect(chooser.textContent).toContain("IRF540");
     expect(document.querySelector("select[aria-label='Simulation model']")).toBeNull();
-    expect(screen.getByRole("status").textContent).toMatch(/Needs an exact model ·.*won't substitute a generic NMOS/);
+    expect(screen.getByRole("status").textContent).toContain("Needs exact NMOS");
     fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
@@ -457,7 +456,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
     expect(chooser.textContent).toContain("deadtime");
     expect(document.querySelector("select[aria-label='Subcircuit model']")).toBeNull();
-    expect(screen.getByRole("status").textContent).toContain("5 named terminals (vcc, vee, pwm, gp, gn)");
+    expect(screen.getByRole("status").textContent).toContain("5 terminals from");
     expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
 
     const dead = screen.getByRole("textbox", { name: "Subcircuit parameter dead" }) as HTMLInputElement;
@@ -518,8 +517,8 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     useSchematic.setState({ components: [selected] });
     render(<ComponentInspector selected={selected} onAttachModelFile={openLibraries} manualModelControls />);
 
-    expect(screen.getByRole("status").textContent).toContain("Ready · 2 named terminals");
-    expect(screen.getByText(/Open or drop a compatible \.lib or \.sub file/)).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Ready · 2 terminals from");
+    expect(screen.getByText("Open or drop a compatible .lib/.sub into this schematic.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
@@ -538,7 +537,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     expect(chooser.getAttribute("data-slot")).toBe("select-trigger");
     expect(chooser.textContent).toContain("vendor_driver");
     expect(document.querySelector("select[aria-label='Subcircuit model']")).toBeNull();
-    expect(screen.getByRole("status").textContent).toContain("Run won't invent pins");
+    expect(screen.getByRole("status").textContent).toContain("Run is refused");
     fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
@@ -704,9 +703,9 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
 
   it("states the LED's own drop and the zener's marked breakdown", () => {
     show(junction("led", "LED"));
-    expect(screen.getByRole("status").textContent).toContain("Generic LED · 2 V forward");
+    expect(screen.getByRole("status").textContent).toContain("Generic LED · Vf 2 V typical/default");
     expect(screen.getByRole("combobox", { name: "Color" })).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: "Forward voltage" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Typical Vf (default)" })).toBeTruthy();
 
     cleanup();
     show(junction("zener", "5V1"));
@@ -731,7 +730,7 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
     expect(disclosure.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(disclosure);
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText(/replaces the ideal device with its measured curve/)).toBeTruthy();
+    expect(screen.getByText(/Named or attached models replace this ideal/)).toBeTruthy();
 
     const chooser = screen.getByRole("combobox", { name: "Simulation model" });
     fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });

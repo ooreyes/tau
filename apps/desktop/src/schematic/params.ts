@@ -1,6 +1,12 @@
 import type { ComponentKind } from "./types";
 import { parseComparator } from "../engine/comparatorSpec";
 import { parseIcValue, stripIcSpec } from "../engine/icSpec";
+import {
+  LED_COLOR_CHOICES,
+  DEFAULT_LED_FORWARD_VOLTS,
+  ledHasExplicitForwardVoltage,
+  ledTypicalForwardVolts,
+} from "../engine/ledSpec";
 import { parseQuantity } from "../simulation/quantity";
 
 /**
@@ -240,15 +246,20 @@ const GENERIC_LED: ParamSpec = {
       kind: "choice",
       fallback: "red",
       omitWhenFallback: true,
-      choices: [
-        { value: "red", label: "Red" },
-        { value: "amber", label: "Amber" },
-        { value: "green", label: "Green" },
-        { value: "blue", label: "Blue" },
-        { value: "white", label: "White" },
-      ],
+      choices: LED_COLOR_CHOICES,
     },
-    { key: "vfwd", label: "Forward voltage", unit: "V", kind: "number", token: "Vfwd", fallback: "2", min: 0.1, max: 20, omitWhenFallback: true },
+    {
+      key: "vfwd",
+      label: "Typical Vf (default)",
+      unit: "V",
+      kind: "number",
+      token: "Vfwd",
+      fallback: String(DEFAULT_LED_FORWARD_VOLTS),
+      min: 0.1,
+      max: 20,
+      omitWhenFallback: true,
+      description: "Typical forward drop; color supplies a default and this value overrides it.",
+    },
   ],
 };
 
@@ -878,6 +889,21 @@ export function encodeParams(kind: ComponentKind, values: Record<string, string>
     case "positional":
       return encodePositional(spec.fields, values);
   }
+}
+
+/** Apply a color's typical/default Vf without overwriting an explicit Vfwd. */
+export function applyLedColorDefault(
+  kind: ComponentKind,
+  baseValue: string,
+  values: Record<string, string>,
+  key: string,
+  nextValue: string,
+): Record<string, string> {
+  const next = { ...values, [key]: nextValue };
+  if (kind === "led" && key === "color" && !ledHasExplicitForwardVoltage(baseValue)) {
+    next.vfwd = String(ledTypicalForwardVolts(nextValue));
+  }
+  return next;
 }
 
 /**

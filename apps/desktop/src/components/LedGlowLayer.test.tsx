@@ -40,6 +40,11 @@ const led = (id: string, x = 0): SchematicComponent => ({
   label: id.toUpperCase(),
 });
 
+const ledWithColor = (id: string, color: string): SchematicComponent => ({
+  ...led(id),
+  value: `LED color=${color}`,
+});
+
 function draw(currents: [string, number][] | null, parts = [led("d1")]) {
   return render(
     <svg>
@@ -52,6 +57,13 @@ const glowCircles = (container: HTMLElement) =>
   [...container.querySelectorAll<SVGCircleElement>("circle.led-glow")];
 
 describe("LedGlowLayer - emission, not a decal", () => {
+  it.each(["yellow", "blue", "white", "custom"] as const)("keeps the %s color in the live glow", (color) => {
+    const { container } = draw([["d1", LED_FULL_AMPS]], [ledWithColor("d1", color)]);
+    expect(container.querySelector("circle.led-glow")?.getAttribute("class"))
+      .toContain(`led-color-${color}`);
+    expect(container.querySelector(`[id="tau-led-glow-${color}"]`)).toBeTruthy();
+  });
+
   it("carries no stroke, because light has no outline", () => {
     const { container } = draw([["d1", LED_FULL_AMPS]]);
     const circle = glowCircles(container)[0];

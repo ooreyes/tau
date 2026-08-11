@@ -1,5 +1,5 @@
 import type { SchematicComponent } from "../schematic/types";
-import { ledColorFromValue, type LedColor } from "../engine/idealModels";
+import { ledColorFromValue, type LedColor } from "../engine/ledSpec";
 import { ledGlowField } from "../simulation/ledGlow";
 import { componentVisualPlacement } from "./Canvas.geometry";
 
@@ -12,10 +12,9 @@ import { componentVisualPlacement } from "./Canvas.geometry";
  * a consumer of solver state. Overlays keep the drawing static and the
  * measurement on top of it.
  *
- * Tau does not model an LED's wavelength, so every part glows in the amber
- * `--signal` lamp rather than in a colour the simulation did not compute.
- * Inventing red and green here would be a confident guess about a property the
- * solver has no opinion on.
+ * Generic LEDs carry an explicit visual color choice. The choice is kept
+ * separate from solved current: color changes appearance, while Vfwd changes
+ * the electrical model.
  */
 
 /**

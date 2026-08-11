@@ -150,6 +150,19 @@ describe("idealJunctionModel", () => {
     });
   });
 
+  it("uses the selected LED color's typical Vf while preserving a custom override", () => {
+    const blue = idealJunctionModel(part("led", "D2", "LED color=blue", 0, 0));
+    expect(blue).toMatchObject({ model: "TAU_LED_IDEAL_3V", forwardVolts: 3 });
+    expect(blue?.card).toContain("Vfwd=3");
+
+    const custom = idealJunctionModel(part("led", "D3", "LED color=blue Vfwd=2.65", 0, 0));
+    expect(custom).toMatchObject({ model: "TAU_LED_IDEAL_2V65", forwardVolts: 2.65 });
+    expect(custom?.card).toContain("Vfwd=2.65");
+
+    const deck = buildSpiceDeck(rig(part("led", "D4", "LED color=blue", 400, 0), "5", "100"), { kind: "op" });
+    expect(deck.netlist).toContain(".model TAU_LED_IDEAL_3V sidiode(Ron=1m Roff=1G Vfwd=3 epsilon=10m)");
+  });
+
   it("refuses a part that names a real one, and any part read from an LTspice file", () => {
     expect(idealJunctionModel(diodeAt("1N4148"))).toBeNull();
     expect(idealJunctionModel(part("zener", "D3", "1N750", 0, 0))).toBeNull();

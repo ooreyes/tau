@@ -615,6 +615,13 @@ describe("symbol geometry remediation: sources, capacitors, and light arrows", (
     },
   );
 
+  it.each(["red", "amber", "yellow", "green", "blue", "white", "custom"] as const)(
+    "renders the selected LED color class for %s",
+    (color) => {
+      expect(renderWith("led", `LED color=${color}`)).toContain(`led-artwork led-color-${color}`);
+    },
+  );
+
   it("leaves a selected-stroke gap between each polarized-capacitor lead and plate", () => {
     const markup = renderWith("polarizedCapacitor");
     const elements = drawnElements(markup);

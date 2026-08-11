@@ -175,4 +175,15 @@ describe("diode companion model", () => {
     expect(diodeCurrent(spec, 2.0)).toBeGreaterThan(3e-3);
     expect(diodeCurrent(spec, 2.0)).toBeLessThan(40e-3);
   });
+
+  it.each([
+    ["red", 2.0],
+    ["blue", 3.0],
+    ["white", 3.0],
+    ["custom Vf", 2.65],
+  ])("anchors %s preview current at its selected typical Vf", (label, vf) => {
+    const value = label === "custom Vf" ? "LED color=custom Vfwd=2.65" : `LED color=${label}`;
+    const spec = diodeSpecFor("led", value);
+    expect(diodeCurrent(spec, vf)).toBeCloseTo(10e-3, 5);
+  });
 });
