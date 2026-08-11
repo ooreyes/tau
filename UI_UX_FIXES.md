@@ -73,9 +73,9 @@ focused shell suite **5 files / 75 passed**, integrated shell suite **6 files /
 passed**. Matching packaged light/dark 900×600/1280×800/1440×900 before/after
 Packaged/native/browser QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-01).
 
-### [x] SHELL-02 - Simplify model-library UI without weakening the engine
+### [ ] SHELL-02 - Simplify model-library UI without weakening the engine
 
-**Status:** FIXED
+**Status:** IN PROGRESS
 **Priority:** P0 engineering safety  
 **Source:** Untitled document, page 1, item 2  
 ![Model controls](screenshots/ui-ux-fix-brief/shell-02-model-library-controls.png)
@@ -101,9 +101,9 @@ ignored**, and ignored real-ngspice smoke **42 passed / 0 failed**. Packaged
 default-UI, exact-model, and refusal evidence across both themes remains in
 Wave 3 packaged/native/browser QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-02).
 
-### [x] SHELL-03 - Preserve folder identity at narrow Explorer widths
+### [ ] SHELL-03 - Preserve folder identity at narrow Explorer widths
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** Untitled document, page 1, item 3  
 ![Narrow Explorer](screenshots/ui-ux-fix-brief/shell-03-narrow-explorer.png)
@@ -124,9 +124,9 @@ Explorer/shell focused assertions are green within the worker’s **5 files /
 900×600 packaged before/after evidence plus keyboard overflow QA remain
 Packaged/native/browser QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-03).
 
-### [x] SHELL-04 - Native macOS title-bar movement and zoom
+### [ ] SHELL-04 - Native macOS title-bar movement and zoom
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1 native  
 **Source:** Untitled document, page 1, item 4  
 ![Title bar](screenshots/ui-ux-fix-brief/shell-04-titlebar.png)
@@ -147,9 +147,9 @@ files / 75 passed**, and typecheck is **exit 0**. Packaged Computer Use proof
 of drag, double-click zoom/restore, traffic lights, controls, focus, and all
 three sizes is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-04).
 
-### [x] SHELL-05 - Remove redundant bottom rail/settings/status clutter
+### [ ] SHELL-05 - Remove redundant bottom rail/settings/status clutter
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P2  
 **Source:** Untitled document, page 1, item 5  
 ![Bottom rail and status](screenshots/ui-ux-fix-brief/shell-05-settings-status.png)
@@ -171,9 +171,9 @@ focused shell suite **5 files / 75 passed**, command-palette reachability
 typecheck **exit 0**. Both-theme/minimum-height screenshots and packaged
 application-menu reachability evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-05).
 
-### [x] SHELL-06 - Keep component labels visually attached to symbols
+### [ ] SHELL-06 - Keep component labels visually attached to symbols
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** Untitled document, page 2, item 6  
 ![Capacitor label spacing](screenshots/ui-ux-fix-brief/shell-06-capacitor-label.png)
@@ -218,9 +218,9 @@ shots plus keyboard focus/hit-target QA are complete; see `screenshots/ui-ux-fix
 
 ## Components and properties
 
-### [x] COMP-01 - One coherent independent-source workflow
+### [ ] COMP-01 - One coherent independent-source workflow
 
-**Status:** FIXED
+**Status:** IN PROGRESS
 **Priority:** P0 compatibility  
 **Source:** edits-to-fix, page 1, item 1  
 ![DC source properties](screenshots/ui-ux-fix-brief/comp-01-unified-source-dc.png)
@@ -247,9 +247,9 @@ green (**cargo 104 passed / 42 ignored; real-ngspice ignored 42 passed**).
 Waveform-by-waveform packaged QA, screenshots, and native authoring evidence
 Wave 3 packaged waveform authoring and simulation evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-01).
 
-### [x] COMP-02 - Align property controls into stable columns
+### [ ] COMP-02 - Align property controls into stable columns
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** edits-to-fix, page 2, item 2  
 ![Property alignment](screenshots/ui-ux-fix-brief/comp-02-property-alignment.png)
@@ -271,9 +271,9 @@ inputs now keep label/control/unit columns stable and validation messages on a
 separate predictable row. Narrow-width, every-family, and packaged
 light/dark packaged screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-02).
 
-### [x] COMP-03 - Give the current-source glyph enough interior space
+### [ ] COMP-03 - Give the current-source glyph enough interior space
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** edits-to-fix, page 2, item 3  
 ![Current source glyph](screenshots/ui-ux-fix-brief/comp-03-current-source-spacing.png)
@@ -294,9 +294,9 @@ dark/light, hit bounds, pin geometry, and snapshot/geometry tests.
 light/dark, selected-stroke, rotation/mirror, and hit-bound evidence remains
 packaged selected/geometry evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-03).
 
-### [x] COMP-04 - Apply inspector alignment to every component family
+### [ ] COMP-04 - Apply inspector alignment to every component family
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** edits-to-fix, page 3, item 4  
 ![Pulse inspector alignment](screenshots/ui-ux-fix-brief/comp-04-inspector-alignment.png)
@@ -341,9 +341,9 @@ files / 723 passed**, integrated frontend **256 files / 2 skipped, 4,297 tests /
 smoke were green. Node-zero, save/reopen, undo/redo, and packaged orientation
 packaged node-zero and orientation evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-05).
 
-### [x] COMP-06 - Movable properties and friendly component identity
+### [ ] COMP-06 - Movable properties and friendly component identity
 
-**Status:** FIXED
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 6  
 ![Movable properties](screenshots/ui-ux-fix-brief/comp-06-movable-properties.png)
@@ -364,9 +364,9 @@ and user-facing `Component ID` labels landed in `02371ec` from worker
 passed, and design drift passed (**9 checks + 48 tests**). Pointer/native
 movement, resize matrix, and packaged 900×600 screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-06).
 
-### [x] COMP-07 - Correct polarized-capacitor geometry
+### [ ] COMP-07 - Correct polarized-capacitor geometry
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 7  
 ![Polarized capacitor](screenshots/ui-ux-fix-brief/comp-07-polarized-capacitor.png)
@@ -385,9 +385,9 @@ worker `2d80d0f`; geometry/symbol contract coverage was included in **5 files /
 8 skipped** and typecheck **exit 0**. Every-orientation light/dark screenshots
 and native selected/unselected evidence are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-07).
 
-### [x] COMP-08 - LED geometry and useful electrical properties
+### [ ] COMP-08 - LED geometry and useful electrical properties
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 8  
 ![LED properties](screenshots/ui-ux-fix-brief/comp-08-led-properties.png)
@@ -413,9 +413,9 @@ files / 114 passed**; integrated frontend and native gates remain green.
 LED property interaction, save/reopen, simulator indication, and packaged
 both-theme visual evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-08).
 
-### [x] COMP-09 - Replace Zener prose with editable parameters
+### [ ] COMP-09 - Replace Zener prose with editable parameters
 
-**Status:** FIXED
+**Status:** IN PROGRESS
 **Priority:** P1  
 **Source:** edits-to-fix, page 5, item 9 (text-only note)
 
@@ -436,9 +436,9 @@ files / 114 passed**; typecheck and design drift passed. Generic/named
 inspector screenshots, invalid range interaction, and save/reopen evidence
 generic/named inspector and invalid-range evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-09).
 
-### [x] COMP-10 - Correct photodiode arrow spacing
+### [ ] COMP-10 - Correct photodiode arrow spacing
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** edits-to-fix, page 5, item 10 (same geometry class as LED)  
 ![Related LED arrow geometry](screenshots/ui-ux-fix-brief/comp-08-led-properties.png)
@@ -457,9 +457,9 @@ frontend suite passed **256 files / 2 skipped, 4,268 tests / 8 skipped** with
 typecheck **exit 0**. Every-orientation light/dark screenshots, selected
 stroke and pin/hit-bound evidence are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-10).
 
-### [x] COMP-11 - Hide manual model pickers while preserving fidelity
+### [ ] COMP-11 - Hide manual model pickers while preserving fidelity
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P0 engineering safety  
 **Source:** edits-to-fix, page 5, item 11  
 ![PNP parameters](screenshots/ui-ux-fix-brief/comp-11-pnp-properties.png)
@@ -489,9 +489,9 @@ real-ngspice **42 passed / 0 failed**. Packaged named-device fidelity,
 attached-library, missing-model, and both-theme inspector evidence remain
 packaged named-device/model-picker evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-11).
 
-### [x] COMP-12 - Type and range validation for every property
+### [ ] COMP-12 - Type and range validation for every property
 
-**Status:** FIXED
+**Status:** IN PROGRESS
 **Priority:** P0 correctness  
 **Source:** edits-to-fix, page 6, item 12  
 ![Invalid logic constant](screenshots/ui-ux-fix-brief/comp-12-logic-validation.png)
@@ -516,9 +516,9 @@ integrated frontend **256 files / 2 skipped, 4,297 tests / 8 skipped**, and
 typecheck **exit 0**. Empty/partial/exponent/suffix/NaN/Infinity and every
 component-family packaged interaction evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-12).
 
-### [x] COMP-13 - Repair the generic op-amp inspector
+### [ ] COMP-13 - Repair the generic op-amp inspector
 
-**Status:** FIXED
+**Status:** IN PROGRESS
 **Priority:** P0 correctness  
 **Source:** edits-to-fix, page 6, item 13  
 ![Current op-amp inspector](screenshots/ui-ux-fix-brief/comp-13-opamp-current.png)
@@ -543,9 +543,9 @@ coverage passed **3 files / 114 tests**, and typecheck/design drift passed.
 Generic clipping, invalid rail order, named/imported models, narrow-width, and
 packaged visual and clipping evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-13).
 
-### [x] COMP-14 - Remove long component-property essays
+### [ ] COMP-14 - Remove long component-property essays
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P2  
 **Source:** edits-to-fix, page 6, item 14  
 ![Long description](screenshots/ui-ux-fix-brief/comp-14-long-description.png)
@@ -566,9 +566,9 @@ and design drift passed (**9 checks + 48 tests**). Unsupported/refusal
 diagnostics remain explicit in the implementation; packaged contextual-help and
 both-theme screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-14).
 
-### [x] COMP-15 - Make dense digital symbols legible
+### [ ] COMP-15 - Make dense digital symbols legible
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P1  
 **Source:** edits-to-fix, pages 6-7, item 15  
 ![Dense digital labels](screenshots/ui-ux-fix-brief/comp-15-digital-labels.png)
@@ -590,9 +590,9 @@ files / 215 passed**, with integrated frontend **256 files / 2 skipped, 4,268
 tests / 8 skipped** and typecheck **exit 0**. Rotation/mirror, pin-mapping,
 collision and both-theme packaged screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-15).
 
-### [x] COMP-16 - Simulate a real seven-segment display
+### [ ] COMP-16 - Simulate a real seven-segment display
 
-**Status:** FIXED
+**Status:** IN PROGRESS
 **Priority:** P1 simulation  
 **Source:** edits-to-fix, page 7, item 16 (source calls it an 8-bit segment)
 
@@ -619,9 +619,9 @@ common-anode/cathode polarity, no-result and non-digit patterns, and keeps
 derived state out of the schematic. Packaged light/dark digit 0-9, live-update,
 and stopped-state screenshots/native evidence are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-16).
 
-### [x] COMP-17 - Remove the unnecessary switch rectangle
+### [ ] COMP-17 - Remove the unnecessary switch rectangle
 
-**Status:** FIXED
+**Status:** UNVERIFIED
 **Priority:** P2  
 **Source:** edits-to-fix, page 7, item 17  
 ![Switch rectangle](screenshots/ui-ux-fix-brief/comp-17-switch-rectangle.png)
@@ -644,15 +644,15 @@ control-port QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-
 
 ## Completion matrix
 
-- [x] All 24 stable issues are `FIXED` or evidence-backed `ALREADY SATISFIED`.
-- [x] No issue remains `UNVERIFIED`, `IN PROGRESS`, or `BLOCKED`.
-- [x] Every issue has commit, literal test result, and matching visual evidence.
-- [x] Light/dark and 900×600, 1280×800, 1440×900 matrices pass.
-- [x] Computer Use proves packaged native interactions and resizing.
-- [x] Chrome proves responsive `dev:web` behavior with no app-origin console errors.
-- [x] Typecheck, frontend tests, design drift, minimum-window, production build,
+- [ ] All 24 stable issues are `FIXED` or evidence-backed `ALREADY SATISFIED`.
+- [ ] No issue remains `UNVERIFIED`, `IN PROGRESS`, or `BLOCKED`.
+- [ ] Every issue has commit, literal test result, and matching visual evidence.
+- [ ] Light/dark and 900×600, 1280×800, 1440×900 matrices pass.
+- [ ] Computer Use proves packaged native interactions and resizing.
+- [ ] Chrome proves responsive `dev:web` behavior with no app-origin console errors.
+- [ ] Typecheck, frontend tests, design drift, minimum-window, production build,
       applicable Rust/native gates, and packaged-ngspice smoke pass.
-- [x] Exact model/import behavior and named-device fail-closed guarantees remain.
+- [ ] Exact model/import behavior and named-device fail-closed guarantees remain.
 - [ ] Final Sol High review has no unresolved actionable findings.
-- [x] `auto/ltspice-parity` is clean and pushed; no fleet worktrees or branches
+- [ ] `auto/ltspice-parity` is clean and pushed; no fleet worktrees or branches
       remain; nothing is merged to `main`.

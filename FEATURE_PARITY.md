@@ -2003,7 +2003,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Per-analysis ngspice option mapping
 
 ## 8. UX / app
-- ✅ **PDF-directed UI/UX remediation fleet (complete 2026-08-11):** the
+- 🟡 **PDF-directed UI/UX remediation correction pass (2026-08-11):** Sol High
+  rejected integration `5f5fd20`; the authoritative 24-item tracker is
+  reopened wherever acceptance-matching packaged evidence or implementation
+  was not proven. The prior completion paragraph is historical and must not be
+  used as the current finish signal. Fresh native evidence must cover
+  populated/selected/properties/simulator states, connected edited circuits,
+  current-source geometry, seven-segment 0–9/live/stopped states, both themes,
+  and 900×600/1280×800/1440×900.
+  <!--
   authoritative 24-item tracker is `UI_UX_FIXES.md`, with lossless source images
   under `screenshots/ui-ux-fix-brief/`. The fleet starts from tagged baseline
   `live-simulator-baseline-2026-08-11` (`919f0e1`), preserves exact model
@@ -2022,7 +2030,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (114 focused tests). Wave 3 packaged Computer Use and Chrome QA now prove
   all 24 issues; the complete issue-to-commit and screenshot index is
   `screenshots/ui-ux-fixes/QA-EVIDENCE.md`, and no stable issue remains
-  `UNVERIFIED`, `IN PROGRESS`, or silently deferred.**
+  `UNVERIFIED`, `IN PROGRESS`, or silently deferred.
+  -->
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - ✅ **Visual QA on the actual desktop app:** the current Tauri hot-reload app
   stays alive on `auto/ltspice-parity`; live browser QA verified centered

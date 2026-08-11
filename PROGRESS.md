@@ -1,35 +1,30 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-11**
+**Status: IN PROGRESS - 2026-08-11**
 
-Unit: **Wave 3 packaged/native and Chrome UI/UX acceptance QA**. Wave 1 and
-Wave 2 are fully integrated; the final implementation tip before QA was
-`564c375`. All 24 stable PDF tracker issues now have `FIXED` status and
-matching code/test/visual evidence.
+Unit: **Sol High review correction pass**. The review rejected `5f5fd20`.
+Implementation and acceptance claims are being reopened until legacy source
+round-trips, generic op-amp defaults, model-library visibility, validation,
+zener identity, seven-segment polarity, inspector identity, and packaged
+native evidence are proven at the acceptance-matching state.
 
 **Files:** Wave 2 workers will use disjoint temporary worktrees and the issue
 ownership/file boundaries recorded in `UI_UX_FIXES.md`; this primary checkout
 remains the only owner of `PROGRESS.md`, `FEATURE_PARITY.md`, and
 `UI_UX_FIXES.md`.
 
-**Tests:** typecheck **exit 0**; full frontend **258 files passed / 2
-skipped, 4,337 tests passed / 8 skipped**; desktop web build **exit 0**;
-design drift **9 checks + 48 tests passed**; Tauri bundle **exit 0**;
-`codesign --verify --deep --strict` **exit 0**; `hdiutil verify` **VALID**;
-packaged engine smoke **336 samples, 0..5 V**; cargo fmt/clippy **exit 0**;
-native Rust **104 passed / 0 failed / 42 ignored**; ignored real-ngspice
-smoke **42 passed / 0 failed**. Packaged Computer Use imported and ran the
-unmodified RC deck (**3,079 samples, COMPLETE**) and an edited circuit with
-the seven-segment component (**3,104 samples, COMPLETE; U2 display blank for
-undriven nodes**). Chrome dev:web reported zero app-origin console errors and
-no overflow at all six theme/viewport combinations.
+**Tests:** prior `5f5fd20` gates are historical only. The correction pass will
+record fresh focused, frontend, native/Rust/ngspice, packaged-build, and
+acceptance-matrix results here after the fixes land.
 
-**Parity items:** `UI_UX_FIXES.md` is **24/24 FIXED**, covering SHELL-01–07
-and COMP-01–17. The complete issue-to-commit and screenshot index is
-`screenshots/ui-ux-fixes/QA-EVIDENCE.md`.
+**Parity items:** the Sol review reopened every unsupported or mismatched
+claim in `UI_UX_FIXES.md`; only review-supported evidence claims are retained
+while the correction lanes run. No issue is considered complete from the
+prior filenames alone.
 
-**Next:** parent task launches one fresh Sol High review from the final SHA;
-this orchestrator does not perform that review.
+**Next:** finish correction code, run packaged native QA with meaningful
+connected circuits, update evidence/tracking honestly, push a clean SHA, and
+return it to the parent. This orchestrator does not perform the Sol review.
 
 ---
 
