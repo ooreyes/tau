@@ -46,6 +46,8 @@ export interface SelectionInspectorProps {
   obstacles?: readonly Rect[];
   /** Accessible name, e.g. `R1 properties`. */
   title: string;
+  /** Stable selection identity; unlike the title, it changes for same-named parts. */
+  selectionKey: string | null;
   /** Bumping this focuses the first field: the explicit keyboard command. */
   focusSignal?: number;
   /** Escape, or the close button. The selection itself is not cleared. */
@@ -79,6 +81,7 @@ export function SelectionInspector({
   viewport,
   obstacles = [],
   title,
+  selectionKey,
   focusSignal = 0,
   onDismiss,
   children,
@@ -176,12 +179,15 @@ export function SelectionInspector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchorKey, compute]);
 
-  // A different inspection gets a fresh placement. Closing and reopening the
-  // same inspection also starts from the computed side of the selected part,
-  // while a resize clamps an existing drag below without losing it.
+  // A different inspection gets a fresh placement. This is deliberately keyed
+  // by the caller's stable selection identity, not the accessible title: two
+  // components can share a title while still needing independent panel state.
+  // Closing and reopening the same inspection also starts from the computed
+  // side of the selected part, while a resize clamps an existing drag below
+  // without losing it.
   useEffect(() => {
     setDragPosition(null);
-  }, [title]);
+  }, [selectionKey]);
 
   // Rule 3. Keyed on the signal, not on the selection, which is rule 2.
   useEffect(() => {

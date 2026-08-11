@@ -3475,8 +3475,6 @@ function App() {
             onRun={runAndShowSimulator}
             onStop={stopAnalysis}
             onClearScratchpad={() => setConfirmClearOpen(true)}
-            modelLibraryCount={userModelLibraries.length}
-            onOpenModelLibraries={() => setModelLibrariesOpen(true)}
             onOpenSimulationSetup={() => setSimulationSetupOpen(true)}
           />
           <EditorTabs
@@ -3778,6 +3776,7 @@ function App() {
             viewport={inspectorViewport}
             obstacles={inspectorObstacles}
             title={inspectorTitle}
+            selectionKey={inspectionKey}
             focusSignal={inspectorFocusSignal}
             onDismiss={() => setInspectorClosedFor(inspectionKey)}
           >
@@ -3975,7 +3974,6 @@ function App() {
           <CommandPalette
             open={paletteOpen}
             onClose={() => setPaletteOpen(false)}
-            onOpenModelLibraries={() => setModelLibrariesOpen(true)}
             onOpenSettings={openSettingsSurface}
           />
         )}

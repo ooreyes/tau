@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   Crosshair,
   Eraser,
-  Library,
   MousePointer2,
   Play,
   Plus,
@@ -31,9 +30,6 @@ export function EditorToolbar({
   onRun,
   onStop,
   onClearScratchpad,
-  modelLibraryCount,
-  onOpenModelLibraries,
-  showModelLibraries = true,
   onOpenSimulationSetup,
 }: {
   mode: "schematic" | "simulator";
@@ -41,9 +37,6 @@ export function EditorToolbar({
   onRun: () => void;
   onStop: () => void;
   onClearScratchpad: () => void;
-  modelLibraryCount: number;
-  onOpenModelLibraries: () => void;
-  showModelLibraries?: boolean;
   onOpenSimulationSetup: () => void;
 }) {
   // The simulator view is read-only (pan/zoom/probe only - see Canvas's
@@ -107,14 +100,6 @@ export function EditorToolbar({
       <IconButton title="Simulation setup" disabled={readOnly} onClick={onOpenSimulationSetup}>
         <SlidersHorizontal size={16} strokeWidth={1.6} />
       </IconButton>
-      {showModelLibraries && (
-        <IconButton title="Model libraries" onClick={onOpenModelLibraries}>
-          <Library size={16} strokeWidth={1.6} />
-          {modelLibraryCount > 0 && (
-            <span className="toolbar-count" aria-hidden="true">{modelLibraryCount}</span>
-          )}
-        </IconButton>
-      )}
       <div className="editor-toolbar-spacer" />
       <div className="transport">
         <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>

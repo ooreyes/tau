@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/command";
 
 interface Entry {
-  kind: ComponentKind | "__wire__" | "__probe__" | "__label__" | "__model_libraries__" | "__settings__";
+  kind: ComponentKind | "__wire__" | "__probe__" | "__label__" | "__settings__";
   name: string;
   section: string;
   hotkey: string;
@@ -28,19 +28,16 @@ const ENTRIES: Entry[] = [
   { kind: "__wire__", name: "Wire", section: "Tools", hotkey: "w" },
   { kind: "__probe__", name: "Probe", section: "Tools", hotkey: "" },
   { kind: "__label__", name: "Net label", section: "Tools", hotkey: "f4" },
-  { kind: "__model_libraries__", name: "Model libraries...", section: "Document", hotkey: "" },
   { kind: "__settings__", name: "Settings", section: "Tau", hotkey: "⌘," },
 ];
 
 export function CommandPalette({
   open,
   onClose,
-  onOpenModelLibraries,
   onOpenSettings,
 }: {
   open: boolean;
   onClose: () => void;
-  onOpenModelLibraries?: () => void;
   onOpenSettings?: () => void;
 }) {
   const startPlacing = useSchematic((s) => s.startPlacing);
@@ -79,7 +76,6 @@ export function CommandPalette({
     if (entry.kind === "__wire__") startWiring();
     else if (entry.kind === "__probe__") startProbing();
     else if (entry.kind === "__label__") startLabeling();
-    else if (entry.kind === "__model_libraries__") onOpenModelLibraries?.();
     else if (entry.kind === "__settings__") onOpenSettings?.();
     else startPlacing(entry.kind);
     onClose();
@@ -126,10 +122,6 @@ export function CommandPalette({
                       <g className="symbol">
                         <path d="M -26 -12 H 6 L 24 0 L 6 12 H -26 Z" fill="none" />
                         <path d="M -18 -5 V 5 M -10 -5 V 5" fill="none" />
-                      </g>
-                    ) : entry.kind === "__model_libraries__" ? (
-                      <g className="symbol">
-                        <path d="M -20 -16 V 16 M -6 -16 V 16 M 8 -16 L 20 -10 V 16 L 8 16 Z" fill="none" />
                       </g>
                     ) : (
                       <g className="symbol">

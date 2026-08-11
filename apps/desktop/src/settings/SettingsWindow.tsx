@@ -10,7 +10,6 @@
  */
 import { useEffect, useState } from "react";
 import {
-  BookMarked,
   Keyboard,
   Gauge,
   Settings2,
@@ -21,7 +20,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GeneralPage } from "./pages/GeneralPage";
-import { LibrariesPage } from "./pages/LibrariesPage";
 import { ModelConfigurationPage } from "./pages/ModelConfigurationPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { ShortcutsPage } from "./pages/ShortcutsPage";
@@ -34,7 +32,6 @@ export type SettingsPageId =
   | "models"
   | "usage"
   | "simulation"
-  | "libraries"
   | "shortcuts";
 
 interface NavEntry {
@@ -51,7 +48,6 @@ const NAV: readonly NavEntry[] = [
   { id: "models", label: "Model configuration", icon: Sparkles, section: "You" },
   { id: "usage", label: "Usage", icon: Wallet, section: "You" },
   { id: "simulation", label: "Simulation", icon: Gauge, section: "Engine" },
-  { id: "libraries", label: "Model libraries", icon: BookMarked, section: "Engine" },
   { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard, section: "Engine" },
 ];
 
@@ -135,7 +131,6 @@ export function SettingsWindow({
           {page === "models" && <ModelConfigurationPage onNotice={onNotice} />}
           {page === "usage" && <UsagePage onNotice={onNotice} />}
           {page === "simulation" && <SimulationPage onNotice={onNotice} />}
-          {page === "libraries" && <LibrariesPage />}
           {page === "shortcuts" && <ShortcutsPage />}
         </div>
         {notice && (

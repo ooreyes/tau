@@ -26,6 +26,7 @@ function renderInspector(overrides: Partial<Parameters<typeof SelectionInspector
       anchor={ANCHOR}
       viewport={VIEWPORT}
       title="R1 properties"
+      selectionKey="component:r1"
       onDismiss={onDismiss}
       {...overrides}
     >
@@ -83,6 +84,7 @@ describe("selection inspector - focus", () => {
         anchor={{ minX: 600, minY: 300, maxX: 660, maxY: 340 }}
         viewport={VIEWPORT}
         title="R2 properties"
+        selectionKey="component:r2"
         onDismiss={() => {}}
       >
         <input aria-label="Value" defaultValue="2k" />
@@ -105,6 +107,7 @@ describe("selection inspector - focus", () => {
         anchor={ANCHOR}
         viewport={VIEWPORT}
         title="R1 properties"
+        selectionKey="component:r1"
         focusSignal={1}
         onDismiss={() => {}}
       >
@@ -121,6 +124,7 @@ describe("selection inspector - focus", () => {
         anchor={ANCHOR}
         viewport={VIEWPORT}
         title="R1 properties"
+        selectionKey="component:r1"
         focusSignal={1}
         onDismiss={() => {}}
       >
@@ -230,6 +234,7 @@ describe("selection inspector - placement", () => {
         anchor={ANCHOR}
         viewport={VIEWPORT}
         title="R1 properties"
+        selectionKey="component:r1"
         focusSignal={1}
         onDismiss={() => {}}
       >
@@ -252,6 +257,7 @@ describe("selection inspector - placement", () => {
         anchor={ANCHOR}
         viewport={{ minX: 52, minY: 44, maxX: 600, maxY: 500 }}
         title="R1 properties"
+        selectionKey="component:r1"
         onDismiss={() => {}}
       >
         <input aria-label="Value" defaultValue="1k" />
@@ -259,5 +265,30 @@ describe("selection inspector - placement", () => {
     );
     expect(Number.parseFloat(panel().style.left)).toBeLessThanOrEqual(300);
     expect(Number.parseFloat(panel().style.top)).toBeLessThanOrEqual(160);
+  });
+
+  it("resets a moved panel when a same-title selection gets a new identity", () => {
+    const { rerender } = renderInspector();
+    const inspector = panel();
+    const header = inspector.querySelector(".selection-inspector-head") as HTMLElement;
+    const automaticLeft = Number.parseFloat(inspector.style.left);
+
+    fireEvent.pointerDown(header, { button: 0, pointerId: 12, clientX: 500, clientY: 320 });
+    fireEvent.pointerMove(header, { pointerId: 12, clientX: 620, clientY: 320 });
+    fireEvent.pointerUp(header, { pointerId: 12, clientX: 620, clientY: 320 });
+    expect(Number.parseFloat(panel().style.left)).toBeGreaterThan(automaticLeft);
+
+    rerender(
+      <SelectionInspector
+        anchor={ANCHOR}
+        viewport={VIEWPORT}
+        title="R1 properties"
+        selectionKey="component:r2"
+        onDismiss={() => {}}
+      >
+        <input aria-label="Value" defaultValue="2k" />
+      </SelectionInspector>,
+    );
+    expect(Number.parseFloat(panel().style.left)).toBe(automaticLeft);
   });
 });

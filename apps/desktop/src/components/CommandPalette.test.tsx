@@ -63,4 +63,12 @@ describe("CommandPalette ui/command", () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("does not expose model-library authoring in the default command list", async () => {
+    render(<CommandPalette open onClose={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/Search parts/);
+    fireEvent.change(input, { target: { value: "model libraries" } });
+    expect(await screen.findByText("No matching parts")).toBeTruthy();
+    expect(screen.queryByText("Model libraries...")).toBeNull();
+  });
 });

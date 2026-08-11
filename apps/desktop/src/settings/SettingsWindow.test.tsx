@@ -121,7 +121,6 @@ describe("every page renders", () => {
     ["Model configuration", "Model configuration"],
     ["Usage", "Usage"],
     ["Simulation", "Simulation"],
-    ["Model libraries", "Model libraries"],
     ["Keyboard shortcuts", "Keyboard shortcuts"],
   ];
 
@@ -133,10 +132,11 @@ describe("every page renders", () => {
     );
   });
 
-  it("offers all seven pages in the nav", () => {
+  it("offers all six pages in the nav", () => {
     render(<SettingsWindow />);
     const nav = screen.getByRole("navigation", { name: "Settings pages" });
-    expect(within(nav).getAllByRole("button")).toHaveLength(7);
+    expect(within(nav).getAllByRole("button")).toHaveLength(6);
+    expect(within(nav).queryByRole("button", { name: "Model libraries" })).toBeNull();
   });
 });
 
