@@ -1715,7 +1715,11 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         && /^(?:ideal\b|(?:gain|avol|vmin|vmax|min|max)\s*=)/i.test(component.value.trim());
       if (driven(vPlus) && driven(vMinus)) {
         const avol = parseOpampAvol(component.value);
-        const limits = genericOpamp && /(?:^|[\s,])(?:gain|vmin|vmax|min|max)\s*=/i.test(component.value)
+        // Generic Tau op-amps always have the same bounded default model the
+        // inspector displays. An untouched `ideal` must not silently fall
+        // back to the historical unbounded E source; explicit limits still
+        // override those defaults through the shared parser.
+        const limits = genericOpamp
           ? parseOpampOutputLimits(component.value)
           : undefined;
         return [railClampedOpampLine(
@@ -1730,7 +1734,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
           limits?.max,
         )];
       }
-      if (genericOpamp && /(?:^|[\s,])(?:gain|vmin|vmax|min|max)\s*=/i.test(component.value)) {
+      if (genericOpamp) {
         const limits = parseOpampOutputLimits(component.value);
         return [boundedOpampLine(
           `B_${base}`,

@@ -1711,7 +1711,8 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain("TAU_PMOS");
     expect(deck.netlist).toContain("TAU_NPN");
     expect(deck.netlist).toContain("TAU_PNP");
-    expect(deck.netlist).toContain("E_U1");
+    expect(deck.netlist).toContain("B_U1");
+    expect(deck.netlist).toContain("tanh(1000000");
     expect(deck.netlist).toContain("R_RV1_a");
     expect(deck.netlist).toContain("R_S1");
     expect(deck.netlist).toContain("K_T1");
@@ -1921,11 +1922,14 @@ describe("buildSpiceDeck", () => {
       wire("wout", [{ x: 32, y: 0 }, { x: 64, y: 0 }, { x: 64, y: 32 }]), // out → RL.a
     ];
     const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
-    expect(deck.netlist).toMatch(/B_U1 \S+ 0 V=\(V\(\S+\)\+V\(0\)\)\/2\+\(V\(\S+\)-V\(0\)\)\/2\*tanh\(1000000\*/);
+    expect(deck.netlist).toContain("B_U1");
+    expect(deck.netlist).toContain("tanh(1000000");
+    expect(deck.netlist).toContain("min(V(");
+    expect(deck.netlist).toContain("max(V(0),-15)");
     expect(deck.netlist).not.toContain("E_U1");
   });
 
-  it("keeps the unbounded ideal op-amp when the supply pins float", () => {
+  it("bounds an untouched generic ideal op-amp to the inspector defaults", () => {
     const components = [
       component("opamp", "U1", "Ideal", 0, 0),
       component("vsource", "VIN", "1", -96, 48),
@@ -1938,9 +1942,10 @@ describe("buildSpiceDeck", () => {
       wire("wout", [{ x: 32, y: 0 }, { x: 64, y: 0 }, { x: 64, y: 32 }]),
     ];
     const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
-    expect(deck.netlist).toContain("E_U1");
-    expect(deck.netlist).toContain("R_U1_out");
-    expect(deck.netlist).not.toContain("B_U1");
+    expect(deck.netlist).toContain("B_U1");
+    expect(deck.netlist).toContain("tanh(1000000");
+    expect(deck.netlist).toContain("0+15*tanh");
+    expect(deck.netlist).not.toContain("E_U1");
   });
 
   it("emits a JFET (J device) with the generic NJF/PJF model", () => {
