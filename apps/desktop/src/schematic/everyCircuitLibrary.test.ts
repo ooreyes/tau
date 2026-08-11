@@ -543,7 +543,7 @@ describe("EveryCircuit library — IC pack (counter / 555 / ADC / DAC / 7-seg)",
     expect(deck.netlist).not.toMatch(/analog\.com|encrypted|\$CMII|AD712/i);
   });
 
-  it("emits ADC / DAC behavioral B lines and 7-seg 1G loads", () => {
+  it("emits ADC / DAC behavioral B lines and directional 7-seg LED loads", () => {
     const adc: SchematicComponent = {
       ...c("adc", "A2", "Vhigh=5", 0, 0),
       pinOverride: [
@@ -584,8 +584,10 @@ describe("EveryCircuit library — IC pack (counter / 555 / ADC / DAC / 7-seg)",
     expect(deck.netlist).toMatch(/^B_a2_d3\b/m);
     expect(deck.netlist).toMatch(/^B_a2_d0\b/m);
     expect(deck.netlist).toMatch(/^B_a3_out\b/m);
-    expect(deck.netlist).toMatch(/^R_u2_a\b.+1G/m);
-    expect(deck.netlist).toMatch(/^R_u2_g\b.+1G/m);
+    expect(deck.netlist).toMatch(/^D_u2_a\b\s+\S+\s+\S+\s+TAU_7SEG_LED$/m);
+    expect(deck.netlist).toMatch(/^R_u2_a\b.+220$/m);
+    expect(deck.netlist).toMatch(/^D_u2_g\b\s+\S+\s+\S+\s+TAU_7SEG_LED$/m);
+    expect(deck.netlist).toMatch(/^R_u2_g\b.+220$/m);
   });
 });
 
