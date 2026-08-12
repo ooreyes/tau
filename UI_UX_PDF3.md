@@ -32,9 +32,33 @@ Gates that must pass before an item may be called done:
 ```bash
 pnpm -C apps/desktop typecheck
 pnpm -C apps/desktop test
-node scripts/design-system-dod.mjs      # design-token / palette gate
-node scripts/validate-palette.mjs
+node scripts/design-system-dod-grep.mjs
+node scripts/pdf3-verify.mjs after
 ```
+
+**Correction — the first draft of this list named two scripts that do not do
+what it claimed.** `scripts/design-system-dod.mjs` is a Playwright *screenshot*
+script that needs a dev server on port 1470 and drives the Settings dialog; it is
+not a CSS linter and it times out when run bare. `scripts/validate-palette.mjs`
+is a CLI that takes an explicit hex list (`node scripts/validate-palette.mjs
+"#aaa,#bbb" --mode dark`), not a repo sweep. The real static token gate is
+**`scripts/design-system-dod-grep.mjs`**, which proves: zero raw `#hex` /
+`rgba()` in `App.css` outside token-defining blocks, zero hardcoded hex in
+production chrome `.ts`/`.tsx` outside its data/engine allowlist, the
+Resizable/Command/Toast primitives wired, **zero production native `<select>`**,
+and no legacy toast markup.
+
+That last-but-one item matters to two lanes: a new native `<select>` anywhere in
+production code fails the gate, so any new dropdown must use the existing Radix
+`Select` primitive.
+
+**Known pre-existing failure, reproduced at the base commit in a clean
+worktree:** `DESIGN-SYSTEM-GREP: FAIL — App.css still defines .shell-toast (dead
+legacy toast)`. It is dead CSS at `App.css:10276` (only a comment in
+`components/ui/sonner.tsx` and a "markup is gone" assertion in
+`uiux/Wave2Regression.test.tsx:327` still mention it). It is **not** this
+remediation's to fix — `App.css` is deliberately untouched this run — so the bar
+for every lane is **no NEW gate failures beyond that line**.
 
 ---
 

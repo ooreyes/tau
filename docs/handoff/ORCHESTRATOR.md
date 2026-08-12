@@ -1,5 +1,27 @@
 # Orchestrator notes to the lanes (read this if your lane is named)
 
+## EVERYONE — the CSS gate in your brief was the wrong script
+
+Your brief told you to run `scripts/design-system-dod.mjs` and
+`scripts/validate-palette.mjs`. Both are real scripts and neither is a linter:
+the first is a Playwright screenshot run that needs a dev server on port 1470 and
+times out when run bare, the second is a CLI that takes an explicit hex list.
+**Run `node scripts/design-system-dod-grep.mjs` instead.** Do not report the
+other two as failures — they were never a gate.
+
+Two things that gate will hold you to, worth knowing before you write code:
+
+- zero raw `#hex` or `rgba()` in `App.css` outside token-defining blocks, and
+  zero hardcoded hex in production `.ts`/`.tsx` chrome outside its allowlist;
+- **zero production native `<select>`** — any new dropdown must use the existing
+  Radix `Select` primitive (`components/ui/select`), which is what
+  `IndependentSourceEditor.tsx:258` already does.
+
+It has ONE pre-existing failure, reproduced at the base commit in a clean
+worktree: `App.css still defines .shell-toast (dead legacy toast)`. That is not
+yours, `App.css` is untouched this run, and the bar is **no new failures beyond
+that one line**.
+
 ## DOCK — your ownership is extended to the drawer module
 
 `P3-14` cannot be finished from `App.tsx` alone. You now also own:
