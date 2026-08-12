@@ -29,6 +29,18 @@ export interface TauDevBridge {
   /** Select the first open-schematic component with this reference designator. */
   selectComponent: (reference: string) => boolean;
   useProject: typeof useProject;
+  /**
+   * The document store itself.
+   *
+   * Exposed for the same reason `useProject` is: several proofs are about state
+   * the DOM cannot show. Whether a dropped ground really landed at rotation 0,
+   * whether Backspace removed the net label from the document or merely hid its
+   * glyph, whether an inspector edit rewrote `kind` as well as `value` - those
+   * are store facts, and a screenshot can only guess at them. Reading them here
+   * keeps the proof honest without the capture script reaching into React
+   * internals, which is exactly what this module exists to avoid.
+   */
+  useSchematic: typeof useSchematic;
 }
 
 declare global {
@@ -71,5 +83,6 @@ export function installDevBridge(): void {
     },
 
     useProject,
+    useSchematic,
   };
 }

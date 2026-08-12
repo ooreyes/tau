@@ -61,7 +61,10 @@ immediately after `import "./App.css"`, so **no worker needs to touch App.css**:
 | SYMBOLS | P3-01, P3-03, P3-08 | `schematic/catalog.ts`, `componentNames.ts`, `params.ts`, `sourceValue.ts`, `kindGroups.ts`, `paletteItems.ts`, `symbols.tsx`, `symbols.test.tsx`, `sourceGeometry.test.tsx`, `components/IndependentSourceEditor.tsx`(+test), `components/Palette.tsx`, `store/useSchematic.ts`(+test), `styles/sourceSymbols.css` |
 | CANVAS | P3-07, P3-10, P3-11 | `components/Canvas.tsx`, `Canvas.geometry.ts`, `Canvas.labels.test.ts`, `Canvas.geometry.test.ts`, `Canvas.geometry.placement.test.ts`, `Canvas.shapes.test.tsx`, `components/ScopeZoomCluster.tsx`, `schematic/shortcuts.ts`(+test) |
 | TOOLBAR | P3-12, P3-13, P3-04B | `components/editor/EditorChrome.tsx`, `components/editor/*` (new icon module), `components/EmptyState.tsx`(+test), `styles/editorToolbarIcons.css`, `THIRD_PARTY_NOTICES` |
-| DOCK | P3-14, P3-05 | `App.tsx`, `styles/diagnosticsDock.css`, `schematic/documentValidation.ts`(+test), `components/ComponentMeasurementsPanel.tsx`(+test), `App.workspace.test.tsx` |
+| DOCK | P3-14, P3-05 | `App.tsx`, `styles/diagnosticsDock.css`, `schematic/documentValidation.ts`(+test), `components/ComponentMeasurementsPanel.tsx`(+test), `App.workspace.test.tsx`, `components/drawer/ResultsDrawer.tsx`(+test), `components/drawer/DiagnosticsTab.tsx` |
+
+The orchestrator alone owns `lib/devBridge.ts` (the dev-only automation bridge
+the capture harness drives) and `scripts/`.
 
 `App.tsx` is owned solely by DOCK. Lanes that need an `App.tsx` wiring change
 (a new prop, a renamed import) file it in `docs/handoff/<lane>.md`; the
