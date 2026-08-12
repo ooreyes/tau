@@ -69,9 +69,19 @@ describe("sourceValueLabel", () => {
     expect(sourceValueLabel("tline", "Td=50n Z0=50")).toBe("Td=50n Z0=50");
   });
 
-  it("leaves the op-amp's model value untouched (empty unit, no suffix)", () => {
-    expect(sourceValueLabel("opamp", "ideal")).toBe("ideal");
+  // `ideal` is the schema's internal model token, and printing it verbatim
+  // captioned every generic op-amp on the sheet with a word that describes
+  // Tau's bookkeeping rather than the circuit (review item 13).
+  it("captions a generic op-amp with its gain, or with nothing", () => {
+    expect(sourceValueLabel("opamp", "ideal")).toBe("");
+    expect(sourceValueLabel("opamp", "")).toBe("");
+    expect(sourceValueLabel("opamp", "ideal Gain=200k")).toBe("200k\u2009V/V");
+    expect(sourceValueLabel("opamp", "ideal Vmin=-12 Vmax=12")).toBe("");
+  });
+
+  it("never hides a named or imported op-amp's own identity", () => {
     expect(sourceValueLabel("opamp", "LT1001")).toBe("LT1001");
+    expect(sourceValueLabel("opamp", "LT1001 Gain=1Meg")).toBe("LT1001");
   });
 
   it("keeps subcircuit knobs in Properties instead of the sketch label", () => {

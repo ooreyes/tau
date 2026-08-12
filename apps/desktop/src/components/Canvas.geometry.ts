@@ -332,6 +332,20 @@ export const sourceValueLabel = (kind: ComponentKind, value: string): string => 
     const hyst = Number(params.vhyst ?? "0");
     return hyst ? `${base} ±${explicitUnit(String(hyst), "V")}` : base;
   }
+  if (kind === "opamp") {
+    const raw = value.trim();
+    const bare = raw.split(/\s+/, 1)[0] ?? "";
+    // A named or imported part keeps its identity beside the triangle - that
+    // is the one thing a reader must not have to guess, and Tau never
+    // substitutes for it.
+    if (bare && bare.toLowerCase() !== "ideal" && !bare.includes("=")) return bare;
+    // `ideal` is the schema's internal model token (`internal: true`), not a
+    // fact about the circuit. It was being printed verbatim, so every generic
+    // op-amp on the sheet was captioned "ideal". Show the open-loop gain
+    // instead, and only once it stops being the default.
+    const gain = /(?:^|[\s,;])(?:Gain|Avol)\s*=\s*([^\s,;]+)/i.exec(raw)?.[1];
+    return gain ? explicitUnit(gain, "V/V") : "";
+  }
   if (kind === "nmos" || kind === "pmos") {
     const params = decodeParams(kind, value);
     const model = params.model || (kind === "nmos" ? "NMOS" : "PMOS");

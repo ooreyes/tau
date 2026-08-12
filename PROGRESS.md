@@ -1,5 +1,50 @@
 ## HEARTBEAT
 
+**Status: REVIEW FOLLOW-UP LANDED — 2026-08-12 (branch `fix/ui-ux-followup`)**
+
+Unit: **Correcting nine UI/UX items that were checked `FIXED` against packaged
+screenshots showing the defect still present.** Built on `498e436`; the
+canonical `auto/ltspice-parity` branch is deliberately untouched so the two can
+be compared before either becomes current.
+
+**What the prior pass missed.** Read closely, its own evidence
+(`screenshots/ui-ux-fixes/native/23-light-900-opamp-inspector.png` and the
+Zener/LED equivalents) shows the op-amp captioned `Open-loop gain 0000` with no
+value, no unit and no visible input. Reproduced and measured: at 900×600 the
+engineering control for the op-amp gain/rails, the Zener breakdown/forward and
+the LED forward voltage each rendered **0 px wide and outside its own row**.
+The DOM tests passed the whole time because they assert the input *exists*
+(`getByRole("textbox", …)`), never that it has width.
+
+**Fixed:** the value control no longer loses its width to the range hint;
+the inspector grid no longer pins its only child to a dead fixed track;
+LED/photodiode/zener `SYMBOL_BODY` now covers the artwork that drives
+hit-testing, wire routing, label placement and fit-to-view; inspector prose is
+deleted at source rather than truncated at render; flip-flop captions have
+measurable clearance and hover glosses; the titlebar arms a drag on movement
+instead of starting one on press; the collapse toggle stops restoring a stale
+snapshot; the resting status strip is gone; the generic op-amp is no longer
+captioned `ideal`; and the canvas zoom cluster is no longer rendered
+underneath the parts rail.
+
+**Tests:** `pnpm -C apps/desktop typecheck` **exit 0**;
+`pnpm -C apps/desktop test` **262 files / 4,497 passed, 8 skipped**.
+
+**Files:** before/after matrix in `screenshots/uiux-followup/{before,after}/`
+(light + dark × 900×600, 1280×800, 1440×900) with `measurements.json` carrying
+the layout numbers; captured by `scripts/uiux-followup-shot.mjs`. Details and
+the remaining open items are in `UI_UX_FIXES.md` under
+"Review follow-up — 2026-08-12".
+
+**Next:** owner review of `fix/ui-ux-followup` against `auto/ltspice-parity`.
+Still owed: a packaged re-capture of the corrected inspector states, and a
+physical double-click zoom test on the packaged title bar. Final Sol High
+review remains **PENDING**.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: DONE - 2026-08-12**
 
 Unit: **Targeted final Sol correction — titlebar gesture determinism, LED

@@ -29,12 +29,34 @@ describe("StatusBar simulator guidance", () => {
   afterEach(() => cleanup());
 
   it("uses concise inspection guidance without repeating the view-only label", () => {
-    render(<StatusBar mode="simulator" result={null} title="filter.asc" />);
+    render(<StatusBar mode="simulator" result={null} />);
 
     expect(screen.getByText("Inspect - select a component to focus telemetry")).toBeTruthy();
     expect(screen.queryByText(/topology locked/i)).toBeNull();
     expect(screen.queryByText(/engine:/i)).toBeNull();
     expect(screen.queryByText(/grid 0\.1 in/i)).toBeNull();
+  });
+
+  /**
+   * Review item 5 asked for the lower-left gear "and the text underneath it"
+   * to go. Only the gear went. `Ready` never changed while editing, the file
+   * name is already in the title bar and on the tab, and `Select` is the
+   * resting tool - so at rest the strip is now absent entirely.
+   */
+  it("shows nothing at all in a resting schematic editor", () => {
+    const { container } = render(<StatusBar mode="schematic" result={null} />);
+    expect(container.querySelector(".statusbar")).toBeNull();
+    expect(screen.queryByText("Ready")).toBeNull();
+    expect(screen.queryByText("Select")).toBeNull();
+  });
+
+  it("appears only while a tool is mid-gesture, and says just that", () => {
+    useSchematic.setState({ tool: { mode: "wire" } as never });
+    const { container } = render(<StatusBar mode="schematic" result={null} />);
+    expect(container.querySelector(".statusbar")).toBeTruthy();
+    expect(screen.getByText("Wiring")).toBeTruthy();
+    // Still no duplicated document identity.
+    expect(screen.queryByText(/\.asc/)).toBeNull();
   });
 });
 

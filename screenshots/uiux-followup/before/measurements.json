@@ -1,0 +1,860 @@
+{
+  "opamp-light-900x600": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "156px 98px",
+    "groupWidth": 156,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "U1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Open-loop gain",
+        "range": "1–1000000000000",
+        "engWidth": 0,
+        "value": "1",
+        "valueWidth": 36,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Minimum output",
+        "range": "-1000–1000",
+        "engWidth": 0,
+        "value": "-15",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Maximum output",
+        "range": "-1000–1000",
+        "engWidth": 0,
+        "value": "15",
+        "valueWidth": 40,
+        "valueInsideRow": false
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyopamp.ascSelect"
+  },
+  "zener-light-900x600": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "156px 98px",
+    "groupWidth": 156,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Breakdown voltage",
+        "range": "0.1–400",
+        "engWidth": 0,
+        "value": "5.1",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Forward voltage",
+        "range": "0.1–20",
+        "engWidth": 0,
+        "value": "0.7",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyzener.ascSelect"
+  },
+  "led-light-900x600": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "156px 98px",
+    "groupWidth": 156,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Color",
+        "range": null,
+        "engWidth": null,
+        "value": null,
+        "valueWidth": null,
+        "valueInsideRow": null
+      },
+      {
+        "label": "Typical Vf (default)",
+        "range": "0.1–20",
+        "engWidth": 0,
+        "value": "2",
+        "valueWidth": 36,
+        "valueInsideRow": false
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyled.ascSelect"
+  },
+  "resting-light-900x600": {
+    "inspectorWidth": null,
+    "inspectorTracks": null,
+    "groupWidth": null,
+    "rows": [],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyresting.ascSelect"
+  },
+  "opamp-light-1280x800": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "U1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Open-loop gain",
+        "range": "1–1000000000000",
+        "engWidth": 19,
+        "value": "1",
+        "valueWidth": 36,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Minimum output",
+        "range": "-1000–1000",
+        "engWidth": 46,
+        "value": "-15",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Maximum output",
+        "range": "-1000–1000",
+        "engWidth": 46,
+        "value": "15",
+        "valueWidth": 40,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyopamp.ascSelect"
+  },
+  "zener-light-1280x800": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Breakdown voltage",
+        "range": "0.1–400",
+        "engWidth": 61,
+        "value": "5.1",
+        "valueWidth": 47,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Forward voltage",
+        "range": "0.1–20",
+        "engWidth": 67,
+        "value": "0.7",
+        "valueWidth": 47,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyzener.ascSelect"
+  },
+  "led-light-1280x800": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Color",
+        "range": null,
+        "engWidth": null,
+        "value": null,
+        "valueWidth": null,
+        "valueInsideRow": null
+      },
+      {
+        "label": "Typical Vf (default)",
+        "range": "0.1–20",
+        "engWidth": 62,
+        "value": "2",
+        "valueWidth": 36,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyled.ascSelect"
+  },
+  "resting-light-1280x800": {
+    "inspectorWidth": null,
+    "inspectorTracks": null,
+    "groupWidth": null,
+    "rows": [],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyresting.ascSelect"
+  },
+  "opamp-light-1440x900": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "U1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Open-loop gain",
+        "range": "1–1000000000000",
+        "engWidth": 19,
+        "value": "1",
+        "valueWidth": 36,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Minimum output",
+        "range": "-1000–1000",
+        "engWidth": 46,
+        "value": "-15",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Maximum output",
+        "range": "-1000–1000",
+        "engWidth": 46,
+        "value": "15",
+        "valueWidth": 40,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyopamp.ascSelect"
+  },
+  "zener-light-1440x900": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Breakdown voltage",
+        "range": "0.1–400",
+        "engWidth": 61,
+        "value": "5.1",
+        "valueWidth": 47,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Forward voltage",
+        "range": "0.1–20",
+        "engWidth": 67,
+        "value": "0.7",
+        "valueWidth": 47,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyzener.ascSelect"
+  },
+  "led-light-1440x900": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Color",
+        "range": null,
+        "engWidth": null,
+        "value": null,
+        "valueWidth": null,
+        "valueInsideRow": null
+      },
+      {
+        "label": "Typical Vf (default)",
+        "range": "0.1–20",
+        "engWidth": 62,
+        "value": "2",
+        "valueWidth": 36,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyled.ascSelect"
+  },
+  "resting-light-1440x900": {
+    "inspectorWidth": null,
+    "inspectorTracks": null,
+    "groupWidth": null,
+    "rows": [],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyresting.ascSelect"
+  },
+  "opamp-dark-900x600": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "156px 98px",
+    "groupWidth": 156,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "U1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Open-loop gain",
+        "range": "1–1000000000000",
+        "engWidth": 0,
+        "value": "1",
+        "valueWidth": 36,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Minimum output",
+        "range": "-1000–1000",
+        "engWidth": 0,
+        "value": "-15",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Maximum output",
+        "range": "-1000–1000",
+        "engWidth": 0,
+        "value": "15",
+        "valueWidth": 40,
+        "valueInsideRow": false
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyopamp.ascSelect"
+  },
+  "zener-dark-900x600": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "156px 98px",
+    "groupWidth": 156,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Breakdown voltage",
+        "range": "0.1–400",
+        "engWidth": 0,
+        "value": "5.1",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Forward voltage",
+        "range": "0.1–20",
+        "engWidth": 0,
+        "value": "0.7",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyzener.ascSelect"
+  },
+  "led-dark-900x600": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "156px 98px",
+    "groupWidth": 156,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Color",
+        "range": null,
+        "engWidth": null,
+        "value": null,
+        "valueWidth": null,
+        "valueInsideRow": null
+      },
+      {
+        "label": "Typical Vf (default)",
+        "range": "0.1–20",
+        "engWidth": 0,
+        "value": "2",
+        "valueWidth": 36,
+        "valueInsideRow": false
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyled.ascSelect"
+  },
+  "resting-dark-900x600": {
+    "inspectorWidth": null,
+    "inspectorTracks": null,
+    "groupWidth": null,
+    "rows": [],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyresting.ascSelect"
+  },
+  "opamp-dark-1280x800": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "U1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Open-loop gain",
+        "range": "1–1000000000000",
+        "engWidth": 19,
+        "value": "1",
+        "valueWidth": 36,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Minimum output",
+        "range": "-1000–1000",
+        "engWidth": 46,
+        "value": "-15",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Maximum output",
+        "range": "-1000–1000",
+        "engWidth": 46,
+        "value": "15",
+        "valueWidth": 40,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyopamp.ascSelect"
+  },
+  "zener-dark-1280x800": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Breakdown voltage",
+        "range": "0.1–400",
+        "engWidth": 61,
+        "value": "5.1",
+        "valueWidth": 47,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Forward voltage",
+        "range": "0.1–20",
+        "engWidth": 67,
+        "value": "0.7",
+        "valueWidth": 47,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyzener.ascSelect"
+  },
+  "led-dark-1280x800": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Color",
+        "range": null,
+        "engWidth": null,
+        "value": null,
+        "valueWidth": null,
+        "valueInsideRow": null
+      },
+      {
+        "label": "Typical Vf (default)",
+        "range": "0.1–20",
+        "engWidth": 62,
+        "value": "2",
+        "valueWidth": 36,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyled.ascSelect"
+  },
+  "resting-dark-1280x800": {
+    "inspectorWidth": null,
+    "inspectorTracks": null,
+    "groupWidth": null,
+    "rows": [],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyresting.ascSelect"
+  },
+  "opamp-dark-1440x900": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "U1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Open-loop gain",
+        "range": "1–1000000000000",
+        "engWidth": 19,
+        "value": "1",
+        "valueWidth": 36,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Minimum output",
+        "range": "-1000–1000",
+        "engWidth": 46,
+        "value": "-15",
+        "valueWidth": 47,
+        "valueInsideRow": false
+      },
+      {
+        "label": "Maximum output",
+        "range": "-1000–1000",
+        "engWidth": 46,
+        "value": "15",
+        "valueWidth": 40,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyopamp.ascSelect"
+  },
+  "zener-dark-1440x900": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Breakdown voltage",
+        "range": "0.1–400",
+        "engWidth": 61,
+        "value": "5.1",
+        "valueWidth": 47,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Forward voltage",
+        "range": "0.1–20",
+        "engWidth": 67,
+        "value": "0.7",
+        "valueWidth": 47,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyzener.ascSelect"
+  },
+  "led-dark-1440x900": {
+    "inspectorWidth": 298,
+    "inspectorTracks": "232px 22px",
+    "groupWidth": 232,
+    "rows": [
+      {
+        "label": "Component ID",
+        "range": null,
+        "engWidth": null,
+        "value": "D1",
+        "valueWidth": 167,
+        "valueInsideRow": true
+      },
+      {
+        "label": "Color",
+        "range": null,
+        "engWidth": null,
+        "value": null,
+        "valueWidth": null,
+        "valueInsideRow": null
+      },
+      {
+        "label": "Typical Vf (default)",
+        "range": "0.1–20",
+        "engWidth": 62,
+        "value": "2",
+        "valueWidth": 36,
+        "valueInsideRow": true
+      }
+    ],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyled.ascSelect"
+  },
+  "resting-dark-1440x900": {
+    "inspectorWidth": null,
+    "inspectorTracks": null,
+    "groupWidth": null,
+    "rows": [],
+    "zoomControlsPresent": true,
+    "zoomControlsClearOfRail": false,
+    "zoomButtons": [
+      "Zoom in",
+      "Zoom out",
+      "Fit circuit to view"
+    ],
+    "statusbarPresent": true,
+    "statusbarText": "Readyresting.ascSelect"
+  }
+}

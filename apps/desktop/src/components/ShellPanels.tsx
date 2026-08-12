@@ -107,6 +107,24 @@ export const COMPONENTS_RAIL_WIDTH: PanelWidthConfig = {
 };
 
 /**
+ * How wide the parts rail actually renders.
+ *
+ * The rail floats over the right of the stage, so anything else anchored to
+ * the stage's right edge has to know this number or it renders underneath it -
+ * which is exactly what happened to the canvas zoom cluster: the +, - and fit
+ * buttons were mounted and hit-testable, and completely covered by the rail.
+ * Exported so App can publish it to CSS instead of the two places guessing.
+ */
+export const componentsRailMaxWidth = (maxWidth?: number): number => Math.max(
+  COMPONENTS_RAIL_WIDTH.minWidth,
+  Math.min(COMPONENTS_RAIL_WIDTH.maxWidth, maxWidth ?? COMPONENTS_RAIL_WIDTH.maxWidth),
+);
+
+export const componentsRailWidth = (width: number, maxWidth?: number): number =>
+  clampPanelWidth(width, COMPONENTS_RAIL_WIDTH.minWidth, componentsRailMaxWidth(maxWidth));
+
+
+/**
  * Persistence contract for Explorer drag/drop. This is intentionally a move
  * operation, not `renameNode`: the project layer updates the source path,
  * destination directory, virtual-workspace metadata, and refreshed tree as
@@ -506,7 +524,11 @@ export function ExplorerPanel({
   const toggleCollapseFolders = () => {
     if (!rootPath) return;
     const snapshot = collapseSnapshotRef.current;
-    if (snapshot?.rootPath === rootPath) {
+    // Restore only while the tree is still as this button left it. Once the
+    // reader has opened a folder themselves the button's job is to collapse
+    // again: restoring at that point would discard the folder they just
+    // opened and reinstate a set they had already moved on from.
+    if (snapshot?.rootPath === rootPath && expanded.length === 0) {
       collapseSnapshotRef.current = null;
       useProject.setState({ expanded: snapshot.expanded });
       return;
@@ -516,7 +538,8 @@ export function ExplorerPanel({
     collapseAll();
   };
 
-  const collapseRestorationAvailable = collapseSnapshotRef.current?.rootPath === rootPath;
+  const collapseRestorationAvailable =
+    collapseSnapshotRef.current?.rootPath === rootPath && expanded.length === 0;
   const collapseActionLabel = collapseRestorationAvailable
     ? "Restore expanded folders in explorer"
     : "Collapse folders in explorer";
@@ -1173,24 +1196,18 @@ function subcircuitPortSides(
 }
 
 /**
- * Keep routine inspector help to one scan-friendly line. The schema remains
- * the source of truth, while the visible grid does not turn a property into a
- * paragraph-sized card or repeat the same explanation in several rows.
+ * Inspector help is short because the schema says it short, not because the
+ * panel cuts it off.
+ *
+ * This used to truncate at the first sentence and cap at 120 characters, with
+ * two hardcoded string rewrites for the paragraphs that survived the cap. That
+ * is a display bandage over authoring: it left the long text in the schema, so
+ * screen readers and tooltips still got the paragraph, and every new paragraph
+ * needed another special case. The prose now lives nowhere - see the length
+ * ceiling enforced in `params.test.ts` - and this only normalises whitespace.
  */
 function compactInspectorHint(text: string): string {
-  const maxLength = 120;
-  const normalized = text.replace(/\s+/g, " ").trim();
-  if (normalized.startsWith("Q outputs a sine")) {
-    return "Q outputs a sine of ±1 V; FM sets frequency, AM scales the amplitude, and COM is the reference.";
-  }
-  if (normalized.includes("cannot watch an existing source")
-    && normalized.includes("Output current is the gain")) {
-    return "Tau supplies the current-sense pair; wire C+ and C- in series with the branch.";
-  }
-  const firstSentence = normalized.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim();
-  const candidate = firstSentence || normalized;
-  if (candidate.length <= maxLength) return candidate;
-  return `${candidate.slice(0, maxLength - 1).trimEnd()}…`;
+  return text.replace(/\s+/g, " ").trim();
 }
 
 function InspectorHint({ text }: { text: string }) {
@@ -2310,15 +2327,8 @@ export function ComponentsRail({
    */
   offsetRight?: number;
 }) {
-  const responsiveMaxWidth = Math.max(
-    COMPONENTS_RAIL_WIDTH.minWidth,
-    Math.min(COMPONENTS_RAIL_WIDTH.maxWidth, maxWidth ?? COMPONENTS_RAIL_WIDTH.maxWidth),
-  );
-  const componentsWidth = clampPanelWidth(
-    resize.width,
-    COMPONENTS_RAIL_WIDTH.minWidth,
-    responsiveMaxWidth,
-  );
+  const responsiveMaxWidth = componentsRailMaxWidth(maxWidth);
+  const componentsWidth = componentsRailWidth(resize.width, maxWidth);
 
   return (
     <aside

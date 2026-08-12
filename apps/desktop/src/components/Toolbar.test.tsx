@@ -126,7 +126,42 @@ describe("Toolbar Run health control", () => {
 
     await waitFor(() => expect(nativeWindow.unmaximize).toHaveBeenCalledOnce());
     expect(nativeWindow.maximize).toHaveBeenCalledOnce();
-    expect(nativeWindow.startDragging).toHaveBeenCalledTimes(2);
+    // The regression this replaces: a drag was started on every press, so a
+    // double-click asked the macOS window server to begin dragging twice while
+    // also expecting to receive the events that server consumes. A stationary
+    // double-click must not start a drag at all.
+    expect(nativeWindow.startDragging).not.toHaveBeenCalled();
+  });
+
+  it("starts a native drag only once the pointer actually travels", async () => {
+    nativeWindow.startDragging.mockClear();
+    const { container } = render(<Toolbar {...baseProps} />);
+    const surface = container.querySelector(".titlebar-drag-region")!;
+
+    fireEvent.mouseDown(surface, { button: 0, detail: 1, clientX: 200, clientY: 12 });
+    // Inside the threshold: still a click, so nothing native has happened yet.
+    fireEvent.mouseMove(window, { clientX: 201, clientY: 13 });
+    expect(nativeWindow.startDragging).not.toHaveBeenCalled();
+
+    fireEvent.mouseMove(window, { clientX: 240, clientY: 60 });
+    await waitFor(() => expect(nativeWindow.startDragging).toHaveBeenCalledOnce());
+
+    // And exactly once for the gesture, however far it continues.
+    fireEvent.mouseMove(window, { clientX: 300, clientY: 90 });
+    fireEvent.mouseUp(window);
+    expect(nativeWindow.startDragging).toHaveBeenCalledOnce();
+  });
+
+  it("stops listening for movement once the press is released", () => {
+    nativeWindow.startDragging.mockClear();
+    const { container } = render(<Toolbar {...baseProps} />);
+    const surface = container.querySelector(".titlebar-drag-region")!;
+
+    fireEvent.mouseDown(surface, { button: 0, detail: 1, clientX: 200, clientY: 12 });
+    fireEvent.mouseUp(window);
+    // A later pointer sweep with no button held must not move the window.
+    fireEvent.mouseMove(window, { clientX: 400, clientY: 200 });
+    expect(nativeWindow.startDragging).not.toHaveBeenCalled();
   });
 
   it("treats an accessibility click pair as one toggle", async () => {
@@ -145,11 +180,22 @@ describe("Toolbar Run health control", () => {
 
   it("keeps gesture state deterministic for pointer and AX event orders", () => {
     const machine = createTitlebarGestureMachine();
-    expect(machine.mouseDown(0, 1)).toBe("drag");
+    // A press arms a drag; it does not start one.
+    expect(machine.mouseDown(0, 1, { x: 0, y: 0 })).toBe("arm");
+    expect(machine.pointerMove({ x: 1, y: 1 })).toBe("ignore");
     expect(machine.click(10, 1)).toBe("ignore");
-    expect(machine.mouseDown(20, 2)).toBe("toggle");
+    expect(machine.mouseDown(20, 2, { x: 0, y: 0 })).toBe("toggle");
     expect(machine.click(30, 1)).toBe("ignore");
     expect(machine.doubleClick(40)).toBe("ignore");
+
+    const dragged = createTitlebarGestureMachine();
+    expect(dragged.mouseDown(0, 1, { x: 100, y: 10 })).toBe("arm");
+    expect(dragged.pointerMove({ x: 102, y: 11 })).toBe("ignore");
+    expect(dragged.pointerMove({ x: 140, y: 40 })).toBe("drag");
+    // One drag per gesture, and a dragged press is no longer a click half.
+    expect(dragged.pointerMove({ x: 200, y: 80 })).toBe("ignore");
+    dragged.pointerUp();
+    expect(dragged.mouseDown(30, 1, { x: 200, y: 80 })).toBe("arm");
 
     const ax = createTitlebarGestureMachine();
     expect(ax.click(0, 1)).toBe("ignore");

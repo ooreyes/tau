@@ -56,6 +56,7 @@ import {
 import { schematicToAsc } from "./io/ascExport";
 import {
   COMPONENTS_RAIL_WIDTH,
+  componentsRailWidth,
   ComponentsRail,
   ExplorerPanel,
   ComponentInspector,
@@ -3522,7 +3523,22 @@ function App() {
               return to. The redesign makes the canvas the whole window and
               gives Escape a "return focus here" job, which needs a landmark to
               return to. See shellContract.ts. */}
-          <main className="stage" aria-label={SHELL.canvas.name}>
+          {/*
+            * Publish the parts rail's real width to CSS. The rail is an
+            * absolutely-positioned overlay on this stage's right edge, and the
+            * canvas zoom cluster is anchored to that same edge - so without
+            * this the +, - and fit buttons render underneath the rail: present
+            * in the DOM, focusable, and invisible. Zero when the rail is shut.
+            */}
+          <main
+            className="stage"
+            aria-label={SHELL.canvas.name}
+            style={{
+              "--stage-rail-inset": componentsColumnOpen
+                ? `${componentsRailWidth(componentsRailResize.width, componentsRailResponsiveMax)}px`
+                : "0px",
+            } as CSSProperties}
+          >
             <Suspense fallback={<CanvasLoadingSurface />}>
               <Canvas
                 op={opAnalysis}
@@ -3978,7 +3994,7 @@ function App() {
           </Suspense>
         )}
       </div>
-      <StatusBar mode={mode} result={analysis} title={documentTitle} />
+      <StatusBar mode={mode} result={analysis} />
       {shouldShowLearningPathCoach(learningPath)
         && !learningPathCoachHidden
         && learningPathTip

@@ -11,6 +11,7 @@ import {
   gateComPoint,
   gateInputRows,
 } from "./symbols";
+import { CATALOG } from "./catalog";
 import { GATE_INPUTS_MAX, GATE_INPUTS_MIN, parseDigitalGate } from "../engine/digitalGateSpec";
 import type { ComponentKind, Rotation } from "./types";
 
@@ -745,6 +746,52 @@ describe("declared metrics match the drawing", () => {
     expect(declared.maxY - drawn.maxY, `${kind} maxY slack`).toBeLessThanOrEqual(slack);
   });
 
+  /**
+   * The coverage check above is scoped to the kinds items 3 and 4 redrew, and
+   * that scope is how the LED regressed: its emission arrows were moved out to
+   * (31, -33) while `SYMBOL_BODY.led` stayed at the junction's ±15. Nothing
+   * failed, because the LED was never in the list.
+   *
+   * SYMBOL_BODY is not documentation - it is what `componentAt` hit-tests,
+   * what `collides` refuses placements against, what `segmentHitsBody` routes
+   * wires around, what `componentWorldRect` keeps refdes text off, and what
+   * `circuitBounds` fits to view. Artwork outside it is artwork the editor
+   * cannot see. So every kind owes containment, whether or not it was redrawn.
+   */
+  it.each(CATALOG.map((entry) => entry.kind))(
+    "%s: no artwork escapes the footprint the editor computes",
+    (kind) => {
+      const pins = getLocalPins(kind);
+      const elements = drawnElements(render(kind));
+      if (elements.length === 0) return;
+      const drawn = elements.map((e) => e.box).reduce(union);
+
+      // The exact footprint `componentGeometryBounds` builds: the declared
+      // body unioned with the real pin bank. A marker that rides on a lead -
+      // a BJT's emitter arrow, a polarized cap's "+" - legitimately sits
+      // outside the body but inside the pins, and inflating the body to
+      // swallow it would push every label out to the terminals. What is not
+      // legitimate is artwork outside BOTH, which is invisible to the editor.
+      const declared = SYMBOL_BODY[kind];
+      const footprint = [...pins, { x: declared.minX, y: declared.minY }, { x: declared.maxX, y: declared.maxY }]
+        .reduce(
+          (box, point) => ({
+            minX: Math.min(box.minX, point.x),
+            minY: Math.min(box.minY, point.y),
+            maxX: Math.max(box.maxX, point.x),
+            maxY: Math.max(box.maxY, point.y),
+          }),
+          { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+        );
+
+      const tolerance = 0.05;
+      expect(footprint.minX, `${kind} minX`).toBeLessThanOrEqual(drawn.minX + tolerance);
+      expect(footprint.minY, `${kind} minY`).toBeLessThanOrEqual(drawn.minY + tolerance);
+      expect(footprint.maxX, `${kind} maxX`).toBeGreaterThanOrEqual(drawn.maxX - tolerance);
+      expect(footprint.maxY, `${kind} maxY`).toBeGreaterThanOrEqual(drawn.maxY - tolerance);
+    },
+  );
+
   it.each(REDRAWN_KINDS)("%s: SYMBOL_BOX contains SYMBOL_BODY", (kind) => {
     const body = SYMBOL_BODY[kind];
     const box = SYMBOL_BOX[kind];
@@ -1066,14 +1113,16 @@ interface DrawnText {
 
 function drawnText(markup: string): DrawnText[] {
   const out: DrawnText[] = [];
-  const pattern = /<text\b([^>]*)>([^<]*)<\/text>/g;
+  // A caption may carry a <title> child (the hover gloss for an abbreviation
+  // like COM or CLR), so the content is not necessarily a bare text node.
+  const pattern = /<text\b([^>]*)>([\s\S]*?)<\/text>/g;
   let match = pattern.exec(markup);
   while (match !== null) {
     const attrs = match[1];
     const transform = /transform="([^"]*)"/.exec(attrs)?.[1] ?? "";
     const translate = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(transform);
     out.push({
-      text: match[2],
+      text: match[2].replace(/<title>[\s\S]*?<\/title>/g, ""),
       x: translate ? Number(translate[1]) : 0,
       y: translate ? Number(translate[2]) : 0,
       transform,
@@ -1193,15 +1242,32 @@ describe("digital parts carry a readable pinout (item 5)", () => {
     }
   });
 
-  it("never overlaps one caption with another", () => {
+  /**
+   * Not overlapping is not the same as being readable. `COM`, `CLR` and `Q\u0305`
+   * shared the flop's bottom edge with 0.8 and 2.2 units of air between them -
+   * legal by the old assertion, and on the real canvas they read as one word.
+   * DESIGN_SYSTEM.md section 5 calls a near-miss a bug, so measure the gap.
+   */
+  const CAPTION_CLEARANCE = 2.5;
+
+  it("keeps a readable gap between captions, not merely zero overlap", () => {
     for (const kind of Object.keys(PIN_LABEL_LAYOUT) as ComponentKind[]) {
       const labels = drawnText(render(kind));
       for (let i = 0; i < labels.length; i += 1) {
         for (let j = i + 1; j < labels.length; j += 1) {
+          const a = textBox(labels[i]);
+          const b = textBox(labels[j]);
           expect(
-            overlaps(textBox(labels[i]), textBox(labels[j])),
+            overlaps(a, b),
             `${kind}: "${labels[i].text}" overlaps "${labels[j].text}"`,
           ).toBe(false);
+          // Separated on at least one axis by enough to read as two labels.
+          const gapX = Math.max(b.minX - a.maxX, a.minX - b.maxX);
+          const gapY = Math.max(b.minY - a.maxY, a.minY - b.maxY);
+          expect(
+            Math.max(gapX, gapY),
+            `${kind}: "${labels[i].text}" and "${labels[j].text}" are ${Math.max(gapX, gapY).toFixed(1)} apart`,
+          ).toBeGreaterThanOrEqual(CAPTION_CLEARANCE);
         }
       }
     }

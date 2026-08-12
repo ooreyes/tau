@@ -30,6 +30,104 @@ empty editor, populated schematic, selected component, properties, and
 simulator. Native Tauri/packaged evidence is authoritative; `dev:web` is useful
 for responsive and console diagnosis but cannot prove ngspice or native chrome.
 
+## Review follow-up — 2026-08-12 (branch `fix/ui-ux-followup`)
+
+A second read of the packaged evidence filed below found that several items
+were checked `FIXED` against screenshots that show the defect still present.
+This pass fixes what those screenshots actually showed. It is a separate
+branch; `auto/ltspice-parity` is untouched.
+
+Evidence is a before/after matrix captured by
+`node scripts/uiux-followup-shot.mjs <label>` — light and dark at 900×600,
+1280×800 and 1440×900 — in `screenshots/uiux-followup/{before,after}/`, with
+`measurements.json` recording the layout numbers behind each picture. Chrome
+`dev:web`, not packaged: every defect here is CSS/geometry, which the browser
+proves exactly, and the theme gate refuses to capture a theme that did not
+take. Packaged re-capture is still owed and is listed as open below.
+
+### What was wrong, and the number that proves it
+
+| Item | Claimed | Measured before | Measured after |
+| --- | --- | --- | --- |
+| COMP-13 op-amp gain/rails | `FIXED` | control **0 px wide, outside its row** at 900×600; bound read `1–1000000000000` | 92/73/66 px, inside the row; bound reads `1–1T` / `±1k` |
+| COMP-09 Zener breakdown/forward | `FIXED` | control **0 px wide, outside its row** at 900×600 | 73 px, inside the row |
+| COMP-08B LED forward voltage | `FIXED` | control **0 px wide, outside its row** at 900×600 | 62 px, inside the row |
+| Inspector track list | — | `156px 98px` — one child, 98 px of dead track | `270px`, the group fills the panel |
+
+Two compounding causes, both fixed:
+
+1. `.property-range` was `flex: none`, so an unshrinkable bound won the width
+   fight against the control it annotated. The control is now pinned
+   (`flex: 0 0 auto`) and the bound yields.
+2. `.component-inspector` still declared `232px 1fr` (`156px 1fr` under the
+   narrow-window override) from a era when a fixed identity block sat beside
+   the grid. The symbol moved into each group's header, so the only child was
+   pinned to the fixed track. Now `repeat(auto-fit, minmax(…, 1fr))`.
+
+`paramRangeLabel` also spells large bounds in engineering notation and
+collapses a symmetric pair to `±`, so a bound stays a glance.
+
+### Other items corrected in this pass
+
+- **COMP-08A / COMP-10 geometry.** The light arrows were moved to (31, −33)
+  without updating `SYMBOL_BODY`, which drives hit-testing, collision, wire
+  routing, label avoidance and fit-to-view — so the default label slot landed
+  in the arrow lane and wires routed through it. Bounds corrected for `led`,
+  `photodiode` and `zener` (whose breakdown serifs also escaped ±15). A new
+  all-kinds invariant in `symbols.test.tsx` asserts no artwork falls outside
+  `body ∪ pins`; it fails on the old LED bounds with `expected -15 to be less
+  than or equal to -32.95`, so it has teeth.
+- **COMP-14 prose.** Previously truncated at render time with two hardcoded
+  string rewrites, leaving the paragraphs in the schema (and so in tooltips
+  and the accessibility tree). The prose is now deleted at source: 14 field
+  descriptions became 5, none over 73 characters, enforced by a length and
+  sentence-count ceiling in `params.test.ts`.
+- **COMP-15 dense digital symbols.** `COM`/`CLR`/`Q̅` were separated by 0.8 and
+  2.2 units — legal under the old "do not overlap" assertion, unreadable on
+  the canvas. Minimum caption clearance is now 3.8 units and the test measures
+  the gap instead of just the overlap. Each abbreviation also carries an SVG
+  `<title>`, so hovering `COM` answers the review's "what is COM, CLR".
+- **SHELL-04 titlebar.** `startDragging` fired on every press, handing the
+  pointer to the macOS window-drag loop — which consumes exactly the events
+  double-click detection needs. A press now only *arms* a drag; the drag
+  starts once the pointer travels 3 px. A stationary double-click no longer
+  calls `startDragging` at all.
+- **SHELL-01 collapse toggle.** Collapse, hand-expand a folder, press again:
+  it restored the stale pre-collapse set instead of collapsing. Restore now
+  applies only while the tree is still as the button left it.
+- **SHELL-05 status strip.** The gear went; the text under it did not.
+  `Ready` never changed, the file name is in the title bar and on the tab, and
+  `Select` is the resting tool. A resting schematic editor now renders no
+  status bar at all (`'Readyresting.ascSelect'` → absent).
+- **COMP-13 canvas caption.** Every generic op-amp was captioned `ideal`, the
+  schema's internal model token. It now shows the open-loop gain once that
+  stops being the default, and nothing otherwise. Named and imported parts
+  keep their own identity, unchanged.
+- **New — canvas zoom controls (review follow-up request).** The +, − and fit
+  cluster was mounted and hit-testable in the schematic tab and rendered
+  *underneath* the parts rail, which overlays the same stage edge. App now
+  publishes the rail's real width as `--stage-rail-inset` and the cluster
+  offsets by it (`clearOfRail: false → true` in every captured state).
+
+### Gates for this pass
+
+`pnpm -C apps/desktop typecheck` **exit 0**; `pnpm -C apps/desktop test`
+**262 files / 4,497 passed, 8 skipped**.
+
+### Open after this pass
+
+- [ ] Packaged (Tauri) re-capture of the corrected inspector states. The
+      defect was reproduced and fixed in `dev:web`; the packaged matrix below
+      still shows the pre-fix rendering.
+- [ ] Real double-click zoom on the packaged title bar. The drag threshold
+      removes the known race, but the gesture is still only proven by unit
+      test and by the direct AX action — not by a physical double-click.
+- [ ] `COM` on the flip-flops still sits close to its own diagonal lead. The
+      caption-to-caption clearance is fixed; caption-over-lead is a separate
+      collision that no test covers.
+- [ ] The D flip-flop inspector shows an empty `Value` row (visible in
+      `screenshots/uiux-followup/after/flops-*.png`). Not touched here.
+
 ## Correction-pass acceptance record — 2026-08-12 (current)
 
 The current packaged correction run is indexed in
@@ -73,7 +171,7 @@ open until all of its subchecks pass.
 
 ### [x] SHELL-01 - Collapse All is a reversible toggle
 
-**Status:** FIXED
+**Status:** FIXED · corrected by the 2026-08-12 review follow-up above
 **Priority:** P1  
 **Source:** Untitled document, page 1, item 1  
 ![Collapse control](screenshots/ui-ux-fix-brief/shell-01-collapse-toggle.png)
@@ -147,7 +245,7 @@ Packaged/native/browser QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE
 
 ### [x] SHELL-04 - Native macOS title-bar movement and zoom
 
-**Status:** FIXED
+**Status:** FIXED · corrected by the 2026-08-12 review follow-up above
 **Priority:** P1 native  
 **Source:** Untitled document, page 1, item 4  
 ![Title bar](screenshots/ui-ux-fix-brief/shell-04-titlebar.png)
@@ -172,7 +270,7 @@ preserved (content width `1182 → 1224 → 1182`).
 
 ### [x] SHELL-05 - Remove redundant bottom rail/settings/status clutter
 
-**Status:** FIXED
+**Status:** FIXED · corrected by the 2026-08-12 review follow-up above
 **Priority:** P2  
 **Source:** Untitled document, page 1, item 5  
 ![Bottom rail and status](screenshots/ui-ux-fix-brief/shell-05-settings-status.png)
@@ -410,7 +508,7 @@ and native selected/unselected evidence are complete; see `screenshots/ui-ux-fix
 
 ### [x] COMP-08 - LED geometry and useful electrical properties
 
-**Status:** FIXED
+**Status:** FIXED · corrected by the 2026-08-12 review follow-up above
 **Priority:** P1  
 **Source:** edits-to-fix, page 4, item 8  
 ![LED properties](screenshots/ui-ux-fix-brief/comp-08-led-properties.png)
@@ -440,7 +538,7 @@ typecheck, web build, and packaged Tauri build are exit 0. See
 
 ### [x] COMP-09 - Replace Zener prose with editable parameters
 
-**Status:** FIXED
+**Status:** FIXED · corrected by the 2026-08-12 review follow-up above
 **Priority:** P1  
 **Source:** edits-to-fix, page 5, item 9 (text-only note)
 
@@ -463,7 +561,7 @@ generic/named inspector and invalid-range evidence is complete; see `screenshots
 
 ### [x] COMP-10 - Correct photodiode arrow spacing
 
-**Status:** FIXED
+**Status:** FIXED · corrected by the 2026-08-12 review follow-up above
 **Priority:** P1  
 **Source:** edits-to-fix, page 5, item 10 (same geometry class as LED)  
 ![Related LED arrow geometry](screenshots/ui-ux-fix-brief/comp-08-led-properties.png)
@@ -543,7 +641,7 @@ component-family packaged interaction evidence is complete; see `screenshots/ui-
 
 ### [x] COMP-13 - Repair the generic op-amp inspector
 
-**Status:** FIXED
+**Status:** FIXED · corrected by the 2026-08-12 review follow-up above
 **Priority:** P0 correctness  
 **Source:** edits-to-fix, page 6, item 13  
 ![Current op-amp inspector](screenshots/ui-ux-fix-brief/comp-13-opamp-current.png)
@@ -570,7 +668,7 @@ packaged visual and clipping evidence is complete; see `screenshots/ui-ux-fixes/
 
 ### [x] COMP-14 - Remove long component-property essays
 
-**Status:** FIXED
+**Status:** FIXED · corrected by the 2026-08-12 review follow-up above
 **Priority:** P2  
 **Source:** edits-to-fix, page 6, item 14  
 ![Long description](screenshots/ui-ux-fix-brief/comp-14-long-description.png)
@@ -593,7 +691,7 @@ both-theme screenshots are complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md
 
 ### [x] COMP-15 - Make dense digital symbols legible
 
-**Status:** FIXED
+**Status:** FIXED · corrected by the 2026-08-12 review follow-up above
 **Priority:** P1  
 **Source:** edits-to-fix, pages 6-7, item 15  
 ![Dense digital labels](screenshots/ui-ux-fix-brief/comp-15-digital-labels.png)
@@ -669,8 +767,10 @@ control-port QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-
 
 ## Completion matrix
 
-- [x] All 24 stable issues are `FIXED_WITH_CURRENT_EVIDENCE` or evidence-backed
-      `ALREADY SATISFIED` in `native/matrix-manifest.json`.
+- [ ] All 24 stable issues are `FIXED_WITH_CURRENT_EVIDENCE`. **Nine were
+      checked against packaged screenshots that show the defect still
+      present; the 2026-08-12 follow-up above fixes them and re-proves them
+      in `dev:web`. The packaged matrix has not been re-captured since.**
 - [x] No issue remains `UNVERIFIED`, `IN PROGRESS`, or `BLOCKED` in the current
       tracker manifest.
 - [x] Every issue has a landing reference, literal test result, and a current

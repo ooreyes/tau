@@ -10,7 +10,7 @@ import {
   normalizeLedColor,
   ledTypicalForwardVolts,
 } from "../engine/ledSpec";
-import { parseQuantity } from "../simulation/quantity";
+import { formatEngineering, parseQuantity } from "../simulation/quantity";
 
 /**
  * Structured parameter fields per component kind. The canonical storage stays a
@@ -273,7 +273,6 @@ const GENERIC_LED: ParamSpec = {
       min: 0.1,
       max: 20,
       omitWhenFallback: true,
-      description: "Typical forward drop; color supplies a default and this value overrides it.",
     },
   ],
   codec: {
@@ -440,7 +439,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
       label: "Capacitance",
       unit: "F",
       kind: "number",
-      description: "The terminal marked + must sit at the higher potential. Tau reports a run that drives it backwards.",
+      description: "The + terminal must sit at the higher potential.",
     }],
   }],
   inductor: { fields: [{ key: "l", label: "Inductance", unit: "H", kind: "number" }] },
@@ -458,7 +457,6 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
         max: 1,
         display: { scale: 100, unit: "%" },
         omitWhenFallback: true,
-        description: "How far along the track between pin A and the wiper the tap sits. 50 % is centred.",
       },
     ],
   },
@@ -491,8 +489,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
           { value: "schmitt", label: "Schmitt trigger" },
         ] },
       { key: "inputs", label: "Inputs", unit: "", kind: "number", token: "Inputs",
-        min: 2, max: 5, integer: true, fallback: "2", omitWhenFallback: true,
-        description: "How many input pins the gate exposes. A buffer, inverter or Schmitt trigger always has one." },
+        min: 2, max: 5, integer: true, fallback: "2", omitWhenFallback: true },
     ],
   },
   vac: AC_SOURCE("V"),
@@ -540,14 +537,12 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
         choices: [
           { value: "no", label: "Normally open" },
           { value: "nc", label: "Normally closed" },
-        ],
-        description: "Where the contact rests when nobody is pressing it." },
+        ] },
       { key: "action", label: "Action", unit: "", kind: "choice", fallback: "",
         choices: [
           { value: "momentary", label: "Momentary" },
           { value: "latching", label: "Latching" },
-        ],
-        description: "Momentary springs back on release; latching stays where it is clicked." },
+        ] },
     ],
   },
   spdt: { fields: [{ key: "throw", label: "Throw (no/nc)", unit: "" }] },
@@ -571,7 +566,6 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
         kind: "number",
         token: "Td",
         fallback: "1n",
-        description: "One-way propagation delay along the line.",
       },
       {
         key: "z0",
@@ -580,7 +574,6 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
         kind: "number",
         token: "Z0",
         fallback: "50",
-        description: "Characteristic impedance of the ideal lossless line.",
       },
     ],
   },
@@ -590,12 +583,10 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   // other three pins do. The fallbacks are `parseModulator`'s own defaults, so
   // a value that omits one shows the number the deck will run.
   modulator: {
-    // The group header already names the part, so this starts at the first
-    // thing the header does not say.
-    summary: "Q outputs a sine of ±1 V whose frequency follows the FM pin:"
-      + " the space frequency at 0 V, the mark frequency at 1 V, and straight-line in between and beyond."
-      + " AM scales the amplitude and counts as 1 V while it is unwired. COM is the reference the sine rides on;"
-      + " leave it unwired for a ground-referenced output.",
+    // One line, not a paragraph. The two frequency rows below already carry
+    // the 0 V / 1 V endpoints, so repeating them here was the panel explaining
+    // itself twice.
+    summary: "Q outputs a ±1 V sine; FM sets frequency, AM scales amplitude, COM is the reference.",
     fields: [
       {
         key: "mark",
@@ -605,7 +596,6 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
         token: "mark",
         fallback: "1k",
         min: 0,
-        description: "Output frequency while the FM pin sits at 1 V.",
       },
       {
         key: "space",
@@ -615,7 +605,6 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
         token: "space",
         fallback: "0",
         min: 0,
-        description: "Output frequency while the FM pin sits at 0 V, which is also what an unwired FM pin gives.",
       },
     ],
   },
@@ -656,7 +645,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
       label: "Voltage gain",
       unit: "V/V",
       kind: "number",
-      description: "Output voltage is the gain times the voltage across the control pins C+ and C-. The control port draws no current, so it does not load the circuit it measures.",
+      description: "Sensed across C+/C-; the control port draws no current.",
     }],
   }],
   vccs: [LAPLACE_TRANSFER(
@@ -667,7 +656,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
       label: "Transconductance",
       unit: "A/V",
       kind: "number",
-      description: "Output current is the transconductance times the voltage across the control pins C+ and C-, flowing from the + output pin through the source to the - pin. The control port draws no current.",
+      description: "Sensed across C+/C-; the control port draws no current.",
     }],
   }],
   // No Laplace variant on the current-controlled pair: F and H sources take a
@@ -678,7 +667,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
       label: "Current gain",
       unit: "A/A",
       kind: "number",
-      description: "Output current is the gain times the current sensed at the control pins C+ and C-. That sense path is Tau's own zero-volt source, so a CCCS cannot watch an existing source such as V1. Wire C+ and C- in series with the branch whose current you want.",
+      description: "Wire C+/C- in series with the sensed branch; Tau supplies the sense pair.",
     }],
   },
   ccvs: {
@@ -687,7 +676,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
       label: "Transresistance",
       unit: "V/A",
       kind: "number",
-      description: "Output voltage is the transresistance times the current sensed at the control pins C+ and C-, so 1k gives 1 V per mA. That sense path is Tau's own zero-volt source, so a CCVS cannot watch an existing source such as V1. Wire C+ and C- in series with the branch whose current you want.",
+      description: "Wire C+/C- in series with the sensed branch; Tau supplies the sense pair.",
     }],
   },
   diode: GENERIC_DIODE,
@@ -822,11 +811,30 @@ export function isBoundedParamField(field: ParamField): boolean {
  * learn what a field accepts. Mirrors `OutputPointsControl`, which states its
  * own range the same way.
  */
+/**
+ * A bound spelled the way the value beside it is spelled.
+ *
+ * Printing the raw number is fine up to a point and absurd past it: the
+ * generic op-amp's gain ceiling rendered as `1–1000000000000`, which is wider
+ * than the column it shares with the number it governs. Anything a reader
+ * would say out loud with an SI prefix gets one, so a bound stays a glance.
+ */
+const rangeNumber = (value: number): string => {
+  if (!Number.isFinite(value)) return String(value);
+  if (Math.abs(value) < 1000) return String(value);
+  return formatEngineering(value).replace(/\s+/g, "");
+};
+
 export function paramRangeLabel(field: ParamField): string {
   const { min, max } = field;
-  if (min !== undefined && max !== undefined) return `${min}–${max}`;
-  if (min !== undefined) return `≥ ${min}`;
-  if (max !== undefined) return `≤ ${max}`;
+  if (min !== undefined && max !== undefined) {
+    // A symmetric bound reads as one fact, not two: the op-amp's output rails
+    // are "±1k", not "-1k–1k", which an en dash makes actively hard to parse.
+    if (max > 0 && min === -max) return `±${rangeNumber(max)}`;
+    return `${rangeNumber(min)}–${rangeNumber(max)}`;
+  }
+  if (min !== undefined) return `≥ ${rangeNumber(min)}`;
+  if (max !== undefined) return `≤ ${rangeNumber(max)}`;
   return "";
 }
 

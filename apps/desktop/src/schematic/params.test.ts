@@ -287,21 +287,24 @@ describe("controlled source gains", () => {
     expect(paramFields("ccvs", "1k").map((f) => [f.label, f.unit])).toEqual([["Transresistance", "V/A"]]);
   });
 
-  it("describes the control port of every one of them", () => {
+  it("names the control port of every one of them", () => {
     for (const kind of ["vcvs", "vccs", "cccs", "ccvs"] as const) {
-      expect(paramFields(kind, "1")[0].description).toMatch(/control pins C\+ and C-/);
+      expect(paramFields(kind, "1")[0].description).toMatch(/C\+\/C-/);
     }
   });
 
   // F and H synthesize their own `V_<base>_sense` between C+ and C-, so
-  // wiring one across an existing V1 shorts it instead of measuring it.
-  it("says on the current-controlled pair that the sense branch is Tau's own", () => {
+  // wiring one across an existing V1 shorts it instead of measuring it. The
+  // hint is one line now, so it carries the instruction that prevents the
+  // mistake rather than the paragraph that explained it.
+  it("tells the current-controlled pair to be wired in series", () => {
     for (const kind of ["cccs", "ccvs"] as const) {
-      expect(paramFields(kind, "1")[0].description).toMatch(/cannot watch an existing source such as V1/);
-      expect(paramFields(kind, "1")[0].description).toMatch(/in series with the branch/);
+      expect(paramFields(kind, "1")[0].description).toMatch(/in series/);
+      expect(paramFields(kind, "1")[0].description).toMatch(/Tau supplies the sense pair/);
     }
     for (const kind of ["vcvs", "vccs"] as const) {
       expect(paramFields(kind, "1")[0].description).not.toMatch(/in series/);
+      expect(paramFields(kind, "1")[0].description).toMatch(/draws no current/);
     }
   });
 
@@ -394,8 +397,6 @@ describe("modulator (VCO) frequencies", () => {
     expect(summary).toMatch(/AM/);
     expect(summary).toMatch(/COM/);
     expect(summary).toMatch(/Q/);
-    expect(paramFields("modulator", "mark=1K")[0].description).toMatch(/1 V/);
-    expect(paramFields("modulator", "mark=1K")[1].description).toMatch(/0 V/);
   });
 
   it("carries no summary for a kind whose fields speak for themselves", () => {
@@ -594,6 +595,30 @@ describe("declared bounds are enforced, not decorative", () => {
     expect(paramRangeLabel(fieldFor("resistor", "r"))).toBe("");
   });
 
+  it("spells a large bound the way the value beside it is spelled", () => {
+    const opampField = (key: string) =>
+      paramFields("opamp", "ideal").find((candidate) => candidate.key === key)!;
+    // The generic op-amp's ceiling printed as `1–1000000000000`, which is
+    // wider than the column it shares with the number it governs - and it
+    // took that width from the number.
+    expect(paramRangeLabel(opampField("gain"))).toBe("1–1T");
+    // `-1000–1000` makes a reader parse an en dash between two signed numbers.
+    expect(paramRangeLabel(opampField("vmin"))).toBe("±1k");
+    expect(paramRangeLabel(opampField("vmax"))).toBe("±1k");
+  });
+
+  it("keeps every range short enough to sit beside its value", () => {
+    for (const entry of CATALOG) {
+      for (const field of paramFields(entry.kind, entry.defaultValue)) {
+        if (!isBoundedParamField(field)) continue;
+        expect(
+          paramRangeLabel(field).length,
+          `${entry.kind}.${field.key} range "${paramRangeLabel(field)}"`,
+        ).toBeLessThanOrEqual(12);
+      }
+    }
+  });
+
   it("every bounded field can say what its range is", () => {
     for (const entry of CATALOG) {
       for (const field of paramFields(entry.kind, entry.defaultValue)) {
@@ -674,5 +699,43 @@ describe("display units", () => {
     });
     expect(stored).toBe("10k Wiper=0.25");
     expect(decodeParams("potentiometer", stored).wiper).toBe("0.25");
+  });
+});
+
+/**
+ * Item 14 of the review PDF: "these long text explanations commonly found in
+ * component properties are unnecessary, please remove all of them".
+ *
+ * The first attempt satisfied that by truncating at render time, which left
+ * the paragraphs in the schema (and so in tooltips and the accessibility
+ * tree) and needed a hardcoded rewrite per paragraph that outgrew the cap.
+ * The ceiling belongs here, at the point of authoring.
+ */
+describe("inspector help stays a line, not a paragraph", () => {
+  const HINT_MAX = 80;
+
+  it("every field description fits on one row", () => {
+    for (const entry of CATALOG) {
+      for (const field of paramFields(entry.kind, entry.defaultValue)) {
+        if (!field.description) continue;
+        expect(
+          field.description.length,
+          `${entry.kind}.${field.key}: "${field.description}"`,
+        ).toBeLessThanOrEqual(HINT_MAX);
+      }
+    }
+  });
+
+  it("no description is multi-sentence prose", () => {
+    for (const entry of CATALOG) {
+      for (const field of paramFields(entry.kind, entry.defaultValue)) {
+        if (!field.description) continue;
+        const sentences = field.description.split(/[.!?](?:\s|$)/).filter((part) => part.trim());
+        expect(
+          sentences.length,
+          `${entry.kind}.${field.key} has ${sentences.length} sentences`,
+        ).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });

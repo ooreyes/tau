@@ -587,7 +587,9 @@ describe("ComponentInspector - transmission line", () => {
     expect(delay.value).toBe("50");
     expect((screen.getByRole("textbox", { name: "Impedance" }) as HTMLInputElement).value).toBe("75");
     expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
-    expect(screen.getByText("Characteristic impedance of the ideal lossless line.")).toBeTruthy();
+    // The line's two knobs are self-describing, so item 14 removed their prose;
+    // what has to survive is the labelled control, not the sentence beside it.
+    expect(screen.queryByText(/ideal lossless line/)).toBeNull();
 
     fireEvent.change(delay, { target: { value: "10" } });
     expect(useSchematic.getState().components[0].value).toBe("Td=10n Z0=75");
@@ -632,9 +634,7 @@ describe("ComponentInspector - controlled sources", () => {
   it("explains what a CCVS computes and edits it as a transresistance", () => {
     show(source("ccvs", "1k", "H1"));
 
-    expect(screen.getByText(/Output voltage is the transresistance times the current sensed at the control pins C\+ and C-/))
-      .toBeTruthy();
-    expect(screen.getByText(/1k gives 1 V per mA/)).toBeTruthy();
+    expect(screen.getByText(/Wire C\+\/C- in series with the sensed branch/)).toBeTruthy();
 
     fireEvent.change(screen.getByRole("textbox", { name: "Transresistance" }), { target: { value: "2" } });
     expect(useSchematic.getState().components[0].value).toBe("2k");
@@ -647,12 +647,8 @@ describe("ComponentInspector - controlled sources", () => {
     for (const component of [source("cccs", "10", "F1"), source("ccvs", "1k", "H1")]) {
       cleanup();
       show(component);
-      if (component.kind === "cccs") {
-        expect(screen.getByText(/Tau supplies the current-sense pair/)).toBeTruthy();
-        expect(screen.getByText(/wire C\+ and C- in series with the branch/)).toBeTruthy();
-      } else {
-        expect(screen.getByText(/Output voltage is the transresistance/)).toBeTruthy();
-      }
+      expect(screen.getByText(/Tau supplies the sense pair/)).toBeTruthy();
+      expect(screen.getByText(/in series with the sensed branch/)).toBeTruthy();
     }
   });
 
@@ -994,9 +990,10 @@ describe("ComponentInspector - modulator (VCO)", () => {
     // The group header names the part now, so the summary starts where the
     // header stops - at what the pins do.
     expect(screen.getByRole("button", { name: /Voltage-controlled oscillator/ })).toBeTruthy();
-    expect(screen.getByText(/Q outputs a sine of ±1 V/)).toBeTruthy();
-    expect(screen.getByText(/AM scales the amplitude/)).toBeTruthy();
-    expect(screen.getByText("Output frequency while the FM pin sits at 1 V.")).toBeTruthy();
+    expect(screen.getByText(/Q outputs a ±1 V sine/)).toBeTruthy();
+    expect(screen.getByText(/AM scales amplitude/)).toBeTruthy();
+    // The per-row sentences are gone; the two labelled frequency rows say it.
+    expect(screen.queryByText(/Output frequency while the FM pin/)).toBeNull();
 
     fireEvent.change(mark, { target: { value: "2" } });
     expect(useSchematic.getState().components[0].value).toBe("mark=2k space=1K");

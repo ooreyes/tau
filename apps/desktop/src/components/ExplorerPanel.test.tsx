@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { ExplorerPanel } from "./ShellPanels";
 import { useProject } from "../store/useProject";
@@ -115,6 +115,36 @@ describe("ExplorerPanel action row", () => {
     expect(useProject.getState().expanded).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Restore expanded folders in explorer" }));
     expect(useProject.getState().expanded).toEqual(["web://workspace/other-project"]);
+  });
+
+  // "Collapse, then open one folder myself, then press it again" has to
+  // collapse. It used to restore the pre-collapse set instead, throwing away
+  // the folder the reader had just opened and reinstating folders they had
+  // deliberately left behind.
+  it("collapses again rather than restoring once the reader expands anything", () => {
+    renderExplorer();
+    const root = useProject.getState().rootPath!;
+    const before = [...useProject.getState().expanded];
+    expect(before.length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse folders in explorer" }));
+    expect(useProject.getState().expanded).toEqual([]);
+
+    // The reader opens a folder by hand. The button is no longer "undo my
+    // collapse" - the tree is not as the button left it.
+    const handOpened = [root, `${root}/nested`];
+    act(() => { useProject.setState({ expanded: handOpened }); });
+    expect(
+      screen.queryByRole("button", { name: "Restore expanded folders in explorer" }),
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse folders in explorer" }));
+    expect(useProject.getState().expanded).toEqual([]);
+
+    // …and the fresh snapshot is the hand-opened set, not the stale one.
+    fireEvent.click(screen.getByRole("button", { name: "Restore expanded folders in explorer" }));
+    expect(useProject.getState().expanded).toEqual(handOpened);
+    expect(useProject.getState().expanded).not.toEqual(before);
   });
 
   it("does not invent a restoration set for an already-collapsed tree", () => {

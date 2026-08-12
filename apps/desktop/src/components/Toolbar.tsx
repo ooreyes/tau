@@ -96,14 +96,41 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
     if (target.closest(TITLEBAR_GESTURE_SURFACE) && event.currentTarget !== event.target) return;
     if (isTitlebarControlTarget(target)) return;
 
-    const action = titlebarGesture.mouseDown(Date.now(), event.detail);
+    const action = titlebarGesture.mouseDown(Date.now(), event.detail, {
+      x: event.clientX,
+      y: event.clientY,
+    });
     if (action === "toggle") {
       void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
-    } else if (action === "drag") {
-      event.preventDefault();
-      event.stopPropagation();
-      void startCurrentWindowDragging();
+      return;
     }
+    if (action !== "arm") return;
+
+    /*
+     * Armed, not dragging. The native drag only begins once the pointer has
+     * actually travelled, so a stationary press remains a click and the second
+     * half of a double-click still reaches this window instead of being eaten
+     * by the macOS drag loop.
+     *
+     * The listeners live on `window` because once the drag starts the pointer
+     * belongs to the window server, and the element under it stops mattering.
+     */
+    event.preventDefault();
+    const onMove = (move: MouseEvent) => {
+      if (titlebarGesture.pointerMove({ x: move.clientX, y: move.clientY }) !== "drag") return;
+      release();
+      void startCurrentWindowDragging();
+    };
+    const release = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    function onUp() {
+      release();
+      titlebarGesture.pointerUp();
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   };
 
   const handleTitlebarDoubleClickCapture = (event: ReactMouseEvent<HTMLElement>) => {

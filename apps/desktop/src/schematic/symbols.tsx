@@ -405,7 +405,7 @@ const FLOP_HALF_W = 24;
 const FLOP_HALF_H = 24;
 const FLOP_PIN_X = 32;
 const FLOP_PIN_Y = 32;
-const FLOP_LABEL_X = 13;
+const FLOP_LABEL_X = 17;
 /** Same, for the nose-bodied parts (sample & hold, modulator). */
 const NOSE_HALF_W = 24;
 const NOSE_PIN_X = 32;
@@ -520,6 +520,11 @@ function PinLabel({
       y={2.4}
       transform={parts.join(" ")}
     >
+      {/* "what is COM, CLR" was the question the review asked, and an
+          aria-label only answers it for a screen reader. An SVG <title> is the
+          same string as a hover tooltip, with no JS and no layout cost - the
+          abbreviation stays compact and can still explain itself. */}
+      {ariaLabel && ariaLabel !== text && <title>{ariaLabel}</title>}
       {text}
     </text>
   );
@@ -556,37 +561,37 @@ export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPl
   dflop: [
     { pin: "d", text: "D", x: -F, y: -16 },
     { pin: "clk", text: "CLK", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -12, y: 20 },
-    { pin: "pre", text: "PRE", x: 2, y: -18 },
-    { pin: "clr", text: "CLR", x: 2, y: 18 },
+    { pin: "com", text: "COM", x: -13, y: 20 },
+    { pin: "pre", text: "PRE", x: 4, y: -18 },
+    { pin: "clr", text: "CLR", x: 4, y: 19 },
     { pin: "q", text: "Q", x: F, y: -16 },
-    { pin: "qbar", text: "Q̅", x: F, y: 16 },
+    { pin: "qbar", text: "Q\u0305", x: F, y: 16 },
   ],
   srflop: [
     { pin: "s", text: "S", x: -F, y: -16 },
     { pin: "r", text: "R", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -12, y: 20 },
+    { pin: "com", text: "COM", x: -13, y: 20 },
     { pin: "q", text: "Q", x: F, y: -16 },
-    { pin: "qbar", text: "Q̅", x: F, y: 16 },
+    { pin: "qbar", text: "Q\u0305", x: F, y: 16 },
   ],
   tflop: [
     { pin: "t", text: "T", x: -F, y: -16 },
     { pin: "clk", text: "CLK", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -12, y: 20 },
-    { pin: "pre", text: "PRE", x: 2, y: -18 },
-    { pin: "clr", text: "CLR", x: 2, y: 18 },
+    { pin: "com", text: "COM", x: -13, y: 20 },
+    { pin: "pre", text: "PRE", x: 4, y: -18 },
+    { pin: "clr", text: "CLR", x: 4, y: 19 },
     { pin: "q", text: "Q", x: F, y: -16 },
-    { pin: "qbar", text: "Q̅", x: F, y: 16 },
+    { pin: "qbar", text: "Q\u0305", x: F, y: 16 },
   ],
   jkflop: [
     { pin: "j", text: "J", x: -F, y: -16 },
     { pin: "k", text: "K", x: -F, y: -3 },
     { pin: "clk", text: "CLK", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -12, y: 20 },
-    { pin: "pre", text: "PRE", x: 2, y: -18 },
-    { pin: "clr", text: "CLR", x: 2, y: 18 },
+    { pin: "com", text: "COM", x: -13, y: 20 },
+    { pin: "pre", text: "PRE", x: 4, y: -18 },
+    { pin: "clr", text: "CLR", x: 4, y: 19 },
     { pin: "q", text: "Q", x: F, y: -16 },
-    { pin: "qbar", text: "Q̅", x: F, y: 16 },
+    { pin: "qbar", text: "Q\u0305", x: F, y: 16 },
   ],
   counter: [
     { pin: "clk", text: "CLK", x: -L, y: -16 },
@@ -777,9 +782,15 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   vpulse: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   logicConstant: { minX: -14, minY: -16, maxX: 14, maxY: 16 },
   diode: { minX: -13, minY: -15, maxX: 13, maxY: 15 },
-  led: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
-  zener: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
-  photodiode: { minX: -13, minY: -20, maxX: 16, maxY: 15 },
+  // The light arrows are drawn body, not decoration: they reach (31, -33), well
+  // above and right of the junction. Declaring only the junction meant labels
+  // settled on top of the arrows (the top candidate sits at `minY - 20`, which
+  // was y-35 - inside the arrow lane), wires routed straight through them,
+  // clicks near them missed the part, and fit-to-view clipped them.
+  led: { minX: -13, minY: -34, maxX: 32, maxY: 15 },
+  // The breakdown serifs run to (16, -18) and (4, 18), past the old ±15.
+  zener: { minX: -13, minY: -19, maxX: 17, maxY: 19 },
+  photodiode: { minX: -13, minY: -34, maxX: 32, maxY: 15 },
   opamp: { minX: -24, minY: -32, maxX: 30, maxY: 32 },
   comparator: { minX: -24, minY: -32, maxX: 30, maxY: 32 },
   // The gate's body grows with its input count; this is the largest it gets
@@ -842,9 +853,11 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   vpulse: { halfW: 16, halfH: 17 },
   logicConstant: { halfW: 14, halfH: 18 },
   diode: { halfW: 14, halfH: 15 },
-  led: { halfW: 18, halfH: 22 },
-  zener: { halfW: 16, halfH: 18 },
-  photodiode: { halfW: 18, halfH: 22 },
+  // Large enough to clear the light arrows at any rotation: the inline value
+  // editor is offset by this, and at R180 the arrows swing below the junction.
+  led: { halfW: 32, halfH: 34 },
+  zener: { halfW: 17, halfH: 19 },
+  photodiode: { halfW: 32, halfH: 34 },
   opamp: { halfW: 32, halfH: 34 },
   comparator: { halfW: 32, halfH: 34 },
   digitalGate: { halfW: 32, halfH: 40 },

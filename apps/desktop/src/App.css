@@ -4504,8 +4504,12 @@ body {
 .view-controls {
   position: absolute;
   top: var(--sp-4);
-  right: var(--sp-4);
+  /* Clear of the parts rail, which is an overlay on this same right edge.
+     `--stage-rail-inset` is published by App from the rail's real (resizable)
+     width and is 0px when the rail is closed. */
+  right: calc(var(--stage-rail-inset, 0px) + var(--sp-4));
   z-index: 6;
+  transition: right var(--motion-fast) var(--ease-out);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -6548,8 +6552,13 @@ button.bottom-panel-head:focus-visible {
    each row is a micro-label (uppercase, tracked, --faint) paired with a
    mono value, separated by hairlines - an instrument spec sheet, not a
    stack of form-card fields. */
+/* One track per selected part, and a single part fills the panel.
+   This was `232px 1fr` back when a fixed identity block sat beside the
+   property grid. The symbol now rides in each group's header, so the only
+   child is the group itself: it was pinned to the 232px track while the empty
+   `1fr` ate the rest of the panel, which is what starved the value column. */
 .component-inspector {
-  grid-template-columns: 232px 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(232px, 100%), 1fr));
 }
 
 /* At the 900px minimum-window floor the bottom panel itself is narrow (the
@@ -6558,7 +6567,7 @@ button.bottom-panel-head:focus-visible {
    and a starved 0px input. */
 @media (max-width: 1023px) {
   .component-inspector {
-    grid-template-columns: 156px 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   }
 
   .inspector-summary {
@@ -7263,13 +7272,21 @@ button.bottom-panel-head:focus-visible {
   min-width: 0;
 }
 
+/* The number is the point of the row; the bound beside it is a courtesy. Both
+   used to be able to shrink, and because `.property-range` was `flex: none`
+   the courtesy won: an op-amp's "1–1000000000000" took the whole column, the
+   engineering field measured 0px wide, and its input rendered past the panel's
+   right edge where nothing could see or reach it. Pin the control and let the
+   bound be what yields. */
 .property-value .eng-input {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
 .property-range {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--faint);
   font-size: var(--fs-micro);
   letter-spacing: var(--tracking-wide);
