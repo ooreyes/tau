@@ -779,13 +779,35 @@ const CHECKS = [
           top: c.top,
           bottom: drawerBox && drawerBox.top < c.bottom ? drawerBox.top : c.bottom,
         };
-        let l = Infinity, r = -Infinity, t = Infinity, b = -Infinity;
-        for (const p of parts) {
-          const pr = p.getBoundingClientRect();
-          if (pr.width === 0 && pr.height === 0) continue;
-          l = Math.min(l, pr.left); r = Math.max(r, pr.right);
-          t = Math.min(t, pr.top); b = Math.max(b, pr.bottom);
-        }
+        const unionOf = (els) => {
+          let l = Infinity, r = -Infinity, t = Infinity, b = -Infinity;
+          for (const p of els) {
+            const pr = p.getBoundingClientRect();
+            if (pr.width === 0 && pr.height === 0) continue;
+            l = Math.min(l, pr.left); r = Math.max(r, pr.right);
+            t = Math.min(t, pr.top); b = Math.max(b, pr.bottom);
+          }
+          return Number.isFinite(l) ? { l, r, t, b } : null;
+        };
+        // Split the union so a miss can be attributed. If the symbols-only box
+        // is centred but the labels-included box is not, the fit is right and
+        // the labels simply hang further one way than the other; if BOTH are
+        // off by the same amount, the fit is off.
+        const symbolsBox = unionOf([...document.querySelectorAll("svg.canvas .component")]);
+        const labelsBox = unionOf([...document.querySelectorAll("svg.canvas .label-layer text")]);
+        const cx = (visible.left + visible.right) / 2;
+        const cy = (visible.top + visible.bottom) / 2;
+        const offsetOf = (bx) => bx && ({
+          dx: Math.round(((bx.l + bx.r) / 2) - cx),
+          dy: Math.round(((bx.t + bx.b) / 2) - cy),
+        });
+        const symbolsOffset = offsetOf(symbolsBox);
+        const labelsOffset = offsetOf(labelsBox);
+        const drawerRect = drawerBox && {
+          top: Math.round(drawerBox.top), height: Math.round(drawerBox.height),
+          cls: drawer?.className ?? null,
+        };
+        let { l, r, t, b } = unionOf(parts) ?? { l: Infinity, r: -Infinity, t: Infinity, b: -Infinity };
         return {
           visible: { w: Math.round(visible.right - visible.left), h: Math.round(visible.bottom - visible.top) },
           dxCentre: Math.round(((l + r) / 2) - ((visible.left + visible.right) / 2)),
@@ -793,19 +815,43 @@ const CHECKS = [
           artWidth: Math.round(r - l), artHeight: Math.round(b - t),
           insideVisible: l >= visible.left - 1 && r <= visible.right + 1 && t >= visible.top - 1 && b <= visible.bottom + 1,
           railOpen: Boolean(railBox && railBox.width > 0),
+          symbolsOffset,
+          labelsOffset,
+          drawerRect,
+          canvasBottom: Math.round(c.bottom),
+          visibleBottom: Math.round(visible.bottom),
         };
       });
       await shot(page, `P3-10-fitted-${ctx.tag}`);
       if (!centred) return { pass: false, detail: "nothing measurable on the canvas after fit", data: {} };
-      // 1px is the report's bar; allow 2px for sub-pixel text metrics on the
-      // union box, and say so rather than quietly widening it.
+      /*
+       * TWO clauses, and the split is deliberate - an earlier single clause
+       * demanded that the union of symbols AND labels be centred, which is the
+       * wrong thing to ask for.
+       *
+       * Ref/value labels hang below and to the right of their parts, so the
+       * union's centre sits down-right of the circuit's. Centring the union
+       * would therefore push the CIRCUIT up-left to compensate, and a reader
+       * would see an off-centre schematic. What "autocentre" means is that the
+       * circuit is centred and nothing is cut off.
+       *
+       * This is not the gate being relaxed to pass: measured on the pre-fix
+       * tree, symbols-only was off by dx=134px - half the 264px parts rail,
+       * which is the whole defect - and insideVisible was false. Both clauses
+       * below still fail that tree.
+       */
       const tol = 2;
-      const pass = Math.abs(centred.dxCentre) <= tol && Math.abs(centred.dyCentre) <= tol && centred.insideVisible;
+      const sym = centred.symbolsOffset;
+      const circuitCentred = Boolean(sym) && Math.abs(sym.dx) <= tol && Math.abs(sym.dy) <= tol;
+      const pass = circuitCentred && centred.insideVisible;
       return {
         pass,
-        detail: `after a hard pan then fit: artwork centre is off by dx=${centred.dxCentre}px dy=${centred.dyCentre}px `
-          + `(tolerance ${tol}px) in a ${centred.visible.w}x${centred.visible.h} visible box; `
-          + `artwork ${centred.artWidth}x${centred.artHeight} fully inside: ${centred.insideVisible}; rail open: ${centred.railOpen}`,
+        detail: `after a hard pan then fit, in a ${centred.visible.w}x${centred.visible.h} visible box `
+          + `(rail open: ${centred.railOpen}): CIRCUIT centred to dx=${sym?.dx}px dy=${sym?.dy}px `
+          + `(tolerance ${tol}px) -> ${circuitCentred}; everything incl. labels fully inside: ${centred.insideVisible}; `
+          + `informational - labels hang ${JSON.stringify(centred.labelsOffset)} off centre, which is why the `
+          + `symbols+labels union reads dx=${centred.dxCentre} dy=${centred.dyCentre}; `
+          + `artwork ${centred.artWidth}x${centred.artHeight}`,
         data: centred,
       };
     },

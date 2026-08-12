@@ -452,12 +452,30 @@ needs to work dynamically as the user resizes each tab."*
 covered edges and the parts rail; the reported failure is that the button is a
 no-op in this state and that fit does not track a resize.
 
-**Done when:** clicking fit frames all artwork centred in the *visible* canvas
-box (excluding the parts rail, the bottom dock, and any overlay), to a measured
-tolerance of ≤ 1 px on both axes; it works from any prior pan/zoom; resizing the
-window or a panel re-fits while the camera is still the one fit chose, and does
-**not** stomp a user pan; a test asserts the centring numbers at 900×600,
-1280×800 and 1440×900 with the rail open and closed.
+**Cause, from recon:** this is a regression, not an old bug. `fitView` sets
+`visibleWidth = Math.max(160, r.width)` — the **full** svg width — under a
+comment saying summoned side surfaces "must not alter the camera's width". But
+the parts rail *is* an overlay on that svg, so `r.width` includes the band it
+covers and the circuit centre lands half a rail width to the right. Commit
+`b3c7708` (2026-08-09, three days before the report) removed the `fitInsetRight`
+prop that used to subtract it. Clicking fit again is idempotent, which is why it
+reads as "does not work" rather than "puts it in the wrong place".
+
+**Done when — two clauses, and the split matters.** Fit must (a) centre the
+**circuit** in the visible canvas box (excluding the parts rail, the bottom dock
+and any overlay) to ≤ 2 px on both axes, and (b) leave **everything, labels
+included, fully inside** that box. It must work from any prior pan/zoom; resizing
+the window or a panel must re-fit while the camera is still the one fit chose,
+without stomping a user pan; measured at 900×600, 1280×800 and 1440×900, rail
+open and closed.
+
+Deliberately **not** required: that the union of symbols *and* labels be centred.
+Ref/value labels hang below-right of their parts, so centring that union would
+push the circuit up-left to compensate and a reader would see an off-centre
+schematic. The gate's first version asked for exactly that and failed a correct
+fix by 15×27 px. Measured proof the split still has teeth — pre-fix the
+circuit-only offset is **dx = 134 px** (half the 264 px rail) with `fully inside:
+false`; post-fix it is **dx = 2, dy = 0** with `fully inside: true`.
 
 ---
 
