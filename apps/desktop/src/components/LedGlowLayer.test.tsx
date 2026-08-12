@@ -57,11 +57,12 @@ const glowCircles = (container: HTMLElement) =>
   [...container.querySelectorAll<SVGCircleElement>("circle.led-glow")];
 
 describe("LedGlowLayer - emission, not a decal", () => {
-  it.each(["yellow", "blue", "white", "custom"] as const)("keeps the %s color in the live glow", (color) => {
+  it.each(["red", "green", "yellow", "blue", "white", "custom"] as const)("keeps the %s color in the live glow", (color) => {
     const { container } = draw([["d1", LED_FULL_AMPS]], [ledWithColor("d1", color)]);
     expect(container.querySelector("circle.led-glow")?.getAttribute("class"))
       .toContain(`led-color-${color}`);
-    expect(container.querySelector(`[id="tau-led-glow-${color}"]`)).toBeTruthy();
+    const gradientId = color === "red" ? "tau-led-glow" : `tau-led-glow-${color}`;
+    expect(container.querySelector(`[id="${gradientId}"]`)).toBeTruthy();
   });
 
   it("carries no stroke, because light has no outline", () => {

@@ -25,13 +25,27 @@ export function normalizeLedColor(raw: string | undefined): LedColor {
   return LED_COLORS.includes(normalized as LedColor) ? normalized as LedColor : "red";
 }
 
+const isLedColorToken = (raw: string): boolean => {
+  const normalized = raw.trim().toLowerCase().replace(/[_-]+/g, " ");
+  return normalized === "orange"
+    || normalized === "amber/orange"
+    || LED_COLORS.includes(normalized as LedColor);
+};
+
 /** Read `Color=` plus the compact legacy `LED blue` spelling. */
 export function ledColorFromValue(value: string): LedColor {
   const keyed = /(?:^|[\s,;])color\s*=\s*([^\s,;]+)/i.exec(value ?? "")?.[1];
   if (keyed) return normalizeLedColor(keyed);
   const bare = (value ?? "").trim().split(/[\s,;]+/).slice(1)
-    .find((token) => LED_COLORS.includes(normalizeLedColor(token)) && !token.includes("="));
+    .find((token) => !token.includes("=") && isLedColorToken(token));
   return bare ? normalizeLedColor(bare) : "red";
+}
+
+/** True when a color was authored in the stored value, rather than inferred. */
+export function ledHasExplicitColor(value: string): boolean {
+  if (/(?:^|[\s,;])color\s*=\s*[^\s,;]+/i.test(value ?? "")) return true;
+  return (value ?? "").trim().split(/[\s,;]+/).slice(1)
+    .some((token) => !token.includes("=") && isLedColorToken(token));
 }
 
 /** Typical/default forward voltage for a selected color; it is not a limit. */

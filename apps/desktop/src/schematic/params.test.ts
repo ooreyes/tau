@@ -459,16 +459,32 @@ describe("generic model-backed parameter schemas", () => {
     })).toContain("below maximum");
   });
 
-  it("offers engineering LED colors and changes only the implicit typical Vf", () => {
+  it("offers engineering LED colors without serializing inferred Vf overrides", () => {
     const choices = paramFields("led", "LED").find((field) => field.key === "color")?.choices ?? [];
     expect(choices.map((choice) => choice.label)).toEqual([
       "Red", "Amber / Orange", "Yellow", "Green", "Blue", "White", "Custom",
     ]);
-    expect(applyLedColorDefault("led", "LED", decodeParams("led", "LED"), "color", "blue"))
-      .toMatchObject({ color: "blue", vfwd: "3" });
-    expect(applyLedColorDefault("led", "LED color=red Vfwd=1.8", decodeParams("led", "LED color=red Vfwd=1.8"), "color", "blue"))
-      .toMatchObject({ color: "blue", vfwd: "1.8" });
-    expect(decodeParams("led", "LED color=yellow Vfwd=2.15")).toMatchObject({ color: "yellow", vfwd: "2.15" });
+    let values = decodeParams("led", "LED");
+    for (const [color, vfwd] of [["red", "2"], ["green", "2.2"], ["blue", "3"]] as const) {
+      values = applyLedColorDefault("led", encodeParams("led", values), values, "color", color);
+      expect(values).toMatchObject({ color, vfwd });
+      expect(encodeParams("led", values)).toBe(`LED color=${color}`);
+    }
+    const imported = decodeParams("led", "LED color=blue Vfwd=3");
+    expect(imported).toMatchObject({ color: "blue", vfwd: "3" });
+    expect(encodeParams("led", imported)).toBe("LED color=blue Vfwd=3");
+    const explicit = applyLedColorDefault(
+      "led",
+      "LED color=red Vfwd=1.8",
+      decodeParams("led", "LED color=red Vfwd=1.8"),
+      "color",
+      "blue",
+    );
+    expect(explicit).toMatchObject({ color: "blue", vfwd: "1.8" });
+    expect(encodeParams("led", explicit)).toBe("LED color=blue Vfwd=1.8");
+    const custom = applyLedColorDefault("led", "LED", decodeParams("led", "LED"), "color", "custom");
+    expect(custom).toMatchObject({ color: "custom", vfwd: "2" });
+    expect(encodeParams("led", custom)).toBe("LED color=custom");
     expect(encodeParams("led", { model: "LED", color: "yellow", vfwd: "2.15" }))
       .toBe("LED color=yellow Vfwd=2.15");
   });

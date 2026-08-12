@@ -151,9 +151,11 @@ describe("idealJunctionModel", () => {
   });
 
   it("uses the selected LED color's typical Vf while preserving a custom override", () => {
-    const blue = idealJunctionModel(part("led", "D2", "LED color=blue", 0, 0));
-    expect(blue).toMatchObject({ model: "TAU_LED_IDEAL_3V", forwardVolts: 3 });
-    expect(blue?.card).toContain("Vfwd=3");
+    for (const [color, volts] of [["red", 2], ["green", 2.2], ["blue", 3]] as const) {
+      const led = idealJunctionModel(part("led", "D2", `LED color=${color}`, 0, 0));
+      expect(led).toMatchObject({ model: `TAU_LED_IDEAL_${formatIdealVoltageCode(volts)}`, forwardVolts: volts });
+      expect(led?.card).toContain(`Vfwd=${volts}`);
+    }
 
     const custom = idealJunctionModel(part("led", "D3", "LED color=blue Vfwd=2.65", 0, 0));
     expect(custom).toMatchObject({ model: "TAU_LED_IDEAL_2V65", forwardVolts: 2.65 });

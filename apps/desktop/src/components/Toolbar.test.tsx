@@ -1,10 +1,26 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { isTitlebarControlTarget, Toolbar } from "./Toolbar";
-import { handleTitlebarDoubleClick, startTitlebarDragging, toggleTitlebarMaximize } from "./titlebarWindow";
+import {
+  createTitlebarGestureMachine,
+  handleTitlebarDoubleClick,
+  startTitlebarDragging,
+  toggleTitlebarMaximize,
+} from "./titlebarWindow";
 import type { AnalysisResult } from "../simulation/linearTransient";
+
+const nativeWindow = vi.hoisted(() => ({
+  isMaximized: vi.fn(),
+  maximize: vi.fn(async () => {}),
+  unmaximize: vi.fn(async () => {}),
+  startDragging: vi.fn(async () => {}),
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => nativeWindow,
+}));
 
 afterEach(() => cleanup());
 
@@ -86,6 +102,59 @@ describe("Toolbar Run health control", () => {
 
     expect(isTitlebarControlTarget(dragRegion)).toBe(false);
     expect(isTitlebarControlTarget(ordinaryButton)).toBe(true);
+  });
+
+  it("toggles once for each complete native pointer double-click sequence", async () => {
+    nativeWindow.isMaximized.mockReset()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    nativeWindow.maximize.mockClear();
+    nativeWindow.unmaximize.mockClear();
+    nativeWindow.startDragging.mockClear();
+    const { container } = render(<Toolbar {...baseProps} />);
+    const surface = container.querySelector(".titlebar-drag-region")!;
+    const physicalDoubleClick = () => {
+      fireEvent.mouseDown(surface, { button: 0, detail: 1 });
+      fireEvent.click(surface, { detail: 1 });
+      fireEvent.mouseDown(surface, { button: 0, detail: 2 });
+      fireEvent.click(surface, { detail: 1 });
+      fireEvent.doubleClick(surface, { detail: 2 });
+    };
+
+    physicalDoubleClick();
+    physicalDoubleClick();
+
+    await waitFor(() => expect(nativeWindow.unmaximize).toHaveBeenCalledOnce());
+    expect(nativeWindow.maximize).toHaveBeenCalledOnce();
+    expect(nativeWindow.startDragging).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats an accessibility click pair as one toggle", async () => {
+    nativeWindow.isMaximized.mockReset().mockResolvedValueOnce(false);
+    nativeWindow.maximize.mockClear();
+    nativeWindow.unmaximize.mockClear();
+    const { container } = render(<Toolbar {...baseProps} />);
+    const surface = container.querySelector(".titlebar-drag-region")!;
+
+    fireEvent.click(surface, { detail: 1 });
+    fireEvent.click(surface, { detail: 1 });
+
+    await waitFor(() => expect(nativeWindow.maximize).toHaveBeenCalledOnce());
+    expect(nativeWindow.unmaximize).not.toHaveBeenCalled();
+  });
+
+  it("keeps gesture state deterministic for pointer and AX event orders", () => {
+    const machine = createTitlebarGestureMachine();
+    expect(machine.mouseDown(0, 1)).toBe("drag");
+    expect(machine.click(10, 1)).toBe("ignore");
+    expect(machine.mouseDown(20, 2)).toBe("toggle");
+    expect(machine.click(30, 1)).toBe("ignore");
+    expect(machine.doubleClick(40)).toBe("ignore");
+
+    const ax = createTitlebarGestureMachine();
+    expect(ax.click(0, 1)).toBe("ignore");
+    expect(ax.click(20, 1)).toBe("toggle");
+    expect(ax.doubleClick(30)).toBe("ignore");
   });
 
   it("stays neutral before validation and still invokes Run", () => {

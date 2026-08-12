@@ -4,7 +4,10 @@ import { parseIcValue, stripIcSpec } from "../engine/icSpec";
 import {
   LED_COLOR_CHOICES,
   DEFAULT_LED_FORWARD_VOLTS,
+  ledColorFromValue,
+  ledHasExplicitColor,
   ledHasExplicitForwardVoltage,
+  normalizeLedColor,
   ledTypicalForwardVolts,
 } from "../engine/ledSpec";
 import { parseQuantity } from "../simulation/quantity";
@@ -134,6 +137,18 @@ interface ParamSpec {
 /** Unparsed `Name=value` tokens, carried through an edit so none are dropped. */
 export const EXTRA_PARAM_KEY = "$extra";
 
+// These decode-only markers distinguish an inferred color/Vf from a value the
+// author actually wrote. They never reach the stored component string.
+const LED_COLOR_EXPLICIT_KEY = "$ledColorExplicit";
+const LED_VFWD_EXPLICIT_KEY = "$ledVfwdExplicit";
+
+const isKnownLedColor = (raw: string): boolean => {
+  const normalized = raw.trim().toLowerCase().replace(/[_-]+/g, " ");
+  return normalized === "orange"
+    || normalized === "amber/orange"
+    || LED_COLOR_CHOICES.some((choice) => choice.value === normalized);
+};
+
 const CHARGE_CAPACITOR: ParamSpec = {
   when: /^\s*Q\s*=/i,
   fields: [
@@ -261,6 +276,57 @@ const GENERIC_LED: ParamSpec = {
       description: "Typical forward drop; color supplies a default and this value overrides it.",
     },
   ],
+  codec: {
+    form: "custom",
+    decode: (value) => {
+      const tokens = value.trim().split(/[\s,;]+/).filter(Boolean);
+      const modelIndex = tokens.findIndex((token) => !token.includes("="));
+      const model = modelIndex >= 0 ? tokens[modelIndex] : "LED";
+      const color = ledColorFromValue(value);
+      const keyedColor = keyedValue(value, ["color"]);
+      const vfwd = keyedValue(value, ["Vfwd", "Forward"]);
+      const extras = tokens.filter((token, index) => {
+        if (index === modelIndex) return false;
+        if (/^(?:color|Vfwd|Forward)\s*=/i.test(token)) return false;
+        // Preserve the compact legacy `LED blue` spelling while it is being
+        // decoded; an edit will write the canonical keyed spelling.
+        if (index > modelIndex && normalizeLedColor(token) === color &&
+            (/^(?:red|amber|orange|amber\/orange|yellow|green|blue|white|custom)$/i.test(token))) return false;
+        return true;
+      });
+      return {
+        model,
+        // Keep an unknown imported token intact for the schema's round-trip
+        // guarantee; the inspector's choice validator still refuses it before
+        // a user edit can commit it.
+        color: keyedColor && !isKnownLedColor(keyedColor) ? keyedColor : color,
+        // This is a display value only when absent from storage. The explicit
+        // marker below prevents it from becoming a false `Vfwd=` override.
+        vfwd: vfwd ?? String(ledTypicalForwardVolts(color)),
+        [LED_COLOR_EXPLICIT_KEY]: ledHasExplicitColor(value) ? "true" : "false",
+        [LED_VFWD_EXPLICIT_KEY]: vfwd ? "true" : "false",
+        ...(extras.length > 0 ? { [EXTRA_PARAM_KEY]: extras.join(" ") } : {}),
+      };
+    },
+    encode: (values) => {
+      const model = (values.model ?? "LED").trim() || "LED";
+      const rawColor = (values.color ?? "").trim();
+      const color = isKnownLedColor(rawColor) ? normalizeLedColor(rawColor) : rawColor || "red";
+      const colorExplicit = values[LED_COLOR_EXPLICIT_KEY] === "true" || color !== "red";
+      const vfwd = (values.vfwd ?? "").trim();
+      // Objects assembled directly by callers predate the decode markers and
+      // are treated as explicit, while decoded color defaults remain inferred.
+      const vfwdExplicit = values[LED_VFWD_EXPLICIT_KEY] === undefined
+        ? Boolean(vfwd)
+        : values[LED_VFWD_EXPLICIT_KEY] === "true";
+      const parts = [model];
+      if (colorExplicit) parts.push(`color=${color}`);
+      if (vfwdExplicit && vfwd) parts.push(`Vfwd=${vfwd}`);
+      const extras = (values[EXTRA_PARAM_KEY] ?? "").trim();
+      if (extras) parts.push(extras);
+      return parts.join(" ");
+    },
+  },
 };
 
 const parseVoltageMarking = (text: string): number | null => {
@@ -900,8 +966,15 @@ export function applyLedColorDefault(
   nextValue: string,
 ): Record<string, string> {
   const next = { ...values, [key]: nextValue };
-  if (kind === "led" && key === "color" && !ledHasExplicitForwardVoltage(baseValue)) {
-    next.vfwd = String(ledTypicalForwardVolts(nextValue));
+  if (kind !== "led") return next;
+  if (key === "color") {
+    next[LED_COLOR_EXPLICIT_KEY] = "true";
+    if (!ledHasExplicitForwardVoltage(baseValue) && values[LED_VFWD_EXPLICIT_KEY] !== "true") {
+      next.vfwd = String(ledTypicalForwardVolts(nextValue));
+      next[LED_VFWD_EXPLICIT_KEY] = "false";
+    }
+  } else if (key === "vfwd") {
+    next[LED_VFWD_EXPLICIT_KEY] = "true";
   }
   return next;
 }

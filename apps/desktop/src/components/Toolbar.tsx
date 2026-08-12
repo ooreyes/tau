@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
+  createTitlebarGestureMachine,
   handleTitlebarDoubleClick,
   startCurrentWindowDragging,
   toggleCurrentWindowMaximize,
@@ -52,9 +53,8 @@ export function isTitlebarControlTarget(target: EventTarget | null): boolean {
 }
 
 export function Toolbar({ mode, result, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
-  const lastTitlebarMouseDownRef = useRef<number | null>(null);
-  const lastTitlebarClickRef = useRef<number | null>(null);
-  const suppressNativeDoubleClickRef = useRef(false);
+  const titlebarGestureRef = useRef<ReturnType<typeof createTitlebarGestureMachine> | null>(null);
+  const titlebarGesture = titlebarGestureRef.current ?? (titlebarGestureRef.current = createTitlebarGestureMachine());
   const isSimulator = mode === "simulator";
   const runHasError = !isRunning && (runState === "error" || result?.ok === false);
   const runIsAcceptable = !isRunning && runState === "complete" && result?.ok === true;
@@ -96,15 +96,10 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
     if (target.closest(TITLEBAR_GESTURE_SURFACE) && event.currentTarget !== event.target) return;
     if (isTitlebarControlTarget(target)) return;
 
-    const now = Date.now();
-    const previous = lastTitlebarMouseDownRef.current;
-    const isDoubleClick = event.detail >= 2 || (previous !== null && now - previous <= 500);
-    if (isDoubleClick) {
-      lastTitlebarMouseDownRef.current = null;
-      suppressNativeDoubleClickRef.current = true;
+    const action = titlebarGesture.mouseDown(Date.now(), event.detail);
+    if (action === "toggle") {
       void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
-    } else {
-      lastTitlebarMouseDownRef.current = now;
+    } else if (action === "drag") {
       event.preventDefault();
       event.stopPropagation();
       void startCurrentWindowDragging();
@@ -115,8 +110,8 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
     const target = event.target as HTMLElement;
     if (target.closest(TITLEBAR_GESTURE_SURFACE) && event.currentTarget !== event.target) return;
     if (isTitlebarControlTarget(target)) return;
-    if (suppressNativeDoubleClickRef.current) {
-      suppressNativeDoubleClickRef.current = false;
+    const action = titlebarGesture.doubleClick(Date.now());
+    if (action === "ignore") {
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -128,20 +123,14 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
     const target = event.target as HTMLElement;
     if (target.closest(TITLEBAR_GESTURE_SURFACE) && event.currentTarget !== event.target) return;
     if (isTitlebarControlTarget(target)) return;
-    if (suppressNativeDoubleClickRef.current) {
-      suppressNativeDoubleClickRef.current = false;
+    const action = titlebarGesture.click(Date.now(), event.detail);
+    if (action === "ignore") {
       event.preventDefault();
       event.stopPropagation();
       return;
     }
-
-    const now = Date.now();
-    const previous = lastTitlebarClickRef.current;
-    if (event.detail >= 2 || (previous !== null && now - previous <= 500)) {
-      lastTitlebarClickRef.current = null;
+    if (action === "toggle") {
       void handleTitlebarDoubleClick(event, toggleCurrentWindowMaximize);
-    } else {
-      lastTitlebarClickRef.current = now;
     }
   };
 

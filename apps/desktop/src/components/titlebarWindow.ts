@@ -7,6 +7,56 @@ export interface TitlebarWindowControls {
   startDragging: () => Promise<void>;
 }
 
+export type TitlebarGestureAction = "drag" | "toggle" | "ignore";
+
+const DOUBLE_CLICK_WINDOW_MS = 500;
+
+const isRecent = (previous: number | null, now: number): boolean =>
+  previous !== null && now - previous <= DOUBLE_CLICK_WINDOW_MS;
+
+/**
+ * One state machine owns the three browser events a titlebar can receive.
+ * Native pointer input is mousedown → click → mousedown → click → dblclick;
+ * accessibility activation may only deliver click pairs. Both paths therefore
+ * share the same recent-toggle suppression instead of independently toggling.
+ */
+export function createTitlebarGestureMachine() {
+  let lastMouseDownAt: number | null = null;
+  let lastClickAt: number | null = null;
+  let lastToggleAt: number | null = null;
+
+  const toggled = (now: number): TitlebarGestureAction => {
+    lastMouseDownAt = null;
+    lastClickAt = null;
+    lastToggleAt = now;
+    return "toggle";
+  };
+
+  return {
+    mouseDown(now: number, detail = 1): TitlebarGestureAction {
+      const doubleClick = detail >= 2 || isRecent(lastMouseDownAt, now);
+      if (doubleClick) return toggled(now);
+      lastMouseDownAt = now;
+      return "drag";
+    },
+    click(now: number, detail = 1): TitlebarGestureAction {
+      // A click emitted after the pointer path already toggled belongs to that
+      // same gesture. It must not become a second toggle.
+      if (isRecent(lastToggleAt, now)) return "ignore";
+      const doubleClick = detail >= 2 || isRecent(lastClickAt, now);
+      if (doubleClick) return toggled(now);
+      lastClickAt = now;
+      return "ignore";
+    },
+    doubleClick(now: number): TitlebarGestureAction {
+      // Browser dblclick follows the second click. It is observed for event
+      // suppression only when mousedown/click already performed the toggle.
+      if (isRecent(lastToggleAt, now)) return "ignore";
+      return toggled(now);
+    },
+  };
+}
+
 export async function toggleTitlebarMaximize(window: TitlebarWindowControls): Promise<void> {
   if (await window.isMaximized()) {
     await window.unmaximize();
