@@ -463,11 +463,24 @@ both key names and the focus split.
 red body, chromed tip, black lead). *"Replace the probe sign with a red
 multimeter probe something like the following."*
 
-**Done when:** the probe tool button, the canvas probe cursor affordance, and
-any probe marker read as a red multimeter probe at 16 px; the red comes from a
-design token (add one if none fits) and holds contrast in light and dark; the
-icon is legible at 16 px, not a shrunken illustration; a test asserts the button
-renders the probe icon and its token-derived colour.
+**"any probe marker" must NOT be taken literally — do not recolour
+`.probe-marker`.** `Canvas.tsx` renders `<g className="probe-marker" style={{
+color: p.color }}>` where `p.color` comes from `useSchematic.ts`'s `PROBE_COLORS`
+rotation — which is the **trace palette**. A marker's colour *is* the identity of
+its waveform on the scope. Painting every marker red would break
+marker-to-trace correspondence: a correctness regression wearing a style fix's
+clothes, and a direct contradiction of DESIGN_SYSTEM §0 ("if a legend swatch
+needs the trace color, that swatch **is** data") and §0.1's disjoint-palette
+clause. A single-probe schematic already reads red anyway, because the first
+probe resolves to `--trace-red`. Recorded so no later pass "completes" this item
+by breaking it.
+
+**Done when:** the probe *tool button*, the *canvas probe cursor*, and the
+*empty-scope hint glyph* all read as the same red multimeter probe; the red comes
+from `--tool-probe-ink` and holds ≥ 4.5:1 in both themes; the icon is legible at
+16 px rather than a shrunken illustration; outside `.editor-toolbar` it falls
+back to `currentColor` so §0.1's "tool strip only" clause holds without a special
+case; and the probe marker's trace-derived colour is left exactly as it is.
 
 ---
 

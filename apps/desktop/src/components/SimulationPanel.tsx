@@ -4,7 +4,13 @@ import type {
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
-import { Crosshair, FileDown } from "lucide-react";
+import { FileDown } from "lucide-react";
+/* The empty-scope glyph is a probe, and has to be the SAME probe the tool strip
+ * draws or the hint points at something the user cannot find. Outside
+ * `.editor-toolbar` its `--ti-*` custom properties are unset, so it falls back
+ * to `currentColor` and stays monochrome here - DESIGN_SYSTEM §0.1's "editor
+ * tool strip only" clause holds without this needing a special case. */
+import { ProbeIcon } from "./editor/ToolIcons";
 import {
   buildRunRecord,
   rememberRunRecord,
@@ -2167,7 +2173,7 @@ export function WaveformPlot({
       )}
       {success && allTraces.length === 0 && (
         <div className="scope-empty-state">
-          <Crosshair size={20} strokeWidth={1.5} aria-hidden="true" />
+          <ProbeIcon size={20} aria-hidden="true" />
           <strong>Nothing to plot yet</strong>
           <span>Place a probe or label a net. Unlabeled nets stay off the plot.</span>
         </div>
