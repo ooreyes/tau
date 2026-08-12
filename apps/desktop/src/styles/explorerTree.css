@@ -70,3 +70,10 @@
   background: var(--border-subtle);
   pointer-events: none;
 }
+
+/* The project root row is 26px tall and carries a 2px margin under its rule
+   line (App.css `.tree-project-root-row`), not the 22px every other folder row
+   is, so its guide has to start 6px lower or it draws across that rule. */
+.tree-project-root-dir[data-open="true"]::before {
+  top: 28px;
+}

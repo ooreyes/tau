@@ -562,6 +562,31 @@ const unionRect = (a: Rect, b: Rect): Rect => ({
   maxY: Math.max(a.maxY, b.maxY),
 });
 
+/** Touching counts as intersecting. Deliberately conservative: this is only
+ *  ever used to decide whether an obstacle is worth *scoring*, and a rect that
+ *  merely grazes the candidate region is cheaper to keep than to reason about.
+ */
+const intersectsRect = (a: Rect, b: Rect) =>
+  a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+
+/**
+ * The obstacles a set of candidate boxes could possibly touch.
+ *
+ * P3-07's escalation ladder multiplied the candidate count per label from 6 to
+ * 42 and the form count from 1 to 4, and every candidate was being scored
+ * against every obstacle on the sheet. Measured on a 300-part sheet, that took
+ * `buildLabelPlacements` from 10.5 ms to 267 ms and the three passes a render
+ * makes (placements, net labels, fit bounds) from 38 ms to 745 ms - i.e. it
+ * turned a drag into a slideshow. Filtering first is O(candidates + obstacles)
+ * and cannot change any answer: a rect outside the union of every candidate
+ * box overlaps none of them, so its contribution to every score was zero.
+ */
+const nearCandidates = (reach: Rect, rects: readonly Rect[]): Rect[] =>
+  rects.length > 24 ? rects.filter((rect) => intersectsRect(rect, reach)) : (rects as Rect[]);
+
+/** Union of every candidate box, i.e. the region a label could land in. */
+const candidateReach = (boxes: readonly Rect[]): Rect => boxes.reduce(unionRect);
+
 const makePlacement = (
   refText: string,
   valText: string,
@@ -876,7 +901,10 @@ export const buildLabelPlacements = (components: SchematicComponent[], wires: Sc
         ...labelCandidates(component, form.measureRef, form.val),
         ...ringCandidates(component, form.measureRef, form.val),
       ];
-      const chosen = placeClear(candidates, hard, wireRects);
+      // Only obstacles inside the region these candidates span can affect the
+      // choice - see `nearCandidates`.
+      const reach = candidateReach(candidates.map((candidate) => candidate.box));
+      const chosen = placeClear(candidates, nearCandidates(reach, hard), nearCandidates(reach, wireRects));
       if (!chosen) continue;
       placements.set(component.id, {
         ...chosen,
@@ -954,7 +982,53 @@ const netLabelOffsetCandidates = (w: number): Array<{ dx: number; dy: number }> 
   { dx: -(w + 6), dy: 2 * NET_LABEL_HEIGHT + 16 },
   { dx: w + 24, dy: -6 },
   { dx: -(2 * w + 24), dy: -6 },
+  // Rings, tried only after every close slot has been rejected. The close ones
+  // read best - a net label wants to sit on the node it names - but there were
+  // only ten of them, and a crowded sheet used all ten up and then inked the
+  // least-bad overlap anyway (P3-07). Fixed steps in a fixed order, never a
+  // search: the same sheet must place identically twice.
+  ...[22, 40, 62].flatMap((step) => [
+    { dx: 6, dy: -(NET_LABEL_HEIGHT + step) },
+    { dx: 6, dy: NET_LABEL_HEIGHT + step },
+    { dx: -(w + 6), dy: -(NET_LABEL_HEIGHT + step) },
+    { dx: -(w + 6), dy: NET_LABEL_HEIGHT + step },
+    { dx: w + step, dy: -6 },
+    { dx: -(w + step), dy: -6 },
+    { dx: w + step, dy: NET_LABEL_HEIGHT + step },
+    { dx: -(w + step), dy: NET_LABEL_HEIGHT + step },
+  ]),
 ];
+
+/**
+ * The offset that is clear of everything by construction, used when no
+ * candidate above is.
+ *
+ * A net label cannot degrade the way a component label can. A refdes can
+ * shorten and finally reduce to an ellipsis because the inspector still holds
+ * the value; a net label IS the connection - abbreviate "vbias" and the reader
+ * can no longer tell which net it joins, and hide it and a wire silently loses
+ * its name. So the only honest escalation left is distance.
+ *
+ * `union` is the bounding box of every obstacle in the pass, so a text box
+ * placed wholly outside it overlaps nothing - that is what makes the zero-
+ * overlap invariant hold by construction rather than by finding a lucky slot.
+ * The four sides are all valid; the nearest one wins, so the label travels the
+ * shortest distance from its node that clears the drawing.
+ */
+const NET_LABEL_ESCAPE_GAP = 4;
+
+const netLabelEscapeOffset = (anchor: Point, w: number, union: Rect): { dx: number; dy: number } => {
+  // Mirrors `netLabelTextRect`'s box: x-1 .. x+w+1 horizontally, y-11 .. y+2
+  // vertically, both after its 1-unit pad.
+  const options = [
+    { dx: union.maxX + NET_LABEL_ESCAPE_GAP + 1 - anchor.x, dy: -6 },
+    { dx: union.minX - NET_LABEL_ESCAPE_GAP - 1 - w - anchor.x, dy: -6 },
+    { dx: 6, dy: union.minY - NET_LABEL_ESCAPE_GAP - 2 - anchor.y },
+    { dx: 6, dy: union.maxY + NET_LABEL_ESCAPE_GAP + NET_LABEL_HEIGHT + 1 - anchor.y },
+  ];
+  return options.reduce((best, option) =>
+    Math.hypot(option.dx, option.dy) < Math.hypot(best.dx, best.dy) ? option : best);
+};
 
 /**
  * Auto-placement for a net label with no explicit `dx`/`dy` (old .sim files,
@@ -966,6 +1040,16 @@ const netLabelOffsetCandidates = (w: number): Array<{ dx: number; dy: number }> 
  * scoring every candidate against every component per render is deterministic
  * and cheap .
  */
+/** A wire segment's own bounding box, for the cheap "could this matter?" test
+ *  in `chooseNetLabelOffset`. Zero-thickness on one axis by construction, which
+ *  `intersectsRect` handles because it counts touching as intersecting. */
+const segmentRect = (segment: WireSegment): Rect => ({
+  minX: Math.min(segment.a.x, segment.b.x),
+  minY: Math.min(segment.a.y, segment.b.y),
+  maxX: Math.max(segment.a.x, segment.b.x),
+  maxY: Math.max(segment.a.y, segment.b.y),
+});
+
 /** Length of `segment` that passes through `rect` (0 when it misses). Only
  *  axis-aligned segments occur in Tau wires, so this is a cheap clip. */
 const segmentLengthInRect = (segment: WireSegment, rect: Rect): number => {
@@ -1019,19 +1103,45 @@ function chooseNetLabelOffset(
     && probeRects.length === 0 && occupiedLabelRects.length === 0
   ) return candidates[0];
 
-  const scored = candidates.map((offset) => {
-    const box = netLabelTextRect(anchor, offset.dx, offset.dy, text);
-    let score = componentRects.reduce((total, rect) => total + overlapArea(box, rect), 0);
-    score += probeRects.reduce((total, rect) => total + overlapArea(box, rect) * 2, 0);
+  // Artwork, probe dots and other text are HARD: ink on any of them is the
+  // defect P3-07 reports, and no ranking justifies choosing it. A wire under
+  // the text is SOFT - it misreads as though the wire carried the name, worth
+  // avoiding but not worth moving the label off its node for. Splitting the
+  // two is what lets the fallback be "clear of everything hard, wire or not"
+  // instead of "least bad overall", which is what admitted the overlaps.
+  const hardRects = [...componentRects, ...probeRects, ...occupiedLabelRects];
+  // Scored against only what the candidates can reach; the escape below still
+  // unions the FULL hard set, because "outside everything" has to mean
+  // everything. See `nearCandidates` for why this pruning is free.
+  const boxes = candidates.map((offset) => netLabelTextRect(anchor, offset.dx, offset.dy, text));
+  const reach = candidateReach(boxes);
+  const nearComponents = nearCandidates(reach, componentRects);
+  const nearProbes = nearCandidates(reach, probeRects);
+  const nearOccupied = nearCandidates(reach, occupiedLabelRects);
+  const nearSegments = segments.length > 24
+    ? segments.filter((segment) => intersectsRect(segmentRect(segment), reach))
+    : segments;
+  const scored = candidates.map((offset, index) => {
+    const box = boxes[index];
+    let hard = nearComponents.reduce((total, rect) => total + overlapArea(box, rect), 0);
+    hard += nearProbes.reduce((total, rect) => total + overlapArea(box, rect) * 2, 0);
     // Text landing on other text is the worst outcome - it is the one case
     // where both strings become unreadable rather than just cluttered.
-    score += occupiedLabelRects.reduce((total, rect) => total + overlapArea(box, rect) * 3, 0);
+    hard += nearOccupied.reduce((total, rect) => total + overlapArea(box, rect) * 3, 0);
     // A wire crossing the text box is linear, not areal - weight it so a
     // couple of grid units of wire-under-text loses to a clear spot.
-    score += segments.reduce((total, segment) => total + segmentLengthInRect(segment, box) * 4, 0);
-    return { offset, score };
+    const soft = nearSegments.reduce((total, segment) => total + segmentLengthInRect(segment, box) * 4, 0);
+    return { offset, hard, score: hard + soft };
   });
-  return scored.find((entry) => entry.score === 0)?.offset ?? scored.sort((a, b) => a.score - b.score)[0].offset;
+  const perfect = scored.find((entry) => entry.score === 0);
+  if (perfect) return perfect.offset;
+  const clearOfHard = scored.filter((entry) => entry.hard === 0);
+  if (clearOfHard.length > 0) {
+    return clearOfHard.reduce((best, entry) => (entry.score < best.score ? entry : best)).offset;
+  }
+  // Every slot the sheet offers is on artwork or on other text. Leave the
+  // neighbourhood rather than ink through it.
+  return netLabelEscapeOffset(anchor, w, hardRects.reduce(unionRect));
 }
 
 export function autoNetLabelOffset(

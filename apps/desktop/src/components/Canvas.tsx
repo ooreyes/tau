@@ -271,6 +271,8 @@ export function Canvas({
   onActuate,
   fitSignal = 0,
   fitInsetBottom = 0,
+  revealComponentId = null,
+  revealSignal = 0,
   onSelectionRect,
   currentVisualizer = false,
 }: {
@@ -289,6 +291,20 @@ export function Canvas({
   onActuate?: () => void;
   /** Bumped by App on open/new/tab switch so the schematic auto-fits once. */
   fitSignal?: number;
+  /**
+   * Bring one component into view without reframing the sheet.
+   *
+   * A diagnostics row must be able to show you the part it is complaining
+   * about, and `fitSignal` is the wrong tool for it: fit frames ALL artwork, so
+   * clicking an error would re-zoom the schematic and throw away the pan the
+   * reader had chosen. This pans only, keeps the zoom exactly as it is, and
+   * does nothing at all when the part is already on screen - the least
+   * disruptive thing that still answers "where is it".
+   */
+  revealComponentId?: string | null;
+  /** Bumped alongside `revealComponentId` so revealing the SAME part twice
+   *  works; the id alone would not change and the effect would not re-fire. */
+  revealSignal?: number;
   /**
    * Pixels along the bottom edge that something is covering, so the fit frames
    * the circuit into the part of the canvas the reader can actually see.
@@ -1581,6 +1597,47 @@ export function Canvas({
     const id = requestAnimationFrame(() => fitView());
     return () => cancelAnimationFrame(id);
   }, [fitSignal, fitView]);
+
+  /*
+   * Reveal one part, without reframing the sheet.
+   *
+   * Clicking a diagnostics row has to answer "where is it", and fit is too
+   * blunt an instrument for that: it frames all artwork, so it would re-zoom
+   * the schematic and discard the pan the reader chose. This pans only - zoom
+   * is never touched - and it does nothing at all when the part is already on
+   * screen, which is the common case and the least disruptive answer.
+   *
+   * Keyed on `revealSignal` rather than the id, so asking for the SAME part
+   * twice still works; the id alone would not change and this would not re-fire.
+   */
+  useEffect(() => {
+    if (!revealSignal || !revealComponentId) return;
+    const el = svgRef.current;
+    if (!el) return;
+    const part = components.find((c) => c.id === revealComponentId);
+    if (!part) return;
+    const frame = requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return;
+      setView((v) => {
+        // Where the part sits in the viewport under the CURRENT camera.
+        const sx = part.x * v.zoom + v.x;
+        const sy = part.y * v.zoom + v.y;
+        // A margin so the part lands inside the frame rather than against its
+        // edge, and clear of the parts rail on the right.
+        const margin = 72;
+        // Same published number `fitView` uses, via the same helper - the parts
+        // rail floats over the canvas, so revealing a part into the band it
+        // covers would put it behind the rail.
+        const right = Math.max(margin, r.width - stageRailInset(el) - margin);
+        const bottom = Math.max(margin, r.height - fitInsetBottom - margin);
+        const dx = sx < margin ? margin - sx : sx > right ? right - sx : 0;
+        const dy = sy < margin ? margin - sy : sy > bottom ? bottom - sy : 0;
+        return dx === 0 && dy === 0 ? v : { ...v, x: v.x + dx, y: v.y + dy };
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [revealSignal, revealComponentId, components, fitInsetBottom]);
 
   // Re-fit when the canvas changes size: the window, a tab's split, a sibling
   // panel drag, the read-only simulator's column.

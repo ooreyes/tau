@@ -369,9 +369,33 @@ function CenteredSineGlyph({ y = 0 }: { y?: number }) {
   );
 }
 
+/**
+ * The waveform term of a source value, with the two prefixes LTspice puts in
+ * front of it removed. Both regexes are the ones `sourceValue.ts` itself uses
+ * (`AC_TEXT_RE`, and its leading-`DC <n>` match), in the same order, because
+ * the inspector title and the canvas caption are BOTH derived through
+ * `decodeIndependentSourceValue`: an imported `DC 2 SINE(0 1 1k)` is titled
+ * "Sine voltage source" and captioned `Sine · 1 V @ 1k Hz`, so artwork that
+ * stopped at a `^SINE` test drew a battery underneath both of them. That is
+ * the same drawing-versus-identity disagreement PDF-3 item 1 exists to remove,
+ * merely moved onto a different pair of surfaces.
+ *
+ * Still text only, not a decode: artwork is chosen on every render of every
+ * part, and the only question here is which glyph, not what the numbers are.
+ */
+function sourceWaveformTerm(value: string | undefined): string {
+  const bare = (value ?? "").replace(/\bAC\b\s+([^\s,;]+)(?:\s+([+-]?\d[\w.+-]*))?/i, " ").trim();
+  return bare.replace(/^DC\s+[^\s,;]+\s*/i, "");
+}
+
 /** True when a voltage/current source value is an explicit SINE/SIN function. */
 export function valueLooksLikeSine(value: string | undefined): boolean {
-  return /^\s*(SINE|SIN)\s*\(/i.test(value ?? "");
+  return /^\s*(SINE|SIN)\s*\(/i.test(sourceWaveformTerm(value));
+}
+
+/** True when the value's waveform term is an explicit PULSE function. */
+export function valueLooksLikePulse(value: string | undefined): boolean {
+  return /^\s*PULSE\s*\(/i.test(sourceWaveformTerm(value));
 }
 
 /* ── Digital chips: one body, labelled pins (mission item 5) ─────────────────
@@ -1010,6 +1034,13 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
       );
 
     case "vsource":
+      // The drawing follows the WAVEFORM, because that is the part's identity
+      // (PDF-3 item 1) - a source captioned `Sine · 1 V @ 1k Hz` drawn as a
+      // battery is the same disagreement the report caught in the title.
+      // Only glyphs that already exist and are already clearance-tested are
+      // reused: the `vac` sine and the `vpulse` train. PWL / EXP / SFFM have no
+      // glyph and fall through to the DC drawing rather than getting an
+      // invented one - see docs/handoff/SYMBOLS.md.
       if (valueLooksLikeSine(value)) {
         return (
           <>
@@ -1020,6 +1051,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           </>
         );
       }
+      if (valueLooksLikePulse(value)) return symbolArtwork("vpulse", value, imported, catalog);
       return (
         <>
           <line x1={0} y1={-pin} x2={0} y2={-r} />
@@ -1034,6 +1066,26 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
       );
 
     case "isource":
+      // Same rule as `vsource`, and the same omission it used to have: a sine
+      // current source drew the plain DC arrow. `iac`'s glyph already solves
+      // this - a small sine over the direction arrow, so the drawing says both
+      // "alternating" and "which way".
+      if (valueLooksLikeSine(value)) return symbolArtwork("iac", value, imported, catalog);
+      if (valueLooksLikePulse(value)) {
+        return (
+          <>
+            <line x1={0} y1={-pin} x2={0} y2={-r} />
+            <circle cx={0} cy={0} r={r} />
+            {/* The `vpulse` train raised clear of the arrow, on the same
+                baseline `iac` uses for its sine, so the two glyphs stack
+                without touching inside the r = 15 circle. */}
+            <path data-pulse-glyph="" d="M -10 -4 L -10 -12 L -2 -12 L -2 -4 L 6 -4 L 6 -12 L 10 -12" fill="none" />
+            <path data-current-arrow="shaft" d="M 0 -1 V 8" />
+            <path data-current-arrow="head" d="M -5 4 L 0 10 L 5 4" />
+            <line x1={0} y1={r} x2={0} y2={pin} />
+          </>
+        );
+      }
       return (
         <>
           <line x1={0} y1={-pin} x2={0} y2={-r} />
@@ -1072,7 +1124,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <line x1={0} y1={-pin} x2={0} y2={-r} />
           <circle cx={0} cy={0} r={r} />
           {/* pulse train: low-high-low-high */}
-          <path d="M -10 5 L -10 -5 L -2 -5 L -2 5 L 6 5 L 6 -5 L 10 -5" />
+          <path data-pulse-glyph="" d="M -10 5 L -10 -5 L -2 -5 L -2 5 L 6 5 L 6 -5 L 10 -5" />
           <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );

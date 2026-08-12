@@ -6,5 +6,147 @@
  * (see the file-ownership map in UI_UX_PDF3.md).
  *
  * Colour must arrive through the tokens in styles/tokens.css / App.css's
- * :root. Raw hex in here fails scripts/design-system-dod.mjs.
+ * :root. Raw hex in here fails scripts/design-system-dod-grep.mjs, which
+ * exempts only App.css and styles/tokens.css from its hex scan - which is also
+ * why the --tool-*-ink values themselves live in App.css's four theme blocks
+ * (DESIGN_SYSTEM 7.4: tokens are defined once) and this file only consumes
+ * them.
+ *
+ * The licence for this colour: DESIGN_SYSTEM 0.1, "The one exception:
+ * tool-object ink". Every clause of it is enforced below - glyph stroke/fill
+ * only and never a surface, a closed --tool-*-ink set, disjoint from --trace-*,
+ * disabled desaturates to the neutral ink, and tools whose real counterpart is
+ * neutral stay neutral.
  */
+
+/* ---------------------------------------------------------------------------
+ * Tool-object ink (P3-13)
+ *
+ * Two indirection slots per button rather than seven pairs of per-glyph rules:
+ * ToolIcons.tsx paints from var(--ti-1) (the object) and var(--ti-2) (its
+ * metal), so a tone is one declaration block and the disabled state is one
+ * override instead of seven.
+ *
+ * `color` is set as well as the slots because App.css:6134 gives the root svg
+ * `stroke: currentColor`, and because scripts/pdf3-verify.mjs samples
+ * getComputedStyle().color/stroke/fill on the svg AND its children - a tone
+ * that lived only in child fills would look right and measure grey.
+ * ------------------------------------------------------------------------ */
+
+.editor-toolbar .editor-icon-btn[data-tone],
+.editor-toolbar .editor-icon-btn[data-tone]:hover:not(:disabled) {
+  /* The hover selector is repeated deliberately: App.css:6142's
+     `.editor-icon-btn:hover:not(:disabled) { color: var(--text) }` is more
+     specific than a bare tone rule and would flatten every accent on hover.
+     Hover keeps the object's ink and lets the background carry the state. */
+  color: var(--ti-1);
+}
+
+/* Red hookup wire; the stripped ends are metal, which is what makes the red
+   read as insulation rather than as an error colour. */
+.editor-toolbar .editor-icon-btn.tool-wire {
+  --ti-1: var(--tool-wire-ink);
+  --ti-2: var(--tool-steel-ink);
+}
+
+/* Kraft/manila tag with a steel eyelet. */
+.editor-toolbar .editor-icon-btn.tool-tag {
+  --ti-1: var(--tool-tag-ink);
+  --ti-2: var(--tool-steel-ink);
+}
+
+/* Multimeter probe: red barrel, chromed needle and lead (P3-12). */
+.editor-toolbar .editor-icon-btn.tool-probe {
+  --ti-1: var(--tool-probe-ink);
+  --ti-2: var(--tool-steel-ink);
+}
+
+/* Rubber eraser: rose block, grey metal ferrule - the report's "pink/grey
+   metal erase". */
+.editor-toolbar .editor-icon-btn.tool-eraser {
+  --ti-1: var(--tool-eraser-ink);
+  --ti-2: var(--tool-steel-ink);
+}
+
+/* The bin is the report's "gray trascan" and stays neutral on purpose. It is
+   still a tone rather than the default ink so the destructive control does not
+   measure identical to Select; --tool-steel-ink is a near-neutral with the cool
+   undertone DESIGN_SYSTEM 1.1 mandates (saturation 0.11), i.e. it deliberately
+   does NOT register as an accent in the verification gate. */
+.editor-toolbar .editor-icon-btn.tool-trash {
+  --ti-1: var(--tool-steel-ink);
+  --ti-2: var(--tool-steel-ink);
+}
+
+/* Undo and redo are the one pair with no physical object, so they are
+   separated by hue instead: violet back, teal forward. Mirrored geometry alone
+   is not enough at 16px - that was the report's complaint. */
+.editor-toolbar .editor-icon-btn.tool-undo {
+  --ti-1: var(--tool-undo-ink);
+  --ti-2: var(--tool-undo-ink);
+}
+
+.editor-toolbar .editor-icon-btn.tool-redo {
+  --ti-1: var(--tool-redo-ink);
+  --ti-2: var(--tool-redo-ink);
+}
+
+/*
+ * Disabled desaturates, it does not merely dim (DESIGN_SYSTEM 0.1).
+ *
+ * App.css:9754 sets `opacity: .38; filter: grayscale(.5)` on every disabled
+ * icon button. Half a grayscale leaves half the hue, so a disabled red probe
+ * at 38% still reads as a coloured, live control. Here both paint slots drop
+ * to the neutral disabled ink, which removes the hue outright; the remaining
+ * opacity then does the "dimmed" half of the signal. `filter: none` because
+ * greying an already-neutral ink only costs a compositing layer.
+ *
+ * This wins over App.css by specificity (0,4,0 vs 0,2,0), not by import order,
+ * so it survives a reshuffle of App.tsx's stylesheet imports.
+ */
+.editor-toolbar .editor-icon-btn[data-tone]:disabled {
+  --ti-1: var(--tool-ink-disabled);
+  --ti-2: var(--tool-ink-disabled);
+  color: var(--tool-ink-disabled);
+  opacity: 0.5;
+  filter: none;
+}
+
+/*
+ * Active stays legible next to the ink: App.css:6147 gives `.active` the accent
+ * colour and --accent-soft background. The tone rule above is more specific, so
+ * a selected tool keeps its object ink and the soft background is what says
+ * "armed" - which is the right split, since the icon's colour is identity and
+ * the pill is state. The ring below restores the contrast that the accent
+ * foreground used to provide on a toned button.
+ */
+.editor-toolbar .editor-icon-btn[data-tone].active {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* ---------------------------------------------------------------------------
+ * P3-04B: one highlight pulse on the Components rail.
+ *
+ * EmptyState stamps data-parts-flash on the enclosing .stage when its primary
+ * action fires, and clears it on animationend, so the pulse can fire again on
+ * a second click. Border-only and background-only: the rail's content must not
+ * move, because the user is being asked to read it.
+ * ------------------------------------------------------------------------ */
+
+@keyframes tau-parts-flash {
+  0% { box-shadow: inset 0 0 0 0 transparent; }
+  35% { box-shadow: inset 0 0 0 2px var(--accent); }
+  100% { box-shadow: inset 0 0 0 0 transparent; }
+}
+
+.stage[data-parts-flash="1"] .components-rail {
+  animation: tau-parts-flash var(--parts-flash-duration, 460ms) var(--ease-out) 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No pulse, but the rail still opens - the reveal is the functional half of
+     the affordance and the animation is only its emphasis. */
+  .stage[data-parts-flash="1"] .components-rail {
+    animation: none;
+  }
+}

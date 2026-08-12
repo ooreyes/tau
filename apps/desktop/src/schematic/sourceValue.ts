@@ -85,6 +85,17 @@ function isZeroText(value: string | undefined): boolean {
   return !value?.trim() || value.trim() === "0";
 }
 
+/**
+ * The high level a freshly seeded PULSE gets. "5" unless the low level already
+ * IS five, in which case the pulse would be flat; textual comparison is enough
+ * because the only value that can collide is the one this function itself
+ * writes elsewhere as a default, and a low level Tau cannot parse (a `{param}`
+ * expression) is better left with the familiar "5" than with a guess.
+ */
+function pulseHighSeed(bias: string): string {
+  return bias.trim() === "5" ? "10" : "5";
+}
+
 function sourceDefaults(
   mode: IndependentSourceMode,
   unit: IndependentSourceUnit,
@@ -121,7 +132,14 @@ function sourceDefaults(
         ...common,
         parameters: {
           low: bias || "0",
-          high: "5",
+          // The seeded high level must not collide with the low level. The
+          // seed used to be a fixed "5", so switching a 5 V DC source to Pulse
+          // produced `PULSE(5 5 …)` — a pulse with no swing, which on the
+          // canvas and in a run is indistinguishable from the DC source the
+          // reader just replaced, i.e. the switch looked like it did nothing.
+          // Only the exact collision is displaced, so the long-standing
+          // `PULSE(0 5 …)` default for an unbiased source is unchanged.
+          high: pulseHighSeed(bias),
           delay: "0",
           rise: "1n",
           fall: "1n",

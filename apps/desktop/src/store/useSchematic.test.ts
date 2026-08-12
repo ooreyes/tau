@@ -19,6 +19,7 @@ import {
 import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { dispatchShortcutAction, resolveShortcut, type ShortcutHandlers } from "../schematic/shortcuts";
 import { getComponentPins } from "../schematic/pins";
+import type { ComponentKind } from "../schematic/types";
 
 const sourceDocument = (): SchematicDocument => ({
   components: [
@@ -1899,13 +1900,20 @@ describe("user model library attachments", () => {
  * part all read the same two pieces of state.
  */
 describe("P3-08 ground is placed pin-up on every placement path", () => {
+  /** The just-placed part. Index arithmetic rather than `Array.at`, because
+   *  this package's `tsconfig` lib target predates ES2022. */
+  const lastPlaced = () => {
+    const { components } = useSchematic.getState();
+    return components[components.length - 1];
+  };
+
   /** The single funnel every placement path uses: `startPlacing` arms the tool,
    *  `addComponent` lands the part. Palette click passes the catalog's value,
    *  the catalog hotkey and the command palette pass none. */
   const placeGround = (value?: string) => {
     useSchematic.getState().startPlacing("ground", value);
     useSchematic.getState().addComponent("ground", 32, 48);
-    return useSchematic.getState().components.at(-1)!;
+    return lastPlaced();
   };
 
   it("arms no rotation and no mirror for a pending ground, so the ghost cannot promise a sideways drop", () => {
@@ -1970,10 +1978,10 @@ describe("P3-08 ground is placed pin-up on every placement path", () => {
     useSchematic.getState().select(placed.id);
 
     useSchematic.getState().rotate();
-    expect(useSchematic.getState().components.at(-1)).toMatchObject({ kind: "ground", rotation: 90 });
+    expect(lastPlaced()).toMatchObject({ kind: "ground", rotation: 90 });
 
     useSchematic.getState().undo();
-    expect(useSchematic.getState().components.at(-1)).toMatchObject({ kind: "ground", rotation: 0 });
+    expect(lastPlaced()).toMatchObject({ kind: "ground", rotation: 0 });
   });
 
   it("keeps an imported ground's authored orientation, because .asc import fidelity outranks the pin-up preference", () => {
@@ -2037,6 +2045,101 @@ describe("P3-08 ground is placed pin-up on every placement path", () => {
     // The tool is still armed for ground, so the drop that follows those three
     // keypresses is the one the report described.
     useSchematic.getState().addComponent("ground", 32, 48);
-    expect(useSchematic.getState().components.at(-1)).toMatchObject({ rotation: 0, mirrored: false });
+    expect(lastPlaced()).toMatchObject({ rotation: 0, mirrored: false });
+  });
+});
+
+/**
+ * P3-01, Done-when clause 4 + 5: an alias-stored part converges to its
+ * canonical kind "in one undoable step, with undo/redo restoring both kind and
+ * value together", and the deck still emits a single `V<n>` card.
+ */
+describe("P3-01 a legacy source alias converges to its canonical kind in one transaction", () => {
+  /** One source, one resistor, one ground - enough for a deck with a V card. */
+  const sourceCircuit = (kind: ComponentKind, value: string): SchematicDocument => ({
+    components: [
+      { id: "v1", kind, x: 0, y: 0, rotation: 0, value, label: "V1" },
+      { id: "r1", kind: "resistor", x: 128, y: 0, rotation: 90, value: "1k", label: "R1" },
+      { id: "g1", kind: "ground", x: 0, y: 32, rotation: 0, value: "", label: "" },
+    ],
+    wires: [
+      { id: "w1", points: [{ x: 0, y: -32 }, { x: 128, y: -32 }] },
+      { id: "w2", points: [{ x: 128, y: 32 }, { x: 0, y: 32 }] },
+    ],
+  });
+
+  /** `loadCircuit` re-ids a document as it adopts it, so the authored "v1" is
+   *  gone by the time these tests act on the part. */
+  const sourceId = (): string => useSchematic.getState().components[0].id;
+
+  const sourceCards = (): string[] =>
+    // The deck builder wants library TEXT, not the store's attachment records,
+    // which is the same mapping App performs before a run.
+    buildSpiceDeck(
+      {
+        components: useSchematic.getState().components,
+        wires: useSchematic.getState().wires,
+        netLabels: useSchematic.getState().netLabels,
+      },
+      { kind: "op" },
+    )
+      .netlist.split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^V\d/.test(line));
+
+  it("moves kind and value together as ONE history entry, and undo/redo restores both", () => {
+    useSchematic.getState().loadCircuit(sourceCircuit("vac", "1 1k"));
+    const historyBefore = useSchematic.getState().past.length;
+
+    // The waveform the alias's positional dialect cannot hold. The editor calls
+    // this with the already-re-encoded function value.
+    expect(
+      useSchematic.getState().setSourceIdentity(sourceId(), "vsource", "PULSE(0 5 0 1n 1n 5u 10u)"),
+    ).toBe(true);
+
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      kind: "vsource",
+      value: "PULSE(0 5 0 1n 1n 5u 10u)",
+    });
+    expect(useSchematic.getState().past.length).toBe(historyBefore + 1);
+
+    // One step back restores BOTH - not a pulse still stored as a `vac`, and
+    // not a `vac` holding a value its own codec reads as `{offset: "PULSE(0"}`.
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0]).toMatchObject({ kind: "vac", value: "1 1k" });
+
+    useSchematic.getState().redo();
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      kind: "vsource",
+      value: "PULSE(0 5 0 1n 1n 5u 10u)",
+    });
+  });
+
+  it("keeps the refdes and the single V card - the conversion is not a netlist change", () => {
+    // The value here is already in the function dialect, which is what the deck
+    // builder prefers for BOTH kinds (`legacySourceDeckSpec` tries
+    // `parseSourceFunctionForDeck` first). So the kind move alone must be
+    // byte-neutral, and that is the claim worth pinning.
+    useSchematic.getState().loadCircuit(sourceCircuit("vac", "SINE(0 2 1k)"));
+    const before = sourceCards();
+    expect(before).toHaveLength(1);
+
+    useSchematic.getState().setSourceIdentity(sourceId(), "vsource", "SINE(0 2 1k)");
+
+    expect(sourceCards()).toEqual(before);
+    expect(useSchematic.getState().components[0].label).toBe("V1");
+  });
+
+  it("refuses any conversion outside the closed alias -> canonical table", () => {
+    useSchematic.getState().loadCircuit(sourceCircuit("vsource", "5"));
+
+    // Canonical -> alias would put the part back into the compact positional
+    // dialect this action exists to escape.
+    expect(useSchematic.getState().setSourceIdentity(sourceId(), "vac", "1 1k")).toBe(false);
+    // And a cross-unit move would change the refdes prefix from V to I.
+    expect(useSchematic.getState().setSourceIdentity(sourceId(), "isource", "1m")).toBe(false);
+    expect(useSchematic.getState().setSourceIdentity("missing", "vsource", "5")).toBe(false);
+
+    expect(useSchematic.getState().components[0]).toMatchObject({ kind: "vsource", value: "5" });
   });
 });

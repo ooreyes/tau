@@ -8,3 +8,50 @@
  * Colour must arrive through the tokens in styles/tokens.css / App.css's
  * :root. Raw hex in here fails scripts/design-system-dod.mjs.
  */
+
+/* The lone Errors surface, rendered as a section heading rather than as a tab
+ * strip with one tab (P3-14). Deliberately styled like the active
+ * `.results-drawer-tab` it replaces — same size, same ink, same gap to its
+ * badge — so the schematic dock does not visibly re-lay-out when the
+ * simulator's second surface appears and it becomes a real tab again. What it
+ * drops is the tab's affordances: no underline, no hover ink change, no
+ * pointer, because there is nothing to press. */
+.results-drawer-section {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0 var(--sp-3);
+  color: var(--text);
+  font: 590 var(--fs-label) var(--font-ui);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* A live row that names a part is a button, so it can select that part.
+ * Everything a browser gives a <button> for free fights the row styling in
+ * App.css — its own font, its centred text, its border — so those are reset
+ * here rather than in App.css, and the layout is inherited from
+ * `.bottom-errors .error/.warning` instead of restated. Only the affordance is
+ * new: a cursor, a lift on hover, and a focus ring, because an actionable row
+ * that looks identical to an inert one is a click nobody discovers. */
+.bottom-error-row--actionable {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+.bottom-errors .error.bottom-error-row--actionable:hover {
+  background: color-mix(in srgb, var(--diagnostic-error-soft) 92%, var(--panel));
+}
+
+.bottom-errors .warning.bottom-error-row--actionable:hover {
+  background: color-mix(in srgb, var(--diagnostic-warning-soft) 88%, var(--panel));
+}
+
+.bottom-error-row--actionable:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: -2px;
+}

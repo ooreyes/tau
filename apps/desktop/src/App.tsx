@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
-import { Crosshair, Eye, EyeOff, Gauge, LockKeyhole, MousePointer2, Tag } from "lucide-react";
+import { Eye, EyeOff, Gauge, LockKeyhole, MousePointer2, Tag } from "lucide-react";
 import "./App.css";
 import "./styles/liveControls.css";
 /* Per-concern layers, loaded after App.css so they win at equal specificity.
@@ -27,6 +27,7 @@ import {
 import { SURFACES } from "./chrome/surfaces";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
+import { ProbeIcon } from "./components/editor/ToolIcons";
 import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
 import { UnsavedRecoveryDialog } from "./components/UnsavedRecoveryDialog";
 import {
@@ -158,6 +159,7 @@ import { isInteractiveSchematic, liveControlHint, liveControls } from "./schemat
 import {
   MAX_MODEL_LIBRARIES,
   MAX_MODEL_LIBRARY_TOTAL_LENGTH,
+  liveSchematicDiagnostics,
   retiredKindNotices,
   validateSchematicDocument,
 } from "./schematic/documentValidation";
@@ -293,6 +295,21 @@ const LARGE_RUN_NATIVE_STEPS = 500_000;
  * circuit timescale.
  */
 const LIVE_HORIZON_OUTPUT_STEPS = 100_000_000;
+
+/**
+ * How large a document still gets the deck-emitting half of the live
+ * diagnostics pass (P3-14).
+ *
+ * The structural checks are cheap — one `extractCircuit` and a scan — but the
+ * two classes only a deck can see (a named model that resolved nowhere, a
+ * malformed directive) cost a full emission, and that runs once per edit. A
+ * few hundred parts is the size at which that stops being free, and it is two
+ * orders of magnitude above the schematics this check exists to help with;
+ * `MAX_COMPONENTS` in documentValidation is 5,000, so the cap bites well
+ * before the document does. Above it the pass degrades to structural-only
+ * rather than making typing stutter, and Run still reports the rest.
+ */
+const LIVE_DECK_PROBE_MAX_COMPONENTS = 400;
 
 /**
  * Traces a live run plots, capped at the scope's own palette.
@@ -1395,13 +1412,150 @@ function App() {
       : `${inspectedParts.length} components`;
   const inspectorOpen = Boolean(inspectionKey) && inspectionKey !== inspectorClosedFor;
 
+  /**
+   * Everything wrong with the document as drawn, with no run required (P3-14).
+   *
+   * The Errors dock used to be a run REPORT: it could only ever say "No
+   * analysis yet" over a schematic with no ground, no source and two stranded
+   * terminals. `liveSchematicDiagnostics` is the linter half of
+   * `documentValidation.ts` and answers the same questions from the document
+   * alone.
+   *
+   * Memoised on the store slices themselves rather than on `currentSignature`,
+   * because those references only change when the document changes — a
+   * signature comparison would re-serialize the whole sheet on every render to
+   * discover the same thing.
+   *
+   * `probeDeck` is the expensive class (a named model that resolved nowhere, a
+   * malformed directive) and is only worth paying for on a document small
+   * enough that emitting a deck between keystrokes is not felt. Above the
+   * threshold the pass degrades to the structural checks rather than making
+   * the editor stutter, and the deck's own errors surface on Run as they
+   * always did.
+   *
+   * Schematic mode only, and not merely because that is where the report asks
+   * for it: in the simulator the same dock already lists the run's own
+   * `warnings`, which come from the same `extractCircuit` call, so running
+   * both would print every floating-pin warning twice.
+   */
+  const liveDiagnostics = useMemo(() => (mode !== "schematic" ? [] : liveSchematicDiagnostics({
+    components,
+    wires,
+    netLabels,
+    ascForeignSymbols,
+    ...(components.length <= LIVE_DECK_PROBE_MAX_COMPONENTS
+      ? {
+        probeDeck: () => {
+          buildSpiceDeck(
+            {
+              components,
+              wires,
+              netLabels,
+              params,
+              directives,
+              ascForeignSymbols,
+              userModelLibraries: userModelLibraryTexts,
+              userModelLibraryNames,
+            },
+            // A plain operating point: the cheapest card that still forces the
+            // whole deck — every device model, every `.param`, every directive
+            // — to be emitted and therefore validated.
+            { kind: "op" },
+          );
+        },
+      }
+      : {}),
+  })), [
+    mode, components, wires, netLabels, ascForeignSymbols, params, directives,
+    userModelLibraryTexts, userModelLibraryNames,
+  ]);
+
+  /**
+   * What an Errors row does when it is clicked: take the reader to the part it
+   * is complaining about.
+   *
+   * Selecting is the half this file can do today, and it is the half that
+   * matters on a schematic that fits the viewport — the part highlights and
+   * the inspector opens on it. CENTRING is the deliberately-named seam: the
+   * canvas exposes only `fitSignal`, which frames all artwork and would stomp
+   * the reader's pan, so a reveal input belongs on `Canvas.tsx` and that file
+   * is not this lane's to change (docs/handoff/DOCK.md). When it lands, bump a
+   * reveal signal here alongside the select; nothing else about the row moves.
+   */
+  const [revealTarget, setRevealTarget] = useState<{ id: string; signal: number }>({ id: "", signal: 0 });
+  const revealDiagnosticComponent = useCallback((componentId: string) => {
+    select(componentId);
+    // Selecting says WHICH part; this says WHERE. Canvas pans it into view
+    // without touching zoom, and does nothing when it is already on screen, so
+    // clicking an error never reframes the sheet under the reader. The signal
+    // is bumped rather than compared, so clicking the same row twice still
+    // works after the reader has panned away.
+    setRevealTarget((prev) => ({ id: componentId, signal: prev.signal + 1 }));
+  }, [select]);
+
+  /**
+   * The live rows the dock will actually render, with anything the run has
+   * already said removed.
+   *
+   * The live pass and `extractCircuit` answer some questions from the same
+   * code, so they produce the same STRING — "No ground symbol found." and the
+   * single-pin warnings especially. Leaving the simulator does not invalidate
+   * the analysis, so carrying a failed run back into the editor put both
+   * copies on screen at once: the dock printed the same sentence twice and the
+   * badge counted it twice. That is the reported state (the evidence
+   * screenshot is the editor after a run), so the de-duplication has to happen
+   * here rather than being left to the reader.
+   *
+   * The run's row is the one kept, because it is the one that carries
+   * `role="alert"` and the failure's own ordering; the live copy is redundant
+   * on a document the run has already judged.
+   */
+  const dockIssues = useMemo(() => {
+    if (liveDiagnostics.length === 0) return liveDiagnostics;
+    const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
+    const spoken = new Set<string>([
+      ...(activeAnalysis && !activeAnalysis.ok && activeAnalysis.message ? [activeAnalysis.message] : []),
+      ...(activeAnalysis?.warnings ?? []),
+      ...notices,
+    ]);
+    if (spoken.size === 0) return liveDiagnostics;
+    return liveDiagnostics.filter((issue) => !spoken.has(issue.message));
+  }, [liveDiagnostics, activeAnalysis, activeFilePath, importWarningsByPath]);
+
   const diagnosticsBadge = useMemo(() => {
+    if (analysisRunning) return null;
+    const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
+    const failed = Boolean(activeAnalysis && !activeAnalysis.ok);
+    // The live rows are counted here too, because the report's done-when is
+    // that the badge equals the row count — and BottomPanel now renders both
+    // lists. The two arithmetics have to stay the same expression; see the
+    // note above about why this count is hoisted rather than reported upward.
+    // It counts `dockIssues`, not `liveDiagnostics`, for the same reason the
+    // dock renders them: a row removed as a duplicate is a row not there.
+    const count = (failed ? 1 : 0) + (activeAnalysis?.warnings?.length ?? 0) + notices.length
+      + dockIssues.length;
+    if (count === 0) return null;
+    const tone = failed || dockIssues.some((issue) => issue.severity === "error")
+      ? ("error" as const)
+      : ("warning" as const);
+    return { text: String(count), tone };
+  }, [activeAnalysis, analysisRunning, activeFilePath, importWarningsByPath, dockIssues]);
+
+  /**
+   * Which part of the badge is worth raising a peeked drawer for.
+   *
+   * A run landing or an import reporting is news; the live count moving as
+   * someone places and wires a part is not, and yanking the drawer open on
+   * every edit would fight them. So the raise key deliberately omits
+   * `liveDiagnostics` even though the badge counts it.
+   */
+  const diagnosticsRaiseKey = useMemo(() => {
     if (analysisRunning) return null;
     const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
     const failed = Boolean(activeAnalysis && !activeAnalysis.ok);
     const count = (failed ? 1 : 0) + (activeAnalysis?.warnings?.length ?? 0) + notices.length;
     if (count === 0) return null;
-    return { text: String(count), tone: failed ? ("error" as const) : ("warning" as const) };
+    return `${failed ? "error" : "warning"}:${count}`;
   }, [activeAnalysis, analysisRunning, activeFilePath, importWarningsByPath]);
 
   // Prefer ngspice `.meas ac` printout when present (P1.6).
@@ -3691,12 +3845,28 @@ function App() {
                 interactive
                 fitSignal={fitSignal}
                 fitInsetBottom={drawerCover.bottom}
+                revealComponentId={revealTarget.id}
+                revealSignal={revealTarget.signal}
                 onSelectionRect={setSelectionRect}
               />
             </Suspense>
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState
                 projectOpen
+                // P3-04B (TOOLBAR handoff): this card renders INSIDE an open,
+                // empty schematic, so the "create or open a schematic" copy
+                // told a reader to do the thing they had already done. The
+                // first EmptyState, over a shell with no file open, keeps that
+                // copy and must not take this prop.
+                schematicOpen
+                onShowParts={() => {
+                  // Set-true, not `onFocusComponents`: that handler TOGGLES,
+                  // and at the widths this card appears at the rail is
+                  // usually already open — so reusing it would close the panel
+                  // the copy just pointed at.
+                  setPartsOpen(true);
+                  setComponentFocusSignal((value) => value + 1);
+                }}
                 onNewCircuit={() => void startNewCircuit()}
                 onAskBode={openAssistant}
                 offerFirstSuccess={shouldOfferLearningPath(learningPath)}
@@ -3751,7 +3921,10 @@ function App() {
                     aria-pressed={toolMode === "probe"}
                     title="Plot a node\u2019s voltage over time"
                   >
-                    <Crosshair size={13} strokeWidth={1.7} aria-hidden="true" />
+                    {/* P3-12 (TOOLBAR handoff): the same red multimeter probe the editor
+                      * tool strip draws, so the two surfaces stop disagreeing about what
+                      * the probe tool looks like. */}
+                    <ProbeIcon size={13} aria-hidden="true" />
                     <span>Probe</span>
                   </button>
                   <button
@@ -3913,6 +4086,10 @@ function App() {
                     onActuate={handleActuate}
                     fitSignal={fitSignal}
                     fitInsetBottom={drawerCover.bottom}
+                    /* The dock is mounted outside both mode branches, so an
+                     * Errors row is clickable here too and must reveal here too. */
+                    revealComponentId={revealTarget.id}
+                    revealSignal={revealTarget.signal}
                     onSelectionRect={setSelectionRect}
                     currentVisualizer={currentVisualizer}
                   />
@@ -4006,14 +4183,23 @@ function App() {
             preferredHeight={mode === "simulator" ? "half" : "peek"}
             preferredTab={mode === "simulator" ? "waveforms" : "errors"}
             errorBadge={diagnosticsBadge}
+            badgeRaiseKey={diagnosticsRaiseKey}
             errors={
               <BottomPanel
                 result={activeAnalysis}
                 isRunning={analysisRunning}
                 notices={activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : []}
+                issues={dockIssues}
+                onSelectComponent={revealDiagnosticComponent}
               />
             }
-            measurements={componentRows.length === 0 ? null : (
+            // P3-14: Measurements is a SIMULATOR surface. It leaked into the
+            // schematic because the gate was row count alone, and leaving the
+            // simulator does not invalidate the analysis — so any successful
+            // run left a populated Measurements tab sitting next to Errors in
+            // the editor, which is the reported screenshot exactly. The
+            // simulator's own measurement surfaces are untouched.
+            measurements={mode !== "simulator" || componentRows.length === 0 ? null : (
               <ComponentMeasurementsPanel
                 rows={componentRows}
                 selectedId={selectedId}

@@ -1005,7 +1005,19 @@ const CHECKS = [
         return {
           tabs,
           hasMeasurementsTab: tabs.some((t) => /measurement/i.test(t ?? "")),
-          hasErrorsTab: tabs.some((t) => /error/i.test(t ?? "")),
+          /*
+           * A heading counts, not just a tab - and this check used to get that
+           * backwards. The contract's own clause is "no tab strip if there is
+           * one item", so a correctly-fixed schematic dock withholds both
+           * Measurements and Waveforms and renders a bare
+           * <h2 class="results-drawer-section">Errors</h2> with no [role=tab]
+           * anywhere. Demanding a tab therefore scored the fix as a failure.
+           * `hasMeasurementsTab` stays as it is: its ABSENCE is the thing under
+           * test, and absence is measured the same either way.
+           */
+          hasErrorsTab: tabs.some((t) => /error/i.test(t ?? ""))
+            || /error/i.test(drawer?.querySelector(".results-drawer-section")?.textContent ?? ""),
+          errorsSurface: tabs.some((t) => /error/i.test(t ?? "")) ? "tab" : "heading",
           drawerFound: Boolean(drawer),
           drawerText: drawer?.textContent?.replace(/\s+/g, " ").trim().slice(0, 400) ?? null,
           rows: [...new Set(rows)].slice(0, 12),
@@ -1022,7 +1034,7 @@ const CHECKS = [
         detail: `pre-run, a lone ungrounded resistor produced ${preRun.rows.length} diagnostic row(s) `
           + `-> flagged: ${flagsPreRun}; then after ${ranNote} and returning to the schematic (mode "${mode}"), `
           + `dock tabs are [${dock.tabs.join(", ")}] - Measurements present: ${dock.hasMeasurementsTab}, `
-          + `Errors present: ${dock.hasErrorsTab}, badge "${dock.badgeText}"`,
+          + `Errors present: ${dock.hasErrorsTab} (as a ${dock.errorsSurface}), badge "${dock.badgeText}"`,
         data: { preRun, dock, ranNote, mode },
       };
     },

@@ -312,7 +312,9 @@ describe("App schematic workspace tools", () => {
       target: { value: "Continue the two-bit register work" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
+    // `New tab`, not the empty state's "New schematic": with P3-04B that card
+    // stops offering to create a schematic once one is already open and empty.
+    fireEvent.click(screen.getByRole("button", { name: "New tab" }));
     await screen.findByRole("tab", { name: /untitled-2\.asc/ });
     expect(screen.getByRole("textbox", { name: "Message the assistant" })).toHaveProperty(
       "value",
@@ -829,9 +831,18 @@ describe("App project-folder gate", () => {
 describe("closing an empty untitled schematic (P3-05)", () => {
   const untitled2 = `${DEFAULT_WORKSPACE_ID}/untitled-2.asc`;
 
-  /** Mint a second untitled file, which is what produces the reported ladder. */
+  /**
+   * Mint a second untitled file, which is what produces the reported ladder.
+   *
+   * Through the tab strip's `New tab`, not the empty state's "New schematic".
+   * The gesture moved with P3-04B: over an OPEN but empty schematic the card
+   * no longer offers to make another schematic (that was the reported wrong
+   * copy — it told a reader to do the thing they had just done) and offers
+   * "Browse components" instead. `New tab` is the surviving mint route from
+   * that state, and it reaches the same `startNewCircuit`.
+   */
   async function mintSecondUntitled() {
-    fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
+    fireEvent.click(screen.getByRole("button", { name: "New tab" }));
     await screen.findByRole("tab", { name: /untitled-2\.asc/ });
     // The file exists on disk before a single edit - that is the whole defect.
     expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankAscText());
@@ -917,6 +928,28 @@ describe("closing an empty untitled schematic (P3-05)", () => {
     expect(useProject.getState().workspaceFiles[path].contents).toBe(blankAscText());
   });
 
+  it("never deletes a minted file the user has renamed, even while it is still empty", async () => {
+    // The rename gate, which the mint-name condition exists for: a name the
+    // user typed is a name they meant. Everything else still points at delete
+    // (Tau minted it, the document is empty, the bytes are the template), so
+    // the basename is the only thing keeping this file alive.
+    await renderOpenProject();
+    await mintSecondUntitled();
+
+    const tab = screen.getByRole("tab", { name: /untitled-2\.asc/ });
+    fireEvent.doubleClick(tab);
+    const renameInput = await screen.findByRole("textbox", { name: "Rename untitled-2.asc" });
+    fireEvent.change(renameInput, { target: { value: "gain-stage" } });
+    fireEvent.keyDown(renameInput, { key: "Enter" });
+    const renamed = `${DEFAULT_WORKSPACE_ID}/gain-stage.asc`;
+    await waitFor(() => expect(useProject.getState().workspaceFiles[renamed]).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Close gain-stage.asc" }));
+
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /gain-stage\.asc/ })).toBeNull());
+    expect(useProject.getState().workspaceFiles[renamed].contents).toBe(blankAscText());
+  });
+
   it("keeps the file and says why when the delete does not take", async () => {
     await renderOpenProject();
     await mintSecondUntitled();
@@ -935,5 +968,232 @@ describe("closing an empty untitled schematic (P3-05)", () => {
     await waitFor(() => expect(screen.queryByRole("tab", { name: /untitled-2\.asc/ })).toBeNull());
     expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankAscText());
     expect((await screen.findAllByText(/Kept untitled-2\.asc/)).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * A real, solvable loop - 5 V across a 1k into ground - so a transient
+ * genuinely completes and `componentMeasurements` has rows to offer. Copied
+ * rather than shared because the fixture in `App.liveControls.test.tsx` is
+ * shaped for the switch band, and a fixture two suites can edit is a fixture
+ * that breaks the other one.
+ */
+const SOLVED_LOOP = [
+  { id: "v1", kind: "vsource" as const, x: -128, y: 96, rotation: 0 as const, value: "5", label: "V1" },
+  { id: "r1", kind: "resistor" as const, x: 160, y: 0, rotation: 0 as const, value: "1k", label: "R1" },
+  { id: "gnd", kind: "ground" as const, x: -128, y: 160, rotation: 0 as const, value: "", label: "" },
+];
+const SOLVED_LOOP_WIRES = [
+  { id: "w1", points: [{ x: -128, y: 128 }, { x: -128, y: 160 }] },
+  { id: "w2", points: [{ x: -128, y: 64 }, { x: -128, y: 0 }, { x: 128, y: 0 }] },
+  { id: "w3", points: [{ x: 192, y: 0 }, { x: 192, y: 160 }, { x: -128, y: 160 }] },
+];
+
+const dockRows = () => [...document.querySelectorAll(".bottom-errors > *")];
+const dockText = () => document.querySelector(".bottom-errors")?.textContent ?? "";
+
+describe("the schematic dock is Errors only, and catches problems before Run (P3-14)", () => {
+  it("stops offering Measurements in schematic mode after a run, while the simulator keeps it", async () => {
+    await renderOpenProject();
+    act(() => useSchematic.setState({
+      components: SOLVED_LOOP,
+      wires: SOLVED_LOOP_WIRES,
+      directives: [".tran 1m"],
+      past: [],
+      future: [],
+    }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Run simulation" })[0]);
+    // The simulator is where measurements belong, so this is the precondition,
+    // not the defect: the tab has to be there before its absence next door
+    // means anything.
+    const measurementsTab = await screen.findByRole("tab", { name: /Measurements/ });
+    expect(measurementsTab).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Schematic" }));
+
+    // The reported state exactly: leaving the simulator does not invalidate
+    // the analysis, so before the fix the populated Measurements tab followed
+    // the user back into the editor.
+    expect(screen.queryByRole("tab", { name: /Measurement/i })).toBeNull();
+    expect(document.querySelector(".results-drawer-tabs-root")).toBeNull();
+    // ... and what is left reads as a section, not as a chooser with one
+    // choice.
+    expect(screen.getByRole("heading", { name: /Errors/ })).toBeTruthy();
+
+    // The guard that stops the fix being "delete the Measurements tab".
+    fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
+    expect(await screen.findByRole("tab", { name: /Measurements/ })).toBeTruthy();
+  });
+
+  it("lists what is wrong with a lone resistor with no run at all, and the badge equals the row count", async () => {
+    await renderOpenProject();
+    act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+
+    // No Run, no analysis: this dock used to read "No analysis yet" over a
+    // schematic with no ground, no source and two stranded terminals.
+    await waitFor(() => expect(dockRows().length).toBeGreaterThan(0));
+    expect(dockText()).toContain("No ground symbol found.");
+    expect(dockText()).toContain("No source");
+    expect(dockText()).toMatch(/R1\.\w+ is only connected to one pin\./);
+
+    // The report's done-when, measured rather than assumed: the count on the
+    // collapsed drawer is the number of rows behind it.
+    const badge = document.querySelector(".results-drawer-badge")!;
+    expect(badge.textContent).toBe(String(dockRows().length));
+    // ...and the count the panel's own head shows agrees with both.
+    expect(document.querySelector(".bottom-panel-count")?.textContent)
+      .toBe(String(dockRows().length));
+  });
+
+  it("clears its rows as the circuit is completed, without a run in between", async () => {
+    await renderOpenProject();
+    act(() => useSchematic.setState({
+      components: SOLVED_LOOP,
+      wires: SOLVED_LOOP_WIRES,
+      directives: [".tran 1m"],
+      past: [],
+      future: [],
+    }));
+
+    // A live linter that only ever accumulates is a linter nobody trusts: the
+    // rows have to go away when the problem does.
+    await waitFor(() => expect(dockRows().length).toBe(0));
+    expect(document.querySelector(".results-drawer-badge")).toBeNull();
+  });
+
+  it("selects the offending part when its row is clicked", async () => {
+    await renderOpenProject();
+    act(() => useSchematic.setState({
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+        // The collider: same designator, so the row names a part and can
+        // therefore select one. `R1` twice is an error the deserializer
+        // already refuses; this proves the live pass points at the second.
+        { id: "r2", kind: "resistor", x: 128, y: 0, rotation: 0, value: "1k", label: "R1" },
+      ],
+      wires: [],
+      directives: [],
+      past: [],
+      future: [],
+    }));
+
+    const row = await waitFor(() => {
+      const found = dockRows().find((node) => /Duplicate reference/.test(node.textContent ?? ""));
+      expect(found).toBeTruthy();
+      return found as HTMLElement;
+    });
+    expect(row.tagName).toBe("BUTTON");
+
+    fireEvent.click(row);
+
+    expect(useSchematic.getState().selectedId).toBe("r2");
+  });
+
+  it("does not print the same problem twice after a failed run is carried back into the editor", async () => {
+    await renderOpenProject();
+    // A circuit that FAILS extraction for the same reason the live pass
+    // complains about: leaving the simulator does not invalidate the analysis,
+    // so the run's own message and the live row are both in scope at once.
+    act(() => useSchematic.setState({
+      components: [
+        { id: "v1", kind: "vsource", x: -128, y: 96, rotation: 0, value: "5", label: "V1" },
+        { id: "r1", kind: "resistor", x: 160, y: 0, rotation: 0, value: "1k", label: "R1" },
+      ],
+      wires: SOLVED_LOOP_WIRES,
+      directives: [".tran 1m"],
+      past: [],
+      future: [],
+    }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Run simulation" })[0]);
+    await waitFor(() => expect(dockText()).toContain("No ground symbol found."));
+
+    fireEvent.click(screen.getByRole("button", { name: "Schematic" }));
+
+    await waitFor(() => expect(dockRows().length).toBeGreaterThan(0));
+    const texts = dockRows().map((node) => node.textContent ?? "");
+    const grounds = texts.filter((text) => text.includes("No ground symbol found."));
+    expect(grounds.length).toBe(1);
+    // The badge is only honest if it counts what is actually rendered.
+    expect(document.querySelector(".results-drawer-badge")?.textContent)
+      .toBe(String(dockRows().length));
+    expect(new Set(texts).size).toBe(texts.length);
+  });
+});
+
+/**
+ * Requested by the EXPLORER lane in docs/handoff/EXPLORER.md: P3-02's last
+ * unproven clause. `ExplorerPanel.test.tsx` can only prove the panel calls the
+ * injected `onMoveNode`, and `project/types.test.ts` only proves
+ * `remapMovedProjectPath` computes the right string. Nothing drove the two
+ * together through App, which is where the tab list actually lives — and that
+ * seam is the one that would silently leave a tab pointing at a path with no
+ * file behind it.
+ */
+describe("an open tab follows its file when the explorer moves it (P3-02, EXPLORER handoff)", () => {
+  it("rewrites the open tab's path and keeps it active after the drop", async () => {
+    const source = `${DEFAULT_WORKSPACE_ID}/gain.asc`;
+    const file = {
+      path: source,
+      name: "gain.asc",
+      contents: blankAscText(),
+      kind: "asc" as const,
+    };
+    // A `.keep` is how `defaultWorkspaceTree` learns about a directory that
+    // holds nothing yet; the folder has to exist as a drop target before the
+    // file is dragged onto it.
+    const keep = {
+      path: `${DEFAULT_WORKSPACE_ID}/Filters/.keep`,
+      name: ".keep",
+      contents: "",
+      kind: "asc" as const,
+    };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([file, keep]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [source]: file, [keep.path]: keep },
+      error: null,
+      capability: "none",
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "gain.asc" }));
+    await screen.findByRole("tab", { name: /gain\.asc/ });
+
+    const fileRow = screen.getByRole("button", { name: "gain.asc" });
+    const folderRow = screen.getByRole("button", { name: "Filters" });
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      effectAllowed: "uninitialized",
+      dropEffect: "none",
+      setData: (type: string, value: string) => void values.set(type, value),
+      getData: (type: string) => values.get(type) ?? "",
+    } as unknown as DataTransfer;
+
+    fireEvent.dragStart(fileRow, { dataTransfer });
+    fireEvent.dragOver(folderRow, { dataTransfer });
+    fireEvent.drop(folderRow, { dataTransfer });
+
+    const moved = `${DEFAULT_WORKSPACE_ID}/Filters/gain.asc`;
+    await waitFor(() => expect(useProject.getState().workspaceFiles[moved]).toBeTruthy());
+    // The whole point: the tab is still the same tab, still selected, and it
+    // now names the file where it actually is.
+    const tab = await screen.findByRole("tab", { name: /gain\.asc/ });
+    expect(tab.getAttribute("aria-selected")).toBe("true");
+    expect(useProject.getState().workspaceFiles[source]).toBeUndefined();
+
+    // The basename never changed, so a name assertion alone would pass on a
+    // tab still pointing at the old directory. Saving is what measures the
+    // remap: the bytes have to land at the NEW path, and the old one must not
+    // come back.
+    act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+    fireEvent.keyDown(document.body, { key: "s", metaKey: true });
+    await waitFor(() => {
+      expect(useProject.getState().workspaceFiles[moved].contents).toContain("SYMBOL res");
+    });
+    expect(useProject.getState().workspaceFiles[source]).toBeUndefined();
   });
 });

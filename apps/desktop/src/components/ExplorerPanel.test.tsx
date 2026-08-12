@@ -33,7 +33,30 @@ beforeAll(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 });
 
+/**
+ * This jsdom run has no localStorage at all (Node's own global refuses without
+ * --localstorage-file), so `loadPanelWidth` always hands back the panel's
+ * 226px default and no test can exercise another width. Stubbing the one API
+ * it reads is also the real path a user-resized panel takes.
+ *
+ * Most of this file is about tree behaviour, not the header's pixel budget, so
+ * it renders at a width where every primary icon legitimately fits (the
+ * five-icon threshold is 240px - see the P3-04A block). Tests that care what
+ * the *shipped* default renders say so explicitly and stub their own width.
+ */
+const WIDTH_WITH_EVERY_ICON = 300;
+
+const stubExplorerWidth = (width: number) => {
+  const stored = new Map<string, string>([[EXPLORER_PANEL_WIDTH.storageKey, String(width)]]);
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value),
+    removeItem: (key: string) => stored.delete(key),
+  });
+};
+
 beforeEach(() => {
+  stubExplorerWidth(WIDTH_WITH_EVERY_ICON);
   useProject.setState({
     rootPath: null,
     rootName: null,
@@ -592,6 +615,34 @@ describe("P3-06 - tree rows must read as nested inside their folder", () => {
     expect(css).toMatch(/\.tree-dir\s*\{[^}]*position:\s*relative/);
   });
 
+  it("hangs a guide off the project root too, not only off deeper folders", async () => {
+    // img-003-005 crops exactly one relationship: the project root and the
+    // folder living in it. The root row is not rendered by ProjectTree, so it
+    // used to be the one open folder in the tree with no `.tree-dir` wrapper -
+    // and therefore the one parent-child pair the guide did not mark.
+    const root = useProject.getState().rootPath!;
+    await useProject.getState().createFolder(root, "Filters");
+    const { container } = renderExplorer();
+
+    const rootDir = container.querySelector<HTMLElement>(".tree-project-root-dir");
+    expect(rootDir, "the project root has no .tree-dir wrapper to hang a guide from").toBeTruthy();
+    expect(rootDir!.classList.contains("tree-dir")).toBe(true);
+    expect(rootDir!.getAttribute("data-open")).toBe("true");
+    const rootRow = screen.getByRole("button", { name: /Project root/i });
+    expect(rootDir!.style.getPropertyValue("--tree-indent")).toBe(rootRow.style.paddingLeft);
+    // The wrapper must contain the rows it is annotating, or the guide hangs
+    // beside nothing.
+    expect(rootDir!.contains(screen.getByRole("button", { name: "Filters" }))).toBe(true);
+
+    // A collapsed root has no children to group; the guide must not draw a stub.
+    act(() => { useProject.setState({ expanded: [] }); });
+    expect(container.querySelector<HTMLElement>(".tree-project-root-dir")!.getAttribute("data-open")).toBeNull();
+
+    // The root row is 26px + 2px, not the 22px the shared rule assumes.
+    const css = explorerTreeCss();
+    expect(css).toMatch(/\.tree-project-root-dir\[data-open="true"\]::before\s*\{[^}]*top:\s*28px/);
+  });
+
   it("walks every rendered row and finds its indent exactly one step past its parent's", async () => {
     const root = useProject.getState().rootPath!;
     const analog = await useProject.getState().createFolder(root, "Analog");
@@ -603,11 +654,15 @@ describe("P3-06 - tree rows must read as nested inside their folder", () => {
 
     // Depth from the DOM, not from the component: one `.tree-dir` wrapper per
     // level. A folder row sits inside its OWN wrapper, a file row does not, so
-    // a file is one level deeper than its ancestor-wrapper count.
+    // a file is one level deeper than its ancestor-wrapper count. The project
+    // root's wrapper is the exception - it exists to hang the root's guide
+    // line, and the row inside it is depth 0, not depth 1.
     const depthOf = (row: Element): number => {
       let wrappers = 0;
       for (let el = row.parentElement; el; el = el.parentElement) {
-        if (el.classList.contains("tree-dir")) wrappers += 1;
+        if (el.classList.contains("tree-dir") && !el.classList.contains("tree-project-root-dir")) {
+          wrappers += 1;
+        }
         if (el.classList.contains("tree-list")) break;
       }
       return row.matches(".tree-file") ? wrappers + 1 : wrappers;
@@ -809,24 +864,20 @@ describe("P3-02 - rows must actually be draggable", () => {
  * scripts/pdf3-verify.mjs.
  */
 describe("P3-04A - the overflow trigger must survive every width", () => {
-  // This jsdom run has no localStorage at all (Node's own global refuses
-  // without --localstorage-file), so `loadPanelWidth` would always hand back
-  // the 226px default and no test could exercise another width. Stub the one
-  // API it reads; that is also the real path a user-resized panel takes.
   const renderAtWidth = (width: number) => {
-    const stored = new Map<string, string>([[EXPLORER_PANEL_WIDTH.storageKey, String(width)]]);
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => stored.get(key) ?? null,
-      setItem: (key: string, value: string) => stored.set(key, value),
-      removeItem: (key: string) => stored.delete(key),
-    });
+    stubExplorerWidth(width);
     return renderExplorer();
   };
 
-  // Put it back the way this environment ships it, rather than
-  // `unstubAllGlobals()` - that would also drop the file-wide ResizeObserver
-  // stub and break any render that runs after this block.
-  afterEach(() => vi.stubGlobal("localStorage", undefined));
+  /**
+   * Ink width of the default "SCHEMATICS" caption, measured off the evidence
+   * shot rather than derived from the constant under test: in
+   * screenshots/pdf3-report/img-002-003.png (2x) the caption's lit columns run
+   * 22-164, and the ⋯ glyph fixes the scale at 2, so 71 CSS px. An assertion
+   * against EXPLORER_ROOT_NAME_MIN itself would be circular; this number comes
+   * from outside the code.
+   */
+  const CAPTION_INK_PX = 71;
 
   it("always renders the overflow trigger, at the narrowest width and the widest", () => {
     for (const width of [EXPLORER_PANEL_WIDTH.minWidth, 208, 226, EXPLORER_PANEL_WIDTH.maxWidth]) {
@@ -875,7 +926,7 @@ describe("P3-04A - the overflow trigger must survive every width", () => {
       // The root name is the only flexible item, so it absorbing at least its
       // reserve is exactly "the header does not overflow and the ⋯ is not the
       // casualty" - the failure mode img-002-003 shows the other side of.
-      expect(layout.rootNameWidth, `root name box at ${width}px`).toBeGreaterThanOrEqual(56);
+      expect(layout.rootNameWidth, `root name box at ${width}px`).toBeGreaterThanOrEqual(CAPTION_INK_PX);
       expect(layout.visibleActions, `icons at ${width}px`).toBeGreaterThan(0);
       expect(
         layout.rootNameWidth + layout.visibleActions * 22 + 8 * 2 + 24,
@@ -893,10 +944,40 @@ describe("P3-04A - the overflow trigger must survive every width", () => {
     expect(explorerPrimaryActionCount(Number.POSITIVE_INFINITY, 5)).toBe(5);
   });
 
-  it("shows all five primary icons at the shipped default width - the 'ample space' complaint", () => {
+  it("puts icons back in the shipped-default header without squeezing the caption to an ellipsis", () => {
+    // The 'ample space' complaint: at 226px the header used to be a bare
+    // `SCHEMATICS ⋯`. It is not, any more - but the fix must not overshoot into
+    // the failure on the other side. 226px cannot hold the caption, five 22px
+    // icons, the ⋯ and two 8px gaps (18 + 71 + 8 + 110 + 8 + 24 = 239 > 226),
+    // so the honest answer at the default is four icons and an intact name; the
+    // fifth is one ⋯ click away. Charging the caption only 56px approved all
+    // five here and rendered "SCHEMATI…".
     const { container } = renderAtWidth(EXPLORER_PANEL_WIDTH.defaultWidth);
+    const shown = [...container.querySelectorAll(".explorer-primary-actions button")]
+      .map((b) => b.getAttribute("aria-label"));
+    expect(shown.length).toBeGreaterThan(1);
+    expect(shown[0]).toBe("New schematic file");
+    expect(screen.getByRole("button", { name: "More explorer actions" })).toBeTruthy();
+
+    const layout = explorerHeaderLayout(EXPLORER_PANEL_WIDTH.defaultWidth, 5);
+    expect(layout.visibleActions).toBe(shown.length);
+    expect(
+      layout.rootNameWidth,
+      "the SCHEMATICS caption is being truncated to make room for an icon",
+    ).toBeGreaterThanOrEqual(CAPTION_INK_PX);
+  });
+
+  it("restores the fifth icon as soon as the panel is wide enough to hold it honestly", () => {
+    // Progressive, not binary: every icon comes back on its own, and the one
+    // that comes back last is the one that left first.
+    const { container } = renderAtWidth(WIDTH_WITH_EVERY_ICON);
     expect(container.querySelectorAll(".explorer-primary-actions button")).toHaveLength(5);
     expect(screen.getByRole("button", { name: "More explorer actions" })).toBeTruthy();
+    expect(explorerHeaderLayout(WIDTH_WITH_EVERY_ICON, 5).rootNameWidth)
+      .toBeGreaterThanOrEqual(CAPTION_INK_PX);
+    // …and the threshold is where the arithmetic says it is, not lower.
+    expect(explorerPrimaryActionCount(240, 5)).toBe(5);
+    expect(explorerPrimaryActionCount(239, 5)).toBe(4);
   });
 
   it("keeps every dropped action reachable from the ⋯ menu at the narrowest width", async () => {

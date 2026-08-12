@@ -797,10 +797,23 @@ const SINGLE_PIN_WARNING = /^(.+) is only connected to one pin\.$/;
 export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagnostic[] {
   const components = input.components;
   const netLabels = input.netLabels ?? [];
+  const foreignSymbols = input.ascForeignSymbols ?? [];
   // A sheet with no parts on it is not a broken circuit, it is an empty one.
   // Without this gate a brand-new untitled schematic opens shouting "No ground
   // symbol found." at someone who has not drawn anything yet.
-  if (components.length === 0) return [];
+  //
+  // Foreign symbols are the exception, and a fail-closed one: they live in a
+  // collection of their own, so an import made entirely of parts Tau has no
+  // model for reaches here with `components` empty. Returning [] there would
+  // present an unsimulatable sheet as a clean one. The refusal is reported on
+  // its own — a sheet with no Tau-modelled part in it has no topology worth
+  // lecturing about.
+  if (components.length === 0) {
+    const refusal = simulationBlockReason(components, foreignSymbols);
+    return refusal
+      ? [{ id: "unsupported-model::0", code: "unsupported-model", severity: "error", message: refusal }]
+      : [];
+  }
 
   const errors: LiveDiagnostic[] = [];
   const warnings: LiveDiagnostic[] = [];
@@ -884,7 +897,7 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
   // Verbatim from `simulationIntegrity`, which is where the refusal is worded.
   // It SAYS it refused and names what it refused over; paraphrasing it here
   // would be the one thing this item is not allowed to soften.
-  const refusal = simulationBlockReason(components, input.ascForeignSymbols ?? []);
+  const refusal = simulationBlockReason(components, foreignSymbols);
   if (refusal) {
     const named = components.find((component) => refusal.includes(partName(component)));
     push({

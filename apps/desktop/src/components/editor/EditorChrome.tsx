@@ -9,20 +9,19 @@
 import { useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
-  Crosshair,
-  Eraser,
   MousePointer2,
   Play,
   Plus,
-  Redo2,
   SlidersHorizontal,
   Square,
-  Tag,
-  Trash2,
-  Undo2,
   X,
 } from "lucide-react";
 import { useSchematic } from "../../store/useSchematic";
+/* P3-12/P3-13: the tool glyphs moved to their own module so this file stays a
+ * strip of controls rather than a sheet of path data. Select and Simulation
+ * setup keep their lucide glyphs - they depict no object, so DESIGN_SYSTEM 0.1
+ * keeps them neutral and there was nothing to redraw. */
+import { EraserIcon, ProbeIcon, RedoIcon, TagIcon, TrashIcon, UndoIcon, WireIcon } from "./ToolIcons";
 
 export function EditorToolbar({
   mode,
@@ -69,33 +68,27 @@ export function EditorToolbar({
       <IconButton title="Select" active={tool.mode === "select"} onClick={cancel}>
         <MousePointer2 size={16} strokeWidth={1.6} />
       </IconButton>
-      <IconButton title="Wire" active={tool.mode === "wire"} disabled={readOnly} onClick={startWiring}>
-        {/* Orthogonal wire with junction endpoints - schematic wires are
-            axis-aligned, so the glyph is a dogleg, not a freeform spline. */}
-        <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M3.2 12.2 H8 V3.8 H12.8" />
-          <circle cx="3.2" cy="12.2" r="1.7" fill="currentColor" stroke="none" />
-          <circle cx="12.8" cy="3.8" r="1.7" fill="currentColor" stroke="none" />
-        </svg>
+      <IconButton title="Wire" tone="wire" active={tool.mode === "wire"} disabled={readOnly} onClick={startWiring}>
+        <WireIcon />
       </IconButton>
-      <IconButton title="Net label (F4)" active={tool.mode === "label"} disabled={readOnly} onClick={startLabeling}>
-        <Tag size={16} strokeWidth={1.6} />
+      <IconButton title="Net label (F4)" tone="tag" active={tool.mode === "label"} disabled={readOnly} onClick={startLabeling}>
+        <TagIcon />
       </IconButton>
-      <IconButton title="Probe" active={tool.mode === "probe"} onClick={startProbing}>
-        <Crosshair size={16} strokeWidth={1.6} />
+      <IconButton title="Probe" tone="probe" active={tool.mode === "probe"} onClick={startProbing}>
+        <ProbeIcon />
       </IconButton>
       <span className="toolbar-divider" />
-      <IconButton title="Undo" disabled={!canUndo || readOnly} onClick={undo}>
-        <Undo2 size={16} strokeWidth={1.6} />
+      <IconButton title="Undo" tone="undo" disabled={!canUndo || readOnly} onClick={undo}>
+        <UndoIcon />
       </IconButton>
-      <IconButton title="Redo" disabled={!canRedo || readOnly} onClick={redo}>
-        <Redo2 size={16} strokeWidth={1.6} />
+      <IconButton title="Redo" tone="redo" disabled={!canRedo || readOnly} onClick={redo}>
+        <RedoIcon />
       </IconButton>
-      <IconButton title="Delete selection (Delete)" disabled={!hasSelection || readOnly} onClick={deleteSelected}>
-        <Trash2 size={16} strokeWidth={1.6} />
+      <IconButton title="Delete selection (Delete)" tone="trash" disabled={!hasSelection || readOnly} onClick={deleteSelected}>
+        <TrashIcon />
       </IconButton>
-      <IconButton title="Clear schematic" disabled={readOnly} onClick={onClearScratchpad}>
-        <Eraser size={16} strokeWidth={1.6} />
+      <IconButton title="Clear schematic" tone="eraser" disabled={readOnly} onClick={onClearScratchpad}>
+        <EraserIcon />
       </IconButton>
       <IconButton title="Simulation setup" disabled={readOnly} onClick={onOpenSimulationSetup}>
         <SlidersHorizontal size={16} strokeWidth={1.6} />
@@ -120,12 +113,23 @@ export function EditorToolbar({
 
 function IconButton({
   title,
+  tone,
   active = false,
   disabled = false,
   onClick,
   children,
 }: {
   title: string;
+  /**
+   * Names the real object this tool depicts, and is the button's only colour
+   * channel (P3-13). It arrives twice on purpose: as a `tool-<tone>` class,
+   * which is what styles/editorToolbarIcons.css feeds the glyph's two paint
+   * slots from, and as `data-tone`, which is what a test can read without
+   * asserting on a class name that is really a stylesheet's private business.
+   * Omitted for tools with no real-world counterpart - they stay neutral, per
+   * DESIGN_SYSTEM 0.1.
+   */
+  tone?: string;
   active?: boolean;
   disabled?: boolean;
   onClick?: () => void;
@@ -133,7 +137,8 @@ function IconButton({
 }) {
   return (
     <button
-      className={`editor-icon-btn${active ? " active" : ""}`}
+      className={`editor-icon-btn${tone ? ` tool-${tone}` : ""}${active ? " active" : ""}`}
+      data-tone={tone}
       disabled={disabled}
       title={title}
       aria-label={title}

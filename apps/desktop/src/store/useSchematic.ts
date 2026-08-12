@@ -247,6 +247,27 @@ interface SchematicState extends Doc {
   /** Clear any active selection (single, multi, or wire). */
   clearSelection: () => void;
   setValue: (id: string, value: string) => void;
+  /**
+   * Converge a legacy independent-source alias onto its canonical kind while
+   * rewriting its value, as ONE undoable transaction. Returns true when the
+   * conversion was legal and applied.
+   *
+   * `vac` / `iac` / `vpulse` are storage aliases that read their value in a
+   * compact POSITIONAL dialect (`params.ts`'s `AC_SOURCE` codec). The moment
+   * the reader picks a waveform the alias cannot hold, the value is rewritten
+   * in the function dialect and the alias can no longer read it - measured,
+   * `decodeParams("vac", "PULSE(0 5 …)")` yields `{offset: "PULSE(0", …}`,
+   * which is what `ascExport` and the canvas caption then print. So kind and
+   * value must move together or not at all, which is why this is one action
+   * and not `setValue` plus a kind edit.
+   *
+   * Only alias -> canonical is permitted, and only in that direction: the
+   * refdes prefix is identical (V/I), the deck builder already prefers the
+   * function spec so the emitted card does not move, and the part stops being
+   * a `TAU_CARRIER_KINDS` stand-in and saves as a clean `voltage` symbol. The
+   * reverse would re-introduce the dialect this exists to escape.
+   */
+  setSourceIdentity: (id: string, kind: ComponentKind, value: string) => boolean;
   /** Operate a switch / push button / SPDT from the canvas. Returns true when
    *  the contact actually moved, so the caller knows whether to re-solve. */
   actuateContact: (id: string, phase: ActuationPhase) => boolean;
@@ -1335,6 +1356,29 @@ export const useSchematic = create<SchematicState>()((set, get) => {
       set((s) => ({
         components: s.components.map((c) => (c.id === id ? { ...c, value } : c)),
       })),
+
+    setSourceIdentity: (id, kind, value) => {
+      const component = get().components.find((c) => c.id === id);
+      if (!component) return false;
+      // A closed table, not a computed rule: every entry here has been checked
+      // to keep the refdes prefix, the pin geometry and the emitted card
+      // unchanged. A new pair must be checked the same way before it is added.
+      const CONVERGES_TO: Partial<Record<ComponentKind, ComponentKind>> = {
+        vac: "vsource",
+        vpulse: "vsource",
+        iac: "isource",
+      };
+      if (CONVERGES_TO[component.kind] !== kind) return false;
+      // Unlike `setValue`, this takes its own snapshot: the caller cannot open
+      // it with `beginChange()` and then have the kind and the value land in
+      // separate entries, which is the failure the whole action exists to
+      // prevent. `recordInto` clears the redo stack the same as any edit.
+      set((s) => ({
+        ...recordInto(s),
+        components: s.components.map((c) => (c.id === id ? { ...c, kind, value } : c)),
+      }));
+      return true;
+    },
     setSubcircuitModel: (id, model, ports) =>
       set((s) => {
         const before = s.components.filter((component) => component.id === id);

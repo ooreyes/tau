@@ -35,6 +35,17 @@ const WAVEFORM_MODES: readonly { value: IndependentSourceMode; label: string }[]
   { value: "sffm", label: "Single-frequency FM" },
 ];
 
+/**
+ * Where each legacy storage alias lands when its value outgrows the alias's
+ * compact positional dialect. Both targets keep the alias's refdes prefix
+ * (V/I) and its pin geometry, so nothing but the storage form moves.
+ */
+const CANONICAL_SOURCE_KIND: Record<IndependentSourceLegacyKind, "vsource" | "isource"> = {
+  vac: "vsource",
+  iac: "isource",
+  vpulse: "vsource",
+};
+
 interface SourceFieldProps {
   label: string;
   value: string;
@@ -215,12 +226,22 @@ export function IndependentSourceEditor({
   legacyKind,
   onBeginChange,
   onValueChange,
+  onIdentityChange,
 }: {
   value: string;
   unit: IndependentSourceUnit;
   legacyKind?: IndependentSourceLegacyKind;
   onBeginChange: (key: string) => void;
   onValueChange: (value: string) => void;
+  /**
+   * Move the part onto its canonical kind AND write its new value in one
+   * undoable step. Only a legacy alias (`vac`/`iac`/`vpulse`) ever needs it,
+   * and only when the chosen waveform is one its compact positional dialect
+   * cannot hold. Optional so this editor still works standalone; when it is
+   * absent the value change is applied on its own, which leaves the part
+   * readable but stored under an alias whose codec cannot parse it.
+   */
+  onIdentityChange?: (kind: "vsource" | "isource", value: string) => void;
 }) {
   const source = decodeIndependentSourceValue(value, unit, legacyKind);
   const commit = (key: string, next: IndependentSourceValue) => {
@@ -229,6 +250,33 @@ export function IndependentSourceEditor({
   };
   const update = (key: string, nextValue: string) =>
     commit(key, updateIndependentSourceField(source, key, nextValue));
+
+  /**
+   * Switching the waveform is the one edit that can outgrow the part's stored
+   * kind. `changeIndependentSourceMode` seeds the new waveform from
+   * `sourceDefaults`, which carries no `legacyKind`, so the value it returns is
+   * always written in the FUNCTION dialect - and a `vac`/`iac`/`vpulse` cannot
+   * read that back: `decodeParams("vac", "PULSE(0 5 …)")` measurably yields
+   * `{offset: "PULSE(0", …}`, which is what the `.asc` writer and the canvas
+   * caption consume. So every waveform switch on an alias converges the part
+   * onto its canonical kind, in the same undoable transaction as the value.
+   *
+   * The begin-change key carries the TARGET waveform rather than the constant
+   * word "mode": `beginParamChange` coalesces by key and snapshots history only
+   * when the key changes, and nothing resets that key for this Select, so a
+   * constant one merged DC -> Sine -> Pulse into a single entry and undo landed
+   * on DC, skipping Sine. One waveform, one undo step.
+   */
+  const changeMode = (next: IndependentSourceMode) => {
+    const nextSource = changeIndependentSourceMode(source, next);
+    if (legacyKind && onIdentityChange) {
+      // `setSourceIdentity` takes its own history snapshot, so no
+      // `onBeginChange` here - that would record a second, empty entry.
+      onIdentityChange(CANONICAL_SOURCE_KIND[legacyKind], encodeIndependentSourceValue(nextSource));
+      return;
+    }
+    commit(`mode:${next}`, nextSource);
+  };
   const parameter = (key: string, label: string, fieldUnit = "") => (
     <SourceField
       key={key}
@@ -247,10 +295,7 @@ export function IndependentSourceEditor({
         <span>Waveform</span>
         <Select
           value={source.mode}
-          onValueChange={(next) => commit(
-            "mode",
-            changeIndependentSourceMode(source, next as IndependentSourceMode),
-          )}
+          onValueChange={(next) => changeMode(next as IndependentSourceMode)}
         >
           <SelectTrigger
             size="sm"
@@ -269,14 +314,32 @@ export function IndependentSourceEditor({
         </Select>
       </label>
 
-      <SourceField
-        label="DC operating point"
-        value={source.dcBias}
-        unit={unit}
-        fieldKey="dcBias"
-        onBeginChange={() => onBeginChange("dcBias")}
-        onValueChange={(nextValue) => update("dcBias", nextValue)}
-      />
+      {/* Exactly ONE bias row per waveform (PDF-3 item 1). This row used to
+          render unconditionally, so a sine printed `DC operating point 5 V`
+          directly above `Offset 5 V` - two names for one number, because
+          `decodeIndependentSourceValue` seeds `dcBias` from the waveform's own
+          inferred bias. For every non-DC waveform that inferred bias already
+          HAS a control (sine's Offset, pulse's Low level, exp's Initial level,
+          PWL's first point), so the row is a duplicate and goes.
+
+          Two labels, because they are two different quantities and must not
+          share a word: `DC level` for a DC source is the source's whole value,
+          and matches the name `params.ts` already gives the `vsource` field.
+          `DC bias` appears only when a function-valued source carries an
+          EXPLICIT `DC <n>` (LTspice's `DC 2 SINE(...)`, which is legal and
+          which imports arrive holding) - there it is a genuine second quantity
+          beside the waveform's offset, and hiding it would let the encoder drop
+          an authored number on the next save. */}
+      {(source.mode === "dc" || source.dcExplicit) && (
+        <SourceField
+          label={source.mode === "dc" ? "DC level" : "DC bias"}
+          value={source.dcBias}
+          unit={unit}
+          fieldKey="dcBias"
+          onBeginChange={() => onBeginChange("dcBias")}
+          onValueChange={(nextValue) => update("dcBias", nextValue)}
+        />
+      )}
 
       {source.mode === "sine" && (
         <>

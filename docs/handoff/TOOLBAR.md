@@ -1,32 +1,67 @@
 # TOOLBAR lane handoff requests (P3-12, P3-13, P3-04B)
 
-Every request below is in a file the TOOLBAR lane does not own. Nothing here
-blocks the lane's own commit: the shipped code degrades sensibly without any of
-them (each entry says how), so these are completion and consistency requests,
-not build breaks. The two marked **BLOCKS** are the exceptions.
+Rewritten after the session-limit abort. The earlier draft of this file was
+written before the code existed and described a stylesheet that borrowed
+`--danger` / `--signal` / `--led-red`; that is obsolete. The orchestrator added
+the real `--tool-*-ink` set in `539e07e` and `styles/editorToolbarIcons.css`
+now consumes those tokens directly, so the whole "four optional tokens" section
+of the old draft is withdrawn. Two requests below are new or changed; the rest
+carry over unchanged.
 
-Measured fact that shaped all of the colour requests below, because it
-contradicts the recon note that suggested `color-mix()`:
-
-> Chromium serialises `color-mix(in srgb, …)` **and** relative colour syntax
-> (`hsl(from var(--x) …)`) as `color(srgb 0.88 0.67 0.36)`, not as `rgb(…)`.
-> `scripts/pdf3-verify.mjs:773` parses colours with `/[\d.]+/g` and divides by
-> 255, so every derived colour reads back as saturation ~0.09-0.25 and the
-> gate scores a correctly coloured strip as grey. Measured in the same
-> headless chromium the gate uses (`chromium.launch({args:["--force-color-profile=srgb"]})`),
-> both themes. Consequence: **every gate-visible accent must be a bare token
-> whose declared value is a hex/rgba literal.** That is why the requests below
-> ask for real `:root` tokens rather than for mixes.
+Status of the two items that used to block this lane: **both cleared.**
+`DESIGN_SYSTEM.md` §0.1 grants the tool-object-ink exception, and the seven
+`--tool-*-ink` pairs exist in all four theme blocks. Nothing further is needed
+from either file except the one measured value correction below.
 
 ---
 
-## apps/desktop/src/App.tsx (DOCK) - second `<EmptyState>`, currently :3697-3704
+## apps/desktop/src/App.css (orchestrator) — `--tool-undo-ink` is half a point below the accent bar in light
 
-Why: P3-04B. That call site renders the card *inside an open, empty schematic*,
-and it reuses the "no schematic open" copy, so it tells a reader who is already
-in a schematic to create or open one.
+Why: `scripts/pdf3-verify.mjs:889` now judges an accent in **HSL saturation**
+(`SAT = 0.3`), not by channel spread. Measured with that script's own `hsl()`
+function on the shipped token values:
 
-Exact change - add two props to the `<EmptyState>` inside
+| Token | Dark | s | Light | s |
+| --- | --- | --- | --- | --- |
+| `--tool-wire-ink` | `#e4574b` | 0.739 | `#c0392b` | 0.634 |
+| `--tool-probe-ink` | `#ea4f42` | 0.800 | `#b32b22` | 0.681 |
+| `--tool-tag-ink` | `#c4a24e` | 0.500 | `#7a601b` | 0.638 |
+| `--tool-eraser-ink` | `#d9829a` | 0.534 | `#9f4463` | 0.401 |
+| `--tool-steel-ink` | `#9aa3ae` | 0.110 | `#5b6572` | 0.112 | (neutral by design — correct) |
+| **`--tool-undo-ink`** | `#8e8fc4` | **0.314** | `#5a5c99` | **0.259** |
+| `--tool-redo-ink` | `#5fb3a6` | 0.356 | `#286d62` | 0.463 |
+
+In the gate's state (a resistor placed) Redo is the one disabled tool, so the
+accented-and-enabled set is exactly {wire, tag, probe, eraser, undo} = 5
+against a floor of `need = 5`. Light-theme undo at 0.259 drops that to **4 and
+the check fails**; dark at 0.314 passes with 0.014 to spare.
+
+Exact change — same violet, more chroma, in **all four** token blocks:
+
+```css
+  --tool-undo-ink:       #9b9ce0;   /* dark  - h239 s0.527, 7.08:1 on #161617 */
+```
+```css
+  --tool-undo-ink:       #4a4ea6;   /* light - h237 s0.383, 6.09:1 on #E8EDF3 */
+```
+
+Both were measured against their own theme's `--panel-3` with the WCAG 2.x
+relative-luminance formula, and both improve on the current contrast (5.92 dark
+/ 5.21 light). Hue is unchanged to within 2deg, so nothing about the design
+moves; only the chroma does.
+
+Blocks: **P3-13's light-theme gate result.** The code needs no edit — the
+stylesheet already reads `var(--tool-undo-ink)`.
+
+---
+
+## apps/desktop/src/App.tsx (DOCK) — second `<EmptyState>`, currently :3813-3820
+
+Why: P3-04B. That call site renders the card *inside an open, empty schematic*
+and reuses the "no schematic open" copy, so it tells a reader who is already in
+a schematic to create or open one.
+
+Exact change — two props on the `<EmptyState>` inside
 `{components.length === 0 && wires.length === 0 && toolMode === "select" && (`:
 
 ```tsx
@@ -34,7 +69,7 @@ Exact change - add two props to the `<EmptyState>` inside
                 projectOpen
                 schematicOpen                      // NEW: selects the "place your first component" copy
                 onShowParts={() => {               // NEW: reveal + focus the Components rail
-                  setPartsOpen(true);              // set-true, NOT the toggling onFocusComponents at :3556-3566
+                  setPartsOpen(true);              // set-true, NOT the toggling onFocusComponents
                   setComponentFocusSignal((value) => value + 1);
                 }}
                 onNewCircuit={() => void startNewCircuit()}
@@ -45,186 +80,140 @@ Exact change - add two props to the `<EmptyState>` inside
 ```
 
 `setPartsOpen(true)` and not `onFocusComponents`: that handler is
-`setPartsOpen((open) => !open)`, and `screenshots/pdf3-verify/before/P3-04B-empty-dark-1280x800.png`
-shows the rail already open at 1280x800, so reusing it would close the panel the
-new copy just pointed at.
+`setPartsOpen((open) => !open)`, and
+`screenshots/pdf3-verify/before/P3-04B-empty-dark-1280x800.png` shows the rail
+already open at 1280x800, so reusing it would close the panel the new copy just
+pointed at.
 
-The **first** `<EmptyState>` (:3621, `mode === "schematic" && !activeProjectFile`)
+The **first** `<EmptyState>` (:3737, `mode === "schematic" && !activeProjectFile`)
 must NOT get `schematicOpen`. "Create or open a schematic" is correct there.
 
+No `data-parts-flash` plumbing is needed: `EmptyState` stamps the attribute on
+the enclosing `.stage` itself and clears it on `animationend` (with a 900 ms
+timeout fallback, because `prefers-reduced-motion` suppresses the animation and
+therefore the event). An earlier draft asked App.tsx for that attribute; that
+request is withdrawn.
+
 Degrades without it: `schematicOpen` defaults to `false`, so the card keeps
-today's copy and P3-04B stays FAIL. **BLOCKS P3-04B.**
-
-Not needed: any `data-parts-flash` plumbing. The highlight pulse is now driven
-from `EmptyState.tsx` itself (it stamps `data-parts-flash="1"` on the enclosing
-`.stage` for one animation cycle and clears it), so App.tsx needs no extra
-state. An earlier draft of this file asked for that attribute; it is withdrawn.
+today's copy. **Blocks P3-04B.**
 
 ---
 
-## apps/desktop/src/App.tsx (DOCK) - simulator Probe button, :3 and :3754
+## apps/desktop/src/App.tsx (DOCK) — simulator Probe button, :30 and :3873 — ALREADY APPLIED
 
-Why: P3-12 says the probe reads as a red multimeter probe *wherever it appears*.
-The editor tool strip is fixed in this lane; the simulator's circuit-tools Probe
-button still draws lucide's crosshair, so the two disagree.
-
-Exact change:
-
-```tsx
--                    <Crosshair size={13} strokeWidth={1.7} aria-hidden="true" />
-+                    <ProbeIcon size={13} aria-hidden="true" />
-```
-
-plus `import { ProbeIcon } from "./components/editor/ToolIcons";` and drop
-`Crosshair` from the line-3 lucide import (it has no other use in App.tsx).
-`ProbeIcon` is exported for exactly this. It draws its red from
-`var(--tool-probe-ink, var(--danger))` through `currentColor`, so it inherits
-whatever colour that button already sets; add `color: var(--danger)` to the
-button's rule if the simulator's tool row should carry the red too.
-
-Degrades without it: the editor shows a red probe and the simulator shows a
-crosshair. Completes P3-12.
+Recorded as done so nobody re-applies it: the import at :30 and
+`<ProbeIcon size={13} aria-hidden="true" />` at :3873 are already in the tree.
+`ProbeIcon` now exists and accepts arbitrary svg props, so that call typechecks.
+Nothing further needed.
 
 ---
 
-## apps/desktop/src/components/SimulationPanel.tsx (NO LANE OWNS THIS FILE) - :7 and :2170
+## apps/desktop/src/components/SimulationPanel.tsx (NO LANE OWNS THIS FILE — orchestrator) — :7 and :2170
 
-Why: same reason. `.scope-empty-state`'s "Nothing to plot yet" glyph is the
-third crosshair.
-
-Exact change:
+Why: P3-12 says the probe reads as a red multimeter probe wherever it appears.
+`.scope-empty-state`'s "Nothing to plot yet" glyph is the last crosshair left.
 
 ```tsx
 -          <Crosshair size={20} strokeWidth={1.5} aria-hidden="true" />
 +          <ProbeIcon size={20} aria-hidden="true" />
 ```
 
-plus `import { ProbeIcon } from "./editor/ToolIcons";`, and drop `Crosshair`
-from the line-7 lucide import (`FileDown` stays).
+plus `import { ProbeIcon } from "./editor/ToolIcons";` and drop `Crosshair`
+from the line-7 lucide import (`FileDown` stays — it has other uses).
+
+Outside `.editor-toolbar` the glyph's `--ti-1` / `--ti-2` are unset, so it
+falls back to `currentColor` and stays monochrome: DESIGN_SYSTEM §0.1's
+"editor tool strip only" clause holds without a special case.
 
 Degrades without it: cosmetic inconsistency only. Completes P3-12.
 
 ---
 
-## apps/desktop/src/components/Canvas.tsx (CANVAS) - :1790-1797
+## apps/desktop/src/components/Canvas.tsx (CANVAS) — :1790-1797
 
 Why: P3-12's "canvas probe cursor affordance". `canvasCursor` is an inline
-`style={{ cursor }}`, so no stylesheet can override it without `!important`,
-and probe mode currently shares the plain `"crosshair"` literal with
-placing/wiring/labeling.
-
-Exact change - split the probe branch out:
+`style={{ cursor }}` (:1818), so no stylesheet can override it without
+`!important`, and probe mode currently shares the plain `"crosshair"` literal
+with placing/wiring/labeling.
 
 ```tsx
 +import { probeCursor } from "./editor/ToolIcons";
    const canvasCursor =
 -    (interactive && (placing || wiring)) || probing || labeling
+-      ? "crosshair"
 +    probing
 +      ? probeCursor()
 +      : (interactive && (placing || wiring)) || labeling
-       ? "crosshair"
++        ? "crosshair"
        : …
 ```
 
-`probeCursor()` lives in the TOOLBAR lane's `components/editor/ToolIcons.tsx`.
-It reads `--danger` / `--comp` off the live document with `getComputedStyle` and
-builds the data-URL at call time, so (a) no raw colour is added to Canvas.tsx,
-(b) the cursor follows the theme, and (c) it returns the plain string
-`"crosshair"` when there is no document or the tokens are unreadable, so jsdom
-and any headless path keep exactly today's value.
+`probeCursor()` reads `--tool-probe-ink` / `--tool-steel-ink` off the live
+document with `getComputedStyle` and builds the data URL at call time, so
+(a) no raw colour is added to Canvas.tsx, (b) the cursor follows the theme, and
+(c) it returns the bare string `"crosshair"` when there is no document or the
+tokens are unreadable — so jsdom and any headless path keep exactly today's
+value and no existing cursor test moves.
 
 Degrades without it: probe mode keeps a crosshair cursor. Completes P3-12's
 cursor clause.
 
 ---
 
-## apps/desktop/src/components/Canvas.tsx (CANVAS) - :1786-1789 - NEGATIVE request
+## apps/desktop/src/components/Canvas.tsx (CANVAS) — :1786-1789 — NEGATIVE request
 
 Do **not** recolour `.probe-marker` red. P3-12's phrase "any probe marker" must
 not be applied literally here. `Canvas.tsx` renders
 `<g className="probe-marker" style={{ color: p.color }}>` and `p.color` comes
 from `store/useSchematic.ts`'s `PROBE_COLORS` rotation, which is the *trace*
 palette: the marker's colour is the identity of its waveform on the scope.
-Painting every marker red would break marker-to-trace correspondence - a
-correctness regression wearing a style fix's clothes - and would contradict
-DESIGN_SYSTEM.md section 0 ("If a legend swatch needs the trace color, that
-swatch IS data"). The first probe already resolves to `--trace-red`.
+Painting every marker red would break marker-to-trace correspondence — a
+correctness regression wearing a style fix's clothes — and would contradict
+DESIGN_SYSTEM §0 ("If a legend swatch needs the trace color, that swatch IS
+data") and §0.1's disjoint-palette clause. The first probe already resolves to
+`--trace-red`, so a single-probe schematic reads red anyway.
 
 Recorded here so no other lane implements P3-12 literally.
 
 ---
 
-## DESIGN_SYSTEM.md (orchestrator) - a scoped subsection under section 4
+## THIRD_PARTY_NOTICES — no change required
 
-Why: the document is normative and its own header says a conflicting change "is
-wrong unless this document is updated in the same commit". Section 0 says
-saturated colour means a measured trace or a status lamp, and "a trace hue may
-never appear in chrome". The editor tool strip is chrome, so P3-13 needs the
-exception written down rather than merely implemented.
-
-Exact change - append to section 4 (Component rules):
-
-```markdown
-**Tool-strip material accents.** One narrowly scoped exception to section 0:
-inside `.editor-toolbar` only, a tool icon may carry a material accent that
-identifies the real object it depicts - a red wire, a kraft tag, a rose
-eraser, a grey trash can, a red multimeter probe. The exception exists
-because these icons are pictures of objects, not status; a nine-glyph
-monochrome strip was reported as unreadable (UI_UX_PDF3.md P3-13). It does
-not extend to any other chrome, it may not use a `--trace-*` hue, and a tool
-with no real-world counterpart (Select, Simulation setup) stays neutral.
-Accents come from `--tool-*-ink` where those tokens exist and otherwise from
-the semantic tokens named in `styles/editorToolbarIcons.css`.
-```
-
-Degrades without it: the code and the normative doc disagree. **BLOCKS P3-13's
-legality, not its behaviour.**
+Stated explicitly so a reviewer need not re-derive it. The seven new glyphs in
+`components/editor/ToolIcons.tsx` are fresh geometry: no lucide path data was
+copied or edited, and nothing was traced from the photographic references in
+the report PDF. Select and Simulation setup still render lucide components,
+which are covered by the existing lucide-react ISC entry (THIRD_PARTY_NOTICES
+:153 and the §5 licence text). No new attribution section is owed.
 
 ---
 
-## apps/desktop/src/App.css (orchestrator) - four optional `--tool-*-ink` tokens
+## VERIFY pass (independent) — what is confirmed still open
 
-Why: quality, not function. The shipped stylesheet already resolves every
-accent, but two of the five borrow a token whose *name* is about something else,
-because no better token exists in both themes:
+Re-measured from the tree, not from the build agent's notes.
 
-| Alias | Ships as | Wanted instead | Why the borrow is imperfect |
-| --- | --- | --- | --- |
-| `--tool-wire-ink` | `--danger` | - | correct as-is |
-| `--tool-tag-ink` | `--signal` | `--tool-tag-ink` | `--signal` is the *running lamp* amber; the kraft tag is not status |
-| `--tool-probe-ink` | `--danger` | - | correct as-is |
-| `--tool-eraser-ink` | `--led-red` | `--tool-eraser-ink` | dark `#ff6b6b` really is eraser-pink, but light `--led-red` is `#c02718`, i.e. the same red as the wire, so the light-theme eraser reads red rather than rose |
-| `--tool-history-undo-ink` | `--success` | - | acceptable |
-| `--tool-history-redo-ink` | `--led-blue` | `--tool-history-redo-ink` | `--led-blue` is LED emission blue, and on light it equals `--accent`, the selection colour |
+1. **`--tool-undo-ink` really does fail the light-theme gate. Confirmed, and
+   the escape hatch does not exist.** `scripts/pdf3-verify.mjs:197` presses
+   Escape at the end of `place()`, so `hasSelection` is false when the strip is
+   sampled and **Delete selection is disabled** — it is excluded from `enabled`
+   and cannot make up the fifth accent. Redo is disabled too (empty future).
+   The enabled toned set is therefore exactly {wire, tag, probe, eraser, undo}:
+   dark `0.739 / 0.500 / 0.800 / 0.534 / 0.314` = 5/5 **PASS**;
+   light `0.634 / 0.638 / 0.681 / 0.401 / 0.259` = 4/5 **FAIL**.
+   Hue distinctness is not the problem (4 distinct in dark, 3 in light, floor 3).
+   The `#4a4ea6` correction above was recomputed independently: s 0.383,
+   6.088:1 on `#E8EDF3`. Both numbers check out. **Still blocking P3-13 in light.**
 
-If you want the upgrade, add these to **all four** token blocks (`:root` :3,
-`@media (prefers-color-scheme: light)` :301, `:root[data-theme="light"]` :441,
-`:root[data-theme="dark"]` :573 - all four, because `styles/palette.test.ts`
-documents that patching only the media query is exactly how the palette drifted
-last time), above the `TAU-TOKEN-ZONE-END` marker at :694:
+2. **P3-12's cursor clause is still open.** `Canvas.tsx:1791` is still the bare
+   `"crosshair"` literal and nothing imports `probeCursor`. The function exists
+   and is tested; the one-line call site has not landed.
 
-```css
-  /* Tool-strip material accents - see DESIGN_SYSTEM section 4. Measured
-     against --panel-3 (dark #161617 / light #E8EDF3). */
-  --tool-tag-ink:           #D9A860;   /* dark  - kraft card, 8.37:1  */
-  --tool-eraser-ink:        #E39AA8;   /* dark  - rubber rose, 8.14:1 */
-  --tool-history-redo-ink:  #7FB2D9;   /* dark  - history blue, 7.98:1 */
-```
-```css
-  --tool-tag-ink:           #8A6320;   /* light - kraft card, 4.59:1  */
-  --tool-eraser-ink:        #B04A62;   /* light - rubber rose, 4.46:1 */
-  --tool-history-redo-ink:  #0E6FA8;   /* light - history blue, 4.62:1 */
-```
+3. **`SimulationPanel.tsx:7,2170` still renders `Crosshair`.** Unchanged.
 
-`styles/editorToolbarIcons.css` already consumes them as
-`var(--tool-tag-ink, var(--signal))` etc., so adding the tokens is the whole
-change - no component or stylesheet edit follows, and no test asserts the
-fallback value.
-
-Do **not** add these to `styles/editorToolbarIcons.css`: DESIGN_SYSTEM 7.4 says
-tokens are defined once in App.css, and `scripts/design-system-dod-grep.mjs:97`
-exempts only `App.css` and `styles/tokens.css` from the hex scan, so a `:root`
-block anywhere else hard-fails that gate.
-
-Degrades without it: the light-theme eraser is red rather than rose, and the
-redo arrow uses the selection blue on light. Everything still passes.
+4. Not a blocker, recorded so nobody chases it: in **light** theme the bin's
+   flutes (`var(--panel-3)` = `#E8EDF3`) measure s 0.314 h 213 in the gate's own
+   HSL, so the "grey trash can" would register as an *accent* if that button were
+   ever enabled when the strip is sampled. It never is (Escape clears the
+   selection first), so today it neither helps nor hurts — but a future gate that
+   samples with a selection live would score the strip 5/5 in light for the wrong
+   reason.

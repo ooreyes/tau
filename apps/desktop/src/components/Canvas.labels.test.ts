@@ -336,6 +336,61 @@ describe("label placement never emits an overlap (P3-07)", () => {
     }
     expect(failures.length, `net-label overlaps:\n  ${failures.slice(0, 6).join("\n  ")}`).toBe(0);
   });
+
+  /** `n` resistors packed onto a 4-wide, 16-unit lattice - every part touching
+   *  its neighbours, which is far denser than a drawn circuit and is the point:
+   *  it is the only way to run the placer out of clear slots. */
+  const saturated = (n: number): SchematicComponent[] =>
+    Array.from({ length: n }, (_, p) => ({
+      id: `x${p}`,
+      kind: "resistor" as const,
+      x: (p % 4) * 16,
+      y: Math.floor(p / 4) * 16,
+      rotation: 0 as const,
+      value: "2.2Meg",
+      label: `R${p}`,
+    }));
+
+  /**
+   * The invariant is only worth as much as its floor. Re-anchoring alone clears
+   * every layout the randomised sweeps above produce (0 shortened, 0 dropped, 0
+   * elided across 2724 labels), so without this case the rest of the ladder
+   * would be unexercised code that the sheet quietly depends on the day a
+   * reader packs a corner. Saturate the lattice until each rung has to fire.
+   */
+  it("walks the whole escalation ladder rather than ever admitting an overlap", () => {
+    const rungs = (n: number) => {
+      const layout = saturated(n);
+      const placements = buildLabelPlacements(layout, []);
+      const tally = { shortened: 0, dropped: 0, elided: 0, omitted: 0 };
+      for (const c of layout) {
+        const placement = placements.get(c.id);
+        if (!placement) tally.omitted += 1;
+        else if (placement.elided) tally.elided += 1;
+        else if (!placement.valText) tally.dropped += 1;
+        else if (placement.valText.endsWith("…")) tally.shortened += 1;
+      }
+      return tally;
+    };
+
+    // Re-anchoring is enough here, and must stay enough: a ten-part cluster
+    // losing text would be the fix costing more than the bug.
+    expect(rungs(10)).toEqual({ shortened: 0, dropped: 0, elided: 0, omitted: 0 });
+    // Each rung, in the order the ladder gives up information: precision, then
+    // the value, then the label, then the slot.
+    expect(rungs(16).shortened).toBeGreaterThan(0);
+    expect(rungs(24).dropped).toBeGreaterThan(0);
+    expect(rungs(24).elided).toBeGreaterThan(0);
+    expect(rungs(40).omitted).toBeGreaterThan(0);
+  });
+
+  it("still inks nothing through anything at saturation, where the ladder bottoms out", () => {
+    for (const n of [16, 24, 40]) {
+      const layout = saturated(n);
+      expect(textCollisions(layout, []), `text-on-text at n=${n}`).toEqual([]);
+      expect(artworkCollisions(layout, []), `label-on-artwork at n=${n}`).toEqual([]);
+    }
+  });
 });
 
 /**
@@ -390,3 +445,58 @@ describe("label advance constants are derived from App.css, not guessed", () => 
   });
 });
 
+
+/**
+ * The escalation ladder is not allowed to cost a drag.
+ *
+ * P3-07 took the candidate count per label from 6 to 42 and the text forms
+ * from 1 to 4, and every candidate was scored against every obstacle on the
+ * sheet. Measured on a 300-part sheet, that took `buildLabelPlacements` from
+ * 10.5 ms to 267 ms, and the three passes one render makes - the placements
+ * themselves, `autoNetLabelOffsets` (which calls the placer again to seed the
+ * text it must avoid) and `circuitBoundsWithLabels` (again) - from 38 ms to
+ * 745 ms. Every one of those runs on any component or wire change, so a
+ * 300-part sheet dragged at roughly one frame a second.
+ *
+ * `nearCandidates` fixes it by scoring only the obstacles the candidates can
+ * reach, which is provably answer-preserving. The budget below is deliberately
+ * ~3x the measured 88 ms rather than tight: this exists to catch the next
+ * accidental O(n^2 x candidates) pass, not to police CI jitter.
+ */
+describe("label placement stays cheap enough to drag (P3-07 escalation cost)", () => {
+  const PARTS = 300;
+  const sheet = () => {
+    const components: SchematicComponent[] = Array.from({ length: PARTS }, (_, i) => ({
+      id: `R${i}`,
+      kind: "resistor" as ComponentKind,
+      x: (i % 20) * 64,
+      y: Math.floor(i / 20) * 64,
+      rotation: 0 as const,
+      value: "2.2Meg",
+      label: `R${i}`,
+    }));
+    const wires: SchematicWire[] = Array.from({ length: PARTS }, (_, i) => ({
+      id: `w${i}`,
+      points: [
+        { x: (i % 20) * 64, y: Math.floor(i / 20) * 64 - 32 },
+        { x: (i % 20) * 64 + 64, y: Math.floor(i / 20) * 64 - 32 },
+      ],
+    }));
+    const netLabels: NetLabel[] = Array.from({ length: PARTS / 10 }, (_, i) => ({
+      id: `n${i}`, x: (i % 20) * 64, y: Math.floor(i / 20) * 64, text: `net${i}`,
+    }));
+    return { components, wires, netLabels };
+  };
+
+  it("places 300 parts and their net labels in well under a frame budget's worth of seconds", () => {
+    const { components, wires, netLabels } = sheet();
+    // Warm the JIT: the first call of a cold function is not what a drag pays.
+    buildLabelPlacements(components.slice(0, 20), wires.slice(0, 20));
+    const started = performance.now();
+    buildLabelPlacements(components, wires);
+    autoNetLabelOffsets(netLabels, components, wires, []);
+    const elapsed = performance.now() - started;
+    expect(elapsed, `one render's label geometry for ${PARTS} parts took ${elapsed.toFixed(1)}ms`)
+      .toBeLessThan(250);
+  });
+});

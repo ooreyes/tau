@@ -474,6 +474,26 @@ describe("live schematic diagnostics (P3-14)", () => {
     expect(liveSchematicDiagnostics({ components: [], wires: [], netLabels: [{ id: "n", x: 0, y: 0, text: "out" }] })).toEqual([]);
   });
 
+  it("still says it REFUSED an .asc whose parts are ALL foreign, where there is no Tau component to count", () => {
+    // The import that carries nothing Tau can model: `ascForeignSymbols` is a
+    // collection of its own, so `components` is empty and the empty-sheet gate
+    // would have swallowed the refusal — silently presenting an unsimulatable
+    // sheet as a clean one, which is precisely what fail-closed forbids.
+    const rows = liveSchematicDiagnostics({
+      components: [],
+      wires: [],
+      ascForeignSymbols: [
+        { type: "PowerProducts\\LTC4449", x: 0, y: 0, orientation: "R0", attrs: { InstName: "U1" } },
+      ],
+    });
+    expect(codesOf(rows)).toEqual(["unsupported-model"]);
+    expect(rows[0].message).toContain("Simulation refused");
+    expect(rows[0].message).toContain("No approximate or partial circuit was run.");
+    // And nothing about ground or sources: a sheet Tau cannot model at all is
+    // not a sheet to lecture about topology.
+    expect(rows[0].severity).toBe("error");
+  });
+
   it("reports nothing for a sound circuit, so the dock stays quiet when it should", () => {
     const { components, wires } = soundCircuit();
     expect(liveSchematicDiagnostics({ components, wires, probeDeck: deckProbe(components, wires) })).toEqual([]);

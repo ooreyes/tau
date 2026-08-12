@@ -3,9 +3,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Canvas } from "./Canvas";
-import { circuitBounds, circuitBoundsWithLabels } from "./Canvas.geometry";
+import { buildLabelPlacements, circuitBounds, circuitBoundsWithLabels, sourceValueLabel } from "./Canvas.geometry";
 import { useSchematic } from "../store/useSchematic";
-import type { SchematicAscShape } from "../schematic/types";
+import type { SchematicAscShape, SchematicComponent } from "../schematic/types";
+
+// Structural, not imported: the store's state interface is module-local, and
+// widening its visibility for a test is not this lane's file to change.
+type SchematicState = ReturnType<typeof useSchematic.getState>;
 
 class ResizeObserverStub {
   observe() {}
@@ -235,7 +239,7 @@ const APP_TYPING_GUARD =
 describe("Canvas - a selected net label answers Delete and Backspace (P3-11)", () => {
   const LABEL = { id: "n1", x: 32, y: 64, text: "endn" };
 
-  const renderWithLabel = (extra: Parameters<typeof useSchematic.setState>[0] = {}) => {
+  const renderWithLabel = (extra: Partial<SchematicState> = {}) => {
     useSchematic.setState({
       ascShapes: [],
       wires: [{ id: "w1", points: [{ x: 0, y: 64 }, { x: 128, y: 64 }] }],
@@ -357,6 +361,74 @@ describe("Canvas - a selected net label answers Delete and Backspace (P3-11)", (
 });
 
 /**
+ * P3-07's last mile. The placer earns "no overlap, ever" by escalating - it may
+ * shorten a value, drop it, or reduce a whole label to an ellipsis - and it
+ * measures its boxes against exactly the strings it decided on. The canvas used
+ * to re-derive the text from the component instead (`sourceValueLabel(c.kind,
+ * c.value)`), so any escalated label would have inked the FULL caption inside a
+ * rectangle that had been proved clear for a shorter one. The geometry suite
+ * cannot catch that: it never renders. This does.
+ */
+describe("Canvas - the label layer inks exactly what the placer measured (P3-07)", () => {
+  /** Dense enough that the ladder has to give something up - see the ladder
+   *  case in Canvas.labels.test.ts, which pins the same lattice. */
+  const PACKED: SchematicComponent[] = Array.from({ length: 24 }, (_, p) => ({
+    id: `x${p}`,
+    kind: "resistor",
+    x: (p % 4) * 16,
+    y: Math.floor(p / 4) * 16,
+    rotation: 0,
+    value: "2.2Meg",
+    label: `R${p}`,
+  }));
+
+  const renderedLabelText = () =>
+    [...document.querySelectorAll(".label-layer text")].map((node) => node.textContent ?? "");
+
+  it("prints the placement's strings, never the component's own", () => {
+    useSchematic.setState({ ascShapes: [], components: PACKED, wires: [], netLabels: [] });
+    render(<Canvas interactive />);
+    const placements = buildLabelPlacements(PACKED, []);
+    const expected = PACKED.flatMap((c) => {
+      const placement = placements.get(c.id);
+      if (!placement) return [];
+      return [placement.refText, placement.valText].filter(Boolean);
+    });
+    expect(renderedLabelText()).toEqual(expected);
+  });
+
+  it("draws nothing at all for a component the placer could not fit", () => {
+    useSchematic.setState({ ascShapes: [], components: PACKED, wires: [], netLabels: [] });
+    render(<Canvas interactive />);
+    const placements = buildLabelPlacements(PACKED, []);
+    const omitted = PACKED.filter((c) => !placements.get(c.id));
+    // The floor is what makes the invariant constructive rather than lucky, so
+    // assert the fixture actually reaches it before asserting the consequence.
+    expect(omitted.length, "fixture no longer saturates the placer").toBeGreaterThan(0);
+    for (const c of omitted) expect(renderedLabelText()).not.toContain(c.label);
+  });
+
+  it("carries an escalated value through to the DOM, ellipsis and all", () => {
+    useSchematic.setState({ ascShapes: [], components: PACKED, wires: [], netLabels: [] });
+    render(<Canvas interactive />);
+    const placements = buildLabelPlacements(PACKED, []);
+    const escalated = [...placements.values()].filter(
+      (p) => p.elided || !p.valText || p.valText.endsWith("…"),
+    );
+    expect(escalated.length, "fixture no longer escalates").toBeGreaterThan(0);
+    // The full caption of a shortened label must be absent: printing it is the
+    // exact regression this describe exists to catch.
+    const full = sourceValueLabel("resistor", "2.2Meg");
+    const shortened = escalated.filter((p) => p.valText.endsWith("…"));
+    expect(shortened.length).toBeGreaterThan(0);
+    for (const p of shortened) {
+      expect(renderedLabelText()).toContain(p.valText);
+      expect(p.valText).not.toBe(full);
+    }
+  });
+});
+
+/**
  * P3-10: "The autocentering button does not work. It needs to work dynamically
  * as the user resizes each tab."
  *
@@ -391,9 +463,9 @@ describe("Canvas - fit centres in the VISIBLE canvas box and follows a resize (P
   /** The reported circuit: a sine source whose caption ("Sine · 1 V @ 1k Hz")
    *  is far wider than the symbol, so an off-centre fit cannot hide behind
    *  symmetric artwork. */
-  const CIRCUIT = [
-    { id: "v1", kind: "vsource" as const, x: 0, y: 0, rotation: 0, value: "SINE(0 1 1k)", label: "V1" },
-    { id: "c1", kind: "capacitor" as const, x: 128, y: 0, rotation: 0, value: "1u", label: "C1" },
+  const CIRCUIT: SchematicComponent[] = [
+    { id: "v1", kind: "vsource", x: 0, y: 0, rotation: 0, value: "SINE(0 1 1k)", label: "V1" },
+    { id: "c1", kind: "capacitor", x: 128, y: 0, rotation: 0, value: "1u", label: "C1" },
   ];
   const WIRES = [{ id: "w1", points: [{ x: 0, y: -48 }, { x: 128, y: -48 }] }];
   /** App.tsx's default rail width, i.e. the state in the report screenshot. */

@@ -1,28 +1,49 @@
 import { useRef, type ChangeEvent } from "react";
 import { BodeMascot } from "./BodeMascot";
-import { FolderOpen, FolderPlus, Import, MessageSquare, Plus, CircuitBoard } from "lucide-react";
+import { FolderOpen, FolderPlus, Import, MessageSquare, Plus, CircuitBoard, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
 
+/**
+ * The keyframes `styles/editorToolbarIcons.css` runs on the Components rail.
+ * Named here because the `animationend` handler below has to tell its own
+ * pulse apart from every other animation that bubbles up through `.stage`.
+ */
+const PARTS_FLASH_KEYFRAMES = "tau-parts-flash";
+
 export function EmptyState({
   projectOpen = true,
+  schematicOpen = false,
   canCreateProject = false,
   onOpenFolder,
   onCreateProject,
   onNewCircuit,
   onAskBode,
+  onShowParts,
   onOpenAscText,
   onNotice,
   offerFirstSuccess = false,
   onTryFirstSuccess,
 }: {
   projectOpen?: boolean;
+  /**
+   * True only at App.tsx's SECOND call site: a schematic is open and it is
+   * empty. There are three situations and there used to be two variants, so
+   * that call site borrowed the "project open, no schematic" copy and told a
+   * reader already inside a schematic to create or open one (P3-04B). Defaults
+   * to false so the other call site, where that copy is correct, is unchanged.
+   */
+  schematicOpen?: boolean;
   canCreateProject?: boolean;
   onOpenFolder?: () => void;
   onCreateProject?: () => void;
   onNewCircuit?: () => void;
   onAskBode?: () => void;
+  /** Reveals and focuses the Components rail. Must be set-open-and-focus, not
+   *  a toggle: the rail is often already open behind this card, and a toggle
+   *  would close the panel the copy just pointed at. */
+  onShowParts?: () => void;
   /** Opens an imported schematic once it has been written into the project -
    *  same contract `ExplorerPanel` uses, so App.tsx can pass one function to
    *  both. Only needed for the no-project Import action below. */
@@ -33,6 +54,48 @@ export function EmptyState({
   onTryFirstSuccess?: () => void;
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const rootRef = useRef<HTMLElement | null>(null);
+
+  /**
+   * Reveal the rail, then pulse it once (P3-04B).
+   *
+   * The pulse is stamped as a data attribute on the enclosing `.stage` rather
+   * than pushed through a prop: `ComponentsRail` takes no className, so the
+   * stage is the nearest ancestor a stylesheet this lane owns can reach, and
+   * driving it from here means App.tsx needs no extra state.
+   *
+   * Cleared on animationend so a second click pulses again. The timeout is the
+   * fallback that matters: under `prefers-reduced-motion: reduce` the rule sets
+   * `animation: none`, so animationend never fires and the attribute would
+   * otherwise stick forever. Both paths clear the same attribute, and clearing
+   * twice is harmless.
+   *
+   * The listener names its own keyframes because `animationend` bubbles and the
+   * stage is the whole canvas area - the run-progress overlay, the rail and the
+   * canvas all live under it, so an unfiltered handler would clear the stamp on
+   * the first unrelated animation to finish. The pending timeout is cancelled
+   * on re-entry for the same reason: a second click within 900 ms would
+   * otherwise be cut short by the first click's timer.
+   */
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleShowParts = () => {
+    onShowParts?.();
+    const stage = rootRef.current?.closest(".stage");
+    if (!(stage instanceof HTMLElement)) return;
+    if (flashTimer.current !== null) clearTimeout(flashTimer.current);
+    stage.setAttribute("data-parts-flash", "1");
+    const clear = () => {
+      stage.removeAttribute("data-parts-flash");
+      stage.removeEventListener("animationend", onEnd);
+      if (flashTimer.current !== null) clearTimeout(flashTimer.current);
+      flashTimer.current = null;
+    };
+    const onEnd = (event: AnimationEvent) => {
+      if (event.animationName === PARTS_FLASH_KEYFRAMES) clear();
+    };
+    stage.addEventListener("animationend", onEnd);
+    flashTimer.current = setTimeout(clear, 900);
+  };
 
   const handleImportChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -56,7 +119,7 @@ export function EmptyState({
   };
 
   return (
-    <section className="empty-state" aria-label="Empty schematic">
+    <section className="empty-state" aria-label="Empty schematic" ref={rootRef}>
       <div className="empty-panel">
         <div className="empty-kicker">
           <BodeMascot className="bode-empty-mascot" aria-hidden="true" />
@@ -64,8 +127,46 @@ export function EmptyState({
               bare text node after the brand would space the comma off it. */}
           <span><span className="empty-brand">Bode</span> · circuit assistant</span>
         </div>
-        <h1>{projectOpen ? "Create or open a schematic" : "Open a project folder"}</h1>
-        {projectOpen ? (
+        {/* Three situations, three headlines. The middle one is the P3-04B fix;
+            the other two are the copy that was already correct. */}
+        <h1>
+          {!projectOpen
+            ? "Open a project folder"
+            : schematicOpen
+              ? "Place your first component"
+              : "Create or open a schematic"}
+        </h1>
+        {projectOpen && schematicOpen ? (
+          <>
+            <p>
+              Pick a part from Components on the right and click the sheet to
+              place it, or ask Bode to build the circuit for you.
+            </p>
+            <div className="empty-state-actions">
+              {/* The single filled control, per DESIGN_SYSTEM 4: the next
+                  action is to find a part, not to make another schematic. */}
+              <Button type="button" size="sm" onClick={handleShowParts}>
+                <LayoutGrid aria-hidden="true" /> Browse components
+              </Button>
+              {/* The learning path survives the variant split. App.tsx passes
+                  offerFirstSuccess to BOTH call sites, and before this variant
+                  existed this card fell through to the branch below, so an
+                  open empty schematic did offer it - dropping it here would
+                  have quietly deleted the first-success route from the one
+                  screen a first-time user lands on. Outline, not filled,
+                  because the headline names browsing: this is the alternative
+                  route to a first result, not the card's own action. */}
+              {offerFirstSuccess && (
+                <Button type="button" size="sm" variant="outline" onClick={onTryFirstSuccess}>
+                  <CircuitBoard aria-hidden="true" /> Try RC Charging
+                </Button>
+              )}
+              <Button type="button" size="sm" variant="outline" onClick={onAskBode}>
+                <MessageSquare aria-hidden="true" /> Ask Bode
+              </Button>
+            </div>
+          </>
+        ) : projectOpen ? (
           <>
             <p>
               Schematics live in this project. Create one, open from Explorer,

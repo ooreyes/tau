@@ -54,8 +54,15 @@ describe("label placement is deterministic, not merely valid", () => {
    * If a deliberate placement change makes this fail, read the new numbers off
    * the failure and update them in the same commit as the change. That is the
    * point: the choice becomes something a reviewer has to approve.
+   *
+   * These numbers last moved for P3-07. The chosen SLOT did not change - minX
+   * is still 136 for all three - only its measured extent, because the label
+   * metrics were corrected from a hand-tuned 5.5/4.9 px per character and
+   * 10/9 px line heights to the real advances and heights of `.label-layer
+   * .ref` / `.val` (see `LABEL_TEXT_ADVANCE`). The boxes are wider and taller
+   * because the text always inked that much; the placer just did not know.
    */
-  it("pins the chosen box for a crowded row", () => {
+  it("pins the chosen box for a crowded row (widened when the text metrics were corrected)", () => {
     const placements = buildLabelPlacements(CROWDED, THROUGH_WIRES);
     const boxes = Object.fromEntries(
       [...placements].map(([id, placement]) => [id, placement.box]),
@@ -63,22 +70,22 @@ describe("label placement is deterministic, not merely valid", () => {
     expect(boxes).toMatchInlineSnapshot(`
       {
         "r-1": {
-          "maxX": 159.6,
-          "maxY": 13.5,
+          "maxX": 164.88203125,
+          "maxY": 14,
           "minX": 136,
-          "minY": -14,
+          "minY": -14.5,
         },
         "r-2": {
-          "maxX": 159.6,
-          "maxY": 61.5,
+          "maxX": 164.88203125,
+          "maxY": 62,
           "minX": 136,
-          "minY": 34,
+          "minY": 33.5,
         },
         "r-3": {
-          "maxX": 159.6,
-          "maxY": 109.5,
+          "maxX": 164.88203125,
+          "maxY": 110,
           "minX": 136,
-          "minY": 82,
+          "minY": 81.5,
         },
       }
     `);

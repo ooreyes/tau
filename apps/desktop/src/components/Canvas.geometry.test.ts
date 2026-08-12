@@ -108,7 +108,7 @@ describe("imported LTspice symbol presentation", () => {
     }
   });
 
-  it("keeps capacitor labels attached to the fitted body through rotation and mirror", () => {
+  it("keeps capacitor labels attached to the fitted body through rotation and mirror (measured edge-to-body, not centre-to-centre)", () => {
     const cases: SchematicComponent[] = [
       { id: "native-c0", kind: "capacitor", label: "C0", value: "10u", x: 0, y: 0, rotation: 0 },
       { id: "native-c90", kind: "capacitor", label: "C90", value: "10u", x: 160, y: 0, rotation: 90 },
@@ -139,8 +139,22 @@ describe("imported LTspice symbol presentation", () => {
       const placement = buildLabelPlacements([component], wires).get(component.id);
       expect(placement, `${component.id} labels`).toBeDefined();
       const box = placement!.box;
-      const boxCenter = { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 };
-      expect(Math.hypot(boxCenter.x - fitted.x, boxCenter.y - fitted.y), `${component.id} attachment`).toBeLessThan(56);
+      // Attachment is a question about the label's nearest EDGE, not its
+      // midpoint. This used to bound the centre-to-centre distance at 56, and
+      // that number started failing the moment P3-07 corrected the text
+      // metrics (5.5/4.9 px per character -> the real advances of
+      // `.label-layer .ref` / `.val`): the box grew ~5 px wider per line, so
+      // its midpoint slid outward by half of that while the label had not
+      // moved at all. The centre bound was measuring caption length. The gap
+      // is what "attached" means, and it is unchanged: 40, 25, 40, 40 world
+      // units for the four cases, i.e. still the close side slot the placer
+      // has always chosen. 48 is below the 54 the first escalation ring would
+      // produce, so a label that detaches still fails here.
+      const gap = Math.hypot(
+        Math.max(box.minX - fitted.x, 0, fitted.x - box.maxX),
+        Math.max(box.minY - fitted.y, 0, fitted.y - box.maxY),
+      );
+      expect(gap, `${component.id} attachment gap`).toBeLessThan(48);
       // The attached pair must not fall back onto the terminal wire merely
       // because the file anchor and fitted visual centre differ.
       for (const wire of wires.filter((candidate) => candidate.id.startsWith(component.id))) {
