@@ -96,6 +96,28 @@ Two things found while mapping the code, so you do not have to rediscover them:
    holds once validation runs pre-run, which is the part that is currently
    missing.
 
+## SYMBOLS + CANVAS — P3-08 is the ghost, and P3-01's decision changed
+
+Both corrections are now in `UI_UX_PDF3.md`; the short version:
+
+- **P3-08.** SYMBOLS' identification is confirmed independently by the gate. The
+  crop is the placement preview (`.ghost .symbol`, dashed, `--accent` at 65 %),
+  not a placed part. Measured pre-fix: `armed placeRotation 90; ghost transform
+  "rotate(90)"` while the drop lands at rotation 0 — and after ⌘E, a ground
+  actually placed with `mirrored: true`, because `useSchematic.ts:1154` exempts
+  ground from rotation but not from mirroring. SYMBOLS' plan to normalise
+  `placeRotation`/`placeMirror` in `startPlacing` fixes both from one owned file,
+  and CANVAS does not need to touch `Canvas.tsx:1942` — **coordinate, do not both
+  fix it.** State the trade-off in a comment: normalising at the tool disarms a
+  rotation the user had armed for another part.
+- **P3-01.** Converting `component.kind` is off the table; it corrupts data.
+  `decodeParams("vac", "PULSE(0 5 0 1n 1n 5u 10u)")` measurably yields
+  `{offset:"PULSE(0", amplitude:"5", frequency:"0"}`, which reaches
+  `ascExport.ts:377-392` and the canvas caption. Fix the identity where it is
+  shown: a derived display name from `(kind, value)`, and exactly one bias row per
+  waveform. Alias-stored parts still converge to canonical `vsource` in one
+  undoable transaction.
+
 ## Orchestrator's own integration queue (applied after the lanes finish)
 
 1. **`Canvas.tsx` reveal input, for DOCK's benefit.** DOCK's P3-14 done-when
@@ -106,6 +128,26 @@ Two things found while mapping the code, so you do not have to rediscover them:
    `revealSignal` input during integration rather than having two lanes edit
    `Canvas.tsx`. DOCK should build the row click to call `select(id)` and leave a
    clearly-named seam for the centring half.
+
+1b. **`ShellPanels.tsx:1749` + `:1835-1842`, for SYMBOLS' benefit.** P3-01's
+   title clause needs `componentDisplayName(selected.kind, selected.value)`, and
+   its alias-convergence clause needs `onIdentityChange` threaded into
+   `IndependentSourceEditor`. EXPLORER owns that file. SYMBOLS should ship the
+   `componentNames.ts` signature change with a value-accepting overload that is
+   safe to call with one argument, so the two land independently and the
+   orchestrator wires the call site.
+
+1c. **`CommandPalette.tsx:128`, which no lane owns.** Needs SYMBOLS' new
+   `catalog` flag passed to `ComponentSymbol` so the command palette's LED is
+   monochrome too — part of P3-03's "every palette glyph". Orchestrator applies.
+
+1d. **`Canvas.simulator.test.tsx:478-487`, which no lane owns.** Its
+   `@ts-expect-error fitInsetRight` case comments "Components is a summoned
+   overlay, never a fit reservation" — the policy P3-10 deliberately reverses
+   (commit `b3c7708` removed that prop; the report is the consequence). CANVAS's
+   fix reads `--stage-rail-inset` off the DOM so the test keeps passing untouched,
+   but its comment now asserts something the product no longer believes.
+   Orchestrator rewords it.
 
 2. **`data-owner` on label groups, for the P3-07 gate.** The Playwright gate can
    prove label-vs-label overlap, but not label-vs-artwork, because
