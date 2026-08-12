@@ -812,7 +812,18 @@ const CHECKS = [
       // happens to be highest", which every warm grey satisfies.
       const probeRed = Boolean(probe && (probe.sat ?? 0) >= SAT
         && (probe.hue <= 25 || probe.hue >= 335));
-      const need = Math.max(4, Math.ceil(enabled.length * 0.6));
+      /*
+       * A COUNT, not a percentage, and deliberately.
+       *
+       * The brief names a "gray trascan" and a "pink/grey metal erase" - so a
+       * neutral trash can and a partly-neutral eraser are the brief being
+       * followed, and a rule like "60% of icons must be saturated" would mark
+       * that as a failure. Five accents (wire, tag, probe, undo, redo is the
+       * natural set) plus three distinct hues is enough to prove the strip is no
+       * longer nine identical greys, without dictating a rainbow the instrument
+       * aesthetic would reject.
+       */
+      const need = 5;
       return {
         pass: enabled.length > 0 && accented.length >= need && probeRed && distinct >= 3,
         detail: `${strip.length} tool buttons (${enabled.length} enabled); ${accented.length}/${need} carry a real `
