@@ -10325,21 +10325,6 @@ button.bottom-panel-head:focus-visible {
   }
 }
 
-.shell-toast {
-  position: fixed;
-  right: 18px;
-  bottom: 38px;
-  z-index: 90;
-  max-width: min(420px, calc(100vw - 36px));
-  padding: 10px 13px;
-  border: 1px solid var(--accent-line);
-  border-radius: var(--r-lg);
-  color: var(--cream);
-  background: var(--panel-2);
-  box-shadow: var(--elev-pop);
-  font: 600 var(--fs-label) var(--font-ui);
-}
-
 .app-recovery {
   display: grid;
   min-height: 100vh;
