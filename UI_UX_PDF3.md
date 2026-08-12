@@ -111,12 +111,56 @@ options intertwined only if it makes complete sense… selection of it should
 completely swap the component to be the corresponding one… replace the drawing
 which it already does and also replace any sign of its former self."*
 
-**Decision (the user is away; this is the judgement call taken).** Keep one
-palette entry, **"Voltage source"**, because a beginner should not have to know
-the waveform before placing the part. Make the *Waveform* control an identity
-switch: choosing a waveform converts `component.kind` to the matching kind that
-already exists in `componentNames.ts` (`vsource`, `vac`, `vpulse`, and the `exp`
-/ `pwl` / `sffm` equivalents), so that after the change:
+**DECISION REVISED — recon proved the first version unsafe. Read this, not the
+struck-through paragraph below.**
+
+The first decision said: convert `component.kind` on every waveform switch.
+Measured reasons it is wrong:
+
+- `vac` / `iac` / `vpulse` are **storage aliases with their own positional value
+  dialect** (`params.ts:172-181`, `AC_SOURCE` codec `{form:"positional"}`). A part
+  converted to `vac` while holding a function value decodes to garbage —
+  measured: `decodeParams("vac", "PULSE(0 5 0 1n 1n 5u 10u)")` yields
+  `{offset:"PULSE(0", amplitude:"5", frequency:"0"}`, which then reaches
+  `ascExport.ts:377-392` and `Canvas.geometry.ts:300-303`. That is a corrupted
+  `.asc` and a corrupted caption, i.e. exactly the "never silently substitute"
+  rule this repo puts above everything.
+- The `exp` / `pwl` / `sffm` kinds **do not exist**; the first decision assumed
+  they did.
+
+**Revised decision.** The identity the user is complaining about is the one the
+UI *shows*, and that is where it gets fixed — the value codec is left alone:
+
+1. **Title.** `componentDisplayName` takes the value as well as the kind, so a
+   `vsource` holding `SINE(...)` titles itself **"Sine voltage source"**. The
+   title is derived, never stored, so no `.asc` byte moves.
+2. **Field set.** The duplicated bias row goes: `IndependentSourceEditor.tsx`
+   renders `DC operating point` **unconditionally** at `:272-279` while `:283`
+   renders `Offset` for sine, and `decodeIndependentSourceValue("SINE(5 1 1k)")`
+   sets `dcBias = inferredBias = offset = "5"` — which is why the screenshot
+   shows `5 V` twice. Exactly one bias row per waveform.
+3. **Symbol and caption** already follow the value. Keep that true, and pin it.
+4. **Alias parts still converge.** A part stored as the `vac`/`vpulse` alias that
+   is switched to a waveform its dialect cannot hold converts to canonical
+   `vsource` **in the same undoable transaction as the value rewrite**, so the two
+   can never disagree.
+5. `V<n>` designator and the single emitted `V` card are unchanged — prove it with
+   the deck text.
+
+The user's words were "selection of it should completely swap the component to be
+the corresponding one … replace any sign of its former self." What they see after
+this is a part titled *Sine voltage source*, drawn as a sine source, captioned
+`Sine · 1 V @ 1k Hz`, with sine fields and no DC row — their requirement met,
+without a data-model change that would corrupt an export.
+
+<details>
+<summary>Superseded first decision (kept for the record)</summary>
+
+Keep one palette entry, **"Voltage source"**, because a beginner should not have
+to know the waveform before placing the part. Make the *Waveform* control an
+identity switch: choosing a waveform converts `component.kind` to the matching
+kind that already exists in `componentNames.ts` (`vsource`, `vac`, `vpulse`, and
+the `exp` / `pwl` / `sffm` equivalents), so that after the change:
 
 1. the inspector title reads the new name (e.g. **"Sine voltage source"**), not
    "DC source";
@@ -129,14 +173,22 @@ already exists in `componentNames.ts` (`vsource`, `vac`, `vpulse`, and the `exp`
    `V` card — this is a UI/identity change, **not** a netlist change;
 6. undo restores the previous kind *and* value as one step.
 
+</details>
+
 The same applies to current sources (`isource` family). `Small-signal AC (.ac)`
 stays available on every waveform: it is an orthogonal analysis stimulus, not a
 waveform, and LTspice allows `SINE(...) AC 1`.
 
-**Done when:** a test converts DC→Sine→Pulse→DC and asserts kind, display name,
-field set, `value`, caption, and netlist card at each step, plus an undo/redo
-round trip; and no state exists in which the title says "DC source" while the
-waveform is not DC.
+**Done when:** a test walks DC → Sine → Pulse → DC and at every step asserts the
+displayed name, the visible field set, `component.value`, the canvas caption, and
+the emitted netlist card; the `.asc` round-trips byte-identically for each
+waveform; exactly one bias row is visible per waveform (never `DC operating
+point` beside `Offset`); an alias-stored part that converges to `vsource` does so
+in one undoable step, with undo/redo restoring both kind and value together; and
+**no state exists in which the title says "DC source" while the waveform is not
+DC.** The gate's own measurement of the pre-fix defect, for comparison:
+`kind vsource -> vsource; title "DC source"; value "SINE(5 1 1k)"; fields
+[…, DC operating point, Offset, Amplitude, …]`.
 
 ---
 
@@ -317,18 +369,45 @@ of increasing height plus a stem, which is `symbols.tsx`'s ground
 (`0,0→0,10` stem; bars at `y = 10, 15, 20`) turned 90°. *"THis component should
 always be facing upwards the point facing up when dropped into schematic."*
 
-`useSchematic.ts:1153` already forces `rotation: kind === "ground" ? 0 :
-s.placeRotation`, so the reported state must come from another path — a mirrored
-placement, a drag-and-drop placement that bypasses `addComponent`, the palette
-preview, or a sticky `placeRotation` applied elsewhere. **Find the live path
-before changing anything**, then make ground pin-up on *every* placement path.
+**CAUSE IDENTIFIED — the photographed symbol is the placement *ghost*, not a
+placed part.** `useSchematic.ts:1153` does force `rotation: kind === "ground" ? 0
+: s.placeRotation`, and the *dropped* ground is genuinely upright on every path,
+which is why a first version of this gate passed. Three things identify the crop
+as the preview: its strokes are broken because `.ghost .symbol` is
+`stroke-dasharray: 4 3; opacity: 0.65` (`App.css:1111`), its ink is the warm light
+grey `--accent: #d6d3ca` at 65 %, and the geometry is `symbols.tsx:1672-1679`'s
+ground (stem `0,0→0,10`; bars at `y = 10/15/20`, half-widths 11/7/3) at rotation
+90 — pin rightmost, bars descending leftward, exactly the crop.
 
-**Done when:** every placement path (palette click, palette drag-drop, keyboard
-hotkey, command palette, assistant-authored circuit) yields `rotation === 0` and
-`mirrored === false` for ground, proven per path in a test; an explicit user
-rotation after placement is still honoured and still round-trips through
-`.asc`; imported `.asc` grounds keep their authored orientation (import
-fidelity outranks this preference — say so in the test name).
+So there are **two** defects, both now measured by the gate:
+
+1. **The ghost lies about the drop.** `Canvas.tsx:1942` draws
+   `symbolTransform(placeRotation, placeMirror)` for *every* kind, so a rotation
+   left armed on a previous part previews a sideways ground that the drop will not
+   honour — the direct opposite of `Canvas.tsx:696-699`'s own promise that "the
+   preview never lies about the drop position". Gate measurement, pre-fix:
+   `armed placeRotation 90; ghost transform "rotate(90)" -> upright: false`.
+2. **Ground is placed mirrored.** `useSchematic.ts:1154` applies
+   `mirrored: s.placeMirror` with no ground exemption, so the kind that is exempt
+   from rotation is not exempt from mirroring. Gate measurement, pre-fix: after
+   ⌘E, `DROPPED grounds: [{rot:0,mir:false},{rot:0,mir:true}]`.
+
+Reproducing this needs the real bindings: rotate is **Space** or ⌘R and mirror is
+⌘E (`shortcuts.ts:112,141`), they only move `placeRotation`/`placeMirror` while
+`tool.mode === "place"` (`useSchematic.ts:1188,1212`), and `App.tsx`'s window
+keydown guard returns early while a palette **button** holds focus — so the tool
+must be armed and the button blurred first. A check that skips any of that arms
+nothing and passes.
+
+**Done when:** with a rotation and a mirror armed on a previous part, arming
+ground resets both so the ghost and the drop agree; every placement path (palette
+click, keyboard hotkey, command palette, assistant-authored circuit) yields
+`rotation === 0` **and** `mirrored === false`; an explicit user rotation *after*
+placement is still honoured and still round-trips through `.asc`; imported `.asc`
+grounds keep their authored orientation (import fidelity outranks this preference
+— say so in the test name); and the cost of normalising at the tool — it disarms a
+rotation the user had armed for a different part — is stated in a comment, because
+it is a real trade-off and not a free win.
 
 ---
 

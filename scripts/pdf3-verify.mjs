@@ -566,19 +566,94 @@ const CHECKS = [
         .filter((c) => c.kind === "ground")
         .map((c) => ({ rot: c.rotation, mir: Boolean(c.mirrored) })));
 
+      /*
+       * The GHOST is the thing the report actually photographed.
+       *
+       * An earlier version of this check only read the placed component and
+       * passed, because the placed ground genuinely is upright
+       * (useSchematic.ts:1153 forces rotation 0 for ground). The reported
+       * screenshot is the placement preview: its strokes are broken because
+       * `.ghost .symbol` is `stroke-dasharray: 4 3; opacity: 0.65`, and it draws
+       * `symbolTransform(placeRotation, placeMirror)` for every kind - so with a
+       * sticky tool rotation the preview shows a sideways ground that the drop
+       * will not honour. Reading only the drop measures the one thing that was
+       * never broken, so read the ghost's own transform and the tool state
+       * behind it.
+       */
+      const ghostNow = () => page.evaluate(() => {
+        const ghost = document.querySelector("svg.canvas g.ghost");
+        const inner = ghost?.querySelector("g.symbol");
+        const s = window.__TAU_DEV__.useSchematic.getState();
+        return {
+          present: Boolean(ghost),
+          transform: inner?.getAttribute("transform") ?? null,
+          placeRotation: s.placeRotation ?? null,
+          placeMirror: Boolean(s.placeMirror ?? s.placeMirrored),
+          toolKind: s.tool?.kind ?? s.tool?.mode ?? null,
+        };
+      });
+
       // Path 1: palette click, with a sticky tool rotation provoked first -
       // a rotation left over from a previous part is the likeliest way a ground
       // ends up sideways.
-      await place(page, "Resistor", 0.25, 0.28);
-      await page.keyboard.press("r");
-      await page.keyboard.press("r");
+      /*
+       * Arming the sticky rotation is fiddly and the fiddliness is the point.
+       * `rotate` only bumps `placeRotation` while `tool.mode === "place"`
+       * (useSchematic.ts:1188), and App.tsx's window keydown guard returns early
+       * when focus sits on a `button` - which is exactly where a palette click
+       * leaves it. So: arm the tool, blur the palette button, THEN press r. A
+       * first version of this check skipped the blur, measured placeRotation 0,
+       * and passed the pre-fix code by never arming the defect.
+       */
+      const arm = async (partName) => {
+        const tagged = await page.evaluate((name) => {
+          const item = [...document.querySelectorAll("button.palette-item")]
+            .find((b) => b.querySelector(".palette-name")?.textContent?.trim() === name);
+          if (!item) return false;
+          item.setAttribute("data-shot-target", "1");
+          return true;
+        }, partName);
+        if (!tagged) throw new Error(`no palette entry named "${partName}"`);
+        await page.locator('button.palette-item[data-shot-target="1"]').click();
+        await page.evaluate(() => {
+          document.querySelector('[data-shot-target="1"]')?.removeAttribute("data-shot-target");
+          (document.activeElement instanceof HTMLElement) && document.activeElement.blur();
+        });
+      };
+
+      await arm("Resistor");
+      // Rotate is Space (or Cmd/Ctrl+R) - shortcuts.ts:141. An earlier version
+      // pressed "r", which is bound to nothing, and so armed nothing.
+      await page.keyboard.press("Space");
+      await page.waitForTimeout(120);
+      const armedRotation = await page.evaluate(() => window.__TAU_DEV__.useSchematic.getState().placeRotation);
+      const { canvas: c0, box: b0, usableWidth: uw0 } = await usableCanvas(page);
+      await c0.click({ position: { x: uw0 * 0.25, y: b0.height * 0.28 } });
+      await page.waitForTimeout(150);
+
+      // Now arm Ground while that rotation is still armed, and hover WITHOUT
+      // dropping, so the ghost is on screen in the state the report shows.
+      await arm("Ground");
+      await page.mouse.move(b0.x + uw0 * 0.5, b0.y + b0.height * 0.4);
+      await page.waitForTimeout(300);
+      const ghost = await ghostNow();
+      await shot(page, `P3-08-ghost-${ctx.tag}`);
+      await page.keyboard.press("Escape");
+
       await place(page, "Ground", 0.4, 0.5);
       await page.waitForTimeout(200);
       const afterClick = await groundsNow();
 
-      // Path 2: mirror the tool as well, then place again.
-      await page.keyboard.press("r");
-      await page.keyboard.press("m").catch(() => {});
+      // Path 2: mirror the tool as well, then place again. Mirror is
+      // Cmd/Ctrl+E (shortcuts.ts:112); arm first so tool.mode === "place",
+      // and blur so App.tsx's keydown guard does not skip a focused button.
+      await arm("Ground");
+      await page.keyboard.press("Space");
+      await page.keyboard.press(process.platform === "darwin" ? "Meta+e" : "Control+e");
+      const armedMirror = await page.evaluate(() => {
+        const s = window.__TAU_DEV__.useSchematic.getState();
+        return { rot: s.placeRotation, mir: Boolean(s.placeMirror) };
+      });
       await place(page, "Ground", 0.6, 0.5);
       await page.waitForTimeout(200);
       const afterMirror = await groundsNow();
@@ -615,13 +690,24 @@ const CHECKS = [
 
       const all = afterDrag.length ? afterDrag : afterMirror;
       const bad = all.filter((g) => g.rot !== 0 || g.mir);
+      // A ghost that is upright either carries no rotate() at all or rotate(0).
+      const ghostUpright = ghost.present
+        ? (ghost.placeRotation === 0 || ghost.placeRotation === null)
+          && !ghost.placeMirror
+          && !/rotate\(\s*(?!0[\s)])-?\d/.test(ghost.transform ?? "")
+        : null;
       return {
-        pass: all.length > 0 && bad.length === 0,
-        detail: `grounds after palette click (tool rotated twice): ${JSON.stringify(afterClick)}; `
-          + `after also mirroring the tool: ${JSON.stringify(afterMirror)}; `
-          + `after a palette drag (${dragNote}): ${JSON.stringify(afterDrag)}; `
-          + `${bad.length} of ${all.length} not pin-up`,
-        data: { afterClick, afterMirror, afterDrag, dragNote },
+        pass: all.length > 0 && bad.length === 0 && ghostUpright === true && armedRotation !== 0,
+        detail: `armed placeRotation on the previous part: ${armedRotation}`
+          + `${armedRotation === 0 ? " -- CHECK IS TOOTHLESS, the sticky rotation never armed" : ""}; `
+          + `GHOST for ground while that rotation is armed: present ${ghost.present}, `
+          + `transform "${ghost.transform}", placeRotation ${ghost.placeRotation}, `
+          + `placeMirror ${ghost.placeMirror} -> upright: ${ghostUpright} `
+          + `(this is what the report photographed - dashed strokes are .ghost .symbol); `
+          + `tool state before the mirrored drop: ${JSON.stringify(armedMirror)}; `
+          + `DROPPED grounds: click ${JSON.stringify(afterClick)}, mirrored-tool ${JSON.stringify(afterMirror)}, `
+          + `drag (${dragNote}) ${JSON.stringify(afterDrag)}; ${bad.length} of ${all.length} not pin-up`,
+        data: { ghost, ghostUpright, afterClick, afterMirror, afterDrag, dragNote },
       };
     },
   },
