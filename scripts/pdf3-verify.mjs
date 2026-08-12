@@ -258,16 +258,36 @@ const CHECKS = [
       const after = await read();
       await shot(page, `P3-01-sine-${ctx.tag}`);
 
-      const identityChanged = before.kind !== after.kind;
+      /*
+       * The identity that has to change is the DISPLAYED one, not `kind`.
+       *
+       * This check used to require `before.kind !== after.kind`, which enforced
+       * the contract's FIRST decision - convert the component on a waveform
+       * switch. Recon then proved that unsafe with a measurement:
+       * `decodeParams("vac", "PULSE(0 5 0 1n 1n 5u 10u)")` yields
+       * `{offset:"PULSE(0", amplitude:"5", frequency:"0"}`, and that garbage
+       * reaches ascExport and the canvas caption. So the decision changed and
+       * `kind` deliberately stays `vsource`. A gate still asserting the
+       * superseded design fails correct code - which is what it did here, while
+       * its own detail line read "Sine voltage source", no DC row, sine fields.
+       */
+      const titleChanged = (before.titleText ?? "") !== (after.titleText ?? "");
       const titleClean = !/dc source/i.test(after.titleText ?? "") && !/DC source/.test(after.inspectorText);
+      const titleNamesSine = /sine/i.test(after.titleText ?? "");
       const noDoubleBias = !(/dc operating point/i.test(after.inspectorText) && /(^|\s)offset/i.test(after.inspectorText));
+      // The field set must be the sine's, with no bias row left behind it.
+      const fieldsAreSine = after.fields.some((f) => /^offset$/i.test(f ?? ""))
+        && after.fields.some((f) => /amplitude/i.test(f ?? ""))
+        && !after.fields.some((f) => /dc operating point|dc level/i.test(f ?? ""));
       const captionSine = after.caption.some((t) => /sine|sin/i.test(t)) || /SINE/i.test(after.value ?? "");
-      const pass = identityChanged && titleClean && noDoubleBias && captionSine;
+      const pass = titleChanged && titleClean && titleNamesSine && noDoubleBias && fieldsAreSine && captionSine;
       return {
         pass,
-        detail: `kind ${before.kind} -> ${after.kind}; title "${after.titleText}"; `
-          + `"DC source" still present in inspector: ${!titleClean}; `
+        detail: `title "${before.titleText}" -> "${after.titleText}" (names sine: ${titleNamesSine}); `
+          + `"DC source" anywhere in inspector: ${!titleClean}; `
           + `DC-operating-point and Offset both shown: ${!noDoubleBias}; `
+          + `field set is the sine's with no bias row: ${fieldsAreSine}; `
+          + `kind stays "${after.kind}" by design (converting it corrupts the value codec); `
           + `value "${after.value}"; fields [${after.fields.join(", ")}]`,
         data: { before, after },
       };
