@@ -1047,10 +1047,29 @@ const CHECKS = [
         } else {
           ranNote = "no Run button found";
         }
-        // Back to the schematic editor - the Measurements tab must be absent HERE.
+        /*
+         * Back to the schematic editor - the Measurements tab must be absent
+         * HERE, and only here is the claim worth anything. This is the exact
+         * leak: leaving the simulator does not invalidate the analysis, so a
+         * populated Measurements tab used to follow the reader back into the
+         * editor.
+         *
+         * Two routes because one is not enough: the editor tab row's "Return to
+         * schematic editor" arrow only exists while the simulator tab strip is
+         * mounted, and an earlier version of this check relied on it alone,
+         * silently stayed in Simulator, and measured the wrong mode. The
+         * toolbar's mode toggle (Toolbar.tsx:213, aria-label "Schematic") is
+         * always present, so it is the fallback - and the mode is asserted
+         * afterwards rather than assumed.
+         */
         const back = page.getByRole("button", { name: /Return to schematic editor/i });
         if (await back.count()) {
           await back.first().click();
+          await page.waitForTimeout(500);
+        }
+        const toggle = page.locator('.mode-toggle button[aria-label="Schematic"]');
+        if (await toggle.count()) {
+          await toggle.first().click({ force: true });
           await page.waitForTimeout(600);
         }
       } catch (err) {
@@ -1093,12 +1112,19 @@ const CHECKS = [
       await shot(page, `P3-14-dock-${ctx.tag}`);
       const flagsPreRun = preRun.rows.length > 0
         || /no ground|ground reference|no source|floating|unconnected|not connected/i.test(preRun.text ?? "");
-      const mode = await page.evaluate(() => document.querySelector(".mode-toggle [aria-pressed=true]")?.textContent?.trim()
-        ?? document.querySelector("[data-mode]")?.getAttribute("data-mode") ?? "unknown");
+      const mode = await page.evaluate(() => {
+        const pressed = document.querySelector('.mode-toggle [aria-pressed="true"]');
+        return pressed?.getAttribute("aria-label") ?? pressed?.textContent?.trim()
+          ?? document.querySelector("[data-mode]")?.getAttribute("data-mode") ?? "unknown";
+      });
+      // Asserting the mode is the point: "Measurements is absent" proves nothing
+      // if it was measured in the simulator, where its absence means something
+      // else entirely.
+      const inSchematic = /schematic/i.test(mode);
       return {
-        pass: !dock.hasMeasurementsTab && dock.hasErrorsTab && flagsPreRun,
+        pass: inSchematic && !dock.hasMeasurementsTab && dock.hasErrorsTab && flagsPreRun,
         detail: `pre-run, a lone ungrounded resistor produced ${preRun.rows.length} diagnostic row(s) `
-          + `-> flagged: ${flagsPreRun}; then after ${ranNote} and returning to the schematic (mode "${mode}"), `
+          + `-> flagged: ${flagsPreRun}; then after ${ranNote}, back in mode "${mode}" (schematic: ${inSchematic}), `
           + `dock tabs are [${dock.tabs.join(", ")}] - Measurements present: ${dock.hasMeasurementsTab}, `
           + `Errors present: ${dock.hasErrorsTab} (as a ${dock.errorsSurface}), badge "${dock.badgeText}"`,
         data: { preRun, dock, ranNote, mode },

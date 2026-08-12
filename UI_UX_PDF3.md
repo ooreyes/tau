@@ -587,22 +587,54 @@ badge count equals the row count. Tests cover each error class and the live
 
 ## Status
 
-| ID | Item | Status | Landing commit | Evidence |
-| --- | --- | --- | --- | --- |
-| P3-01 | Waveform changes source identity | UNVERIFIED | — | — |
-| P3-02 | Drag file into folder | UNVERIFIED | — | — |
-| P3-03 | LED uncoloured in palette | UNVERIFIED | — | — |
-| P3-04A | Overflow `⋯` at small widths | UNVERIFIED | — | — |
-| P3-04B | Empty-editor copy → place a part | UNVERIFIED | — | — |
-| P3-05 | Don't-save deletes empty untitled | UNVERIFIED | — | — |
-| P3-06 | Tree indentation shows nesting | UNVERIFIED | — | — |
-| P3-07 | Zero label overlap | UNVERIFIED | — | — |
-| P3-08 | Ground lands pin-up | UNVERIFIED | — | — |
-| P3-10 | Auto-centre works and tracks resize | UNVERIFIED | — | — |
-| P3-11 | Backspace deletes a net label | UNVERIFIED | — | — |
-| P3-12 | Red multimeter probe icon | UNVERIFIED | — | — |
-| P3-13 | Coloured, object-like tool strip | UNVERIFIED | — | — |
-| P3-14 | Errors-only dock, live validation | UNVERIFIED | — | — |
+Gate: `node scripts/pdf3-verify.mjs <label>` — 12 checks × light/dark ×
+900×600 / 1280×800 / 1440×900 = **72 runs**.
+
+- **Pre-fix tree** (pristine worktree at base `a26c26b`, served on :5199):
+  **0/72 passed**.
+- **Fixed tree**: **72/72 passed**.
+
+Every check fails on the broken code and passes on the fixed code, so none of
+them is toothless — the failure mode that made the *previous* remediation pass
+untrustworthy. Evidence in `screenshots/pdf3-verify/{before,after}/` with
+`REPORT.md` and `measurements.json` per side.
+
+Suite at the same commit: **265 files / 4673 tests passed, 0 failures**;
+`tsc --noEmit` clean; `design-system-dod-grep.mjs` **ok**.
+
+| ID | Item | Status | Measured before → after |
+| --- | --- | --- | --- |
+| P3-01 | Waveform changes source identity | **FIXED** | title `"DC source" → "DC source"` → `"DC source" → "Sine voltage source"`; bias rows 2 → 1 |
+| P3-02 | Drag file into folder | **FIXED** (native pass owed) | `draggable=false (attr null)` → `draggable=true (attr "true")` |
+| P3-03 | LED uncoloured in palette | **FIXED** | palette LED stroke chroma **148** vs neighbours 5 → **12** vs 12 |
+| P3-04A | Overflow `⋯` at small widths | **FIXED** | @168px: 0 primary icons, gap 8px → 1 icon, gap 40px; caption never truncated at any width |
+| P3-04B | Empty-editor copy → place a part | **FIXED** | `"Create or open a schematic"` → `"Place your first component"` + Browse components |
+| P3-05 | Don't-save deletes empty untitled | **FIXED** | no delete path existed → deletes only Tau-minted, empty, byte-equal-to-template files |
+| P3-06 | Tree indentation shows nesting | **FIXED** | steps root→folder **+2px** → **+14px** per level, guide on every parent |
+| P3-07 | Zero label overlap | **FIXED** | 1 overlapping pair over 7 sheets → **0**, 189 label boxes measured |
+| P3-08 | Ground lands pin-up | **FIXED** | ghost `rotate(90)` w/ drop at 0, and a ground placed `mirrored:true` → both 0/false |
+| P3-10 | Auto-centre works and tracks resize | **FIXED** | circuit off **dx=134px**, clipped → **dx=2 dy=0**, fully inside |
+| P3-11 | Backspace deletes a net label | **FIXED** | Backspace **and** Delete both no-ops → both delete, undo restores |
+| P3-12 | Red multimeter probe icon | **FIXED** | crosshair, `probe reads red: false` → probe icon, `h5 s0.8`, on button + cursor + empty-scope hint |
+| P3-13 | Coloured, object-like tool strip | **FIXED** | **1/5** real accents, 1 hue → **6/5** accents, 4 distinct hues |
+| P3-14 | Errors-only dock, live validation | **FIXED** | **0** pre-run diagnostic rows, `[Errors4]` tab strip → **4** rows, no tab strip, badge = row count |
+
+Not proven by the browser gate, and recorded as such rather than claimed:
+
+- **P3-02's native drag.** Chromium's synthetic drag moves the file *even with
+  `draggable` absent*, because it drives the pointer fallback. Only WKWebView
+  exercises the native path. The gate asserts the attribute itself for this
+  reason; a Tauri-window pass is still owed.
+- **P3-14's Measurements-tab leak.** The pre-run-diagnostics half reproduces
+  cleanly (0 → 4 rows). The leak half did not reproduce in the browser gate — it
+  was already absent pre-fix in that scenario — so it rests on DOCK's unit tests,
+  not on this gate.
+- **P3-05** is proven by unit tests only; the gate has no check for it, because
+  the browser workspace is in-memory and cannot show a real unlink.
+- **P3-08's `.asc` round-trip** is unsatisfiable as written: LTspice's `FLAG`
+  record has no orientation field (`ascExport.ts:609`, `ascImport.ts:2211`).
+  Ground orientation is normalised on placement instead, and imports keep what
+  they authored.
 
 Allowed statuses: `UNVERIFIED`, `CONFIRMED`, `IN PROGRESS`, `FIXED`,
 `ALREADY SATISFIED`, `BLOCKED`. Only the orchestrator edits this table. `FIXED`

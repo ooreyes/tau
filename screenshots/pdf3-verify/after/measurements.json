@@ -1,0 +1,2990 @@
+[
+  {
+    "id": "P3-01",
+    "title": "a source's waveform changes its identity, not just its value",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "title \"DC source\" -> \"Sine voltage source\" (names sine: true); \"DC source\" anywhere in inspector: false; DC-operating-point and Offset both shown: false; field set is the sine's with no bias row: true; kind stays \"vsource\" by design (converting it corrupts the value codec); value \"SINE(5 1 1k)\"; fields [Component ID, Waveform, Offset, Amplitude, Frequency, Start delay, Damping, Phase, Cycles, Small-signal AC (.ac)]",
+    "data": {
+      "before": {
+        "kind": "vsource",
+        "value": "5",
+        "titleText": "DC source",
+        "inspectorText": "›DC sourceV1Component IDWaveformDCDC levelVSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "DC level",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "5 V"
+        ]
+      },
+      "after": {
+        "kind": "vsource",
+        "value": "SINE(5 1 1k)",
+        "titleText": "Sine voltage source",
+        "inspectorText": "›Sine voltage sourceV1Component IDWaveformSineOffsetVAmplitudeVFrequencykHzStart delaysDampingHzPhase°CyclesSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "Offset",
+          "Amplitude",
+          "Frequency",
+          "Start delay",
+          "Damping",
+          "Phase",
+          "Cycles",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "Sine · 1 V @ 1k Hz"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-02",
+    "title": "a file can be dragged into a folder",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "file row draggable=true (attr true); after dragTo, \"p3-02-light-900x600.asc\" parent is \"workspace://Schematics/Project Storage\"; landed in Project Storage: true",
+    "data": {
+      "draggableSet": {
+        "draggable": true,
+        "attr": "true"
+      },
+      "moved": {
+        "path": "workspace://Schematics/Project Storage/p3-02-light-900x600.asc",
+        "name": "p3-02-light-900x600.asc",
+        "kind": "file",
+        "parent": "workspace://Schematics/Project Storage"
+      },
+      "dragError": null
+    }
+  },
+  {
+    "id": "P3-03",
+    "title": "the palette LED is not coloured",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "palette LED stroke chroma 12.0 vs neighbours 12.0 (LED strokes: rgb(11, 16, 23))",
+    "data": {
+      "led": {
+        "name": "LED",
+        "strokes": [
+          "rgb(11, 16, 23)"
+        ]
+      },
+      "diode": {
+        "name": "Diode",
+        "strokes": [
+          "rgb(11, 16, 23)"
+        ]
+      },
+      "resistor": {
+        "name": "Resistor",
+        "strokes": [
+          "rgb(11, 16, 23)"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-04A",
+    "title": "the explorer overflow trigger survives a narrow window",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 306): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 137px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "data": [
+      {
+        "asked": 168,
+        "panelWidth": 168,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 40,
+        "primaryIconsVisible": 1,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 87,
+        "headOverflowing": false
+      },
+      {
+        "asked": 226,
+        "panelWidth": 226,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 106,
+        "primaryIconsVisible": 4,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 79,
+        "headOverflowing": false
+      },
+      {
+        "asked": 420,
+        "panelWidth": 306,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 128,
+        "primaryIconsVisible": 5,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 137,
+        "headOverflowing": false
+      }
+    ]
+  },
+  {
+    "id": "P3-04B",
+    "title": "the empty-editor card tells you to place a part",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "heading \"Place your first component\"; still the stale copy: false; names placing a component: true; keeps an Ask Bode action: true; buttons [Browse components, Try RC Charging, Ask Bode]",
+    "data": {
+      "found": true,
+      "heading": "Place your first component",
+      "body": "Bode · circuit assistantPlace your first componentPick a part from Components on the right and click the sheet to place it, or ask Bode to build the circuit for you. Browse components Try RC Charging Ask Bode",
+      "buttons": [
+        "Browse components",
+        "Try RC Charging",
+        "Ask Bode"
+      ]
+    }
+  },
+  {
+    "id": "P3-06",
+    "title": "tree rows are indented under their parent",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "indent steps: root(64px) -> folder(+14px) -> nested file(+14px); need >= 10px per level; too shallow: none",
+    "data": {
+      "rows": [
+        {
+          "text": "SchematicsProject root",
+          "isRoot": true,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 8,
+          "contentLeft": 64
+        },
+        {
+          "text": "Project Storage",
+          "isRoot": false,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        },
+        {
+          "text": "nested.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 36,
+          "contentLeft": 92
+        },
+        {
+          "text": "p3-06-light-900x600.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        }
+      ],
+      "rootIndent": 64,
+      "rootToFolder": 14,
+      "folderToFile": 14
+    }
+  },
+  {
+    "id": "P3-07",
+    "title": "no two labels overlap, ever",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "7 sheets swept (pitch 32-96, straight and rotated, net labels included), 189 label boxes measured; 0 overlapping pair(s); label-over-artwork collisions: 0",
+    "data": [
+      {
+        "sheet": "pitch32",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch96",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "tight2x6",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      }
+    ]
+  },
+  {
+    "id": "P3-08",
+    "title": "ground lands pin-up on every placement path",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "armed placeRotation on the previous part: 90; GHOST for ground while that rotation is armed: present true, transform \"rotate(0)\", placeRotation 0, placeMirror false -> upright: true (this is what the report photographed - dashed strokes are .ghost .symbol); tool state before the mirrored drop: {\"rot\":0,\"mir\":false}; DROPPED grounds: click [{\"rot\":0,\"mir\":false}], mirrored-tool [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}], drag (attempted) [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}]; 0 of 2 not pin-up",
+    "data": {
+      "ghost": {
+        "present": true,
+        "transform": "rotate(0)",
+        "placeRotation": 0,
+        "placeMirror": false,
+        "toolKind": "ground"
+      },
+      "ghostUpright": true,
+      "afterClick": [
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterMirror": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterDrag": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "dragNote": "attempted"
+    }
+  },
+  {
+    "id": "P3-10",
+    "title": "fit-to-view centres the circuit in the visible canvas",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "after a hard pan then fit, in a 358x419 visible box (rail open: true): CIRCUIT centred to dx=1px dy=0px (tolerance 2px) -> true; everything incl. labels fully inside: true; informational - labels hang {\"dx\":9,\"dy\":16} off centre, which is why the symbols+labels union reads dx=9 dy=16; artwork 241x241",
+    "data": {
+      "visible": {
+        "w": 358,
+        "h": 419
+      },
+      "dxCentre": 9,
+      "dyCentre": 16,
+      "artWidth": 241,
+      "artHeight": 241,
+      "insideVisible": true,
+      "railOpen": true,
+      "symbolsOffset": {
+        "dx": 1,
+        "dy": 0
+      },
+      "labelsOffset": {
+        "dx": 9,
+        "dy": 16
+      },
+      "drawerRect": {
+        "top": 537,
+        "height": 35,
+        "cls": "results-drawer results-drawer--dock-bottom results-drawer--peek"
+      },
+      "canvasBottom": 572,
+      "visibleBottom": 537
+    }
+  },
+  {
+    "id": "P3-11",
+    "title": "Backspace deletes a selected net label",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "created 1; click selected 1 label id(s); after Backspace 0; after undo 1; after Delete 0",
+    "data": {
+      "created": 1,
+      "selected": 1,
+      "afterBackspace": 0,
+      "afterUndo": 1,
+      "afterDelete": 0
+    }
+  },
+  {
+    "id": "P3-12/13",
+    "title": "the tool strip reads as real objects, in colour",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "9 tool buttons (8 enabled); 7/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Select:h211/s1, Wire:h6/s0.63, Net label (F4):h44/s0.64, Probe:h4/s0.68, Undo:h237/s0.38, Delete selection (Delete):h213/s0.31, Clear schematic:h340/s0.4]; probe reads red: true (h4 s0.68)",
+    "data": [
+      {
+        "label": "Select",
+        "disabled": false,
+        "colours": [
+          "rgb(0, 104, 214) h211 s1.00"
+        ],
+        "hue": 211,
+        "sat": 1
+      },
+      {
+        "label": "Wire",
+        "disabled": false,
+        "colours": [
+          "rgb(192, 57, 43) h6 s0.63",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 6,
+        "sat": 0.63
+      },
+      {
+        "label": "Net label (F4)",
+        "disabled": false,
+        "colours": [
+          "rgb(122, 96, 27) h44 s0.64",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 44,
+        "sat": 0.64
+      },
+      {
+        "label": "Probe",
+        "disabled": false,
+        "colours": [
+          "rgb(179, 43, 34) h4 s0.68",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 4,
+        "sat": 0.68
+      },
+      {
+        "label": "Undo",
+        "disabled": false,
+        "colours": [
+          "rgb(74, 78, 166) h237 s0.38"
+        ],
+        "hue": 237,
+        "sat": 0.38
+      },
+      {
+        "label": "Redo",
+        "disabled": true,
+        "colours": [
+          "rgb(123, 135, 152) h215 s0.12"
+        ],
+        "hue": 215,
+        "sat": 0.12
+      },
+      {
+        "label": "Delete selection (Delete)",
+        "disabled": false,
+        "colours": [
+          "rgb(91, 101, 114) h214 s0.11",
+          "rgb(232, 237, 243) h213 s0.31"
+        ],
+        "hue": 213,
+        "sat": 0.31
+      },
+      {
+        "label": "Clear schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(159, 68, 99) h340 s0.40",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 340,
+        "sat": 0.4
+      },
+      {
+        "label": "Simulation setup",
+        "disabled": false,
+        "colours": [
+          "rgb(78, 92, 110) h214 s0.17"
+        ],
+        "hue": 214,
+        "sat": 0.17
+      }
+    ]
+  },
+  {
+    "id": "P3-14",
+    "title": "the schematic dock is Errors only and flags problems before Run",
+    "theme": "light",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "pre-run, a lone ungrounded resistor produced 4 diagnostic row(s) -> flagged: true; then after ran, back in mode \"Schematic\" (schematic: true), dock tabs are [] - Measurements present: false, Errors present: true (as a heading), badge \"5\"",
+    "data": {
+      "preRun": {
+        "rows": [
+          "No ground symbol found.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source.",
+          "R1.B is only connected to one pin.",
+          "R1.A is only connected to one pin."
+        ],
+        "text": "No analysis yetErrors4Errors4No ground symbol found.No source: nothing in this schematic drives it. Add a voltage or current source.R1.B is only connected to one pin.R1.A is only connected to one pin."
+      },
+      "dock": {
+        "tabs": [],
+        "hasMeasurementsTab": false,
+        "hasErrorsTab": true,
+        "errorsSurface": "heading",
+        "drawerFound": true,
+        "drawerText": "ErrorAdd a ground symbol so node voltages have a reference.Errors5Errors5Add a ground symbol so node voltages have a reference.No ground symbol found.R1.B is only connected to one pin.R1.A is only connected to one pin.No source: nothing in this schematic drives it. Add a voltage or current source.",
+        "rows": [
+          "Add a ground symbol so node voltages have a reference.",
+          "No ground symbol found.",
+          "R1.B is only connected to one pin.",
+          "R1.A is only connected to one pin.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source."
+        ],
+        "badgeText": "5"
+      },
+      "ranNote": "ran",
+      "mode": "Schematic"
+    }
+  },
+  {
+    "id": "P3-01",
+    "title": "a source's waveform changes its identity, not just its value",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "title \"DC source\" -> \"Sine voltage source\" (names sine: true); \"DC source\" anywhere in inspector: false; DC-operating-point and Offset both shown: false; field set is the sine's with no bias row: true; kind stays \"vsource\" by design (converting it corrupts the value codec); value \"SINE(5 1 1k)\"; fields [Component ID, Waveform, Offset, Amplitude, Frequency, Start delay, Damping, Phase, Cycles, Small-signal AC (.ac)]",
+    "data": {
+      "before": {
+        "kind": "vsource",
+        "value": "5",
+        "titleText": "DC source",
+        "inspectorText": "›DC sourceV1Component IDWaveformDCDC levelVSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "DC level",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "5 V"
+        ]
+      },
+      "after": {
+        "kind": "vsource",
+        "value": "SINE(5 1 1k)",
+        "titleText": "Sine voltage source",
+        "inspectorText": "›Sine voltage sourceV1Component IDWaveformSineOffsetVAmplitudeVFrequencykHzStart delaysDampingHzPhase°CyclesSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "Offset",
+          "Amplitude",
+          "Frequency",
+          "Start delay",
+          "Damping",
+          "Phase",
+          "Cycles",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "Sine · 1 V @ 1k Hz"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-02",
+    "title": "a file can be dragged into a folder",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "file row draggable=true (attr true); after dragTo, \"p3-02-light-1280x800.asc\" parent is \"workspace://Schematics/Project Storage\"; landed in Project Storage: true",
+    "data": {
+      "draggableSet": {
+        "draggable": true,
+        "attr": "true"
+      },
+      "moved": {
+        "path": "workspace://Schematics/Project Storage/p3-02-light-1280x800.asc",
+        "name": "p3-02-light-1280x800.asc",
+        "kind": "file",
+        "parent": "workspace://Schematics/Project Storage"
+      },
+      "dragError": null
+    }
+  },
+  {
+    "id": "P3-03",
+    "title": "the palette LED is not coloured",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "palette LED stroke chroma 12.0 vs neighbours 12.0 (LED strokes: rgb(11, 16, 23))",
+    "data": {
+      "led": {
+        "name": "LED",
+        "strokes": [
+          "rgb(11, 16, 23)"
+        ]
+      },
+      "diode": {
+        "name": "Diode",
+        "strokes": [
+          "rgb(11, 16, 23)"
+        ]
+      },
+      "resistor": {
+        "name": "Resistor",
+        "strokes": [
+          "rgb(11, 16, 23)"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-04A",
+    "title": "the explorer overflow trigger survives a narrow window",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 251px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "data": [
+      {
+        "asked": 168,
+        "panelWidth": 168,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 40,
+        "primaryIconsVisible": 1,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 87,
+        "headOverflowing": false
+      },
+      {
+        "asked": 226,
+        "panelWidth": 226,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 106,
+        "primaryIconsVisible": 4,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 79,
+        "headOverflowing": false
+      },
+      {
+        "asked": 420,
+        "panelWidth": 420,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 128,
+        "primaryIconsVisible": 5,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 251,
+        "headOverflowing": false
+      }
+    ]
+  },
+  {
+    "id": "P3-04B",
+    "title": "the empty-editor card tells you to place a part",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "heading \"Place your first component\"; still the stale copy: false; names placing a component: true; keeps an Ask Bode action: true; buttons [Browse components, Try RC Charging, Ask Bode]",
+    "data": {
+      "found": true,
+      "heading": "Place your first component",
+      "body": "Bode · circuit assistantPlace your first componentPick a part from Components on the right and click the sheet to place it, or ask Bode to build the circuit for you. Browse components Try RC Charging Ask Bode",
+      "buttons": [
+        "Browse components",
+        "Try RC Charging",
+        "Ask Bode"
+      ]
+    }
+  },
+  {
+    "id": "P3-06",
+    "title": "tree rows are indented under their parent",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "indent steps: root(64px) -> folder(+14px) -> nested file(+14px); need >= 10px per level; too shallow: none",
+    "data": {
+      "rows": [
+        {
+          "text": "SchematicsProject root",
+          "isRoot": true,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 8,
+          "contentLeft": 64
+        },
+        {
+          "text": "Project Storage",
+          "isRoot": false,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        },
+        {
+          "text": "nested.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 36,
+          "contentLeft": 92
+        },
+        {
+          "text": "p3-06-light-1280x800.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        }
+      ],
+      "rootIndent": 64,
+      "rootToFolder": 14,
+      "folderToFile": 14
+    }
+  },
+  {
+    "id": "P3-07",
+    "title": "no two labels overlap, ever",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "7 sheets swept (pitch 32-96, straight and rotated, net labels included), 189 label boxes measured; 0 overlapping pair(s); label-over-artwork collisions: 0",
+    "data": [
+      {
+        "sheet": "pitch32",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch96",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "tight2x6",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      }
+    ]
+  },
+  {
+    "id": "P3-08",
+    "title": "ground lands pin-up on every placement path",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "armed placeRotation on the previous part: 90; GHOST for ground while that rotation is armed: present true, transform \"rotate(0)\", placeRotation 0, placeMirror false -> upright: true (this is what the report photographed - dashed strokes are .ghost .symbol); tool state before the mirrored drop: {\"rot\":0,\"mir\":false}; DROPPED grounds: click [{\"rot\":0,\"mir\":false}], mirrored-tool [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}], drag (attempted) [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}]; 0 of 2 not pin-up",
+    "data": {
+      "ghost": {
+        "present": true,
+        "transform": "rotate(0)",
+        "placeRotation": 0,
+        "placeMirror": false,
+        "toolKind": "ground"
+      },
+      "ghostUpright": true,
+      "afterClick": [
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterMirror": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterDrag": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "dragNote": "attempted"
+    }
+  },
+  {
+    "id": "P3-10",
+    "title": "fit-to-view centres the circuit in the visible canvas",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "after a hard pan then fit, in a 738x619 visible box (rail open: true): CIRCUIT centred to dx=2px dy=0px (tolerance 2px) -> true; everything incl. labels fully inside: true; informational - labels hang {\"dx\":15,\"dy\":27} off centre, which is why the symbols+labels union reads dx=15 dy=27; artwork 412x411",
+    "data": {
+      "visible": {
+        "w": 738,
+        "h": 619
+      },
+      "dxCentre": 15,
+      "dyCentre": 27,
+      "artWidth": 412,
+      "artHeight": 411,
+      "insideVisible": true,
+      "railOpen": true,
+      "symbolsOffset": {
+        "dx": 2,
+        "dy": 0
+      },
+      "labelsOffset": {
+        "dx": 15,
+        "dy": 27
+      },
+      "drawerRect": {
+        "top": 737,
+        "height": 35,
+        "cls": "results-drawer results-drawer--dock-bottom results-drawer--peek"
+      },
+      "canvasBottom": 772,
+      "visibleBottom": 737
+    }
+  },
+  {
+    "id": "P3-11",
+    "title": "Backspace deletes a selected net label",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "created 1; click selected 1 label id(s); after Backspace 0; after undo 1; after Delete 0",
+    "data": {
+      "created": 1,
+      "selected": 1,
+      "afterBackspace": 0,
+      "afterUndo": 1,
+      "afterDelete": 0
+    }
+  },
+  {
+    "id": "P3-12/13",
+    "title": "the tool strip reads as real objects, in colour",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "9 tool buttons (8 enabled); 7/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Select:h211/s1, Wire:h6/s0.63, Net label (F4):h44/s0.64, Probe:h4/s0.68, Undo:h237/s0.38, Delete selection (Delete):h213/s0.31, Clear schematic:h340/s0.4]; probe reads red: true (h4 s0.68)",
+    "data": [
+      {
+        "label": "Select",
+        "disabled": false,
+        "colours": [
+          "rgb(0, 104, 214) h211 s1.00"
+        ],
+        "hue": 211,
+        "sat": 1
+      },
+      {
+        "label": "Wire",
+        "disabled": false,
+        "colours": [
+          "rgb(192, 57, 43) h6 s0.63",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 6,
+        "sat": 0.63
+      },
+      {
+        "label": "Net label (F4)",
+        "disabled": false,
+        "colours": [
+          "rgb(122, 96, 27) h44 s0.64",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 44,
+        "sat": 0.64
+      },
+      {
+        "label": "Probe",
+        "disabled": false,
+        "colours": [
+          "rgb(179, 43, 34) h4 s0.68",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 4,
+        "sat": 0.68
+      },
+      {
+        "label": "Undo",
+        "disabled": false,
+        "colours": [
+          "rgb(74, 78, 166) h237 s0.38"
+        ],
+        "hue": 237,
+        "sat": 0.38
+      },
+      {
+        "label": "Redo",
+        "disabled": true,
+        "colours": [
+          "rgb(123, 135, 152) h215 s0.12"
+        ],
+        "hue": 215,
+        "sat": 0.12
+      },
+      {
+        "label": "Delete selection (Delete)",
+        "disabled": false,
+        "colours": [
+          "rgb(91, 101, 114) h214 s0.11",
+          "rgb(232, 237, 243) h213 s0.31"
+        ],
+        "hue": 213,
+        "sat": 0.31
+      },
+      {
+        "label": "Clear schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(159, 68, 99) h340 s0.40",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 340,
+        "sat": 0.4
+      },
+      {
+        "label": "Simulation setup",
+        "disabled": false,
+        "colours": [
+          "rgb(78, 92, 110) h214 s0.17"
+        ],
+        "hue": 214,
+        "sat": 0.17
+      }
+    ]
+  },
+  {
+    "id": "P3-14",
+    "title": "the schematic dock is Errors only and flags problems before Run",
+    "theme": "light",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "pre-run, a lone ungrounded resistor produced 4 diagnostic row(s) -> flagged: true; then after ran, back in mode \"Schematic\" (schematic: true), dock tabs are [] - Measurements present: false, Errors present: true (as a heading), badge \"5\"",
+    "data": {
+      "preRun": {
+        "rows": [
+          "No ground symbol found.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source.",
+          "R1.A is only connected to one pin.",
+          "R1.B is only connected to one pin."
+        ],
+        "text": "No analysis yetErrors4Errors4No ground symbol found.No source: nothing in this schematic drives it. Add a voltage or current source.R1.A is only connected to one pin.R1.B is only connected to one pin."
+      },
+      "dock": {
+        "tabs": [],
+        "hasMeasurementsTab": false,
+        "hasErrorsTab": true,
+        "errorsSurface": "heading",
+        "drawerFound": true,
+        "drawerText": "ErrorAdd a ground symbol so node voltages have a reference.Errors5Errors5Add a ground symbol so node voltages have a reference.No ground symbol found.R1.A is only connected to one pin.R1.B is only connected to one pin.No source: nothing in this schematic drives it. Add a voltage or current source.",
+        "rows": [
+          "Add a ground symbol so node voltages have a reference.",
+          "No ground symbol found.",
+          "R1.A is only connected to one pin.",
+          "R1.B is only connected to one pin.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source."
+        ],
+        "badgeText": "5"
+      },
+      "ranNote": "ran",
+      "mode": "Schematic"
+    }
+  },
+  {
+    "id": "P3-01",
+    "title": "a source's waveform changes its identity, not just its value",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "title \"DC source\" -> \"Sine voltage source\" (names sine: true); \"DC source\" anywhere in inspector: false; DC-operating-point and Offset both shown: false; field set is the sine's with no bias row: true; kind stays \"vsource\" by design (converting it corrupts the value codec); value \"SINE(5 1 1k)\"; fields [Component ID, Waveform, Offset, Amplitude, Frequency, Start delay, Damping, Phase, Cycles, Small-signal AC (.ac)]",
+    "data": {
+      "before": {
+        "kind": "vsource",
+        "value": "5",
+        "titleText": "DC source",
+        "inspectorText": "›DC sourceV1Component IDWaveformDCDC levelVSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "DC level",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "5 V"
+        ]
+      },
+      "after": {
+        "kind": "vsource",
+        "value": "SINE(5 1 1k)",
+        "titleText": "Sine voltage source",
+        "inspectorText": "›Sine voltage sourceV1Component IDWaveformSineOffsetVAmplitudeVFrequencykHzStart delaysDampingHzPhase°CyclesSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "Offset",
+          "Amplitude",
+          "Frequency",
+          "Start delay",
+          "Damping",
+          "Phase",
+          "Cycles",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "Sine · 1 V @ 1k Hz"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-02",
+    "title": "a file can be dragged into a folder",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "file row draggable=true (attr true); after dragTo, \"p3-02-light-1440x900.asc\" parent is \"workspace://Schematics/Project Storage\"; landed in Project Storage: true",
+    "data": {
+      "draggableSet": {
+        "draggable": true,
+        "attr": "true"
+      },
+      "moved": {
+        "path": "workspace://Schematics/Project Storage/p3-02-light-1440x900.asc",
+        "name": "p3-02-light-1440x900.asc",
+        "kind": "file",
+        "parent": "workspace://Schematics/Project Storage"
+      },
+      "dragError": null
+    }
+  },
+  {
+    "id": "P3-03",
+    "title": "the palette LED is not coloured",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "palette LED stroke chroma 12.0 vs neighbours 12.0 (LED strokes: rgb(11, 16, 23))",
+    "data": {
+      "led": {
+        "name": "LED",
+        "strokes": [
+          "rgb(11, 16, 23)"
+        ]
+      },
+      "diode": {
+        "name": "Diode",
+        "strokes": [
+          "rgb(11, 16, 23)"
+        ]
+      },
+      "resistor": {
+        "name": "Resistor",
+        "strokes": [
+          "rgb(11, 16, 23)"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-04A",
+    "title": "the explorer overflow trigger survives a narrow window",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 251px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "data": [
+      {
+        "asked": 168,
+        "panelWidth": 168,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 40,
+        "primaryIconsVisible": 1,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 87,
+        "headOverflowing": false
+      },
+      {
+        "asked": 226,
+        "panelWidth": 226,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 106,
+        "primaryIconsVisible": 4,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 79,
+        "headOverflowing": false
+      },
+      {
+        "asked": 420,
+        "panelWidth": 420,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 128,
+        "primaryIconsVisible": 5,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 251,
+        "headOverflowing": false
+      }
+    ]
+  },
+  {
+    "id": "P3-04B",
+    "title": "the empty-editor card tells you to place a part",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "heading \"Place your first component\"; still the stale copy: false; names placing a component: true; keeps an Ask Bode action: true; buttons [Browse components, Try RC Charging, Ask Bode]",
+    "data": {
+      "found": true,
+      "heading": "Place your first component",
+      "body": "Bode · circuit assistantPlace your first componentPick a part from Components on the right and click the sheet to place it, or ask Bode to build the circuit for you. Browse components Try RC Charging Ask Bode",
+      "buttons": [
+        "Browse components",
+        "Try RC Charging",
+        "Ask Bode"
+      ]
+    }
+  },
+  {
+    "id": "P3-06",
+    "title": "tree rows are indented under their parent",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "indent steps: root(64px) -> folder(+14px) -> nested file(+14px); need >= 10px per level; too shallow: none",
+    "data": {
+      "rows": [
+        {
+          "text": "SchematicsProject root",
+          "isRoot": true,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 8,
+          "contentLeft": 64
+        },
+        {
+          "text": "Project Storage",
+          "isRoot": false,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        },
+        {
+          "text": "nested.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 36,
+          "contentLeft": 92
+        },
+        {
+          "text": "p3-06-light-1440x900.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        }
+      ],
+      "rootIndent": 64,
+      "rootToFolder": 14,
+      "folderToFile": 14
+    }
+  },
+  {
+    "id": "P3-07",
+    "title": "no two labels overlap, ever",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "7 sheets swept (pitch 32-96, straight and rotated, net labels included), 189 label boxes measured; 0 overlapping pair(s); label-over-artwork collisions: 0",
+    "data": [
+      {
+        "sheet": "pitch32",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch96",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "tight2x6",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      }
+    ]
+  },
+  {
+    "id": "P3-08",
+    "title": "ground lands pin-up on every placement path",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "armed placeRotation on the previous part: 90; GHOST for ground while that rotation is armed: present true, transform \"rotate(0)\", placeRotation 0, placeMirror false -> upright: true (this is what the report photographed - dashed strokes are .ghost .symbol); tool state before the mirrored drop: {\"rot\":0,\"mir\":false}; DROPPED grounds: click [{\"rot\":0,\"mir\":false}], mirrored-tool [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}], drag (attempted) [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}]; 0 of 2 not pin-up",
+    "data": {
+      "ghost": {
+        "present": true,
+        "transform": "rotate(0)",
+        "placeRotation": 0,
+        "placeMirror": false,
+        "toolKind": "ground"
+      },
+      "ghostUpright": true,
+      "afterClick": [
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterMirror": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterDrag": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "dragNote": "attempted"
+    }
+  },
+  {
+    "id": "P3-10",
+    "title": "fit-to-view centres the circuit in the visible canvas",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "after a hard pan then fit, in a 898x719 visible box (rail open: true): CIRCUIT centred to dx=2px dy=0px (tolerance 2px) -> true; everything incl. labels fully inside: true; informational - labels hang {\"dx\":17,\"dy\":31} off centre, which is why the symbols+labels union reads dx=17 dy=31; artwork 479x478",
+    "data": {
+      "visible": {
+        "w": 898,
+        "h": 719
+      },
+      "dxCentre": 17,
+      "dyCentre": 31,
+      "artWidth": 479,
+      "artHeight": 478,
+      "insideVisible": true,
+      "railOpen": true,
+      "symbolsOffset": {
+        "dx": 2,
+        "dy": 0
+      },
+      "labelsOffset": {
+        "dx": 17,
+        "dy": 31
+      },
+      "drawerRect": {
+        "top": 837,
+        "height": 35,
+        "cls": "results-drawer results-drawer--dock-bottom results-drawer--peek"
+      },
+      "canvasBottom": 872,
+      "visibleBottom": 837
+    }
+  },
+  {
+    "id": "P3-11",
+    "title": "Backspace deletes a selected net label",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "created 1; click selected 1 label id(s); after Backspace 0; after undo 1; after Delete 0",
+    "data": {
+      "created": 1,
+      "selected": 1,
+      "afterBackspace": 0,
+      "afterUndo": 1,
+      "afterDelete": 0
+    }
+  },
+  {
+    "id": "P3-12/13",
+    "title": "the tool strip reads as real objects, in colour",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "9 tool buttons (8 enabled); 7/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Select:h211/s1, Wire:h6/s0.63, Net label (F4):h44/s0.64, Probe:h4/s0.68, Undo:h237/s0.38, Delete selection (Delete):h213/s0.31, Clear schematic:h340/s0.4]; probe reads red: true (h4 s0.68)",
+    "data": [
+      {
+        "label": "Select",
+        "disabled": false,
+        "colours": [
+          "rgb(0, 104, 214) h211 s1.00"
+        ],
+        "hue": 211,
+        "sat": 1
+      },
+      {
+        "label": "Wire",
+        "disabled": false,
+        "colours": [
+          "rgb(192, 57, 43) h6 s0.63",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 6,
+        "sat": 0.63
+      },
+      {
+        "label": "Net label (F4)",
+        "disabled": false,
+        "colours": [
+          "rgb(122, 96, 27) h44 s0.64",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 44,
+        "sat": 0.64
+      },
+      {
+        "label": "Probe",
+        "disabled": false,
+        "colours": [
+          "rgb(179, 43, 34) h4 s0.68",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 4,
+        "sat": 0.68
+      },
+      {
+        "label": "Undo",
+        "disabled": false,
+        "colours": [
+          "rgb(74, 78, 166) h237 s0.38"
+        ],
+        "hue": 237,
+        "sat": 0.38
+      },
+      {
+        "label": "Redo",
+        "disabled": true,
+        "colours": [
+          "rgb(123, 135, 152) h215 s0.12"
+        ],
+        "hue": 215,
+        "sat": 0.12
+      },
+      {
+        "label": "Delete selection (Delete)",
+        "disabled": false,
+        "colours": [
+          "rgb(91, 101, 114) h214 s0.11",
+          "rgb(232, 237, 243) h213 s0.31"
+        ],
+        "hue": 213,
+        "sat": 0.31
+      },
+      {
+        "label": "Clear schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(159, 68, 99) h340 s0.40",
+          "rgb(91, 101, 114) h214 s0.11"
+        ],
+        "hue": 340,
+        "sat": 0.4
+      },
+      {
+        "label": "Simulation setup",
+        "disabled": false,
+        "colours": [
+          "rgb(78, 92, 110) h214 s0.17"
+        ],
+        "hue": 214,
+        "sat": 0.17
+      }
+    ]
+  },
+  {
+    "id": "P3-14",
+    "title": "the schematic dock is Errors only and flags problems before Run",
+    "theme": "light",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "pre-run, a lone ungrounded resistor produced 4 diagnostic row(s) -> flagged: true; then after ran, back in mode \"Schematic\" (schematic: true), dock tabs are [] - Measurements present: false, Errors present: true (as a heading), badge \"5\"",
+    "data": {
+      "preRun": {
+        "rows": [
+          "No ground symbol found.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source.",
+          "R1.A is only connected to one pin.",
+          "R1.B is only connected to one pin."
+        ],
+        "text": "No analysis yetErrors4Errors4No ground symbol found.No source: nothing in this schematic drives it. Add a voltage or current source.R1.A is only connected to one pin.R1.B is only connected to one pin."
+      },
+      "dock": {
+        "tabs": [],
+        "hasMeasurementsTab": false,
+        "hasErrorsTab": true,
+        "errorsSurface": "heading",
+        "drawerFound": true,
+        "drawerText": "ErrorAdd a ground symbol so node voltages have a reference.Errors5Errors5Add a ground symbol so node voltages have a reference.No ground symbol found.R1.A is only connected to one pin.R1.B is only connected to one pin.No source: nothing in this schematic drives it. Add a voltage or current source.",
+        "rows": [
+          "Add a ground symbol so node voltages have a reference.",
+          "No ground symbol found.",
+          "R1.A is only connected to one pin.",
+          "R1.B is only connected to one pin.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source."
+        ],
+        "badgeText": "5"
+      },
+      "ranNote": "ran",
+      "mode": "Schematic"
+    }
+  },
+  {
+    "id": "P3-01",
+    "title": "a source's waveform changes its identity, not just its value",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "title \"DC source\" -> \"Sine voltage source\" (names sine: true); \"DC source\" anywhere in inspector: false; DC-operating-point and Offset both shown: false; field set is the sine's with no bias row: true; kind stays \"vsource\" by design (converting it corrupts the value codec); value \"SINE(5 1 1k)\"; fields [Component ID, Waveform, Offset, Amplitude, Frequency, Start delay, Damping, Phase, Cycles, Small-signal AC (.ac)]",
+    "data": {
+      "before": {
+        "kind": "vsource",
+        "value": "5",
+        "titleText": "DC source",
+        "inspectorText": "›DC sourceV1Component IDWaveformDCDC levelVSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "DC level",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "5 V"
+        ]
+      },
+      "after": {
+        "kind": "vsource",
+        "value": "SINE(5 1 1k)",
+        "titleText": "Sine voltage source",
+        "inspectorText": "›Sine voltage sourceV1Component IDWaveformSineOffsetVAmplitudeVFrequencykHzStart delaysDampingHzPhase°CyclesSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "Offset",
+          "Amplitude",
+          "Frequency",
+          "Start delay",
+          "Damping",
+          "Phase",
+          "Cycles",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "Sine · 1 V @ 1k Hz"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-02",
+    "title": "a file can be dragged into a folder",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "file row draggable=true (attr true); after dragTo, \"p3-02-dark-900x600.asc\" parent is \"workspace://Schematics/Project Storage\"; landed in Project Storage: true",
+    "data": {
+      "draggableSet": {
+        "draggable": true,
+        "attr": "true"
+      },
+      "moved": {
+        "path": "workspace://Schematics/Project Storage/p3-02-dark-900x600.asc",
+        "name": "p3-02-dark-900x600.asc",
+        "kind": "file",
+        "parent": "workspace://Schematics/Project Storage"
+      },
+      "dragError": null
+    }
+  },
+  {
+    "id": "P3-03",
+    "title": "the palette LED is not coloured",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "palette LED stroke chroma 5.0 vs neighbours 5.0 (LED strokes: rgb(209, 209, 214))",
+    "data": {
+      "led": {
+        "name": "LED",
+        "strokes": [
+          "rgb(209, 209, 214)"
+        ]
+      },
+      "diode": {
+        "name": "Diode",
+        "strokes": [
+          "rgb(209, 209, 214)"
+        ]
+      },
+      "resistor": {
+        "name": "Resistor",
+        "strokes": [
+          "rgb(209, 209, 214)"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-04A",
+    "title": "the explorer overflow trigger survives a narrow window",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 306): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 137px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "data": [
+      {
+        "asked": 168,
+        "panelWidth": 168,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 40,
+        "primaryIconsVisible": 1,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 87,
+        "headOverflowing": false
+      },
+      {
+        "asked": 226,
+        "panelWidth": 226,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 106,
+        "primaryIconsVisible": 4,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 79,
+        "headOverflowing": false
+      },
+      {
+        "asked": 420,
+        "panelWidth": 306,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 128,
+        "primaryIconsVisible": 5,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 137,
+        "headOverflowing": false
+      }
+    ]
+  },
+  {
+    "id": "P3-04B",
+    "title": "the empty-editor card tells you to place a part",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "heading \"Place your first component\"; still the stale copy: false; names placing a component: true; keeps an Ask Bode action: true; buttons [Browse components, Try RC Charging, Ask Bode]",
+    "data": {
+      "found": true,
+      "heading": "Place your first component",
+      "body": "Bode · circuit assistantPlace your first componentPick a part from Components on the right and click the sheet to place it, or ask Bode to build the circuit for you. Browse components Try RC Charging Ask Bode",
+      "buttons": [
+        "Browse components",
+        "Try RC Charging",
+        "Ask Bode"
+      ]
+    }
+  },
+  {
+    "id": "P3-06",
+    "title": "tree rows are indented under their parent",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "indent steps: root(64px) -> folder(+14px) -> nested file(+14px); need >= 10px per level; too shallow: none",
+    "data": {
+      "rows": [
+        {
+          "text": "SchematicsProject root",
+          "isRoot": true,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 8,
+          "contentLeft": 64
+        },
+        {
+          "text": "Project Storage",
+          "isRoot": false,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        },
+        {
+          "text": "nested.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 36,
+          "contentLeft": 92
+        },
+        {
+          "text": "p3-06-dark-900x600.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        }
+      ],
+      "rootIndent": 64,
+      "rootToFolder": 14,
+      "folderToFile": 14
+    }
+  },
+  {
+    "id": "P3-07",
+    "title": "no two labels overlap, ever",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "7 sheets swept (pitch 32-96, straight and rotated, net labels included), 189 label boxes measured; 0 overlapping pair(s); label-over-artwork collisions: 0",
+    "data": [
+      {
+        "sheet": "pitch32",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch96",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "tight2x6",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      }
+    ]
+  },
+  {
+    "id": "P3-08",
+    "title": "ground lands pin-up on every placement path",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "armed placeRotation on the previous part: 90; GHOST for ground while that rotation is armed: present true, transform \"rotate(0)\", placeRotation 0, placeMirror false -> upright: true (this is what the report photographed - dashed strokes are .ghost .symbol); tool state before the mirrored drop: {\"rot\":0,\"mir\":false}; DROPPED grounds: click [{\"rot\":0,\"mir\":false}], mirrored-tool [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}], drag (attempted) [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}]; 0 of 2 not pin-up",
+    "data": {
+      "ghost": {
+        "present": true,
+        "transform": "rotate(0)",
+        "placeRotation": 0,
+        "placeMirror": false,
+        "toolKind": "ground"
+      },
+      "ghostUpright": true,
+      "afterClick": [
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterMirror": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterDrag": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "dragNote": "attempted"
+    }
+  },
+  {
+    "id": "P3-10",
+    "title": "fit-to-view centres the circuit in the visible canvas",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "after a hard pan then fit, in a 358x419 visible box (rail open: true): CIRCUIT centred to dx=1px dy=0px (tolerance 2px) -> true; everything incl. labels fully inside: true; informational - labels hang {\"dx\":9,\"dy\":16} off centre, which is why the symbols+labels union reads dx=9 dy=16; artwork 241x241",
+    "data": {
+      "visible": {
+        "w": 358,
+        "h": 419
+      },
+      "dxCentre": 9,
+      "dyCentre": 16,
+      "artWidth": 241,
+      "artHeight": 241,
+      "insideVisible": true,
+      "railOpen": true,
+      "symbolsOffset": {
+        "dx": 1,
+        "dy": 0
+      },
+      "labelsOffset": {
+        "dx": 9,
+        "dy": 16
+      },
+      "drawerRect": {
+        "top": 537,
+        "height": 35,
+        "cls": "results-drawer results-drawer--dock-bottom results-drawer--peek"
+      },
+      "canvasBottom": 572,
+      "visibleBottom": 537
+    }
+  },
+  {
+    "id": "P3-11",
+    "title": "Backspace deletes a selected net label",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "created 1; click selected 1 label id(s); after Backspace 0; after undo 1; after Delete 0",
+    "data": {
+      "created": 1,
+      "selected": 1,
+      "afterBackspace": 0,
+      "afterUndo": 1,
+      "afterDelete": 0
+    }
+  },
+  {
+    "id": "P3-12/13",
+    "title": "the tool strip reads as real objects, in colour",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "9 tool buttons (8 enabled); 6/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Wire:h5/s0.74, Net label (F4):h43/s0.5, Probe:h5/s0.8, Undo:h239/s0.53, Clear schematic:h343/s0.53, Simulation setup:h240/s0.33]; probe reads red: true (h5 s0.8)",
+    "data": [
+      {
+        "label": "Select",
+        "disabled": false,
+        "colours": [
+          "rgb(214, 211, 202) h45 s0.13"
+        ],
+        "hue": 45,
+        "sat": 0.13
+      },
+      {
+        "label": "Wire",
+        "disabled": false,
+        "colours": [
+          "rgb(228, 87, 75) h5 s0.74",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 5,
+        "sat": 0.74
+      },
+      {
+        "label": "Net label (F4)",
+        "disabled": false,
+        "colours": [
+          "rgb(196, 162, 78) h43 s0.50",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 43,
+        "sat": 0.5
+      },
+      {
+        "label": "Probe",
+        "disabled": false,
+        "colours": [
+          "rgb(234, 79, 66) h5 s0.80",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 5,
+        "sat": 0.8
+      },
+      {
+        "label": "Undo",
+        "disabled": false,
+        "colours": [
+          "rgb(155, 156, 224) h239 s0.53"
+        ],
+        "hue": 239,
+        "sat": 0.53
+      },
+      {
+        "label": "Redo",
+        "disabled": true,
+        "colours": [
+          "rgba(235, 235, 245, 0.3) h240 s0.33"
+        ],
+        "hue": 240,
+        "sat": 0.33
+      },
+      {
+        "label": "Delete selection (Delete)",
+        "disabled": false,
+        "colours": [
+          "rgb(154, 163, 174) h213 s0.11",
+          "rgb(22, 22, 23) h240 s0.02"
+        ],
+        "hue": 213,
+        "sat": 0.11
+      },
+      {
+        "label": "Clear schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(217, 130, 154) h343 s0.53",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 343,
+        "sat": 0.53
+      },
+      {
+        "label": "Simulation setup",
+        "disabled": false,
+        "colours": [
+          "rgba(235, 235, 245, 0.6) h240 s0.33"
+        ],
+        "hue": 240,
+        "sat": 0.33
+      }
+    ]
+  },
+  {
+    "id": "P3-14",
+    "title": "the schematic dock is Errors only and flags problems before Run",
+    "theme": "dark",
+    "viewport": "900x600",
+    "pass": true,
+    "detail": "pre-run, a lone ungrounded resistor produced 4 diagnostic row(s) -> flagged: true; then after ran, back in mode \"Schematic\" (schematic: true), dock tabs are [] - Measurements present: false, Errors present: true (as a heading), badge \"5\"",
+    "data": {
+      "preRun": {
+        "rows": [
+          "No ground symbol found.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source.",
+          "R1.B is only connected to one pin.",
+          "R1.A is only connected to one pin."
+        ],
+        "text": "No analysis yetErrors4Errors4No ground symbol found.No source: nothing in this schematic drives it. Add a voltage or current source.R1.B is only connected to one pin.R1.A is only connected to one pin."
+      },
+      "dock": {
+        "tabs": [],
+        "hasMeasurementsTab": false,
+        "hasErrorsTab": true,
+        "errorsSurface": "heading",
+        "drawerFound": true,
+        "drawerText": "ErrorAdd a ground symbol so node voltages have a reference.Errors5Errors5Add a ground symbol so node voltages have a reference.No ground symbol found.R1.B is only connected to one pin.R1.A is only connected to one pin.No source: nothing in this schematic drives it. Add a voltage or current source.",
+        "rows": [
+          "Add a ground symbol so node voltages have a reference.",
+          "No ground symbol found.",
+          "R1.B is only connected to one pin.",
+          "R1.A is only connected to one pin.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source."
+        ],
+        "badgeText": "5"
+      },
+      "ranNote": "ran",
+      "mode": "Schematic"
+    }
+  },
+  {
+    "id": "P3-01",
+    "title": "a source's waveform changes its identity, not just its value",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "title \"DC source\" -> \"Sine voltage source\" (names sine: true); \"DC source\" anywhere in inspector: false; DC-operating-point and Offset both shown: false; field set is the sine's with no bias row: true; kind stays \"vsource\" by design (converting it corrupts the value codec); value \"SINE(5 1 1k)\"; fields [Component ID, Waveform, Offset, Amplitude, Frequency, Start delay, Damping, Phase, Cycles, Small-signal AC (.ac)]",
+    "data": {
+      "before": {
+        "kind": "vsource",
+        "value": "5",
+        "titleText": "DC source",
+        "inspectorText": "›DC sourceV1Component IDWaveformDCDC levelVSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "DC level",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "5 V"
+        ]
+      },
+      "after": {
+        "kind": "vsource",
+        "value": "SINE(5 1 1k)",
+        "titleText": "Sine voltage source",
+        "inspectorText": "›Sine voltage sourceV1Component IDWaveformSineOffsetVAmplitudeVFrequencykHzStart delaysDampingHzPhase°CyclesSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "Offset",
+          "Amplitude",
+          "Frequency",
+          "Start delay",
+          "Damping",
+          "Phase",
+          "Cycles",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "Sine · 1 V @ 1k Hz"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-02",
+    "title": "a file can be dragged into a folder",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "file row draggable=true (attr true); after dragTo, \"p3-02-dark-1280x800.asc\" parent is \"workspace://Schematics/Project Storage\"; landed in Project Storage: true",
+    "data": {
+      "draggableSet": {
+        "draggable": true,
+        "attr": "true"
+      },
+      "moved": {
+        "path": "workspace://Schematics/Project Storage/p3-02-dark-1280x800.asc",
+        "name": "p3-02-dark-1280x800.asc",
+        "kind": "file",
+        "parent": "workspace://Schematics/Project Storage"
+      },
+      "dragError": null
+    }
+  },
+  {
+    "id": "P3-03",
+    "title": "the palette LED is not coloured",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "palette LED stroke chroma 5.0 vs neighbours 5.0 (LED strokes: rgb(209, 209, 214))",
+    "data": {
+      "led": {
+        "name": "LED",
+        "strokes": [
+          "rgb(209, 209, 214)"
+        ]
+      },
+      "diode": {
+        "name": "Diode",
+        "strokes": [
+          "rgb(209, 209, 214)"
+        ]
+      },
+      "resistor": {
+        "name": "Resistor",
+        "strokes": [
+          "rgb(209, 209, 214)"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-04A",
+    "title": "the explorer overflow trigger survives a narrow window",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 251px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "data": [
+      {
+        "asked": 168,
+        "panelWidth": 168,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 40,
+        "primaryIconsVisible": 1,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 87,
+        "headOverflowing": false
+      },
+      {
+        "asked": 226,
+        "panelWidth": 226,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 106,
+        "primaryIconsVisible": 4,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 79,
+        "headOverflowing": false
+      },
+      {
+        "asked": 420,
+        "panelWidth": 420,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 128,
+        "primaryIconsVisible": 5,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 251,
+        "headOverflowing": false
+      }
+    ]
+  },
+  {
+    "id": "P3-04B",
+    "title": "the empty-editor card tells you to place a part",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "heading \"Place your first component\"; still the stale copy: false; names placing a component: true; keeps an Ask Bode action: true; buttons [Browse components, Try RC Charging, Ask Bode]",
+    "data": {
+      "found": true,
+      "heading": "Place your first component",
+      "body": "Bode · circuit assistantPlace your first componentPick a part from Components on the right and click the sheet to place it, or ask Bode to build the circuit for you. Browse components Try RC Charging Ask Bode",
+      "buttons": [
+        "Browse components",
+        "Try RC Charging",
+        "Ask Bode"
+      ]
+    }
+  },
+  {
+    "id": "P3-06",
+    "title": "tree rows are indented under their parent",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "indent steps: root(64px) -> folder(+14px) -> nested file(+14px); need >= 10px per level; too shallow: none",
+    "data": {
+      "rows": [
+        {
+          "text": "SchematicsProject root",
+          "isRoot": true,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 8,
+          "contentLeft": 64
+        },
+        {
+          "text": "Project Storage",
+          "isRoot": false,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        },
+        {
+          "text": "nested.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 36,
+          "contentLeft": 92
+        },
+        {
+          "text": "p3-06-dark-1280x800.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        }
+      ],
+      "rootIndent": 64,
+      "rootToFolder": 14,
+      "folderToFile": 14
+    }
+  },
+  {
+    "id": "P3-07",
+    "title": "no two labels overlap, ever",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "7 sheets swept (pitch 32-96, straight and rotated, net labels included), 189 label boxes measured; 0 overlapping pair(s); label-over-artwork collisions: 0",
+    "data": [
+      {
+        "sheet": "pitch32",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch96",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "tight2x6",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      }
+    ]
+  },
+  {
+    "id": "P3-08",
+    "title": "ground lands pin-up on every placement path",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "armed placeRotation on the previous part: 90; GHOST for ground while that rotation is armed: present true, transform \"rotate(0)\", placeRotation 0, placeMirror false -> upright: true (this is what the report photographed - dashed strokes are .ghost .symbol); tool state before the mirrored drop: {\"rot\":0,\"mir\":false}; DROPPED grounds: click [{\"rot\":0,\"mir\":false}], mirrored-tool [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}], drag (attempted) [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}]; 0 of 2 not pin-up",
+    "data": {
+      "ghost": {
+        "present": true,
+        "transform": "rotate(0)",
+        "placeRotation": 0,
+        "placeMirror": false,
+        "toolKind": "ground"
+      },
+      "ghostUpright": true,
+      "afterClick": [
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterMirror": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterDrag": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "dragNote": "attempted"
+    }
+  },
+  {
+    "id": "P3-10",
+    "title": "fit-to-view centres the circuit in the visible canvas",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "after a hard pan then fit, in a 738x619 visible box (rail open: true): CIRCUIT centred to dx=2px dy=0px (tolerance 2px) -> true; everything incl. labels fully inside: true; informational - labels hang {\"dx\":15,\"dy\":27} off centre, which is why the symbols+labels union reads dx=15 dy=27; artwork 412x411",
+    "data": {
+      "visible": {
+        "w": 738,
+        "h": 619
+      },
+      "dxCentre": 15,
+      "dyCentre": 27,
+      "artWidth": 412,
+      "artHeight": 411,
+      "insideVisible": true,
+      "railOpen": true,
+      "symbolsOffset": {
+        "dx": 2,
+        "dy": 0
+      },
+      "labelsOffset": {
+        "dx": 15,
+        "dy": 27
+      },
+      "drawerRect": {
+        "top": 737,
+        "height": 35,
+        "cls": "results-drawer results-drawer--dock-bottom results-drawer--peek"
+      },
+      "canvasBottom": 772,
+      "visibleBottom": 737
+    }
+  },
+  {
+    "id": "P3-11",
+    "title": "Backspace deletes a selected net label",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "created 1; click selected 1 label id(s); after Backspace 0; after undo 1; after Delete 0",
+    "data": {
+      "created": 1,
+      "selected": 1,
+      "afterBackspace": 0,
+      "afterUndo": 1,
+      "afterDelete": 0
+    }
+  },
+  {
+    "id": "P3-12/13",
+    "title": "the tool strip reads as real objects, in colour",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "9 tool buttons (8 enabled); 6/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Wire:h5/s0.74, Net label (F4):h43/s0.5, Probe:h5/s0.8, Undo:h239/s0.53, Clear schematic:h343/s0.53, Simulation setup:h240/s0.33]; probe reads red: true (h5 s0.8)",
+    "data": [
+      {
+        "label": "Select",
+        "disabled": false,
+        "colours": [
+          "rgb(214, 211, 202) h45 s0.13"
+        ],
+        "hue": 45,
+        "sat": 0.13
+      },
+      {
+        "label": "Wire",
+        "disabled": false,
+        "colours": [
+          "rgb(228, 87, 75) h5 s0.74",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 5,
+        "sat": 0.74
+      },
+      {
+        "label": "Net label (F4)",
+        "disabled": false,
+        "colours": [
+          "rgb(196, 162, 78) h43 s0.50",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 43,
+        "sat": 0.5
+      },
+      {
+        "label": "Probe",
+        "disabled": false,
+        "colours": [
+          "rgb(234, 79, 66) h5 s0.80",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 5,
+        "sat": 0.8
+      },
+      {
+        "label": "Undo",
+        "disabled": false,
+        "colours": [
+          "rgb(155, 156, 224) h239 s0.53"
+        ],
+        "hue": 239,
+        "sat": 0.53
+      },
+      {
+        "label": "Redo",
+        "disabled": true,
+        "colours": [
+          "rgba(235, 235, 245, 0.3) h240 s0.33"
+        ],
+        "hue": 240,
+        "sat": 0.33
+      },
+      {
+        "label": "Delete selection (Delete)",
+        "disabled": false,
+        "colours": [
+          "rgb(154, 163, 174) h213 s0.11",
+          "rgb(22, 22, 23) h240 s0.02"
+        ],
+        "hue": 213,
+        "sat": 0.11
+      },
+      {
+        "label": "Clear schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(217, 130, 154) h343 s0.53",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 343,
+        "sat": 0.53
+      },
+      {
+        "label": "Simulation setup",
+        "disabled": false,
+        "colours": [
+          "rgba(235, 235, 245, 0.6) h240 s0.33"
+        ],
+        "hue": 240,
+        "sat": 0.33
+      }
+    ]
+  },
+  {
+    "id": "P3-14",
+    "title": "the schematic dock is Errors only and flags problems before Run",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "pre-run, a lone ungrounded resistor produced 4 diagnostic row(s) -> flagged: true; then after ran, back in mode \"Schematic\" (schematic: true), dock tabs are [] - Measurements present: false, Errors present: true (as a heading), badge \"5\"",
+    "data": {
+      "preRun": {
+        "rows": [
+          "No ground symbol found.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source.",
+          "R1.A is only connected to one pin.",
+          "R1.B is only connected to one pin."
+        ],
+        "text": "No analysis yetErrors4Errors4No ground symbol found.No source: nothing in this schematic drives it. Add a voltage or current source.R1.A is only connected to one pin.R1.B is only connected to one pin."
+      },
+      "dock": {
+        "tabs": [],
+        "hasMeasurementsTab": false,
+        "hasErrorsTab": true,
+        "errorsSurface": "heading",
+        "drawerFound": true,
+        "drawerText": "ErrorAdd a ground symbol so node voltages have a reference.Errors5Errors5Add a ground symbol so node voltages have a reference.No ground symbol found.R1.A is only connected to one pin.R1.B is only connected to one pin.No source: nothing in this schematic drives it. Add a voltage or current source.",
+        "rows": [
+          "Add a ground symbol so node voltages have a reference.",
+          "No ground symbol found.",
+          "R1.A is only connected to one pin.",
+          "R1.B is only connected to one pin.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source."
+        ],
+        "badgeText": "5"
+      },
+      "ranNote": "ran",
+      "mode": "Schematic"
+    }
+  },
+  {
+    "id": "P3-01",
+    "title": "a source's waveform changes its identity, not just its value",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "title \"DC source\" -> \"Sine voltage source\" (names sine: true); \"DC source\" anywhere in inspector: false; DC-operating-point and Offset both shown: false; field set is the sine's with no bias row: true; kind stays \"vsource\" by design (converting it corrupts the value codec); value \"SINE(5 1 1k)\"; fields [Component ID, Waveform, Offset, Amplitude, Frequency, Start delay, Damping, Phase, Cycles, Small-signal AC (.ac)]",
+    "data": {
+      "before": {
+        "kind": "vsource",
+        "value": "5",
+        "titleText": "DC source",
+        "inspectorText": "›DC sourceV1Component IDWaveformDCDC levelVSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "DC level",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "5 V"
+        ]
+      },
+      "after": {
+        "kind": "vsource",
+        "value": "SINE(5 1 1k)",
+        "titleText": "Sine voltage source",
+        "inspectorText": "›Sine voltage sourceV1Component IDWaveformSineOffsetVAmplitudeVFrequencykHzStart delaysDampingHzPhase°CyclesSmall-signal AC (.ac)",
+        "fields": [
+          "Component ID",
+          "Waveform",
+          "Offset",
+          "Amplitude",
+          "Frequency",
+          "Start delay",
+          "Damping",
+          "Phase",
+          "Cycles",
+          "Small-signal AC (.ac)"
+        ],
+        "caption": [
+          "V1",
+          "Sine · 1 V @ 1k Hz"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-02",
+    "title": "a file can be dragged into a folder",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "file row draggable=true (attr true); after dragTo, \"p3-02-dark-1440x900.asc\" parent is \"workspace://Schematics/Project Storage\"; landed in Project Storage: true",
+    "data": {
+      "draggableSet": {
+        "draggable": true,
+        "attr": "true"
+      },
+      "moved": {
+        "path": "workspace://Schematics/Project Storage/p3-02-dark-1440x900.asc",
+        "name": "p3-02-dark-1440x900.asc",
+        "kind": "file",
+        "parent": "workspace://Schematics/Project Storage"
+      },
+      "dragError": null
+    }
+  },
+  {
+    "id": "P3-03",
+    "title": "the palette LED is not coloured",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "palette LED stroke chroma 5.0 vs neighbours 5.0 (LED strokes: rgb(209, 209, 214))",
+    "data": {
+      "led": {
+        "name": "LED",
+        "strokes": [
+          "rgb(209, 209, 214)"
+        ]
+      },
+      "diode": {
+        "name": "Diode",
+        "strokes": [
+          "rgb(209, 209, 214)"
+        ]
+      },
+      "resistor": {
+        "name": "Resistor",
+        "strokes": [
+          "rgb(209, 209, 214)"
+        ]
+      }
+    }
+  },
+  {
+    "id": "P3-04A",
+    "title": "the explorer overflow trigger survives a narrow window",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 251px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "data": [
+      {
+        "asked": 168,
+        "panelWidth": 168,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 40,
+        "primaryIconsVisible": 1,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 87,
+        "headOverflowing": false
+      },
+      {
+        "asked": 226,
+        "panelWidth": 226,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 106,
+        "primaryIconsVisible": 4,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 79,
+        "headOverflowing": false
+      },
+      {
+        "asked": 420,
+        "panelWidth": 420,
+        "triggerVisible": true,
+        "triggerWidth": 22,
+        "insideHead": true,
+        "gapToName": 128,
+        "primaryIconsVisible": 5,
+        "nameTruncated": false,
+        "nameText": "Schematics",
+        "nameWidth": 251,
+        "headOverflowing": false
+      }
+    ]
+  },
+  {
+    "id": "P3-04B",
+    "title": "the empty-editor card tells you to place a part",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "heading \"Place your first component\"; still the stale copy: false; names placing a component: true; keeps an Ask Bode action: true; buttons [Browse components, Try RC Charging, Ask Bode]",
+    "data": {
+      "found": true,
+      "heading": "Place your first component",
+      "body": "Bode · circuit assistantPlace your first componentPick a part from Components on the right and click the sheet to place it, or ask Bode to build the circuit for you. Browse components Try RC Charging Ask Bode",
+      "buttons": [
+        "Browse components",
+        "Try RC Charging",
+        "Ask Bode"
+      ]
+    }
+  },
+  {
+    "id": "P3-06",
+    "title": "tree rows are indented under their parent",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "indent steps: root(64px) -> folder(+14px) -> nested file(+14px); need >= 10px per level; too shallow: none",
+    "data": {
+      "rows": [
+        {
+          "text": "SchematicsProject root",
+          "isRoot": true,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 8,
+          "contentLeft": 64
+        },
+        {
+          "text": "Project Storage",
+          "isRoot": false,
+          "isFile": false,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        },
+        {
+          "text": "nested.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 36,
+          "contentLeft": 92
+        },
+        {
+          "text": "p3-06-dark-1440x900.asc",
+          "isRoot": false,
+          "isFile": true,
+          "left": 56,
+          "paddingLeft": 22,
+          "contentLeft": 78
+        }
+      ],
+      "rootIndent": 64,
+      "rootToFolder": 14,
+      "folderToFile": 14
+    }
+  },
+  {
+    "id": "P3-07",
+    "title": "no two labels overlap, ever",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "7 sheets swept (pitch 32-96, straight and rotated, net labels included), 189 label boxes measured; 0 overlapping pair(s); label-over-artwork collisions: 0",
+    "data": [
+      {
+        "sheet": "pitch32",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch96",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch48rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "pitch64rot",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      },
+      {
+        "sheet": "tight2x6",
+        "count": 27,
+        "hits": [],
+        "onArt": [],
+        "onArtCount": 0
+      }
+    ]
+  },
+  {
+    "id": "P3-08",
+    "title": "ground lands pin-up on every placement path",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "armed placeRotation on the previous part: 90; GHOST for ground while that rotation is armed: present true, transform \"rotate(0)\", placeRotation 0, placeMirror false -> upright: true (this is what the report photographed - dashed strokes are .ghost .symbol); tool state before the mirrored drop: {\"rot\":0,\"mir\":false}; DROPPED grounds: click [{\"rot\":0,\"mir\":false}], mirrored-tool [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}], drag (attempted) [{\"rot\":0,\"mir\":false},{\"rot\":0,\"mir\":false}]; 0 of 2 not pin-up",
+    "data": {
+      "ghost": {
+        "present": true,
+        "transform": "rotate(0)",
+        "placeRotation": 0,
+        "placeMirror": false,
+        "toolKind": "ground"
+      },
+      "ghostUpright": true,
+      "afterClick": [
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterMirror": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "afterDrag": [
+        {
+          "rot": 0,
+          "mir": false
+        },
+        {
+          "rot": 0,
+          "mir": false
+        }
+      ],
+      "dragNote": "attempted"
+    }
+  },
+  {
+    "id": "P3-10",
+    "title": "fit-to-view centres the circuit in the visible canvas",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "after a hard pan then fit, in a 898x719 visible box (rail open: true): CIRCUIT centred to dx=2px dy=0px (tolerance 2px) -> true; everything incl. labels fully inside: true; informational - labels hang {\"dx\":17,\"dy\":31} off centre, which is why the symbols+labels union reads dx=17 dy=31; artwork 479x478",
+    "data": {
+      "visible": {
+        "w": 898,
+        "h": 719
+      },
+      "dxCentre": 17,
+      "dyCentre": 31,
+      "artWidth": 479,
+      "artHeight": 478,
+      "insideVisible": true,
+      "railOpen": true,
+      "symbolsOffset": {
+        "dx": 2,
+        "dy": 0
+      },
+      "labelsOffset": {
+        "dx": 17,
+        "dy": 31
+      },
+      "drawerRect": {
+        "top": 837,
+        "height": 35,
+        "cls": "results-drawer results-drawer--dock-bottom results-drawer--peek"
+      },
+      "canvasBottom": 872,
+      "visibleBottom": 837
+    }
+  },
+  {
+    "id": "P3-11",
+    "title": "Backspace deletes a selected net label",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "created 1; click selected 1 label id(s); after Backspace 0; after undo 1; after Delete 0",
+    "data": {
+      "created": 1,
+      "selected": 1,
+      "afterBackspace": 0,
+      "afterUndo": 1,
+      "afterDelete": 0
+    }
+  },
+  {
+    "id": "P3-12/13",
+    "title": "the tool strip reads as real objects, in colour",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "9 tool buttons (8 enabled); 6/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Wire:h5/s0.74, Net label (F4):h43/s0.5, Probe:h5/s0.8, Undo:h239/s0.53, Clear schematic:h343/s0.53, Simulation setup:h240/s0.33]; probe reads red: true (h5 s0.8)",
+    "data": [
+      {
+        "label": "Select",
+        "disabled": false,
+        "colours": [
+          "rgb(214, 211, 202) h45 s0.13"
+        ],
+        "hue": 45,
+        "sat": 0.13
+      },
+      {
+        "label": "Wire",
+        "disabled": false,
+        "colours": [
+          "rgb(228, 87, 75) h5 s0.74",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 5,
+        "sat": 0.74
+      },
+      {
+        "label": "Net label (F4)",
+        "disabled": false,
+        "colours": [
+          "rgb(196, 162, 78) h43 s0.50",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 43,
+        "sat": 0.5
+      },
+      {
+        "label": "Probe",
+        "disabled": false,
+        "colours": [
+          "rgb(234, 79, 66) h5 s0.80",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 5,
+        "sat": 0.8
+      },
+      {
+        "label": "Undo",
+        "disabled": false,
+        "colours": [
+          "rgb(155, 156, 224) h239 s0.53"
+        ],
+        "hue": 239,
+        "sat": 0.53
+      },
+      {
+        "label": "Redo",
+        "disabled": true,
+        "colours": [
+          "rgba(235, 235, 245, 0.3) h240 s0.33"
+        ],
+        "hue": 240,
+        "sat": 0.33
+      },
+      {
+        "label": "Delete selection (Delete)",
+        "disabled": false,
+        "colours": [
+          "rgb(154, 163, 174) h213 s0.11",
+          "rgb(22, 22, 23) h240 s0.02"
+        ],
+        "hue": 213,
+        "sat": 0.11
+      },
+      {
+        "label": "Clear schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(217, 130, 154) h343 s0.53",
+          "rgb(154, 163, 174) h213 s0.11"
+        ],
+        "hue": 343,
+        "sat": 0.53
+      },
+      {
+        "label": "Simulation setup",
+        "disabled": false,
+        "colours": [
+          "rgba(235, 235, 245, 0.6) h240 s0.33"
+        ],
+        "hue": 240,
+        "sat": 0.33
+      }
+    ]
+  },
+  {
+    "id": "P3-14",
+    "title": "the schematic dock is Errors only and flags problems before Run",
+    "theme": "dark",
+    "viewport": "1440x900",
+    "pass": true,
+    "detail": "pre-run, a lone ungrounded resistor produced 4 diagnostic row(s) -> flagged: true; then after ran, back in mode \"Schematic\" (schematic: true), dock tabs are [] - Measurements present: false, Errors present: true (as a heading), badge \"5\"",
+    "data": {
+      "preRun": {
+        "rows": [
+          "No ground symbol found.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source.",
+          "R1.A is only connected to one pin.",
+          "R1.B is only connected to one pin."
+        ],
+        "text": "No analysis yetErrors4Errors4No ground symbol found.No source: nothing in this schematic drives it. Add a voltage or current source.R1.A is only connected to one pin.R1.B is only connected to one pin."
+      },
+      "dock": {
+        "tabs": [],
+        "hasMeasurementsTab": false,
+        "hasErrorsTab": true,
+        "errorsSurface": "heading",
+        "drawerFound": true,
+        "drawerText": "ErrorAdd a ground symbol so node voltages have a reference.Errors5Errors5Add a ground symbol so node voltages have a reference.No ground symbol found.R1.A is only connected to one pin.R1.B is only connected to one pin.No source: nothing in this schematic drives it. Add a voltage or current source.",
+        "rows": [
+          "Add a ground symbol so node voltages have a reference.",
+          "No ground symbol found.",
+          "R1.A is only connected to one pin.",
+          "R1.B is only connected to one pin.",
+          "No source: nothing in this schematic drives it. Add a voltage or current source."
+        ],
+        "badgeText": "5"
+      },
+      "ranNote": "ran",
+      "mode": "Schematic"
+    }
+  }
+]
