@@ -400,6 +400,14 @@ const CHECKS = [
             insideHead: t ? t.right <= h.right + 1 && t.left >= h.left - 1 : false,
             gapToName: t ? Math.round(t.left - n.right) : null,
             primaryIconsVisible: icons.length,
+            // The root name must not be clipped to make room for icons. The
+            // EXPLORER verify pass found exactly that: a 56px floor against a
+            // caption whose ink measures 71px, so the shipped default truncated
+            // "SCHEMATICS" to fit a fifth icon - the inverse of the reported
+            // complaint, and invisible to a check that only measured the ⋯.
+            nameTruncated: name.scrollWidth > name.clientWidth + 1,
+            nameText: name.textContent?.trim() ?? null,
+            nameWidth: Math.round(n.width),
             headOverflowing: head.scrollWidth > head.clientWidth + 1,
           };
         });
@@ -409,13 +417,16 @@ const CHECKS = [
       await page.evaluate(() => { try { localStorage.removeItem("tau.ui.explorerWidth"); } catch { /* ok */ } });
 
       const bad = perWidth.filter((m) => m.missing
-        || !m.triggerVisible || !m.insideHead || (m.gapToName ?? -1) < 8 || m.headOverflowing);
+        || !m.triggerVisible || !m.insideHead || (m.gapToName ?? -1) < 8 || m.headOverflowing
+        || m.nameTruncated);
       return {
         pass: bad.length === 0,
         detail: perWidth.map((m) => `@${m.asked}px(actual ${m.panelWidth}): ⋯ visible ${m.triggerVisible}`
           + `, inside header ${m.insideHead}, gap to name ${m.gapToName}px, ${m.primaryIconsVisible} primary icon(s)`
+          + `, name "${m.nameText}" ${m.nameWidth}px truncated ${m.nameTruncated}`
           + `, header overflowing ${m.headOverflowing}`).join(" | ")
-          + `; failing widths: ${bad.map((m) => m.asked).join(", ") || "none"} (⋯ must survive every width with >= 8px clear)`,
+          + `; failing widths: ${bad.map((m) => m.asked).join(", ") || "none"} `
+          + `(⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)`,
         data: perWidth,
       };
     },
