@@ -931,6 +931,14 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
  * `Digital\*.asy` really does expose the complementary pin and the `com`
  * reference, and dropping their leads would leave those terminals unattached to
  * the body. A preview, which is always Tau's own part, leaves it false.
+ *
+ * `catalog` says this drawing stands for a part TYPE rather than for a placed
+ * instance - a palette row, the symbol-preview panel. Only the LED reads it:
+ * an LED's colour is a real per-instance parameter (it sets Vf, see
+ * `engine/ledSpec.ts`), so tinting it on the canvas is information, but tinting
+ * it in an index of types is not - it made the palette's LED row draw red
+ * beside a monochrome Diode row with nothing to distinguish (PDF-3 item 3). The
+ * canvas passes nothing here and keeps the tint.
  */
 export function ComponentSymbol({
   kind,
@@ -938,22 +946,24 @@ export function ComponentSymbol({
   rotation = 0,
   mirrored = false,
   imported = false,
+  catalog = false,
 }: {
   kind: ComponentKind;
   value?: string;
   rotation?: Rotation;
   mirrored?: boolean;
   imported?: boolean;
+  catalog?: boolean;
 }) {
   return (
     <>
-      {symbolArtwork(kind, value, imported)}
+      {symbolArtwork(kind, value, imported, catalog)}
       <SymbolPinLabels kind={kind} rotation={rotation} mirrored={mirrored} />
     </>
   );
 }
 
-function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
+function symbolArtwork(kind: ComponentKind, value?: string, imported = false, catalog = false) {
   const r = SOURCE_CIRCLE_R;
   const pin = SOURCE_PIN_Y;
   switch (kind) {
@@ -1091,7 +1101,14 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false) {
 
     case "led":
       return (
-        <g className={`led-artwork led-color-${ledColorFromValue(value ?? "")}`}>
+        // `led-artwork` alone in a catalog context: the group is still tagged
+        // (LedGlowLayer and the tests find it by that class) but carries no
+        // colour class, so the artwork simply inherits whatever stroke its
+        // surface declares. `ledColorFromValue` is deliberately not consulted
+        // there - it answers "red" for both the catalog's bare `LED` value and
+        // for no value at all, which is why every type-index surface came out
+        // red rather than only the ones that meant to.
+        <g className={catalog ? "led-artwork" : `led-artwork led-color-${ledColorFromValue(value ?? "")}`}>
           <line x1={-32} y1={0} x2={-12} y2={0} />
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <line x1={10} y1={-14} x2={10} y2={14} />

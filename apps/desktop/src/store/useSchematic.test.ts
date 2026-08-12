@@ -138,10 +138,16 @@ describe("schematic document store", () => {
     ]);
   });
 
-  it("places new ground upward without changing imported-or-tool orientation history", () => {
+  // Expectation widened for PDF-3 item 8: this test proved `rotation` but said
+  // nothing about `mirrored`, which had no ground exemption at all - so a
+  // mirrored tool really did land a mirrored ground and this test stayed green.
+  // It arms the tool by direct setState on purpose, bypassing `startPlacing`,
+  // which is what makes it the backstop test for `addComponent` itself.
+  it("places new ground upward and unmirrored without changing imported-or-tool orientation history", () => {
     useSchematic.setState({
       tool: { mode: "place", kind: "ground" },
       placeRotation: 90,
+      placeMirror: true,
     });
 
     useSchematic.getState().addComponent("ground", 32, 48);
@@ -151,6 +157,7 @@ describe("schematic document store", () => {
       x: 32,
       y: 48,
       rotation: 0,
+      mirrored: false,
       value: "",
     });
     useSchematic.getState().undo();
@@ -1860,5 +1867,176 @@ describe("user model library attachments", () => {
     expect(() => buildSpiceDeck({ ...schematic, userModelLibraries: [] }, { kind: "op" })).toThrow(
       'Simulation refused: Q1 names model "MYVENDNPN", but Tau could not resolve it.',
     );
+  });
+});
+
+/**
+ * P3-08 — "THis component should always be facing upwards the point facing up
+ * when dropped into schematic." The part in the report's crop
+ * (`screenshots/pdf3-report/img-004-007-x5.png`) is the ground symbol turned
+ * 90°: pin to the right, the three bars descending leftward.
+ *
+ * `addComponent` has forced `rotation: kind === "ground" ? 0` for a while, so
+ * the PLACED part was already upright on every path — every path funnels
+ * through `startPlacing` then `addComponent`, and there is no HTML5 drag path
+ * (`grep dataTransfer Palette.tsx Canvas.tsx` finds nothing). What was still
+ * broken, and is what the crop actually shows:
+ *
+ *   - The dashed stroke in the crop is `.ghost .symbol` (`stroke-dasharray:
+ *     4 3`, `opacity: .65`, `stroke: var(--accent)`), not a placed symbol —
+ *     Canvas draws the ghost at `symbolTransform(placeRotation, placeMirror)`
+ *     for every kind, so a sticky tool rotation promised a sideways drop that
+ *     `addComponent` then refused to honour.
+ *   - `mirrored: s.placeMirror` had no ground exemption at all, so a ground
+ *     placed while the tool was mirrored landed `mirrored: true` — which the
+ *     Done-when forbids outright.
+ *   - `findFreeSpot` collision-tested ground with the ROTATED footprint while
+ *     the part landed upright, so the resolved drop spot could be wrong for the
+ *     part that actually appeared.
+ *
+ * Normalizing at the TOOL (`startPlacing`, `rotate`, `mirror`) is what makes
+ * all four agree, because the ghost, the collision footprint and the placed
+ * part all read the same two pieces of state.
+ */
+describe("P3-08 ground is placed pin-up on every placement path", () => {
+  /** The single funnel every placement path uses: `startPlacing` arms the tool,
+   *  `addComponent` lands the part. Palette click passes the catalog's value,
+   *  the catalog hotkey and the command palette pass none. */
+  const placeGround = (value?: string) => {
+    useSchematic.getState().startPlacing("ground", value);
+    useSchematic.getState().addComponent("ground", 32, 48);
+    return useSchematic.getState().components.at(-1)!;
+  };
+
+  it("arms no rotation and no mirror for a pending ground, so the ghost cannot promise a sideways drop", () => {
+    // A sticky orientation left over from another part is the live cause: the
+    // ghost reads placeRotation/placeMirror directly.
+    useSchematic.setState({ placeRotation: 90, placeMirror: true });
+
+    useSchematic.getState().startPlacing("ground");
+
+    expect(useSchematic.getState().placeRotation).toBe(0);
+    expect(useSchematic.getState().placeMirror).toBe(false);
+  });
+
+  it("ignores rotate and mirror while a ground is the pending tool", () => {
+    useSchematic.getState().startPlacing("ground");
+
+    useSchematic.getState().rotate();
+    useSchematic.getState().rotate();
+    useSchematic.getState().mirror();
+
+    expect(useSchematic.getState().placeRotation).toBe(0);
+    expect(useSchematic.getState().placeMirror).toBe(false);
+    // And nothing was written to the document, so no phantom undo step exists.
+    expect(useSchematic.getState().past).toEqual([]);
+  });
+
+  it("still arms rotate and mirror for a pending non-ground part (positive control)", () => {
+    useSchematic.getState().startPlacing("resistor");
+
+    useSchematic.getState().rotate();
+    useSchematic.getState().mirror();
+
+    expect(useSchematic.getState().placeRotation).toBe(90);
+    expect(useSchematic.getState().placeMirror).toBe(true);
+  });
+
+  it("lands rotation 0 and mirrored false from a palette click, a catalog hotkey and the command palette alike", () => {
+    // Palette.tsx calls startPlacing(kind, item.value); App.tsx's hotkey
+    // lookup and CommandPalette.tsx both call startPlacing(kind) with no
+    // value. All three then reach placeAtCursor -> addComponent.
+    for (const value of ["", undefined]) {
+      resetStore();
+      expect(placeGround(value)).toMatchObject({ kind: "ground", rotation: 0, mirrored: false });
+    }
+  });
+
+  it("does not mirror a placed ground even when the tool was left mirrored by another part", () => {
+    // The old rule exempted ground from placeRotation but not from placeMirror.
+    useSchematic.setState({ placeRotation: 270, placeMirror: true });
+
+    expect(placeGround()).toMatchObject({ kind: "ground", rotation: 0, mirrored: false });
+  });
+
+  it("honours an explicit user rotation of a ground AFTER it is placed", () => {
+    // Pin-up is a placement default, not a lock: rotate() in select mode still
+    // turns a selected ground, and undo puts it back. `cancel()` first because
+    // the store deliberately stays in place mode after a drop (Canvas's
+    // placeAtCursor comment: "for rapid repeated placement"), and rotate()
+    // branches on that before it looks at the selection.
+    const placed = placeGround();
+    useSchematic.getState().cancel();
+    useSchematic.getState().select(placed.id);
+
+    useSchematic.getState().rotate();
+    expect(useSchematic.getState().components.at(-1)).toMatchObject({ kind: "ground", rotation: 90 });
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components.at(-1)).toMatchObject({ kind: "ground", rotation: 0 });
+  });
+
+  it("keeps an imported ground's authored orientation, because .asc import fidelity outranks the pin-up preference", () => {
+    // The store must NOT normalize a DOCUMENT. loadCircuit / replaceCircuit /
+    // restoreCircuit carry an already-parsed file, and rewriting its geometry
+    // would break the unmodified-import round trip. (In practice LTspice
+    // writes ground as `FLAG x y 0`, which has no orientation field, so a real
+    // imported ground arrives at 0 anyway — but a Tau `.sim` document, or a
+    // future carrier attribute, can hold one, and this is the rule that keeps
+    // it.) Assistant-authored circuits land through this same path.
+    const rotatedGround: SchematicDocument = {
+      components: [{ id: "gnd-authored", kind: "ground", x: 0, y: 0, rotation: 90, value: "", label: "" }],
+      wires: [],
+    };
+
+    useSchematic.getState().loadCircuit(rotatedGround);
+    expect(useSchematic.getState().components[0]).toMatchObject({ kind: "ground", rotation: 90 });
+
+    resetStore();
+    useSchematic.getState().replaceCircuit(rotatedGround);
+    expect(useSchematic.getState().components[0]).toMatchObject({ kind: "ground", rotation: 90 });
+
+    resetStore();
+    useSchematic.getState().restoreCircuit(rotatedGround, { past: [], future: [] });
+    expect(useSchematic.getState().components[0]).toMatchObject({ kind: "ground", rotation: 90 });
+  });
+
+  it("normalizes the tool through the real rotate/mirror shortcuts, not only the store actions", () => {
+    // The verification harness pressed bare `r` and `m`, which are the Resistor
+    // and NMOS PLACE hotkeys — rotate is Space or Ctrl/Cmd+R and mirror is
+    // Ctrl/Cmd+E. Drive the production callback graph so the gate's intent is
+    // pinned somewhere that cannot silently pass.
+    const handlers: ShortcutHandlers = {
+      undo: () => useSchematic.getState().undo(),
+      redo: () => useSchematic.getState().redo(),
+      openPalette: () => {},
+      rotate: () => useSchematic.getState().rotate(),
+      mirror: () => useSchematic.getState().mirror(),
+      copy: () => useSchematic.getState().copySelected(),
+      paste: () => useSchematic.getState().paste(),
+      duplicate: () => useSchematic.getState().duplicateSelected(),
+      cancel: () => useSchematic.getState().cancel(),
+      remove: () => useSchematic.getState().deleteSelected(),
+      wire: () => useSchematic.getState().startWiring(),
+      label: () => useSchematic.getState().startLabeling(),
+    };
+    useSchematic.getState().startPlacing("ground");
+
+    for (const key of [
+      { key: " ", ctrlOrMeta: false, shift: false },
+      { key: "r", ctrlOrMeta: true, shift: false },
+      { key: "e", ctrlOrMeta: true, shift: false },
+    ]) {
+      const action = resolveShortcut(key);
+      expect(action, JSON.stringify(key)).toBeTruthy();
+      dispatchShortcutAction(action!, "schematic", handlers);
+    }
+
+    expect(useSchematic.getState().placeRotation).toBe(0);
+    expect(useSchematic.getState().placeMirror).toBe(false);
+    // The tool is still armed for ground, so the drop that follows those three
+    // keypresses is the one the report described.
+    useSchematic.getState().addComponent("ground", 32, 48);
+    expect(useSchematic.getState().components.at(-1)).toMatchObject({ rotation: 0, mirrored: false });
   });
 });

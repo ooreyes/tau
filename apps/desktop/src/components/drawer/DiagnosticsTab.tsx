@@ -12,11 +12,14 @@
  */
 import { useEffect, useState } from "react";
 import type { RunOutcome } from "../../App";
+import type { LiveDiagnostic } from "../../schematic/documentValidation";
 
 export function BottomPanel({
   result,
   isRunning = false,
   notices = [],
+  issues = [],
+  onSelectComponent,
 }: {
   mode?: "schematic" | "simulator";
   /**
@@ -32,6 +35,22 @@ export function BottomPanel({
   /** Document-level warnings independent of a run (e.g. ASC import warnings -
    *  previously console-only, so "Opened with 2 warning(s)" was a dead end). */
   notices?: string[];
+  /**
+   * What is wrong with the DOCUMENT, recomputed live as it is edited (P3-14).
+   *
+   * Everything above describes a run that has already happened, which is why
+   * this panel read "No analysis yet" over a schematic with no ground, no
+   * source and two stranded terminals. These rows need no run at all.
+   *
+   * Additive by design, and that is a constraint rather than a preference:
+   * `ShellPanels.test.tsx` renders this component prop-less and pins its markup
+   * class by class, so every state expression below has to collapse to exactly
+   * its previous value when this array is empty.
+   */
+  issues?: readonly LiveDiagnostic[];
+  /** Click-through for a row that names a part: the row selects it on the
+   *  canvas. Rows with no `componentId` (no ground, no source) stay inert. */
+  onSelectComponent?: (componentId: string) => void;
 }) {
   // A live run supersedes the previous result's diagnostics. Keeping stale
   // success/error classes during a rerun would contradict the amber Run state.
@@ -40,13 +59,17 @@ export function BottomPanel({
     ...(result?.warnings ?? []),
     ...notices,
   ];
-  const hasIssues = messages.length > 0;
-  const hasError = !isRunning && Boolean(result && !result.ok);
+  // Live rows are withheld mid-run for the same reason the run's own are: the
+  // document may already have moved on from the circuit being solved.
+  const liveIssues = isRunning ? [] : issues;
+  const hasIssues = messages.length + liveIssues.length > 0;
+  const hasError = !isRunning
+    && (Boolean(result && !result.ok) || liveIssues.some((issue) => issue.severity === "error"));
   // Import notices must surface even before the first run - "idle" only when
   // there is genuinely nothing to show.
   const isIdle = !isRunning && result === null && !hasIssues;
   const isClean = !isRunning && Boolean(result?.ok) && !hasIssues;
-  const issueSignature = messages.join("\u0000");
+  const issueSignature = [...messages, ...liveIssues.map((issue) => issue.message)].join("\u0000");
   const [expanded, setExpanded] = useState(hasIssues);
 
   // New issues must never remain hidden; returning to all-clear collapses the
@@ -102,7 +125,7 @@ export function BottomPanel({
             className={`bottom-panel-count${hasError ? "" : " warnings-only"}`}
             aria-live="polite"
           >
-            {messages.length}
+            {messages.length + liveIssues.length}
           </span>
         </button>
       )}
@@ -126,6 +149,44 @@ export function BottomPanel({
               </span>
               <span className="bottom-error-message">{message}</span>
             </div>
+          );
+        })}
+        {/* Live document rows come AFTER the run's own, which keeps
+            `index === 0` naming the same row as before and leaves exactly one
+            `role="alert"` on the surface. */}
+        {liveIssues.map((issue) => {
+          const glyph = (
+            <span className="bottom-error-glyph" aria-hidden="true">
+              <svg viewBox="0 0 12 12">
+                {issue.severity === "error" ? (
+                  <path d="m4.2 4.2 3.6 3.6m0-3.6L4.2 7.8" />
+                ) : (
+                  <path d="M6 1.8 10.4 10H1.6L6 1.8Zm0 2.9v2.5M6 8.7v.1" />
+                )}
+              </svg>
+            </span>
+          );
+          const body = (
+            <>
+              {glyph}
+              <span className="bottom-error-message">{issue.message}</span>
+            </>
+          );
+          // A row that names a part is a button, so it is reachable by keyboard
+          // and announces itself as actionable; a document-level row (no
+          // ground, no source) has nothing to select and stays a plain div
+          // rather than a button that would do nothing when pressed.
+          return issue.componentId && onSelectComponent ? (
+            <button
+              key={issue.id}
+              type="button"
+              className={`${issue.severity} bottom-error-row bottom-error-row--actionable`}
+              onClick={() => onSelectComponent(issue.componentId!)}
+            >
+              {body}
+            </button>
+          ) : (
+            <div key={issue.id} className={`${issue.severity} bottom-error-row`}>{body}</div>
           );
         })}
       </div>}

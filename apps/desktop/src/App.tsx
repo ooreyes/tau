@@ -147,10 +147,12 @@ import {
   ascRewriteRisks,
   ascSaveBlockReason,
   basename,
+  blankAscText,
   isAscFile,
   isSimFile,
   remapMovedProjectPath,
   serializeSchematicFile,
+  type ProjectNode,
 } from "./project/types";
 import { isInteractiveSchematic, liveControlHint, liveControls } from "./schematic/liveControls";
 import {
@@ -374,6 +376,62 @@ interface OpenTab {
   diskFingerprint?: string;
   /** Reasons an imported ASC cannot be rewritten losslessly by Tau yet. */
   ascRewriteRisks?: string[];
+  /**
+   * Tau minted this file itself, in this session, as an empty untitled
+   * schematic — `startNewCircuit` and nothing else (P3-05).
+   *
+   * It is deliberately NOT set by `saveTabToProject`'s own
+   * `createSchematicInRoot` (that write already carries the user's circuit) nor
+   * by the explorer's create (that file carries a name the user typed). The
+   * marker exists so `discardMintedEmptyFile` can tell "a file Tau created and
+   * the user never engaged with" from "a file that happens to be empty right
+   * now", which is the difference between tidying up and destroying work.
+   */
+  tauMinted?: true;
+}
+
+/**
+ * The names `createSchematicInRoot` can mint for an unnamed schematic:
+ * `untitled.asc` plus the `-2`/`-3`/… ladder `numberedName` appends on a
+ * collision (`store/useProject.ts`). That ladder is exactly what the report's
+ * screenshot shows accumulating.
+ *
+ * Anchored at both ends on purpose: `untitled-2.backup.asc` and a user's own
+ * `my-untitled.asc` must not match, and a rename off this shape is one of the
+ * four things that has to keep the file — `renameProjectNode` rewrites the
+ * tab's `title`/`filePath` from the new basename, so a renamed tab fails here.
+ */
+const UNTITLED_MINT_NAME = /^untitled(-\d+)?\.asc$/i;
+
+/**
+ * Nothing in this document is worth a file on disk.
+ *
+ * Every authored collection is consulted, not just components and wires: a
+ * sheet holding only a `.tran` directive, one net label, a probe, or a
+ * preserved LTspice shape is content someone typed, and removing the file
+ * under it would lose it. `ascSheet` is deliberately NOT consulted — a custom
+ * sheet size rides along with any imported document and is geometry, not
+ * content.
+ */
+function schematicDocumentIsEmpty(doc: SchematicDocument): boolean {
+  return doc.components.length === 0
+    && doc.wires.length === 0
+    && (doc.probes?.length ?? 0) === 0
+    && (doc.netLabels?.length ?? 0) === 0
+    && (doc.directives?.length ?? 0) === 0
+    && (doc.textAnnotations?.length ?? 0) === 0
+    && (doc.ascShapes?.length ?? 0) === 0
+    && (doc.ascDataFlags?.length ?? 0) === 0
+    && (doc.ascForeignSymbols?.length ?? 0) === 0
+    && (doc.ascHierarchicalBlocks?.length ?? 0) === 0
+    && (doc.userModelLibraries?.length ?? 0) === 0;
+}
+
+/** Does the project tree still list this path? Recursive because a native
+ *  project's tree is nested, and the file being asked about may sit in a
+ *  subfolder. */
+function projectTreeHasPath(nodes: readonly ProjectNode[], path: string): boolean {
+  return nodes.some((node) => node.path === path || projectTreeHasPath(node.children ?? [], path));
 }
 
 const newTabId = () => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -2141,13 +2199,19 @@ function App() {
     title: string,
     filePath?: string | null,
     rewriteRisks: string[] = [],
-    options?: { dirty?: boolean; notice?: string; diskFingerprint?: string },
+    options?: { dirty?: boolean; notice?: string; diskFingerprint?: string; tauMinted?: boolean },
   ) => {
     const snap = snapshotActive(tabs);
     const markDirty = Boolean(options?.dirty);
     const signature = schematicDocumentSignature(doc);
     const recoveredDetached = markDirty && !filePath;
     const diskFingerprint = options?.diskFingerprint;
+    // Spread rather than assigned, and only ever set true: a tab that was
+    // minted stays minted (the byte-equality check in
+    // `discardMintedEmptyFile` is what retires the claim once real content
+    // reaches disk), and a re-open of somebody else's file must not be able to
+    // invent the marker. See `OpenTab.tauMinted`.
+    const mintedMark = options?.tauMinted ? { tauMinted: true as const } : {};
     const existing = snap.find((tab) => (filePath ? tab.filePath === filePath : tab.title === title));
     if (existing) {
       setTabs(snap.map((tab) =>
@@ -2166,6 +2230,7 @@ function App() {
                 : signature,
               ...(diskFingerprint !== undefined ? { diskFingerprint } : {}),
               ascRewriteRisks: rewriteRisks,
+              ...mintedMark,
             }
           : tab,
       ));
@@ -2190,6 +2255,7 @@ function App() {
           savedSignature: markDirty ? `${signature}::recovered` : signature,
           ...(diskFingerprint !== undefined ? { diskFingerprint } : {}),
           ascRewriteRisks: rewriteRisks,
+          ...mintedMark,
         }]);
         setActiveId(snap[0].id);
         loadCircuit(doc);
@@ -2206,6 +2272,7 @@ function App() {
           savedSignature: markDirty ? `${signature}::recovered` : signature,
           ...(diskFingerprint !== undefined ? { diskFingerprint } : {}),
           ascRewriteRisks: rewriteRisks,
+          ...mintedMark,
         }]);
         setActiveId(id);
         loadCircuit(doc);
@@ -2670,6 +2737,9 @@ function App() {
     if (documentNavigationRef.current !== requestId) return;
     openDocument(blankDocument(), basename(path), path, [], {
       ...(fingerprint !== undefined ? { diskFingerprint: fingerprint } : {}),
+      // The ONE route that mints a file the user never asked for by name, so
+      // the only one allowed to mark the tab as Tau's to clean up (P3-05).
+      tauMinted: true,
     });
     // No raise here. This replaced `setGraphOpen(true)`, which was a no-op
     // reset of a simulator-only panel; bumping the shared drawer's raise
@@ -2761,6 +2831,66 @@ function App() {
     stepFamily,
   ]);
 
+  /**
+   * P3-05 — take the file with the tab when Tau minted it and nobody ever put
+   * anything in it, instead of leaving the reported `untitled-2.asc …
+   * untitled-4.asc` ladder in the explorer.
+   *
+   * Deleting a user's file wrongly is far worse than leaving an empty one, so
+   * ALL FOUR of these must hold, and each is here because a different real
+   * document would otherwise be destroyed:
+   *
+   *  1. `tab.tauMinted` — Tau created this file itself this session, from the
+   *     New-schematic route. A file the user (or an import) created is never
+   *     ours to remove, even when it is empty right now.
+   *  2. the basename is one `createSchematicInRoot` mints. This is what
+   *     protects a RENAME: `renameProjectNode` rewrites the tab's title and
+   *     path, so a tab renamed off `untitled*` stops matching.
+   *  3. the in-memory document is empty on every authored collection.
+   *  4. the on-disk text is byte-equal to the template Tau wrote. This is the
+   *     condition that retires a stale mint marker: the moment a save puts a
+   *     real circuit on disk the bytes differ, so a saved-then-emptied tab
+   *     keeps its file.
+   *
+   * The contract's wording is "the user chose Don't save", and this is
+   * deliberately wider: an untouched minted tab is NOT dirty (its signature
+   * still equals `blankDocument()`'s), so `closeTab` never prompts for it and
+   * the dialog the report describes never appears. Hooking only the discard
+   * button would therefore have left the reported screenshot exactly as it is.
+   * Widening is safe precisely because of conditions 3 and 4: in the silent
+   * case there is, by construction, nothing to lose.
+   */
+  const discardMintedEmptyFile = useCallback(async (tab: OpenTab) => {
+    const path = tab.filePath;
+    if (!path || !tab.tauMinted) return;
+    const name = basename(path);
+    if (!UNTITLED_MINT_NAME.test(name)) return;
+    if (!tab.doc || !schematicDocumentIsEmpty(tab.doc)) return;
+    // A read that FAILS keeps the file. Treating "could not read" as "matches
+    // the template" would delete bytes nobody ever verified, which is the one
+    // irreversible mistake available anywhere on this path.
+    let onDisk: string;
+    try {
+      onDisk = await readProjectText(path);
+    } catch {
+      return;
+    }
+    if (onDisk !== blankAscText()) return;
+    await deleteProjectNode(path);
+    // `useProject.deleteNode` swallows its errors and, on the in-memory
+    // workspace branch, never sets `error` at all — and nothing clears a stale
+    // `error` there either. So the store's `error` is not a success signal:
+    // reading it would report an unrelated earlier failure as this file's.
+    // Ask what actually happened instead — the node is gone iff nothing lists
+    // the path any more.
+    const after = useProject.getState();
+    const survived = Object.prototype.hasOwnProperty.call(after.workspaceFiles, path)
+      || projectTreeHasPath(after.tree, path);
+    if (!survived) return;
+    // Never fail silently: the file is still there, so say so and say why.
+    showNotice(`Kept ${name}: Tau could not delete the empty schematic.${after.error ? ` ${after.error}` : ""}`);
+  }, [deleteProjectNode, showNotice]);
+
   const closeTab = useCallback((id: string, confirmed = false) => {
     const snap = snapshotActive(tabs);
     const idx = snap.findIndex((tab) => tab.id === id);
@@ -2770,6 +2900,14 @@ function App() {
       setConfirmCloseTabId(id);
       return;
     }
+    // Fire-and-forget on purpose, and placed after the confirm guard so it
+    // covers BOTH close routes (the silent clean close and the Don't-Save one).
+    // `closeTab` has to stay synchronous — the tab list, the restored document
+    // and its undo history are all set below in one commit, and awaiting a disk
+    // round trip here would interleave that with whatever the user does next.
+    // `closing` is the snapshot, so it still carries the document the tab held
+    // at close time even though the store is about to hold the next tab's.
+    void discardMintedEmptyFile(closing);
     documentNavigationRef.current += 1;
     const remaining = snap.filter((tab) => tab.id !== id);
     if (remaining.length === 0) {
@@ -2790,7 +2928,7 @@ function App() {
     }
     invalidateAnalysis();
     leaveSimulator();
-  }, [tabs, activeId, snapshotActive, restoreCircuit, invalidateAnalysis, leaveSimulator]);
+  }, [tabs, activeId, snapshotActive, restoreCircuit, invalidateAnalysis, leaveSimulator, discardMintedEmptyFile]);
 
   const clearScratchpad = useCallback(() => {
     documentNavigationRef.current += 1;

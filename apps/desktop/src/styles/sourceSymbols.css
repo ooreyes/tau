@@ -8,3 +8,33 @@
  * Colour must arrive through the tokens in styles/tokens.css / App.css's
  * :root. Raw hex in here fails scripts/design-system-dod.mjs.
  */
+
+/* ── P3-03: an LED is coloured where it is a PART, monochrome where it is a
+      TYPE ──────────────────────────────────────────────────────────────────
+
+   `ComponentSymbol`'s `catalog` flag is the primary fix and covers the two
+   surfaces this lane owns (`Palette.tsx`'s browse rows and its symbol-preview
+   panel). Two more surfaces draw a type index and cannot pass the flag without
+   an edit in a file no lane owns this run:
+
+     - `components/CommandPalette.tsx` (`.cmdk-icon`) - the part search list,
+       which passes no value at all; `ledColorFromValue("")` answers "red", so
+       an unset LED was tinted anyway.
+     - `components/Canvas.tsx` (`.ghost`) - the placement preview. `.symbol
+       .led-artwork.led-color-red` has specificity 0,3,0 and `.ghost .symbol`
+       only 0,2,0, so an LED ghost beat its own dashed accent and previewed as
+       a solid red part.
+
+   Both rules below match at 0,3,0 - equal to the App.css tint rule - and win
+   on source order because App.tsx imports this file immediately after App.css.
+   Each restates the stroke its own context already declares for every other
+   symbol, so the LED simply stops being the exception. A handoff asks for the
+   `catalog` flag on both call sites as well; these rules are what holds until
+   then, and they remain correct afterwards. */
+.cmdk-icon .symbol .led-artwork {
+  stroke: var(--comp);
+}
+
+.ghost .symbol .led-artwork {
+  stroke: var(--accent);
+}

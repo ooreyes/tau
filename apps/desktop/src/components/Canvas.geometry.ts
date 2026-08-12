@@ -489,17 +489,68 @@ export const segmentIntersections = (first: WireSegment, second: WireSegment): P
 export const isWireEndpoint = (point: Point, segment: WireSegment) =>
   pointsEqual(point, segment.a) || pointsEqual(point, segment.b);
 
-interface LabelPlacement {
+export interface LabelPlacement {
   ref: { x: number; y: number; anchor: "start" | "middle" | "end" };
   val: { x: number; y: number; anchor: "start" | "middle" | "end" };
   box: Rect;
+  /** The refdes string as it will be drawn. Equals `component.label` except in
+   *  the last-resort elided form, where it is a lone ellipsis. */
+  refText: string;
+  /** The value caption as it will be drawn: the full string, a shortened form,
+   *  or "" when the value had to be dropped to clear a collision. The renderer
+   *  must print THIS, not re-derive it, or the boxes the placer reasoned about
+   *  stop describing the ink (P3-07). */
+  valText: string;
+  /** True when the label degraded to an ellipsis affordance: no slot at any
+   *  size was free of artwork or other text, so the sheet says "there is a
+   *  label here" and the inspector holds the value. */
+  elided: boolean;
 }
 
-const estimateTextWidth = (text: string, kind: "ref" | "val") => text.length * (kind === "ref" ? 5.5 : 4.9);
+/**
+ * Horizontal advance per character, in world units, for each label line.
+ *
+ * Not a guess and not a fudge factor: a monospace advance is
+ * `font-size * advance-ratio + letter-spacing`, and every font in `--font-mono`
+ * is a 0.6-em-advance face (SF Mono 0.600, Menlo 0.60205, Courier New 0.600) -
+ * so the widest member of the stack is the safe bound. The per-line sizes and
+ * letter-spacings come from `.label-layer .ref` / `.val` / `.net-label-text` in
+ * App.css, and `Canvas.labels.test.ts` re-derives these numbers from that
+ * stylesheet so the two cannot drift.
+ *
+ * This replaced a hand-tuned 5.5/4.9 px per character, which under-measured the
+ * real ink by 21-26% - enough that the placer scored a slot as clear while the
+ * glyphs collided. That is the "1u F1k Ω" in P3-07's evidence.
+ */
+const MONO_ADVANCE_EM = 1233 / 2048; // Menlo, the widest face in --font-mono
 
-const labelLineRect = (text: string, x: number, y: number, anchor: "start" | "middle" | "end", kind: "ref" | "val") => {
+export const LABEL_TEXT_ADVANCE = {
+  /** `.label-layer .ref`: 11px, letter-spacing 0.02em. */
+  ref: 11 * MONO_ADVANCE_EM + 11 * 0.02,
+  /** `.label-layer .val`: 10px, letter-spacing 0.02em. */
+  val: 10 * MONO_ADVANCE_EM + 10 * 0.02,
+  /** `.net-label-text`: 11px, letter-spacing -0.01em. */
+  net: 11 * MONO_ADVANCE_EM + 11 * -0.01,
+} as const;
+
+/** Em box height of each label line, i.e. its CSS `font-size`. */
+export const LABEL_TEXT_HEIGHT = { ref: 11, val: 10 } as const;
+
+const estimateTextWidth = (text: string, kind: "ref" | "val") => text.length * LABEL_TEXT_ADVANCE[kind];
+
+/** The world-space box a single label line inks. Exported so the placement
+ *  invariant in `Canvas.labels.test.ts` measures exactly what the placer
+ *  reasoned about - a test with its own copy of this arithmetic would pass
+ *  while the canvas overlapped. */
+export const labelLineRect = (
+  text: string,
+  x: number,
+  y: number,
+  anchor: "start" | "middle" | "end",
+  kind: "ref" | "val",
+) => {
   const w = Math.max(8, estimateTextWidth(text, kind));
-  const h = kind === "ref" ? 10 : 9;
+  const h = LABEL_TEXT_HEIGHT[kind];
   const minX = anchor === "middle" ? x - w / 2 : anchor === "end" ? x - w : x;
   return padRect({ minX, minY: y - h / 2, maxX: minX + w, maxY: y + h / 2 }, 2);
 };
@@ -519,7 +570,7 @@ const makePlacement = (
 ): LabelPlacement => {
   const refBox = labelLineRect(refText, ref.x, ref.y, ref.anchor, "ref");
   const valBox = valText ? labelLineRect(valText, val.x, val.y, val.anchor, "val") : refBox;
-  return { ref, val, box: unionRect(refBox, valBox) };
+  return { ref, val, box: unionRect(refBox, valBox), refText, valText, elided: false };
 };
 
 export const componentWorldRect = (component: SchematicComponent): Rect => {
@@ -628,6 +679,147 @@ const labelCandidates = (component: SchematicComponent, refText: string, valText
   return vertical ? candidates : [candidates[2], candidates[3], candidates[1], candidates[0], candidates[5], candidates[4]];
 };
 
+/**
+ * Slots further out from the part, tried only after every close one has been
+ * rejected.
+ *
+ * The close candidates above are the ones that read well - a label wants to
+ * touch the thing it names. But there were only six of them, and when a
+ * crowded sheet used all six up the placer had nothing left and drew an
+ * overlap anyway. These rings are the "re-anchor" half of P3-07's escalation:
+ * the same four sides, pushed out in fixed steps, plus a slide along the
+ * perpendicular axis at each step so a label can get past a neighbour rather
+ * than only away from it.
+ *
+ * Fixed steps and a fixed order, never a search: two identical sheets must
+ * place identically (Canvas.geometry.placement.test.ts pins that), and the
+ * reader's eye must be able to find the label in the same place each time.
+ */
+const RING_STEPS = [14, 30, 50] as const;
+
+const ringCandidates = (
+  component: SchematicComponent,
+  refText: string,
+  valText: string,
+): LabelPlacement[] => {
+  const b = componentBounds(component);
+  const placement = componentVisualPlacement(component);
+  const { x, y } = placement;
+  const out: LabelPlacement[] = [];
+  for (const step of RING_STEPS) {
+    const leftX = component.x + b.minX - 10 - step;
+    const rightX = component.x + b.maxX + 10 + step;
+    const topRefY = component.y + b.minY - 20 - step;
+    const belowRefY = component.y + b.maxY + 10 + step;
+    for (const slide of [0, -step, step]) {
+      out.push(
+        makePlacement(refText, valText,
+          { x: leftX, y: y - 7 + slide, anchor: "end" },
+          { x: leftX, y: y + 7 + slide, anchor: "end" }),
+        makePlacement(refText, valText,
+          { x: rightX, y: y - 7 + slide, anchor: "start" },
+          { x: rightX, y: y + 7 + slide, anchor: "start" }),
+        makePlacement(refText, valText,
+          { x: x + slide, y: topRefY, anchor: "middle" },
+          { x: x + slide, y: topRefY + 12, anchor: "middle" }),
+        makePlacement(refText, valText,
+          { x: x + slide, y: belowRefY, anchor: "middle" },
+          { x: x + slide, y: belowRefY + 12, anchor: "middle" }),
+      );
+    }
+  }
+  return out;
+};
+
+/** Total area of `box` covered by `rects`. */
+const coveredArea = (box: Rect, rects: readonly Rect[]) => {
+  let total = 0;
+  for (const rect of rects) total += overlapArea(box, rect);
+  return total;
+};
+
+/**
+ * The first candidate that covers no *hard* obstacle, or null if there is none.
+ *
+ * Obstacles come in two kinds and conflating them is what forced the old code
+ * into a bad trade. Artwork and other label text are HARD: a label on either is
+ * the defect P3-07 reports, and no amount of shuffling justifies it. A wire
+ * under the text is SOFT: it reads as though the wire carried the value, which
+ * is worth avoiding but is not worth dropping a refdes for.
+ *
+ * So: ask the shared kernel for the best slot against everything (this is the
+ * historical behaviour, and in the overwhelmingly common uncrowded case it
+ * returns the same first-clear candidate it always did); if that slot is on
+ * something hard, ask again with the wire preference dropped.
+ */
+const placeClear = (
+  candidates: readonly LabelPlacement[],
+  hard: readonly Rect[],
+  soft: readonly Rect[],
+): LabelPlacement | null => {
+  const ideal = placeOverlay({ candidates, obstacles: soft.length > 0 ? [...hard, ...soft] : hard });
+  if (coveredArea(ideal.box, hard) === 0) return ideal;
+  if (soft.length === 0) return null;
+  const clearOfHard = placeOverlay({ candidates, obstacles: hard });
+  return coveredArea(clearOfHard.box, hard) === 0 ? clearOfHard : null;
+};
+
+/** Marks a label that had to give up its text entirely. One character wide, so
+ *  it fits where the caption could not, and the value is a click away in the
+ *  inspector. */
+const ELLIPSIS = "…";
+
+/**
+ * Progressively shorter value captions, tried in order once re-anchoring has
+ * failed. Each keeps the leading characters - the digits, which is the half a
+ * reader can use - and marks the loss with an ellipsis, so an abbreviated label
+ * never reads as a complete value that happens to be wrong.
+ */
+const shortenedValues = (valText: string): string[] => {
+  const forms: string[] = [];
+  for (const fraction of [0.66, 0.33]) {
+    const keep = Math.max(1, Math.floor(valText.length * fraction));
+    if (keep >= valText.length) continue;
+    const form = `${valText.slice(0, keep).trimEnd()}${ELLIPSIS}`;
+    if (form.length < valText.length && !forms.includes(form)) forms.push(form);
+  }
+  return forms;
+};
+
+interface LabelTextForm {
+  /** What the candidate geometry is measured with. When a part carries no
+   *  refdes the value text occupies the ref line's slot, which is why this can
+   *  differ from `drawRef`. */
+  measureRef: string;
+  /** What the canvas actually prints on the ref line ("" for none). */
+  drawRef: string;
+  val: string;
+  elided: boolean;
+}
+
+/**
+ * The escalation ladder for one component's label, in the order it is tried.
+ *
+ * Order is a judgement call about what a reader loses at each step: position
+ * first (a label further from its part still says everything), then precision
+ * (a truncated value still says roughly what it is), then the value (identity
+ * outranks the number - the inspector always has the number), and only then
+ * the label itself. The last rung has no text at all, so zero overlap is
+ * guaranteed by construction rather than by finding a lucky slot.
+ */
+const labelTextForms = (component: SchematicComponent, valText: string): LabelTextForm[] => {
+  const ref = component.label;
+  const forms: LabelTextForm[] = [
+    { measureRef: ref || valText, drawRef: ref, val: valText, elided: false },
+  ];
+  for (const short of shortenedValues(valText)) {
+    forms.push({ measureRef: ref || short, drawRef: ref, val: short, elided: false });
+  }
+  if (ref && valText) forms.push({ measureRef: ref, drawRef: ref, val: "", elided: false });
+  forms.push({ measureRef: ELLIPSIS, drawRef: ELLIPSIS, val: "", elided: true });
+  return forms;
+};
+
 /** Thin rects covering each wire segment, so labels don't settle on top of a
  *  wire and read as if the wire itself carried that value. */
 const wireSegmentRects = (wires: SchematicWire[]): Rect[] => {
@@ -652,6 +844,19 @@ const wireSegmentRects = (wires: SchematicWire[]): Rect[] => {
   return rects;
 };
 
+/**
+ * Where every component's refdes/value text goes.
+ *
+ * The contract this owes the canvas is absolute (P3-07, "Absolutely no overlap
+ * between labels EVER"): the box it returns for a component never intersects
+ * another component's artwork and never intersects another label's box. It
+ * gets there by escalating rather than by settling - re-anchor, shorten, drop
+ * the value, and finally reduce to an ellipsis, which is one character wide and
+ * therefore fits where nothing else did. A component whose label cannot be
+ * placed even as an ellipsis is simply left out of the map, which the renderer
+ * already treats as "draw nothing"; that is the constructive floor that makes
+ * the invariant hold by definition instead of by luck.
+ */
 export const buildLabelPlacements = (components: SchematicComponent[], wires: SchematicWire[] = []) => {
   const componentRects = components.map(componentWorldRect);
   const wireRects = wireSegmentRects(wires);
@@ -663,11 +868,27 @@ export const buildLabelPlacements = (components: SchematicComponent[], wires: Sc
     const valText = sourceValueLabel(component.kind, component.value);
     if (!refText && !valText) continue;
 
-    const candidates = labelCandidates(component, refText || valText, valText);
-    const obstacles = [...componentRects, ...wireRects, ...placed];
-    const chosen = placeOverlay({ candidates, obstacles });
-    placements.set(component.id, chosen);
-    placed.push(padRect(chosen.box, 3));
+    // Artwork and already-placed label boxes are hard: covering either is the
+    // reported defect. Wires are soft - see `placeClear`.
+    const hard = [...componentRects, ...placed];
+    for (const form of labelTextForms(component, valText)) {
+      const candidates = [
+        ...labelCandidates(component, form.measureRef, form.val),
+        ...ringCandidates(component, form.measureRef, form.val),
+      ];
+      const chosen = placeClear(candidates, hard, wireRects);
+      if (!chosen) continue;
+      placements.set(component.id, {
+        ...chosen,
+        refText: form.drawRef,
+        valText: form.val,
+        elided: form.elided,
+      });
+      // Padded so the NEXT label keeps a readable gutter, not just a
+      // hairline of clearance, from this one.
+      placed.push(padRect(chosen.box, 3));
+      break;
+    }
   }
 
   return placements;
@@ -695,10 +916,15 @@ export function circuitBoundsWithLabels(
 }
 
 // ── Net label auto-placement (Fix 2) ──────────────────────────────────────
-// Font size matches `.net-label-text` in App.css (9.5px mono) - keep in sync;
-// this is a character-count estimate, not a DOM measurement (auto-placement
-// runs on every render of an unpositioned label, so it must stay cheap).
-const NET_LABEL_CHAR_W = 5.8;
+// Advance and height come from `.net-label-text` in App.css (11px mono,
+// letter-spacing -0.01em) via `LABEL_TEXT_ADVANCE`, which
+// `Canvas.labels.test.ts` re-derives from that stylesheet. The number used to
+// be a hand-tuned 5.8 under a comment claiming the font was "9.5px mono" - it
+// had been 11px for some time, and the stale comment is exactly why net labels
+// were measured 11% narrower than they ink (P3-07). Still a character-count
+// estimate rather than a DOM measurement: auto-placement runs on every render
+// of an unpositioned label, so it must stay cheap.
+const NET_LABEL_CHAR_W = LABEL_TEXT_ADVANCE.net;
 const NET_LABEL_HEIGHT = 11;
 
 /** World-space bbox a net label's text would occupy at a given anchor+offset.

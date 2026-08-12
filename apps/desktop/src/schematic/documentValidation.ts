@@ -1,4 +1,7 @@
 import { CATALOG_BY_KIND } from "./catalog";
+import { extractCircuit } from "./netlist";
+import { decodeParams, paramValuesValidationMessage } from "./params";
+import { simulationBlockReason } from "../simulation/simulationIntegrity";
 import { isRetiredKind, retiredKindNotice } from "./retiredKinds";
 import type {
   ComponentKind,
@@ -599,15 +602,11 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
       fail(`probe ${candidate.id} references a missing component.`);
     }
   }
-  const referenceCounts = new Map<string, { display: string; count: number }>();
-  for (const item of validatedComponents) {
-    const display = item.label.trim();
-    if (!display) continue;
-    const key = display.toLocaleLowerCase();
-    const previous = referenceCounts.get(key);
-    referenceCounts.set(key, { display: previous?.display ?? display, count: (previous?.count ?? 0) + 1 });
-  }
-  const duplicateReference = [...referenceCounts.values()].find(({ count }) => count > 1);
+  // Shared with the live pass below rather than scanned twice: the
+  // deserializer must keep refusing (a document with two R1s cannot be
+  // simulated), and the dock must be able to LIST the same collision without a
+  // throw. Two copies of the scan would drift the moment one grew a case.
+  const duplicateReference = duplicateReferenceDesignators(validatedComponents)[0];
   if (duplicateReference) {
     fail(`component reference "${duplicateReference.display}" is used ${duplicateReference.count} times; each component name must be unique.`);
   }
@@ -645,4 +644,337 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
     // documents keep their exact prior serialized shape.
     ...(validatedLibraries.length > 0 ? { userModelLibraries: validatedLibraries } : {}),
   };
+}
+
+/* ── live diagnostics (P3-14) ────────────────────────────────────────────────
+ *
+ * Everything above is a DESERIALIZER: every check ends in `fail()`, it runs
+ * once on load/import, and it either returns a document or throws. That is the
+ * right shape for untrusted bytes and the wrong shape for a dock, which needs
+ * a LIST of everything wrong with a document the user is still typing.
+ *
+ * So this half is a linter over the live store. It reuses the checks that
+ * already exist rather than restating them - `extractCircuit`'s connectivity
+ * warnings, `params.ts`'s per-field ranges, the duplicate-designator scan
+ * above, `simulationIntegrity`'s fail-closed refusal - because a second
+ * spelling of a rule is a rule that will disagree with itself. Where a check
+ * already has product copy, the row carries that copy VERBATIM, so a problem
+ * reads identically before Run and after it.
+ *
+ * Only two classes had no code anywhere and are new here: "no source" and
+ * "shorted source".
+ */
+
+/** One reference designator used by more than one part. */
+export interface DuplicateReference {
+  /** The designator as first drawn, for the message. */
+  display: string;
+  /** How many parts carry it. */
+  count: number;
+  /** Every part carrying it, in document order. */
+  componentIds: string[];
+}
+
+/**
+ * Reference designators used more than once, in first-appearance order.
+ *
+ * Case-insensitive because SPICE is: `r1` and `R1` are one instance name in the
+ * emitted deck, and letting both through would silently drop one part's card.
+ * Blank labels are skipped - an unnamed part gets its designator at emission.
+ */
+export function duplicateReferenceDesignators(
+  components: readonly Pick<SchematicComponent, "id" | "label">[],
+): DuplicateReference[] {
+  const byKey = new Map<string, DuplicateReference>();
+  for (const item of components) {
+    const display = item.label.trim();
+    if (!display) continue;
+    const key = display.toLocaleLowerCase();
+    const previous = byKey.get(key);
+    if (previous) {
+      previous.count += 1;
+      previous.componentIds.push(item.id);
+    } else {
+      byKey.set(key, { display, count: 1, componentIds: [item.id] });
+    }
+  }
+  return [...byKey.values()].filter(({ count }) => count > 1);
+}
+
+/** Which check produced a row. Present so tests can pin coverage per class
+ *  instead of grepping prose that product copy is free to reword. */
+export type LiveDiagnosticCode =
+  | "no-ground"
+  | "no-source"
+  | "shorted-source"
+  | "duplicate-reference"
+  | "bad-parameter"
+  | "unsupported-model"
+  | "directive-or-model"
+  | "floating-pin"
+  | "label-names-nothing"
+  | "connectivity";
+
+export interface LiveDiagnostic {
+  /** Stable within one pass; used as a React key and for deduplication. */
+  id: string;
+  code: LiveDiagnosticCode;
+  /**
+   * `error` means this document cannot be simulated as drawn; `warning` means
+   * it can, but almost certainly not as intended. The split matches how the
+   * run report already tones these: a missing ground aborts deck
+   * construction, a single-pin net only warns.
+   */
+  severity: "error" | "warning";
+  /** What is wrong, naming the offending part. Product copy, shown verbatim. */
+  message: string;
+  /** The offending part, so a row can select it. Absent for document-level
+   *  problems (no ground, no source) that belong to no single part. */
+  componentId?: string;
+}
+
+export interface LiveDiagnosticsInput {
+  components: readonly SchematicComponent[];
+  wires: readonly SchematicWire[];
+  netLabels?: readonly NetLabel[];
+  ascForeignSymbols?: readonly SchematicForeignSymbol[];
+  /**
+   * The fail-closed model/directive probe: a thunk that builds a deck and is
+   * expected to THROW the engine's own refusal, which becomes one row verbatim.
+   *
+   * Injected rather than imported, and that is a module-graph decision, not a
+   * style one. `engine/spiceNetlist.ts` pulls in some forty engine modules, and
+   * this file is imported by `store/useProject.ts`, `project/fsBridge.ts` and
+   * the CLI - none of which has any business loading a SPICE emitter to learn
+   * a file-size cap. The caller that already owns the engine passes the thunk.
+   *
+   * Omitting it costs exactly the two classes only the deck can see (an
+   * explicitly named model that resolved nowhere, and a malformed directive);
+   * every structural class still runs.
+   */
+  probeDeck?: () => void;
+}
+
+/**
+ * A part that drives the circuit: an INDEPENDENT source.
+ *
+ * Derived from the catalog rather than a hard-coded kind list, because the
+ * kind set is actively moving - P3-01 converts a source's `kind` between
+ * `vsource`/`vac`/`vpulse` and their exp/pwl/sffm equivalents, and a frozen
+ * list would then report "no source" for a schematic that visibly has one,
+ * which is the worst possible failure for this check.
+ *
+ * Two catalog facts, unioned, because neither alone is right: the `Sources`
+ * section holds `ground` (which drives nothing) and misses `logicConstant`
+ * (which is a DC source living under Digital), while the `V`/`I` designator
+ * prefix is exactly what an independent source carries and nothing else does.
+ */
+function isIndependentSource(kind: ComponentKind): boolean {
+  const entry = CATALOG_BY_KIND[kind];
+  if (!entry) return false;
+  if (kind === "ground") return false;
+  return entry.section === "Sources" || entry.prefix === "V" || entry.prefix === "I";
+}
+
+/** What to call this part in a row: its designator, else its kind's name. */
+function partName(component: SchematicComponent): string {
+  return component.label.trim() || CATALOG_BY_KIND[component.kind]?.name || component.kind;
+}
+
+/** `extractCircuit`'s single-pin warning, so its text can be matched back to
+ *  the pin that produced it without restating the exemptions it applies. */
+const SINGLE_PIN_WARNING = /^(.+) is only connected to one pin\.$/;
+
+/**
+ * Everything wrong with the document as it stands, with no run required.
+ *
+ * Order is fixed and deliberate: errors before warnings, and within that the
+ * document-level structural failures first, because "there is no ground" is
+ * the sentence that explains most of the rows under it. Callers render the
+ * array in order, and the dock's badge count is this array's length - the
+ * report's done-when requires those two to be the same number.
+ */
+export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagnostic[] {
+  const components = input.components;
+  const netLabels = input.netLabels ?? [];
+  // A sheet with no parts on it is not a broken circuit, it is an empty one.
+  // Without this gate a brand-new untitled schematic opens shouting "No ground
+  // symbol found." at someone who has not drawn anything yet.
+  if (components.length === 0) return [];
+
+  const errors: LiveDiagnostic[] = [];
+  const warnings: LiveDiagnostic[] = [];
+  const push = (row: Omit<LiveDiagnostic, "id">) => {
+    const list = row.severity === "error" ? errors : warnings;
+    list.push({ ...row, id: `${row.code}:${row.componentId ?? ""}:${list.length}` });
+  };
+
+  const circuit = extractCircuit(
+    components as SchematicComponent[],
+    input.wires as SchematicWire[],
+    netLabels as NetLabel[],
+  );
+
+  // ── no ground reference ────────────────────────────────────────────────
+  // The netlist's own sentence, verbatim, so this row and the warning a real
+  // run produces are the same string rather than two names for one problem.
+  const noGround = circuit.warnings.includes("No ground symbol found.");
+  if (noGround) push({ code: "no-ground", severity: "error", message: "No ground symbol found." });
+
+  // ── no source ──────────────────────────────────────────────────────────
+  const sources = components.filter((component) => isIndependentSource(component.kind));
+  if (sources.length === 0) {
+    push({
+      code: "no-source",
+      severity: "error",
+      message: "No source: nothing in this schematic drives it. Add a voltage or current source.",
+    });
+  }
+
+  // ── shorted source ─────────────────────────────────────────────────────
+  // Every terminal on one net, so the source drives nothing and the solver
+  // sees a zero-impedance loop. Tested over all of the part's pins rather than
+  // a hard-coded `p`/`n` pair, so a future source with a different bank is
+  // covered the day it lands.
+  const extractedById = new Map(circuit.components.map((entry) => [entry.component.id, entry]));
+  for (const source of sources) {
+    const pins = Object.values(extractedById.get(source.id)?.pins ?? {});
+    if (pins.length < 2) continue;
+    if (pins.some((net) => net === "")) continue;
+    if (!pins.every((net) => net === pins[0])) continue;
+    push({
+      code: "shorted-source",
+      severity: "error",
+      componentId: source.id,
+      message: `${partName(source)} is shorted: every terminal sits on the same net, so it drives nothing.`,
+    });
+  }
+
+  // ── duplicate reference designators ────────────────────────────────────
+  for (const duplicate of duplicateReferenceDesignators(components)) {
+    push({
+      code: "duplicate-reference",
+      severity: "error",
+      // The second occurrence, not the first: the first one is where the name
+      // legitimately came from, and the collider is the part to go and rename.
+      componentId: duplicate.componentIds[1],
+      message: `Duplicate reference: "${duplicate.display}" is used ${duplicate.count} times; each component name must be unique.`,
+    });
+  }
+
+  // ── unparseable / out-of-range parameter values ────────────────────────
+  // `paramValuesValidationMessage` over `decodeParams` is the same pair the
+  // inspector commits through, so the dock cannot disagree with the field that
+  // refused the keystroke.
+  for (const component of components) {
+    const message = paramValuesValidationMessage(
+      component.kind,
+      decodeParams(component.kind, component.value),
+    );
+    if (!message) continue;
+    push({
+      code: "bad-parameter",
+      severity: "error",
+      componentId: component.id,
+      message: `${partName(component)}: ${message}`,
+    });
+  }
+
+  // ── unresolved named device / missing model, fail-closed ────────────────
+  // Verbatim from `simulationIntegrity`, which is where the refusal is worded.
+  // It SAYS it refused and names what it refused over; paraphrasing it here
+  // would be the one thing this item is not allowed to soften.
+  const refusal = simulationBlockReason(components, input.ascForeignSymbols ?? []);
+  if (refusal) {
+    const named = components.find((component) => refusal.includes(partName(component)));
+    push({
+      code: "unsupported-model",
+      severity: "error",
+      ...(named ? { componentId: named.id } : {}),
+      message: refusal,
+    });
+  }
+
+  // ── directive errors, and a named model that resolved nowhere ───────────
+  // Only when the structure is sound: the deck refuses on a missing ground or
+  // an empty sheet FIRST, so probing before then would just restate a row that
+  // is already above, and it is the expensive check of the set.
+  if (errors.length === 0 && input.probeDeck) {
+    try {
+      input.probeDeck();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Attribution is by designator match, which is all the engine's copy
+      // offers - it names parts (`M1 names model "IRF540"`), not ids.
+      const named = components.find((component) => {
+        const name = component.label.trim();
+        return name.length > 0 && new RegExp(`(^|[^\\w])${escapeForRegExp(name)}([^\\w]|$)`).test(message);
+      });
+      push({
+        code: "directive-or-model",
+        severity: "error",
+        ...(named ? { componentId: named.id } : {}),
+        message,
+      });
+    }
+  }
+
+  // ── floating / unconnected pins ────────────────────────────────────────
+  // Taken from `extractCircuit`'s warnings rather than recomputed, because the
+  // decision of WHICH single-pin nets deserve a warning carries reasoned
+  // exemptions (an ideal op-amp ignores its rails, a digital gate may float
+  // unused terminals, a switch's control pair is optional). Restating those
+  // here would make a valid part look broken the first time one changed. Only
+  // the mapping back to a component id is done locally.
+  const pinOwnerByName = new Map<string, string>();
+  for (const net of circuit.nets) {
+    for (const pin of net.pins) {
+      const key = `${pin.componentLabel || pin.componentId}.${pin.label}`;
+      if (!pinOwnerByName.has(key)) pinOwnerByName.set(key, pin.componentId);
+    }
+  }
+  for (const warning of circuit.warnings) {
+    if (warning === "No ground symbol found.") continue;
+    const single = SINGLE_PIN_WARNING.exec(warning);
+    if (!single) {
+      // An extraction warning this pass does not recognize is still shown,
+      // not dropped: a netlist warning nobody surfaces is how a real problem
+      // becomes invisible.
+      push({ code: "connectivity", severity: "warning", message: warning });
+      continue;
+    }
+    const componentId = pinOwnerByName.get(single[1]);
+    push({
+      code: "floating-pin",
+      severity: "warning",
+      ...(componentId ? { componentId } : {}),
+      message: warning,
+    });
+  }
+
+  // ── a net label naming nothing ─────────────────────────────────────────
+  // A net that carries labels and not one pin. `extractCircuit` treats a
+  // LABELLED single-pin net as connected on purpose (the LTspice idiom of
+  // probing an output through a bare flag), so this is the case it cannot
+  // report: a flag floating on empty canvas, which silently names no node.
+  for (const net of circuit.nets) {
+    if (net.pins.length > 0 || net.labelCount === 0) continue;
+    const onNet = netLabels.filter((label) =>
+      net.points.some((point) => point.x === label.x && point.y === label.y),
+    );
+    for (const label of onNet) {
+      push({
+        code: "label-names-nothing",
+        severity: "warning",
+        message: `Net label "${label.text}" names nothing: it is not on a wire or a pin.`,
+      });
+    }
+  }
+
+  return [...errors, ...warnings];
+}
+
+/** Escape a designator for literal use inside a `RegExp`. */
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

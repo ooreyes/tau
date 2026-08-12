@@ -8,3 +8,65 @@
  * Colour must arrive through the tokens in styles/tokens.css / App.css's
  * :root. Raw hex in here fails scripts/design-system-dod.mjs.
  */
+
+/* --- P3-04A: the ⋯ is the last thing to go, never the first ---------------
+ * App.css:5288 sets `.explorer-overflow-trigger { display: none }` and only
+ * un-hides it inside `@container explorer-shell (max-width: 280px)`, where it
+ * simultaneously hides every primary icon. The panel ships at 226px, so the
+ * default state was a bare `SCHEMATICS ⋯` with ~186px of unused header
+ * (img-002-003) - and any width above 280px had no overflow affordance at all.
+ * Which icons render is now decided in pixels by explorerPrimaryActionCount()
+ * in ShellPanels.tsx, so both container-query display swaps have to go. A
+ * container query adds no specificity, so these plain rules win purely on
+ * source order - App.css is left untouched, per the ownership map. */
+.explorer-overflow-trigger {
+  display: grid;
+  /* The flex gap alone puts the trigger exactly 8px from the root-name box,
+     which is the contract's bar to the pixel; the extra 2px keeps it strictly
+     clear in an engine that lays the header out on subpixels. Mirrored by
+     EXPLORER_OVERFLOW_CLEARANCE, which is what the icon budget charges for. */
+  margin-left: 2px;
+}
+
+.explorer-primary-actions {
+  display: flex;
+}
+
+/* --- P3-06: nesting must be visible, not inferred ------------------------- */
+
+/* A file row's glyphs have to start in the same column as a sibling folder's,
+   so the caret spacer is 4px from the icon exactly as `.tree-folder-row` is
+   (App.css:5588). `.tree-file`'s own 5px gap would offset every file by 1px. */
+.tree-file {
+  gap: 4px;
+}
+
+/* The spacer is a caret-sized hole, never a glyph: `.tree-caret` supplies the
+   13px box, this makes sure an engine that inherits something into an empty
+   inline element cannot paint in it. */
+.tree-caret-spacer {
+  visibility: hidden;
+}
+
+.tree-dir {
+  position: relative;
+}
+
+/* The guide line. Hangs from the vertical centre of this folder row's caret
+   down past its children, so "lives inside" is readable at a glance rather
+   than inferred from a 14px step. `--tree-indent` is written by the same
+   treeRowIndent() call that sets the row's padding-left (ShellPanels.tsx), so
+   the line cannot drift from the indent it is annotating; +6px is the centre of
+   the 13px `.tree-caret`. Only drawn for an open folder - a collapsed one has
+   no children to group, and `top` starting below the 22px row would otherwise
+   leave a stub. */
+.tree-dir[data-open="true"]::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--tree-indent, 8px) + 6px);
+  top: 22px;
+  bottom: 2px;
+  width: 1px;
+  background: var(--border-subtle);
+  pointer-events: none;
+}

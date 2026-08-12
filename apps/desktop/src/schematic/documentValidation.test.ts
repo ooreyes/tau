@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { retiredKindNotices, validateSchematicDocument } from "./documentValidation";
+import {
+  duplicateReferenceDesignators,
+  liveSchematicDiagnostics,
+  retiredKindNotices,
+  validateSchematicDocument,
+  type LiveDiagnostic,
+} from "./documentValidation";
+import { buildSpiceDeck } from "../engine/spiceNetlist";
+import type { SchematicComponent, SchematicWire } from "./types";
 
 const validDocument = () => ({
   components: [
@@ -405,5 +413,238 @@ describe("schematic document validation", () => {
     const spaced = at({ attrs: { SpiceLine: "Rser=1 Cpar=2" } });
     expect(validateSchematicDocument({ ...base, ascForeignSymbols: [spaced] }).ascForeignSymbols)
       .toEqual([spaced]);
+  });
+});
+
+/**
+ * P3-14 — the schematic dock has to catch problems BEFORE Run.
+ *
+ * `validateSchematicDocument` above cannot do this job and never could: every
+ * check in it ends in `fail()`, so it can report exactly one problem and only
+ * by refusing to open the file. These cover the linter that can produce a list,
+ * one case per class the report enumerates, plus the two ordering/robustness
+ * invariants the dock depends on.
+ */
+describe("live schematic diagnostics (P3-14)", () => {
+  const codesOf = (rows: LiveDiagnostic[]) => rows.map((row) => row.code);
+  const find = (rows: LiveDiagnostic[], code: LiveDiagnostic["code"]) =>
+    rows.find((row) => row.code === code);
+
+  const resistor = (extra: Partial<SchematicComponent> = {}): SchematicComponent => ({
+    id: "r1", kind: "resistor", x: 128, y: 0, rotation: 0, value: "1k", label: "R1", ...extra,
+  });
+
+  /**
+   * V1 → R1 → ground, fully wired: source present, ground present, no single-pin
+   * net. The baseline every "one thing is wrong" case below perturbs, so that a
+   * row appearing is attributable to the perturbation and not to the fixture.
+   * Source pins sit at ±`SOURCE_PIN_Y` (32) and a two-terminal part's at ±32.
+   */
+  const soundCircuit = (): { components: SchematicComponent[]; wires: SchematicWire[] } => ({
+    components: [
+      { id: "v1", kind: "vsource", x: 0, y: 96, rotation: 0, value: "5", label: "V1" },
+      resistor(),
+      { id: "gnd", kind: "ground", x: 0, y: 160, rotation: 0, value: "", label: "" },
+    ],
+    wires: [
+      { id: "w1", points: [{ x: 0, y: 64 }, { x: 0, y: 0 }, { x: 96, y: 0 }] },
+      { id: "w2", points: [{ x: 160, y: 0 }, { x: 160, y: 160 }, { x: 0, y: 160 }] },
+      { id: "w3", points: [{ x: 0, y: 128 }, { x: 0, y: 160 }] },
+    ],
+  });
+
+  /** The fail-closed deck probe, exactly as App wires it: a thunk that throws
+   *  the engine's own refusal. Injected rather than imported by the linter -
+   *  see `LiveDiagnosticsInput.probeDeck`. */
+  const deckProbe = (
+    components: SchematicComponent[],
+    wires: SchematicWire[],
+    directives: string[] = [],
+  ) => () => {
+    buildSpiceDeck(
+      { components, wires, netLabels: [], directives },
+      { kind: "tran", stopTime: 1e-3, steps: 100 },
+    );
+  };
+
+  it("says nothing at all about a sheet with no parts on it", () => {
+    // A brand-new untitled schematic is empty, not broken. Without this an
+    // untouched new file opens shouting "No ground symbol found."
+    expect(liveSchematicDiagnostics({ components: [], wires: [] })).toEqual([]);
+    expect(liveSchematicDiagnostics({ components: [], wires: [], netLabels: [{ id: "n", x: 0, y: 0, text: "out" }] })).toEqual([]);
+  });
+
+  it("reports nothing for a sound circuit, so the dock stays quiet when it should", () => {
+    const { components, wires } = soundCircuit();
+    expect(liveSchematicDiagnostics({ components, wires, probeDeck: deckProbe(components, wires) })).toEqual([]);
+  });
+
+  it("flags no ground, no source and both floating pins on a lone resistor, with no run", () => {
+    // The exact state the acceptance harness drops the app into: one part, no
+    // wires, nothing run. Three of the nine classes have to fire from that.
+    const rows = liveSchematicDiagnostics({ components: [resistor()], wires: [] });
+    expect(codesOf(rows)).toEqual(["no-ground", "no-source", "floating-pin", "floating-pin"]);
+    expect(find(rows, "no-ground")!.message).toBe("No ground symbol found.");
+    expect(find(rows, "no-source")!.message).toMatch(/no source/i);
+    // Each floating row names the offending part AND selects it on click.
+    for (const row of rows.filter((r) => r.code === "floating-pin")) {
+      expect(row.message).toMatch(/^R1\.[AB] is only connected to one pin\.$/);
+      expect(row.componentId).toBe("r1");
+    }
+  });
+
+  it("flags a source whose terminals land on one net, and names the source", () => {
+    const { components, wires } = soundCircuit();
+    // A wire straight from V1's + terminal to its - terminal.
+    wires.push({ id: "short", points: [{ x: 0, y: 64 }, { x: -64, y: 64 }, { x: -64, y: 128 }, { x: 0, y: 128 }] });
+    const rows = liveSchematicDiagnostics({ components, wires });
+    const shorted = find(rows, "shorted-source")!;
+    expect(shorted.message).toContain("V1");
+    expect(shorted.message).toMatch(/shorted/i);
+    expect(shorted.componentId).toBe("v1");
+    expect(shorted.severity).toBe("error");
+  });
+
+  it("flags a duplicate reference designator case-insensitively, pointing at the collider", () => {
+    const { components, wires } = soundCircuit();
+    // `r1` and `R1` are ONE instance name in the emitted deck.
+    components.push(resistor({ id: "r2", label: "r1", x: 128, y: 320 }));
+    const rows = liveSchematicDiagnostics({ components, wires });
+    const duplicate = find(rows, "duplicate-reference")!;
+    expect(duplicate.message).toContain('"R1" is used 2 times');
+    // The second occurrence: the first is where the name legitimately came
+    // from, and the collider is the part to go and rename.
+    expect(duplicate.componentId).toBe("r2");
+  });
+
+  it("flags an unparseable parameter value and an out-of-range one, naming the part", () => {
+    const unparseable = soundCircuit();
+    unparseable.components[1] = resistor({ value: "abc" });
+    const badValue = find(liveSchematicDiagnostics(unparseable), "bad-parameter")!;
+    expect(badValue.message).toBe("R1: Resistance: Enter a finite Ω.");
+    expect(badValue.componentId).toBe("r1");
+
+    // Out of range is the other half of the class, and it is a CROSS-FIELD
+    // range on the op-amp - the case a single-field check would miss.
+    const outOfRange = soundCircuit();
+    outOfRange.components.push({
+      id: "u1", kind: "opamp", x: 320, y: 0, rotation: 0, value: "Avol=1k Vmax=1 Vmin=5", label: "U1",
+    });
+    const range = find(liveSchematicDiagnostics(outOfRange), "bad-parameter")!;
+    expect(range.message).toBe("U1: Minimum output must be below maximum output.");
+    expect(range.componentId).toBe("u1");
+  });
+
+  it("flags a net label that names nothing, which extraction deliberately cannot", () => {
+    const { components, wires } = soundCircuit();
+    // `extractCircuit` treats a LABELLED single-pin net as connected on purpose
+    // (probing an output through a bare flag), so a flag on empty canvas is
+    // exactly the case it stays silent about.
+    const rows = liveSchematicDiagnostics({
+      components,
+      wires,
+      netLabels: [{ id: "n1", x: 512, y: 512, text: "endn" }],
+    });
+    const dangling = find(rows, "label-names-nothing")!;
+    expect(dangling.message).toBe('Net label "endn" names nothing: it is not on a wire or a pin.');
+  });
+
+  it("says it REFUSED an imported symbol with no Tau model rather than substituting one", () => {
+    const { components, wires } = soundCircuit();
+    // A preserved LTspice triac carried as a resistor: geometrically correct,
+    // electrically a different device. Treating it as its Tau kind would
+    // produce a believable and false waveform.
+    components.push(resistor({ id: "u2", label: "U2", x: 320, y: 0, ltSymbolType: "triac" }));
+    const rows = liveSchematicDiagnostics({ components, wires });
+    const refused = find(rows, "unsupported-model")!;
+    expect(refused.message).toContain("Simulation refused");
+    expect(refused.message).toContain("no electrically equivalent Tau model");
+    expect(refused.message).toContain("No approximate or partial circuit was run.");
+    expect(refused.componentId).toBe("u2");
+  });
+
+  it("surfaces the deck's own refusal, verbatim, for a named model that resolved nowhere", () => {
+    const { components, wires } = soundCircuit();
+    // Same geometry as the resistor it replaces, so the loop stays intact and
+    // the only thing wrong is the model name.
+    components[1] = { id: "d1", kind: "diode", x: 128, y: 0, rotation: 0, value: "MYPART", label: "D1" };
+    const rows = liveSchematicDiagnostics({
+      components,
+      wires,
+      probeDeck: deckProbe(components, wires),
+    });
+    const refused = find(rows, "directive-or-model")!;
+    expect(refused.message).toContain("Simulation refused");
+    expect(refused.message).toContain('names model "MYPART"');
+    expect(refused.componentId).toBe("d1");
+  });
+
+  it("surfaces a directive error as a row instead of waiting for Run to throw it", () => {
+    const { components, wires } = soundCircuit();
+    const directives = [".ic I(R1)=1m"];
+    const rows = liveSchematicDiagnostics({
+      components,
+      wires,
+      probeDeck: deckProbe(components, wires, directives),
+    });
+    const directive = find(rows, "directive-or-model")!;
+    expect(directive.message).toContain(".ic I(R1)=1m requires an inductor");
+    expect(directive.componentId).toBe("r1");
+  });
+
+  it("counts a logic constant as a source and a ground as not one, so the check survives new kinds", () => {
+    // Derived from the catalog rather than a frozen kind list: `ground` lives
+    // in the Sources SECTION and drives nothing, `logicConstant` lives under
+    // Digital and is a DC source. A list that got either wrong would report
+    // "no source" for a schematic that visibly has one - which is the worst
+    // failure this check can produce, and the one P3-01's kind rewrite would
+    // otherwise cause.
+    const digital: SchematicComponent[] = [
+      { id: "hi", kind: "logicConstant", x: 0, y: 96, rotation: 0, value: "5", label: "V1" },
+      resistor(),
+      { id: "gnd", kind: "ground", x: 0, y: 160, rotation: 0, value: "", label: "" },
+    ];
+    expect(codesOf(liveSchematicDiagnostics({ components: digital, wires: soundCircuit().wires })))
+      .not.toContain("no-source");
+
+    const groundOnly: SchematicComponent[] = [
+      resistor(),
+      { id: "gnd", kind: "ground", x: 0, y: 160, rotation: 0, value: "", label: "" },
+    ];
+    expect(codesOf(liveSchematicDiagnostics({ components: groundOnly, wires: [] })))
+      .toContain("no-source");
+  });
+
+  it("puts every error above every warning, so the row that explains the rest is on top", () => {
+    const rows = liveSchematicDiagnostics({
+      components: [resistor(), resistor({ id: "r2", label: "R1", x: 128, y: 320 })],
+      wires: [],
+      netLabels: [{ id: "n1", x: 512, y: 512, text: "endn" }],
+    });
+    const severities = rows.map((row) => row.severity);
+    expect(severities.indexOf("warning")).toBeGreaterThan(severities.lastIndexOf("error"));
+    expect(codesOf(rows)).toEqual([
+      "no-ground", "no-source", "duplicate-reference",
+      "floating-pin", "floating-pin", "floating-pin", "floating-pin",
+      "label-names-nothing",
+    ]);
+    // Every row carries a distinct React key.
+    expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  });
+
+  it("shares one duplicate-designator scan with the deserializer, which still refuses", () => {
+    // Two spellings of this rule would disagree the moment one grew a case, so
+    // the fail-closed loader and the live list read the same helper.
+    const components = [resistor(), resistor({ id: "r2", label: "r1" })];
+    expect(duplicateReferenceDesignators(components)).toEqual([
+      { display: "R1", count: 2, componentIds: ["r1", "r2"] },
+    ]);
+    expect(duplicateReferenceDesignators([resistor()])).toEqual([]);
+    // Unnamed parts get their designator at emission; they are not duplicates.
+    expect(duplicateReferenceDesignators([resistor({ label: "" }), resistor({ id: "r2", label: " " })])).toEqual([]);
+
+    const duplicateRef = validDocument();
+    duplicateRef.components.push({ ...duplicateRef.components[0], id: "r2", label: "r1" });
+    expect(() => validateSchematicDocument(duplicateRef)).toThrow(/is used 2 times/);
   });
 });

@@ -104,6 +104,14 @@ const renderWithImported = (kind: ComponentKind, value?: string): string =>
     </svg>,
   );
 
+/** Same, for a glyph standing for a part TYPE (a palette row / preview). */
+const renderAsCatalogGlyph = (kind: ComponentKind, value?: string): string =>
+  renderToStaticMarkup(
+    <svg>
+      <ComponentSymbol kind={kind} value={value} catalog />
+    </svg>,
+  );
+
 const elementTags = (markup: string, name: string): string[] =>
   markup.match(new RegExp(`<${name}\\b[^>]*>`, "g")) ?? [];
 
@@ -620,6 +628,18 @@ describe("symbol geometry remediation: sources, capacitors, and light arrows", (
     "renders the selected LED color class for %s",
     (color) => {
       expect(renderWith("led", `LED color=${color}`)).toContain(`led-artwork led-color-${color}`);
+    },
+  );
+
+  // The companion half of the rule above: the tint belongs to an INSTANCE. A
+  // catalog glyph is the part type, so the colour class must be absent for
+  // every colour, not merely for the default (PDF-3 item 3).
+  it.each(["red", "amber", "yellow", "green", "blue", "white", "custom"] as const)(
+    "drops the LED color class from a catalog glyph for %s",
+    (color) => {
+      const markup = renderAsCatalogGlyph("led", `LED color=${color}`);
+      expect(markup).toContain("led-artwork");
+      expect(markup).not.toContain("led-color-");
     },
   );
 

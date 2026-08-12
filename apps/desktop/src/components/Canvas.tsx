@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { moveComponentTo, useSchematic } from "../store/useSchematic";
 import {
   actuationLabel,
@@ -89,6 +93,31 @@ interface View {
 }
 
 const clampZoom = (z: number) => Math.min(5, Math.max(0.25, z));
+
+/**
+ * How many CSS px of the canvas' right edge the summoned parts rail is
+ * covering, per `--stage-rail-inset` on the enclosing `.stage`.
+ *
+ * App owns that custom property (it is the rail's real, resizable width, and
+ * `0px` when the rail is shut) and `.view-controls` already positions itself
+ * off it, so this reads the one published number instead of introducing a
+ * second one. Module scope on purpose: `fitView` is a `useCallback([])` and
+ * must stay identity-stable, or the auto-fit effects re-fire and stomp the
+ * user's pan on every render.
+ *
+ * Fails open at 0 - an absent stage, an unset property or a unit this cannot
+ * parse means "reserve nothing", which is exactly the pre-rail behaviour.
+ */
+const stageRailInset = (el: SVGSVGElement | null): number => {
+  const stage = el?.closest(".stage");
+  if (!(stage instanceof HTMLElement)) return 0;
+  // Inline style first: that is where App writes it, and it is the only form
+  // jsdom resolves, so the fit is testable without a real style engine.
+  const raw = stage.style.getPropertyValue("--stage-rail-inset")
+    || getComputedStyle(stage).getPropertyValue("--stage-rail-inset");
+  const px = Number.parseFloat(raw);
+  return Number.isFinite(px) ? Math.max(0, px) : 0;
+};
 
 /**
  * Build simulator-only display state from the exact node values in the active
@@ -354,6 +383,10 @@ export function Canvas({
   const toggleSelectLabel = useSchematic((s) => s.toggleSelectLabel);
   const toggleSelectProbe = useSchematic((s) => s.toggleSelectProbe);
   const moveGroup = useSchematic((s) => s.moveGroup);
+  // Bound here only for the net label's own delete keys - see
+  // `onNetLabelKeyDown`. Every other delete in the editor still arrives through
+  // App.tsx's window handler and `dispatchShortcutAction`.
+  const deleteSelected = useSchematic((s) => s.deleteSelected);
   const clearSelection = useSchematic((s) => s.clearSelection);
   const beginChange = useSchematic((s) => s.beginChange);
   const setValue = useSchematic((s) => s.setValue);
@@ -1398,11 +1431,26 @@ export function Canvas({
     // taller than the canvas degrades to "fit what is left" rather than
     // asking for a negative viewport.
     const visibleHeight = Math.max(120, r.height - Math.max(0, fitInsetBottomRef.current));
-    // Summoned side surfaces overlay the drawing. They must not alter the
-    // camera's width: opening Components leaves the canvas fit exactly as wide
-    // as the stage beneath it. The results drawer is different because it
-    // covers a horizontal reading band, so its bottom reservation stays above.
-    const visibleWidth = Math.max(160, r.width);
+    // Reserve the band the parts rail covers, for exactly the reason the
+    // bottom inset is reserved: the rail is an overlay
+    // (`.stage > .components-rail`, absolutely positioned at
+    // z-index --z-summoned), so the svg is as wide as the stage while the
+    // right-hand band of it is unreadable. Centring in the full width put the
+    // circuit half a rail width right of the visible centre - 132 px at the
+    // default 264 px rail - and re-clicking fit was idempotent, so the button
+    // read as broken (P3-10, evidence img-005-008.png).
+    //
+    // b3c7708 removed this reservation on the theory that "a summoned overlay
+    // must not alter the camera"; the report reverses that judgement, and it
+    // is the same judgement the drawer's bottom inset already makes.
+    //
+    // Measured off the DOM rather than taken as a prop: the number is already
+    // published as `--stage-rail-inset` on `.stage` (App.tsx, and App.css uses
+    // it to keep the zoom cluster clear of the rail), so a prop would be a
+    // second copy of one fact. Corner chrome that floats over the drawing
+    // without removing a reading band - the zoom cluster, the flow legend - is
+    // deliberately NOT reserved: only surfaces that hide a whole strip are.
+    const visibleWidth = Math.max(160, r.width - stageRailInset(el));
     // Hierarchical imports pack flattened block bodies far right of the sheet
     // (ascImport places them from x = 1e6). Framing those makes a 1M-unit-wide
     // fit where the authored circuit is sub-pixel - the sheet looks EMPTY. Fit
@@ -1534,17 +1582,34 @@ export function Canvas({
     return () => cancelAnimationFrame(id);
   }, [fitSignal, fitView]);
 
-  // Read-only simulator reflection also re-fits when its column resizes.
+  // Re-fit when the canvas changes size: the window, a tab's split, a sibling
+  // panel drag, the read-only simulator's column.
+  //
+  // The schematic editor used to bail out of this effect entirely
+  // (`if (interactive) return`), so it tracked no size change at all and a
+  // resized window left the circuit wherever the previous fit had put it -
+  // P3-10's "It needs to work dynamically as the user resizes each tab".
   useEffect(() => {
-    if (interactive) return;
     const el = svgRef.current;
     if (!el) return;
     let frame = 0;
+    // The editor's camera belongs to the user; the simulator's reflection has
+    // no user camera to protect (pan/zoom there is transient) and keeps
+    // re-fitting unconditionally, which is what its own tests pin.
+    const cameraIsOurs = () =>
+      !interactive || autoFitViewRef.current === null || viewRef.current === autoFitViewRef.current;
     const scheduleFit = () => {
+      if (!cameraIsOurs()) return;
       cancelAnimationFrame(frame);
       // ResizeObserver can fire while flexbox is still resolving the telemetry
       // dock and sibling columns. Measure on the next painted layout instead.
-      frame = requestAnimationFrame(() => fitView());
+      frame = requestAnimationFrame(() => {
+        // Re-checked inside the frame for the same reason the drawer-inset
+        // effect re-checks: a resize gesture streams intermediate sizes, and a
+        // pan can land between scheduling and painting.
+        if (!cameraIsOurs()) return;
+        fitView();
+      });
     };
     const ro = new ResizeObserver(scheduleFit);
     ro.observe(el);
@@ -1557,6 +1622,36 @@ export function Canvas({
       ro.disconnect();
     };
   }, [interactive, fitView]);
+
+  // Re-frame when the parts rail opens, closes or is dragged.
+  //
+  // A ResizeObserver cannot see this: the rail is an overlay, so summoning it
+  // changes no element's size while still hiding a band of the drawing. The
+  // signal is the width App already publishes as `--stage-rail-inset` on
+  // `.stage` (see `stageRailInset`), so one attribute filter covers open,
+  // close and every intermediate width of a resize drag.
+  //
+  // Same "camera is still the one fit chose" guard as the two effects above,
+  // and load-bearing for the same reason: a rail drag streams widths, and the
+  // reader dragging it may well have panned first.
+  useEffect(() => {
+    const stage = svgRef.current?.closest(".stage");
+    if (!stage) return;
+    let frame = 0;
+    const observer = new MutationObserver(() => {
+      if (autoFitViewRef.current !== null && viewRef.current !== autoFitViewRef.current) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (autoFitViewRef.current !== null && viewRef.current !== autoFitViewRef.current) return;
+        fitView();
+      });
+    });
+    observer.observe(stage, { attributeFilter: ["style"] });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [fitView]);
 
   const placing = tool.mode === "place";
   const wiring = tool.mode === "wire";
@@ -1640,6 +1735,50 @@ export function Canvas({
     // Shift+toggle already handled on pointerdown; skip the exclusive select.
     if (event.shiftKey) return;
     activateNetLabel(l);
+  };
+
+  /**
+   * The net label answers its own Delete/Backspace, because nothing else can.
+   *
+   * The label renders as `role="button"` (it is click-activatable), and
+   * App.tsx's window keydown handler returns early on
+   * `closest("input, textarea, select, button, [role='button'], ...")` before it
+   * resolves a shortcut - a guard meant for text entry that a focused label
+   * matches by role alone. So the moment a click focuses the label, the global
+   * Backspace -> "delete" binding in `shortcuts.ts` is unreachable, which is
+   * exactly the reported bug: the label selects, looks selected, and ignores
+   * the key.
+   *
+   * Gated on the schematic editor's select tool for the same reason
+   * `dispatchShortcutAction` gates every editing action: the simulator's label
+   * tool reads the circuit and must not be able to change its topology.
+   */
+  const onNetLabelKeyDown = (l: NetLabel) => (event: ReactKeyboardEvent<SVGTextElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      activateNetLabel(l);
+      return;
+    }
+    if (event.key !== "Backspace" && event.key !== "Delete") return;
+    if (!interactive || tool.mode !== "select") return;
+    event.preventDefault();
+    // The window handler is dead for this element anyway, but stopping
+    // propagation keeps that an implementation detail rather than a dependency:
+    // if App.tsx's guard is ever narrowed, this must not delete twice.
+    event.stopPropagation();
+    // Tab can focus a label that is not selected. Deleting the *other*
+    // selection in that state would make an unrelated part vanish under the
+    // reader's hands, so the key claims the focused label first.
+    //
+    // Read from the store, not from this render's `selectedLabelIds`: a
+    // selection made in the same tick as the keystroke (shift-click, a marquee
+    // that ended on this label, a command that selected it) has not been
+    // committed to React yet, and re-selecting off a stale snapshot would drop
+    // the rest of a multi-selection instead of deleting it.
+    if (!useSchematic.getState().selectedLabelIds.includes(l.id)) {
+      selectMixed({ componentIds: [], wireIds: [], labelIds: [l.id], probeIds: [] });
+    }
+    deleteSelected();
   };
 
   /**
@@ -1864,12 +2003,7 @@ export function Canvas({
                     onPointerDown={labelsInteractive ? onNetLabelPointerDown(l, offset) : undefined}
                     onPointerMove={labelsInteractive ? onNetLabelPointerMove : undefined}
                     onPointerUp={labelsInteractive ? onNetLabelPointerUp(l) : undefined}
-                    onKeyDown={labelsInteractive ? (event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        activateNetLabel(l);
-                      }
-                    } : undefined}
+                    onKeyDown={labelsInteractive ? onNetLabelKeyDown(l) : undefined}
                   >
                     {l.text}
                   </text>

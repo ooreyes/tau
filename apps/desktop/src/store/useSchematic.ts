@@ -865,6 +865,18 @@ export const useSchematic = create<SchematicState>()((set, get) => {
     startPlacing: (kind, value) =>
       set({
         tool: value !== undefined ? { mode: "place", kind, value } : { mode: "place", kind },
+        // Ground has exactly one legal orientation - its anchor must sit above
+        // the body - so arming the tool is where that gets settled, not just
+        // `addComponent`. Three separate consumers read these two fields: the
+        // placement ghost's transform, `findFreeSpot`'s collision footprint,
+        // and the created component. Normalizing only the last one left the
+        // first two describing a sideways ground that the drop then refused to
+        // produce, which is the dashed rotated ground in the PDF-3 report
+        // (item 8) - a preview that lied. Trade-off, stated deliberately: a
+        // rotation the reader had armed for some other part is disarmed when
+        // they reach for ground. Nothing can be done with it anyway, and the
+        // alternative is a preview that contradicts the drop.
+        ...(kind === "ground" ? { placeRotation: 0 as Rotation, placeMirror: false } : null),
         selectedId: null,
         selectedWireId: null,
         selectedWireIds: [],
@@ -1148,10 +1160,15 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           y,
           // Ground is the one symbol whose electrical identity depends on its
           // anchor being above the body. A new placement must not inherit a
-          // previous tool rotation; imported components keep their own ASC
-          // orientation because this path only creates native parts.
+          // previous tool rotation OR a previous tool mirror; imported
+          // components keep their own ASC orientation because this path only
+          // creates native parts. `startPlacing` normalizes the same two fields
+          // so the ghost and the collision footprint agree with what lands
+          // here, but this stays the backstop: a direct `setState` (a test, a
+          // restored session) can put a rotation into the tool without going
+          // through it, and the part that appears must still be pin-up.
           rotation: kind === "ground" ? 0 : s.placeRotation,
-          mirrored: s.placeMirror,
+          mirrored: kind === "ground" ? false : s.placeMirror,
           value: placeValue,
           label,
         };
@@ -1185,7 +1202,11 @@ export const useSchematic = create<SchematicState>()((set, get) => {
 
     rotate: () =>
       set((s) => {
-        if (s.tool.mode === "place") return { placeRotation: nextRotation(s.placeRotation) };
+        // Re-arming an orientation the drop will discard would put the ghost
+        // back to promising a sideways ground; see `startPlacing`.
+        if (s.tool.mode === "place") {
+          return s.tool.kind === "ground" ? {} : { placeRotation: nextRotation(s.placeRotation) };
+        }
         const ids = new Set(s.selectedIds.length > 0 ? s.selectedIds : s.selectedId ? [s.selectedId] : []);
         if (ids.size === 0) return {};
         const before = s.components.filter((component) => ids.has(component.id));
@@ -1209,7 +1230,9 @@ export const useSchematic = create<SchematicState>()((set, get) => {
 
     mirror: () =>
       set((s) => {
-        if (s.tool.mode === "place") return { placeMirror: !s.placeMirror };
+        if (s.tool.mode === "place") {
+          return s.tool.kind === "ground" ? {} : { placeMirror: !s.placeMirror };
+        }
         const ids = new Set(s.selectedIds.length > 0 ? s.selectedIds : s.selectedId ? [s.selectedId] : []);
         if (ids.size === 0) return {};
         const before = s.components.filter((component) => ids.has(component.id));

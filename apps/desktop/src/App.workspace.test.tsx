@@ -52,10 +52,15 @@ import {
   DEFAULT_WORKSPACE_NAME,
   defaultWorkspaceTree,
 } from "./project/defaultWorkspace";
+import { blankAscText } from "./project/types";
 import { useProject } from "./store/useProject";
 import { useSchematic } from "./store/useSchematic";
 
 const defaultRenameNode = useProject.getState().renameNode;
+// Captured for the same reason `renameNode` is: the P3-05 delete-failure test
+// swaps in a no-op `deleteNode`, and a leaked override would silently disarm
+// every later test that asserts a file really went away.
+const defaultDeleteNode = useProject.getState().deleteNode;
 
 void SettingsWindow;
 void AssistantPanel;
@@ -124,6 +129,7 @@ beforeEach(() => {
     error: null,
     capability: "tauri",
     renameNode: defaultRenameNode,
+    deleteNode: defaultDeleteNode,
   });
 });
 afterEach(() => cleanup());
@@ -805,5 +811,129 @@ describe("App project-folder gate", () => {
       expect(screen.getByRole("button", { name }).hasAttribute("disabled")).toBe(true);
     }
     expect(screen.queryByRole("complementary", { name: "Assistant" })).toBeNull();
+  });
+});
+
+/**
+ * P3-05 — closing an untouched untitled schematic takes its file with it.
+ *
+ * `createSchematicInRoot` writes the file at CREATION, before any edit, and
+ * `numberedName` gives each collision the next suffix - which is the
+ * `untitled-2.asc / untitled-3.asc / untitled-4.asc` ladder in the report's
+ * screenshot. Nothing on the close path ever removed one.
+ *
+ * The delete is gated on four conditions, and the last three tests here exist
+ * to prove each gate is load-bearing rather than to demonstrate the happy
+ * path: deleting a file the user wanted is far worse than leaving an empty one.
+ */
+describe("closing an empty untitled schematic (P3-05)", () => {
+  const untitled2 = `${DEFAULT_WORKSPACE_ID}/untitled-2.asc`;
+
+  /** Mint a second untitled file, which is what produces the reported ladder. */
+  async function mintSecondUntitled() {
+    fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
+    await screen.findByRole("tab", { name: /untitled-2\.asc/ });
+    // The file exists on disk before a single edit - that is the whole defect.
+    expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankAscText());
+  }
+
+  it("deletes the empty file Tau minted rather than leaving untitled-2.asc behind", async () => {
+    await renderOpenProject();
+    await mintSecondUntitled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled-2.asc" }));
+
+    await waitFor(() => expect(useProject.getState().workspaceFiles[untitled2]).toBeUndefined());
+    expect(useProject.getState().tree.some((node) => node.path === untitled2)).toBe(false);
+    expect(screen.queryByRole("tab", { name: /untitled-2\.asc/ })).toBeNull();
+    // The first untitled file is still open and untouched: closing one tab
+    // must not reach for its neighbour's file.
+    expect(useProject.getState().workspaceFiles[`${DEFAULT_WORKSPACE_ID}/untitled.asc`]).toBeTruthy();
+  });
+
+  it("keeps an untitled file whose schematic holds a part when the user chooses Don’t Save", async () => {
+    await renderOpenProject();
+    await mintSecondUntitled();
+    act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled-2.asc" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled-2.asc”?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Don’t Save" }));
+
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /untitled-2\.asc/ })).toBeNull());
+    // Discarded from the editor, kept on disk: the document was not empty at
+    // close time, so this is the case where a delete would destroy work.
+    expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankAscText());
+  });
+
+  it("never deletes a file Tau did not mint, even one named untitled.asc and byte-identical to the template", async () => {
+    // The strongest form of the "a file Tau did not create is kept" clause:
+    // every OTHER condition passes here - the name matches the mint pattern,
+    // the document is empty, and the bytes equal the template exactly - so the
+    // only thing standing between this user's file and deletion is the
+    // Tau-minted marker.
+    const path = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    const file = { path, name: "untitled.asc", contents: blankAscText(), kind: "asc" as const };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([file]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [path]: file },
+      error: null,
+      capability: "none",
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "untitled.asc" }));
+    await screen.findByRole("tab", { name: /untitled\.asc/ });
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled.asc" }));
+
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /untitled\.asc/ })).toBeNull());
+    expect(useProject.getState().workspaceFiles[path].contents).toBe(blankAscText());
+  });
+
+  it("never deletes an imported .asc, because its name is not one Tau mints", async () => {
+    const path = `${DEFAULT_WORKSPACE_ID}/vendor.asc`;
+    // Deliberately byte-equal to the template as well, so the name pattern is
+    // the only gate doing the work.
+    const file = { path, name: "vendor.asc", contents: blankAscText(), kind: "asc" as const };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([file]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [path]: file },
+      error: null,
+      capability: "none",
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "vendor.asc" }));
+    await screen.findByRole("tab", { name: /vendor\.asc/ });
+    fireEvent.click(screen.getByRole("button", { name: "Close vendor.asc" }));
+
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /vendor\.asc/ })).toBeNull());
+    expect(useProject.getState().workspaceFiles[path].contents).toBe(blankAscText());
+  });
+
+  it("keeps the file and says why when the delete does not take", async () => {
+    await renderOpenProject();
+    await mintSecondUntitled();
+    // A removal that reports no error and yet leaves the node behind. This is
+    // the shape a real failure takes: `useProject.deleteNode` never throws and
+    // does not set `error` on the in-memory branch, so success has to be
+    // confirmed by re-reading the tree - never by inspecting `error`.
+    // Inside `act` so React has committed the swapped store action before the
+    // close click reads it; outside, the click still runs the real delete.
+    act(() => {
+      useProject.setState({ deleteNode: async () => {} });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled-2.asc" }));
+
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /untitled-2\.asc/ })).toBeNull());
+    expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankAscText());
+    expect((await screen.findAllByText(/Kept untitled-2\.asc/)).length).toBeGreaterThan(0);
   });
 });

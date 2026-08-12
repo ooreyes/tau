@@ -1,9 +1,22 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { ExplorerPanel } from "./ShellPanels";
+import {
+  ExplorerPanel,
+  explorerHeaderLayout,
+  explorerPrimaryActionCount,
+  treeRowIndent,
+  EXPLORER_PANEL_WIDTH,
+} from "./ShellPanels";
 import { useProject } from "../store/useProject";
+
+/** jsdom evaluates no stylesheet, so the rules this lane owns are asserted as
+ *  source text. Same technique ShellPanels.test.tsx already uses on App.css. */
+const explorerTreeCss = (): string =>
+  readFileSync(join(__dirname, "..", "styles", "explorerTree.css"), "utf8");
 
 const originalProjectActions = {
   detectCapability: useProject.getState().detectCapability,
@@ -497,5 +510,416 @@ describe("ExplorerPanel action row", () => {
     fireEvent.drop(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
 
     await waitFor(() => expect(onNotice).toHaveBeenCalledWith("Moving explorer items needs a project move action."));
+  });
+});
+
+/**
+ * P3-06. "Id like for the files to look indented almost to denote they live
+ * within a folder." The tree used to render the project root's own children at
+ * depth 0 - the same 8px the root row itself sat at - and file rows carried no
+ * caret column, so a file's glyphs started 17px LEFT of a sibling folder's.
+ * Both halves are measured here from the inline padding the browser actually
+ * applies, not from a class name.
+ */
+describe("P3-06 - tree rows must read as nested inside their folder", () => {
+  const paddingLeftOf = (row: Element | null, what: string): number => {
+    expect(row, `${what} is missing from the tree`).toBeTruthy();
+    const declared = (row as HTMLElement).style.paddingLeft;
+    expect(declared, `${what} has no explicit padding-left, so its indent is a <button> UA default`)
+      .toMatch(/^\d+(\.\d+)?px$/);
+    return parseFloat(declared);
+  };
+
+  it("indents each level strictly past its parent, the project root row included", async () => {
+    const root = useProject.getState().rootPath!;
+    const folder = await useProject.getState().createFolder(root, "Filters");
+    await useProject.getState().createSchematicFile(folder!, "low-pass.asc");
+    await useProject.getState().createSchematicFile(root, "gain.asc");
+    renderExplorer();
+
+    const rootIndent = paddingLeftOf(
+      screen.getByRole("button", { name: /Project root .+; drop files or folders here/i }),
+      "the project root row",
+    );
+    const depth1Folder = paddingLeftOf(screen.getByRole("button", { name: "Filters" }), "the Filters folder row");
+    const depth1File = paddingLeftOf(screen.getByRole("button", { name: "gain.asc" }), "the root-level gain.asc row");
+    const depth2File = paddingLeftOf(screen.getByRole("button", { name: "low-pass.asc" }), "the nested low-pass.asc row");
+    // Siblings share a column; each level steps strictly inward.
+    expect(depth1File).toBe(depth1Folder);
+    expect(depth1Folder).toBeGreaterThan(rootIndent);
+    expect(depth2File).toBeGreaterThan(depth1Folder);
+    // A step a reader can SEE. The packaged verify gate refuses anything under
+    // 10px per level because the pre-fix tree stepped by 2px, which satisfies
+    // "greater than" and satisfies nobody looking at it.
+    expect(depth1Folder - rootIndent).toBeGreaterThanOrEqual(10);
+    expect(depth2File - depth1Folder).toBeGreaterThanOrEqual(10);
+  });
+
+  it("gives file rows the folder's caret column so equal depths share a glyph column", async () => {
+    const root = useProject.getState().rootPath!;
+    await useProject.getState().createSchematicFile(root, "gain.asc");
+    renderExplorer();
+
+    const fileRow = screen.getByRole("button", { name: "gain.asc" });
+    const folderRow = screen.getByRole("button", { name: /Project root/i });
+    // Without a spacer the file's icon is the row's first child and starts a
+    // whole caret-width (13px) + gap left of every folder icon in the tree.
+    expect(fileRow.querySelector(".tree-caret")).not.toBeNull();
+    expect(folderRow.querySelector(".tree-caret")).not.toBeNull();
+    expect(fileRow.firstElementChild?.className).toContain("tree-caret");
+    // The spacer must never announce itself or become a second focus stop.
+    expect(fileRow.querySelector(".tree-caret")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("publishes the row indent to CSS so the nesting guide cannot drift from it", async () => {
+    const root = useProject.getState().rootPath!;
+    const folder = await useProject.getState().createFolder(root, "Filters");
+    await useProject.getState().createSchematicFile(folder!, "low-pass.asc");
+    const { container } = renderExplorer();
+
+    const dir = container.querySelector<HTMLElement>(`.tree-dir[data-project-dir-path="${folder}"]`);
+    expect(dir, "the Filters directory wrapper is missing").toBeTruthy();
+    expect(dir!.getAttribute("data-open")).toBe("true");
+    // Single source of truth: the guide's x is derived from the same number the
+    // row's padding uses, so changing the indent step cannot desync the line.
+    const folderRow = screen.getByRole("button", { name: "Filters" });
+    expect(dir!.style.getPropertyValue("--tree-indent")).toBe(folderRow.style.paddingLeft);
+
+    const css = explorerTreeCss();
+    expect(css, "no vertical nesting guide is defined").toMatch(/\.tree-dir\[data-open="true"\]::before/);
+    expect(css).toMatch(/var\(--tree-indent/);
+    expect(css).toMatch(/background:\s*var\(--border-subtle\)/);
+    expect(css).toMatch(/\.tree-dir\s*\{[^}]*position:\s*relative/);
+  });
+
+  it("walks every rendered row and finds its indent exactly one step past its parent's", async () => {
+    const root = useProject.getState().rootPath!;
+    const analog = await useProject.getState().createFolder(root, "Analog");
+    const filters = await useProject.getState().createFolder(analog!, "Filters");
+    await useProject.getState().createSchematicFile(filters!, "low-pass.asc");
+    await useProject.getState().createSchematicFile(analog!, "mid.asc");
+    await useProject.getState().createSchematicFile(root, "gain.asc");
+    const { container } = renderExplorer();
+
+    // Depth from the DOM, not from the component: one `.tree-dir` wrapper per
+    // level. A folder row sits inside its OWN wrapper, a file row does not, so
+    // a file is one level deeper than its ancestor-wrapper count.
+    const depthOf = (row: Element): number => {
+      let wrappers = 0;
+      for (let el = row.parentElement; el; el = el.parentElement) {
+        if (el.classList.contains("tree-dir")) wrappers += 1;
+        if (el.classList.contains("tree-list")) break;
+      }
+      return row.matches(".tree-file") ? wrappers + 1 : wrappers;
+    };
+
+    const rows = [...container.querySelectorAll<HTMLElement>(".tree-folder-row, button.tree-file")];
+    expect(rows.length).toBe(6); // root, Analog, Filters, low-pass, mid, gain
+    const seen = new Map<number, number>();
+    for (const row of rows) {
+      const depth = depthOf(row);
+      const indent = parseFloat(row.style.paddingLeft);
+      expect(indent, `${row.textContent?.trim()} at depth ${depth}`).toBe(treeRowIndent(depth));
+      const previous = seen.get(depth);
+      if (previous !== undefined) expect(indent).toBe(previous); // siblings align
+      seen.set(depth, indent);
+    }
+    const depths = [...seen.keys()].sort((a, b) => a - b);
+    expect(depths).toEqual([0, 1, 2, 3]);
+    for (let i = 1; i < depths.length; i += 1) {
+      expect(seen.get(depths[i])!).toBeGreaterThan(seen.get(depths[i - 1])!);
+    }
+  });
+
+  it("keeps a file's icon column on the folder's, not 1px off it", () => {
+    // `.tree-file` shipped `gap: 5px` while `.tree-folder-row` uses 4px, so even
+    // with the caret spacer in place a file's icon would sit 1px right of every
+    // folder icon in the tree. Same column, or the ladder reads crooked.
+    const css = explorerTreeCss().replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css).toMatch(/\.tree-file\s*\{[^}]*gap:\s*4px/);
+    expect(css).toMatch(/\.tree-caret-spacer\s*\{[^}]*visibility:\s*hidden/);
+  });
+
+  it("keeps the indent arithmetic in one helper rather than a magic number per row", () => {
+    // treeRowIndent(0) is the project root row; its children are depth 1.
+    expect(treeRowIndent(1) - treeRowIndent(0)).toBe(treeRowIndent(2) - treeRowIndent(1));
+    expect(treeRowIndent(1)).toBeGreaterThan(treeRowIndent(0));
+  });
+});
+
+/**
+ * P3-02. `grep -n draggable ShellPanels.tsx` returned nothing: no row set the
+ * attribute, so `dragstart` could never fire in a real engine and the whole
+ * native protocol - plus App.css's `[draggable="true"]` grab cursor and
+ * `-webkit-user-drag: element` - was unreachable. jsdom does not gate dragstart
+ * on the attribute, which is exactly why the drag tests above passed against
+ * dead code; asserting the attribute string is the only teeth jsdom can give.
+ */
+describe("P3-02 - rows must actually be draggable", () => {
+  it("marks file and folder rows draggable, and leaves the root row a drop target only", async () => {
+    const root = useProject.getState().rootPath!;
+    await useProject.getState().createSchematicFile(root, "gain.asc");
+    await useProject.getState().createFolder(root, "Filters");
+    renderExplorer();
+
+    // The literal string, not truthiness: App.css keys the grab cursor and
+    // WebKit's -webkit-user-drag on [draggable="true"], and React renders a
+    // falsy value as no attribute at all - which would silently re-break both.
+    expect(screen.getByRole("button", { name: "gain.asc" }).getAttribute("draggable")).toBe("true");
+    expect(screen.getByRole("button", { name: "Filters" }).getAttribute("draggable")).toBe("true");
+    // The root row cannot be a source: useProject.moveNode refuses source===root.
+    expect(
+      screen.getByRole("button", { name: /Project root/i }).getAttribute("draggable"),
+    ).not.toBe("true");
+  });
+
+  it("still opens a file on click, on Enter, and still opens its context menu while draggable", async () => {
+    const root = useProject.getState().rootPath!;
+    const path = await useProject.getState().createSchematicFile(root, "gain.asc");
+    const { onOpenAscText } = renderExplorer();
+    const fileRow = screen.getByRole("button", { name: "gain.asc" });
+
+    // Three gestures now share this element (Radix's context menu, the pointer
+    // fallback, and the native drag). Prove the plain ones still land.
+    fireEvent.click(fileRow);
+    await waitFor(() => expect(onOpenAscText).toHaveBeenCalledWith(path, "gain.asc", expect.any(String)));
+
+    onOpenAscText.mockClear();
+    fireEvent.keyDown(fileRow, { key: "Enter" });
+    fireEvent.click(fileRow); // the activation a browser synthesises for Enter
+    await waitFor(() => expect(onOpenAscText).toHaveBeenCalledWith(path, "gain.asc", expect.any(String)));
+
+    fireEvent.contextMenu(fileRow);
+    expect(await screen.findByRole("menuitem", { name: /Rename/ })).toBeTruthy();
+  });
+
+  it("does not let a late pointercancel wipe a native drag that has already started", async () => {
+    const root = useProject.getState().rootPath!;
+    const source = await useProject.getState().createSchematicFile(root, "gain.asc");
+    const folder = await useProject.getState().createFolder(root, "Filters");
+    const onMoveNode = vi.fn().mockResolvedValue(`${folder}/gain.asc`);
+    renderExplorer({ onMoveNode });
+    const fileRow = screen.getByRole("button", { name: "gain.asc" });
+    const folderRow = screen.getByRole("button", { name: "Filters" });
+    const dataTransfer = dataTransferStub();
+
+    // Real ordering hazard: pointerdown takes pointer capture, then the engine
+    // decides to start a native drag and delivers pointercancel AFTER
+    // dragstart. Unguarded, cancelPointerDrag nulled the drag source mid-drag,
+    // after which markDropTarget highlighted targets it had not validated.
+    fireEvent.pointerDown(fileRow, { pointerId: 3, button: 0, clientX: 40, clientY: 40 });
+    fireEvent.dragStart(fileRow, { dataTransfer });
+    fireEvent.pointerCancel(fileRow, { pointerId: 3 });
+
+    expect(fileRow.getAttribute("data-dragging")).toBe("true");
+    fireEvent.dragOver(folderRow, { dataTransfer });
+    expect(folderRow.getAttribute("data-drop-target")).toBe("true");
+    fireEvent.drop(folderRow, { dataTransfer });
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
+  });
+
+  it("refuses to highlight an invalid target after a pointercancel, instead of trusting the MIME type alone", async () => {
+    const root = useProject.getState().rootPath!;
+    const parent = await useProject.getState().createFolder(root, "Parent");
+    await useProject.getState().createFolder(parent!, "Child");
+    const onMoveNode = vi.fn().mockResolvedValue("unused");
+    renderExplorer({ onMoveNode });
+    const parentRow = screen.getByRole("button", { name: "Parent" });
+    const childRow = screen.getByRole("button", { name: "Child" });
+    const dataTransfer = dataTransferStub();
+
+    fireEvent.pointerDown(parentRow, { pointerId: 4, button: 0, clientX: 40, clientY: 40 });
+    fireEvent.dragStart(parentRow, { dataTransfer });
+    fireEvent.pointerCancel(parentRow, { pointerId: 4 });
+    fireEvent.dragOver(childRow, { dataTransfer });
+
+    expect(childRow.getAttribute("data-drop-target")).toBeNull();
+    expect(dataTransfer.dropEffect).toBe("none");
+    fireEvent.drop(childRow, { dataTransfer });
+    expect(onMoveNode).not.toHaveBeenCalled();
+  });
+
+  it("refuses a drop onto the row itself and back into the folder it already lives in", async () => {
+    const root = useProject.getState().rootPath!;
+    const analog = await useProject.getState().createFolder(root, "Analog");
+    await useProject.getState().createSchematicFile(analog!, "nested.asc");
+    const onMoveNode = vi.fn().mockResolvedValue("unused");
+    const { container } = renderExplorer({ onMoveNode });
+    const treeList = container.querySelector(".tree-list")!;
+
+    // Onto itself: canMoveProjectNode's source !== destination clause.
+    const folderRow = screen.getByRole("button", { name: "Analog" });
+    const selfDrop = dataTransferStub();
+    fireEvent.dragStart(folderRow, { dataTransfer: selfDrop });
+    fireEvent.dragOver(folderRow, { dataTransfer: selfDrop });
+    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+    expect(selfDrop.dropEffect).toBe("none");
+    fireEvent.drop(folderRow, { dataTransfer: selfDrop });
+    fireEvent.dragEnd(folderRow);
+
+    // Into its own parent: a no-op move that would still churn disk and tabs.
+    const parentDrop = dataTransferStub();
+    const nestedRow = screen.getByRole("button", { name: "nested.asc" });
+    fireEvent.dragStart(nestedRow, { dataTransfer: parentDrop });
+    fireEvent.dragOver(folderRow, { dataTransfer: parentDrop });
+    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+    expect(parentDrop.dropEffect).toBe("none");
+    // …and the refusal does not bubble into an ancestor offering the project
+    // root instead. Lighting the root here promised a move the row's own onDrop
+    // would then refuse.
+    expect(treeList.getAttribute("data-drop-target")).toBeNull();
+    fireEvent.drop(folderRow, { dataTransfer: parentDrop });
+
+    expect(onMoveNode).not.toHaveBeenCalled();
+  });
+
+  it("clears the drop highlight when the cursor leaves a file row", async () => {
+    const root = useProject.getState().rootPath!;
+    const led = await useProject.getState().createFolder(root, "LED");
+    await useProject.getState().createSchematicFile(led!, "led.asc");
+    await useProject.getState().createSchematicFile(root, "driver.asc");
+    const onMoveNode = vi.fn().mockResolvedValue("unused");
+    const { container } = renderExplorer({ onMoveNode });
+    const dataTransfer = dataTransferStub();
+    const ledDir = container.querySelector<HTMLElement>(`.tree-dir[data-project-dir-path="${led}"]`)!;
+    const childRow = screen.getByRole("button", { name: "led.asc" });
+
+    fireEvent.dragStart(screen.getByRole("button", { name: "driver.asc" }), { dataTransfer });
+    fireEvent.dragOver(childRow, { dataTransfer });
+    expect(ledDir.getAttribute("data-drop-target")).toBe("true");
+
+    // The folder row had an onDragLeave; the file row did not, so the highlight
+    // stayed lit on a folder the cursor had already left.
+    fireEvent.dragLeave(childRow, { dataTransfer, relatedTarget: document.body });
+    expect(ledDir.getAttribute("data-drop-target")).toBeNull();
+  });
+});
+
+/**
+ * P3-04A. "There is ample space to show the settings… we should be able to see
+ * them at a smaller window size as long as it has decent space from the text of
+ * the folder name it should be able to dynamically adjust."
+ *
+ * The header was a binary swap keyed on a 280px container query, and the panel
+ * ships at 226px - so the shipped default hid all five icons and showed only
+ * the ⋯ (evidence img-002-003), while every width above 280px hid the ⋯
+ * entirely. jsdom computes no layout, so the contract is pinned on the pixel
+ * budget the component derives from the width the panel really renders at, plus
+ * the stylesheet text; the ≥8px measured gap is re-proven natively by
+ * scripts/pdf3-verify.mjs.
+ */
+describe("P3-04A - the overflow trigger must survive every width", () => {
+  // This jsdom run has no localStorage at all (Node's own global refuses
+  // without --localstorage-file), so `loadPanelWidth` would always hand back
+  // the 226px default and no test could exercise another width. Stub the one
+  // API it reads; that is also the real path a user-resized panel takes.
+  const renderAtWidth = (width: number) => {
+    const stored = new Map<string, string>([[EXPLORER_PANEL_WIDTH.storageKey, String(width)]]);
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => stored.set(key, value),
+      removeItem: (key: string) => stored.delete(key),
+    });
+    return renderExplorer();
+  };
+
+  // Put it back the way this environment ships it, rather than
+  // `unstubAllGlobals()` - that would also drop the file-wide ResizeObserver
+  // stub and break any render that runs after this block.
+  afterEach(() => vi.stubGlobal("localStorage", undefined));
+
+  it("always renders the overflow trigger, at the narrowest width and the widest", () => {
+    for (const width of [EXPLORER_PANEL_WIDTH.minWidth, 208, 226, EXPLORER_PANEL_WIDTH.maxWidth]) {
+      const { unmount } = renderAtWidth(width);
+      expect(
+        screen.getByRole("button", { name: "More explorer actions" }),
+        `the ⋯ trigger is missing at ${width}px`,
+      ).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it("keeps the trigger displayed and clear of the root name outside any container query", () => {
+    // App.css:5288 sets `display: none` unconditionally and only un-hides the
+    // trigger inside `@container explorer-shell (max-width: 280px)`. Neutralise
+    // both, at equal specificity, from a later sheet - App.css stays untouched.
+    // Comments go first: this file's own prose quotes `@container ... {`, and
+    // stripping blocks before comments swallowed the rules under it.
+    const unconditional = explorerTreeCss()
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/@container[^{]*\{[\s\S]*?\n\}/g, "");
+    expect(unconditional).toMatch(/\.explorer-overflow-trigger\s*\{[^}]*display:\s*grid/);
+    expect(unconditional).toMatch(/\.explorer-primary-actions\s*\{[^}]*display:\s*flex/);
+    // The flex gap alone lands exactly on the 8px bar; the clearance puts it
+    // strictly above it in engines that lay the header out on subpixels.
+    expect(unconditional).toMatch(/\.explorer-overflow-trigger\s*\{[^}]*margin-left:\s*2px/);
+  });
+
+  it("drops primary icons one at a time as the panel narrows, and never below zero", () => {
+    const counts = [168, 190, 212, 226, 300, 420].map((w) => explorerPrimaryActionCount(w, 5));
+    // Monotonic in width, saturating at the five actions that exist.
+    for (let i = 1; i < counts.length; i += 1) expect(counts[i]).toBeGreaterThanOrEqual(counts[i - 1]);
+    expect(counts[counts.length - 1]).toBe(5);
+    expect(explorerPrimaryActionCount(EXPLORER_PANEL_WIDTH.minWidth, 5)).toBeLessThan(5);
+    expect(explorerPrimaryActionCount(EXPLORER_PANEL_WIDTH.minWidth, 5)).toBeGreaterThan(0);
+    expect(explorerPrimaryActionCount(40, 5)).toBe(0);
+  });
+
+  it("keeps the ⋯ at least 8px clear of the root name at 168, 208, 226 and 420px", () => {
+    // The contract's numbers. 208 is the width UI_UX_PDF3.md calls the
+    // explorer's minWidth; the real floor is EXPLORER_PANEL_WIDTH.minWidth =
+    // 168 (208 is COMPONENTS_RAIL_WIDTH.minWidth), so both are checked.
+    for (const width of [EXPLORER_PANEL_WIDTH.minWidth, 208, EXPLORER_PANEL_WIDTH.defaultWidth, EXPLORER_PANEL_WIDTH.maxWidth]) {
+      const layout = explorerHeaderLayout(width, 5);
+      expect(layout.overflowGap, `⋯ clear of the root name at ${width}px`).toBeGreaterThanOrEqual(8);
+      // The root name is the only flexible item, so it absorbing at least its
+      // reserve is exactly "the header does not overflow and the ⋯ is not the
+      // casualty" - the failure mode img-002-003 shows the other side of.
+      expect(layout.rootNameWidth, `root name box at ${width}px`).toBeGreaterThanOrEqual(56);
+      expect(layout.visibleActions, `icons at ${width}px`).toBeGreaterThan(0);
+      expect(
+        layout.rootNameWidth + layout.visibleActions * 22 + 8 * 2 + 24,
+        `header demand at ${width}px`,
+      ).toBeLessThanOrEqual(layout.innerWidth);
+    }
+  });
+
+  it("fails OPEN on an unmeasured width so the action row can never vanish", () => {
+    // jsdom has no layout; a width-derived count that returned 0 for an
+    // unknown width would hide every header control and take a dozen callers
+    // that reach for those buttons by name down with it.
+    expect(explorerPrimaryActionCount(Number.NaN, 5)).toBe(5);
+    expect(explorerPrimaryActionCount(0, 5)).toBe(5);
+    expect(explorerPrimaryActionCount(Number.POSITIVE_INFINITY, 5)).toBe(5);
+  });
+
+  it("shows all five primary icons at the shipped default width - the 'ample space' complaint", () => {
+    const { container } = renderAtWidth(EXPLORER_PANEL_WIDTH.defaultWidth);
+    expect(container.querySelectorAll(".explorer-primary-actions button")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "More explorer actions" })).toBeTruthy();
+  });
+
+  it("keeps every dropped action reachable from the ⋯ menu at the narrowest width", async () => {
+    const { container } = renderAtWidth(EXPLORER_PANEL_WIDTH.minWidth);
+    const shown = [...container.querySelectorAll(".explorer-primary-actions button")]
+      .map((b) => b.getAttribute("aria-label"));
+    expect(shown.length).toBeLessThan(5);
+    // Least-essential-first: every icon is 22px wide, so the contract's
+    // "widest-first" degenerates to a priority order, and New schematic file -
+    // the reason the header exists - is the last one standing.
+    expect(shown[0]).toBe("New schematic file");
+    expect(shown).not.toContain("Collapse folders in explorer");
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "More explorer actions" }), { button: 0, ctrlKey: false });
+    await screen.findByRole("menu");
+    for (const label of [
+      "New schematic file",
+      "New folder",
+      "Import circuit",
+      "Refresh explorer",
+      "Collapse folders in explorer",
+    ]) {
+      expect(screen.getByRole("menuitem", { name: label }), `${label} is unreachable`).toBeTruthy();
+    }
   });
 });

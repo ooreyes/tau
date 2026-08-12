@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent, type PointerEvent } from "react";
 import { userFacingErrorMessage } from "../lib/errorMessage";
 import {
   ChevronRight,
@@ -90,13 +90,127 @@ export { EditorTabs, EditorToolbar } from "./editor/EditorChrome";
 /** Drag-to-resize bounds for the two side panels. Minimums keep
  *  every control usable (tree rows, property fields); maximums keep the canvas
  *  from being starved even at the 900px minimum window. */
-const EXPLORER_PANEL_WIDTH: PanelWidthConfig = {
+export const EXPLORER_PANEL_WIDTH: PanelWidthConfig = {
   storageKey: "tau.ui.explorerWidth",
   defaultWidth: 226,
   minWidth: 168,
   maxWidth: 420,
   edge: "right",
 };
+
+/** Left inset of the project root row - and therefore the origin every deeper
+ *  row steps out from. Written explicitly rather than left to the `<button>`
+ *  UA padding (App.css's `.tree-folder-row` sets only `padding-right`), which
+ *  differs between the WKWebView and the Chromium capture harness and was half
+ *  of why root-level children looked flush with the row that owned them. */
+const TREE_ROW_BASE_INDENT = 8;
+
+/** One level of nesting, in px. Has to clear the 13px caret plus its 4px gap
+ *  or the step is a rounding error the reader cannot see: the pre-P3-06 tree
+ *  stepped by 2px between the root row and its own children, which is why
+ *  img-003-005 shows files drawn outside their folder. */
+const TREE_INDENT_STEP = 14;
+
+/**
+ * Indent for a tree row at `depth`, where depth 0 is the project root row
+ * itself and its children are depth 1. `ProjectTree` used to be handed
+ * `depth={0}` for the root's children, so they landed on the same 8px as the
+ * root row - a child painted at its parent's own inset. Callers must not
+ * re-derive this: the guide line's x is published from the same number.
+ */
+export const treeRowIndent = (depth: number): number =>
+  TREE_ROW_BASE_INDENT + depth * TREE_INDENT_STEP;
+
+/* --- P3-04A: the explorer header's pixel budget ---------------------------
+ * The header used to be an all-or-nothing swap - App.css hides every primary
+ * icon and reveals the ⋯ only inside `@container explorer-shell
+ * (max-width: 280px)`. Since the panel ships at 226px, the shipped default hid
+ * all five icons and showed a bare `SCHEMATICS ⋯` with ~186px of unused header
+ * (evidence img-002-003), while every width above 280px hid the ⋯ instead and
+ * left no overflow affordance at all. Both directions are now decided here, in
+ * pixels, from `explorerWidth` - which is the width the panel is actually laid
+ * out at (it is the inline style on `.explorer-panel`), so no ResizeObserver
+ * and no post-layout measurement is needed to get the arithmetic right. */
+
+/** `.explorer-head` padding: 10px left + 8px right (App.css). */
+const EXPLORER_HEAD_PADDING = 18;
+/** `.explorer-head` flex gap, `var(--sp-2)`. Also the contract's minimum clear
+ *  between the ⋯ and the root name, which is why nothing may narrow it. */
+const EXPLORER_HEAD_GAP = 8;
+/** Every header control is a 22px square (`.explorer-icons button`). */
+const EXPLORER_ICON_SIZE = 22;
+/** Extra clear left of the ⋯ on top of the flex gap. The gap alone lands
+ *  exactly on the ≥8px bar, which a subpixel layout can round under. */
+const EXPLORER_OVERFLOW_CLEARANCE = 2;
+/** Narrowest the root identity may be squeezed to before an icon is dropped
+ *  instead. 56px is the measured natural width of the default "SCHEMATICS"
+ *  caption (10px/650/0.06em, uppercase) in the evidence screenshot - i.e. the
+ *  point at which the name stops being truncated rather than an invented
+ *  minimum. */
+const EXPLORER_ROOT_NAME_MIN = 56;
+
+/**
+ * How many of the header's primary icon buttons fit beside the root name and
+ * the always-present ⋯.
+ *
+ * Fails OPEN by design: an unmeasured, zero, or non-finite width returns every
+ * action. jsdom computes no layout, and a host that renders the panel without a
+ * width must not end up with an empty header - that would silently remove
+ * controls a dozen callers reach for by accessible name.
+ */
+export function explorerPrimaryActionCount(explorerWidth: number, total: number): number {
+  if (!Number.isFinite(explorerWidth) || explorerWidth <= 0) return total;
+  const budget = explorerWidth
+    - EXPLORER_HEAD_PADDING
+    - EXPLORER_ROOT_NAME_MIN
+    - (EXPLORER_ICON_SIZE + EXPLORER_OVERFLOW_CLEARANCE)
+    // Both gaps are charged even at a count of zero, where the icon group
+    // stops being a flex item and one gap disappears. Conservative by 8px,
+    // never optimistic - the row must not be allowed to overflow.
+    - EXPLORER_HEAD_GAP * 2;
+  return Math.max(0, Math.min(total, Math.floor(budget / EXPLORER_ICON_SIZE)));
+}
+
+export interface ExplorerHeaderLayout {
+  /** Inner width the three header groups share (panel width less padding). */
+  innerWidth: number;
+  visibleActions: number;
+  /** What is left for the root-name span - the only flexible item in the row,
+   *  so this staying at or above EXPLORER_ROOT_NAME_MIN is what proves the
+   *  header does not overflow and the name is not squeezed to an ellipsis. */
+  rootNameWidth: number;
+  /** Clear between the root-name box and the ⋯ trigger. P3-04A's contract is
+   *  ≥ 8px, measured natively by scripts/pdf3-verify.mjs as
+   *  `trigger.left - rootName.right`; this is the same quantity derived from
+   *  the widths that produce it. */
+  overflowGap: number;
+}
+
+/**
+ * The header geometry the browser will lay out for a given panel width.
+ *
+ * jsdom evaluates no CSS, so `getBoundingClientRect` there is all zeros and the
+ * contract's measured numbers cannot be read out of a unit test. This derives
+ * them from the same constants the stylesheet uses, which makes the ≥8px clear
+ * and the no-overflow invariant assertable and non-circular; the native pass
+ * re-measures both against real pixels. Expects a finite, laid-out width -
+ * `explorerPrimaryActionCount` is where the unmeasured case fails open.
+ */
+export function explorerHeaderLayout(explorerWidth: number, total: number): ExplorerHeaderLayout {
+  const visibleActions = explorerPrimaryActionCount(explorerWidth, total);
+  const innerWidth = explorerWidth - EXPLORER_HEAD_PADDING;
+  const actionsWidth = visibleActions * EXPLORER_ICON_SIZE;
+  // A zero-count action group is not rendered at all, so it is not a flex item
+  // and one of the two gaps disappears with it.
+  const gaps = visibleActions > 0 ? EXPLORER_HEAD_GAP * 2 : EXPLORER_HEAD_GAP;
+  const triggerWidth = EXPLORER_ICON_SIZE + EXPLORER_OVERFLOW_CLEARANCE;
+  return {
+    innerWidth,
+    visibleActions,
+    rootNameWidth: innerWidth - actionsWidth - gaps - triggerWidth,
+    overflowGap: gaps + actionsWidth + EXPLORER_OVERFLOW_CLEARANCE,
+  };
+}
 
 export const COMPONENTS_RAIL_WIDTH: PanelWidthConfig = {
   storageKey: "tau.ui.componentsRailWidth",
@@ -265,6 +379,9 @@ export function ExplorerPanel({
   // Keep a synchronous source and also write the path into dataTransfer so a
   // rerender (for example, creating the destination folder) cannot lose it.
   const draggedNodeRef = useRef<ProjectNode | null>(null);
+  // True between `dragstart` and `dragend`. The pointer fallback consults it so
+  // a late `pointercancel` cannot tear down a native drag mid-flight.
+  const nativeDragActiveRef = useRef(false);
   const pointerDragRef = useRef<{
     node: ProjectNode;
     pointerId: number;
@@ -396,6 +513,21 @@ export function ExplorerPanel({
   };
 
   const beginNodeDrag = (event: DragEvent<HTMLElement>, node: ProjectNode) => {
+    // Now that the rows are `draggable`, the native drag is the preferred path
+    // and the pointer fallback must get out of its way. Capture was taken at
+    // pointerdown - before the engine decided to start a drag - so hand it back
+    // and forget the gesture, or `updatePointerDrag` keeps preventDefault-ing
+    // moves underneath a live native drag.
+    const pointerDrag = pointerDragRef.current;
+    pointerDragRef.current = null;
+    if (pointerDrag) {
+      try {
+        event.currentTarget.releasePointerCapture?.(pointerDrag.pointerId);
+      } catch {
+        // Capture may already have been lost (engine-dependent); nothing to undo.
+      }
+    }
+    nativeDragActiveRef.current = true;
     draggedNodeRef.current = node;
     setDraggedNode(node);
     setDropTargetPath(null);
@@ -408,6 +540,7 @@ export function ExplorerPanel({
   };
 
   const endNodeDrag = () => {
+    nativeDragActiveRef.current = false;
     draggedNodeRef.current = null;
     setDraggedNode(null);
     setDropTargetPath(null);
@@ -465,6 +598,13 @@ export function ExplorerPanel({
 
   const cancelPointerDrag = () => {
     pointerDragRef.current = null;
+    // Starting a native drag is itself a reason engines fire `pointercancel`,
+    // and the ordering relative to `dragstart` is engine-dependent. A cancel
+    // that lands after dragstart must not clear the source: markDropTarget
+    // would then see `source === null`, treat any dataTransfer carrying our
+    // MIME type as valid, and highlight targets canMoveProjectNode had never
+    // approved. `dragend` is what ends a native drag.
+    if (nativeDragActiveRef.current) return;
     endNodeDrag();
   };
 
@@ -556,6 +696,12 @@ export function ExplorerPanel({
     if (source && !canMoveProjectNode(source.path, destinationDirectoryPath)) {
       event.dataTransfer.dropEffect = "none";
       setDropTargetPath(null);
+      // The innermost row under the cursor owns the verdict. Without this the
+      // refusal bubbled to `.tree-list`, which offered the project root
+      // instead: hovering a file over the folder it already lives in lit the
+      // root and reported dropEffect "move", while the row's own onDrop still
+      // refused - the cursor promised a move that could not happen.
+      event.stopPropagation();
       return;
     }
     event.preventDefault();
@@ -620,53 +766,72 @@ export function ExplorerPanel({
     );
   }
 
+  // Ordered most- to least-essential: the tail is what leaves the header first
+  // as the panel narrows. Every icon is exactly 22px, so P3-04A's "widest-first"
+  // has no width to sort by and becomes a priority order - "New schematic file"
+  // is the reason this header exists, "Collapse" is one menu click away.
+  const primaryActions = [
+    <button
+      key="new-file"
+      type="button"
+      title="New schematic file"
+      aria-label="New schematic file"
+      onClick={startNewSchematic}
+    >
+      <FilePlus size={16} strokeWidth={1.6} aria-hidden="true" />
+    </button>,
+    <button
+      key="new-folder"
+      type="button"
+      title="New folder"
+      aria-label="New folder"
+      onClick={startNewFolder}
+    >
+      <FolderPlus size={16} strokeWidth={1.6} aria-hidden="true" />
+    </button>,
+    <button
+      key="import"
+      type="button"
+      title={IMPORT_BUTTON_LABEL}
+      aria-label={IMPORT_BUTTON_LABEL}
+      onClick={() => ascInputRef.current?.click()}
+    >
+      <FileInput size={16} strokeWidth={1.6} aria-hidden="true" />
+    </button>,
+    <button
+      key="refresh"
+      type="button"
+      title="Refresh explorer"
+      aria-label="Refresh explorer"
+      onClick={() => void refreshExplorer()}
+    >
+      <RefreshCw size={16} strokeWidth={1.6} aria-hidden="true" />
+    </button>,
+    <button
+      key="collapse"
+      type="button"
+      title={collapseActionLabel}
+      aria-label={collapseActionLabel}
+      aria-pressed={collapseRestorationAvailable}
+      onClick={toggleCollapseFolders}
+    >
+      <FoldVertical size={16} strokeWidth={1.6} aria-hidden="true" />
+    </button>,
+  ];
+  const visiblePrimaryActions = primaryActions.slice(
+    0,
+    explorerPrimaryActionCount(explorerWidth, primaryActions.length),
+  );
+
   return (
     <aside className="explorer-panel" aria-label="Project explorer" style={{ width: explorerWidth }}>
       <div className="explorer-head">
         <span className="explorer-root-name">{rootName ?? "Schematics"}</span>
-        <div className="explorer-icons explorer-primary-actions" aria-label="Explorer actions">
-          <button
-            type="button"
-            title="New schematic file"
-            aria-label="New schematic file"
-            onClick={startNewSchematic}
-          >
-            <FilePlus size={16} strokeWidth={1.6} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            title="New folder"
-            aria-label="New folder"
-            onClick={startNewFolder}
-          >
-            <FolderPlus size={16} strokeWidth={1.6} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            title={IMPORT_BUTTON_LABEL}
-            aria-label={IMPORT_BUTTON_LABEL}
-            onClick={() => ascInputRef.current?.click()}
-          >
-            <FileInput size={16} strokeWidth={1.6} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            title="Refresh explorer"
-            aria-label="Refresh explorer"
-            onClick={() => void refreshExplorer()}
-          >
-            <RefreshCw size={16} strokeWidth={1.6} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            title={collapseActionLabel}
-            aria-label={collapseActionLabel}
-            aria-pressed={collapseRestorationAvailable}
-            onClick={toggleCollapseFolders}
-          >
-            <FoldVertical size={16} strokeWidth={1.6} aria-hidden="true" />
-          </button>
-        </div>
+        {visiblePrimaryActions.length > 0 && (
+          <div className="explorer-icons explorer-primary-actions" aria-label="Explorer actions">
+            {visiblePrimaryActions}
+          </div>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -735,6 +900,9 @@ export function ExplorerPanel({
         <button
           type="button"
           className="tree-folder-row tree-project-root-row"
+          // Depth 0. Stated explicitly so the origin of the whole indent
+          // ladder is not a UA default that differs per engine.
+          style={{ paddingLeft: treeRowIndent(0) }}
           data-drop-target={dropTargetPath === rootPath || undefined}
           aria-label={`Project root ${rootName ?? "Schematics"}; drop files or folders here`}
           aria-describedby="explorer-drag-help"
@@ -789,7 +957,10 @@ export function ExplorerPanel({
         {expanded.includes(rootPath) && (
           <ProjectTree
             nodes={tree}
-            depth={0}
+            // The root row is depth 0, so its own children are depth 1. This
+            // used to be 0, which drew a root-level file at the root row's own
+            // 8px inset - the "files do not look nested" report (img-003-005).
+            depth={1}
             parentDirectoryPath={rootPath}
             expanded={expanded}
             activeFilePath={activeFilePath}
@@ -952,6 +1123,14 @@ function ProjectTree({
             <div
               key={node.path}
               className="tree-dir"
+              // The vertical nesting guide is a ::before on this wrapper, and it
+              // hangs from the centre of THIS row's caret. Publishing the row's
+              // own indent as a custom property keeps the line and the padding
+              // on one source of truth - hardcoding the x in CSS would silently
+              // desync the moment TREE_INDENT_STEP changes. `data-open` gates
+              // the guide so a collapsed folder does not draw a stub.
+              style={{ "--tree-indent": `${treeRowIndent(depth)}px` } as CSSProperties}
+              data-open={open || undefined}
               data-project-dir-path={node.path}
               data-drop-target={isDropTarget || undefined}
               onDragOver={(event) => onDragOverFolder(event, node.path)}
@@ -965,7 +1144,7 @@ function ProjectTree({
               }}
             >
               {renameDraft?.node.path === node.path ? (
-                <div className="tree-folder-row" style={{ paddingLeft: 8 + depth * 12 }}>
+                <div className="tree-folder-row" style={{ paddingLeft: treeRowIndent(depth) }}>
                   <span className={`tree-caret${open ? " open" : ""}`} aria-hidden="true">
                     <ChevronRight size={13} strokeWidth={1.6} />
                   </span>
@@ -991,7 +1170,14 @@ function ProjectTree({
                   <button
                     type="button"
                     className="tree-folder-row"
-                    style={{ paddingLeft: 8 + depth * 12 }}
+                    style={{ paddingLeft: treeRowIndent(depth) }}
+                    // P3-02. Without this the whole native protocol below is
+                    // dead code - a `<button>` never fires `dragstart` unless it
+                    // is draggable - and App.css's `[draggable="true"]` grab
+                    // cursor and `-webkit-user-drag: element` never match, which
+                    // is also why the row offered no affordance at all. Keep it
+                    // the literal `true` React renders for a `true` value.
+                    draggable
                     data-dragging={draggedPath === node.path || undefined}
                     aria-grabbed={draggedPath === node.path}
                     data-drop-target={isDropTarget || undefined}
@@ -1073,7 +1259,8 @@ function ProjectTree({
         const active = node.path === activeFilePath;
         if (renameDraft?.node.path === node.path) {
           return (
-            <div key={node.path} className={`tree-file${active ? " active" : ""}`} style={{ paddingLeft: 8 + depth * 12 }}>
+            <div key={node.path} className={`tree-file${active ? " active" : ""}`} style={{ paddingLeft: treeRowIndent(depth) }}>
+              <span className="tree-caret tree-caret-spacer" aria-hidden="true" />
               <File className="tree-file-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
               <input
                 className="tree-rename-input"
@@ -1096,8 +1283,10 @@ function ProjectTree({
               <button
                 type="button"
                 className={`tree-file${active ? " active" : ""}`}
-                style={{ paddingLeft: 8 + depth * 12 }}
+                style={{ paddingLeft: treeRowIndent(depth) }}
                 aria-current={active ? "page" : undefined}
+                // P3-02, same reason as the folder row above.
+                draggable
                 data-dragging={draggedPath === node.path || undefined}
                 aria-grabbed={draggedPath === node.path}
                 aria-describedby="explorer-drag-help"
@@ -1112,12 +1301,23 @@ function ProjectTree({
                 onDragStart={(event) => onDragStart(event, node)}
                 onDragEnd={onDragEnd}
                 onDragOver={(event) => onDragOverFolder(event, parentDirectoryPath)}
+                // The folder row had this and the file row did not, so the
+                // owning folder stayed highlighted after the cursor left a
+                // child file row.
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onDragLeaveFolder();
+                }}
                 onDrop={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   onDropFolder(event, parentDirectoryPath);
                 }}
               >
+                {/* Files have no caret, but they must occupy the folder's caret
+                    column or a file at depth N paints a caret-width left of a
+                    folder at the same depth and the row reads as un-nested -
+                    the other half of img-003-005. */}
+                <span className="tree-caret tree-caret-spacer" aria-hidden="true" />
                 <File className="tree-file-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
                 <span className="tree-file-name">{node.name}</span>
               </button>

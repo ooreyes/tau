@@ -49,3 +49,72 @@ describe("component display names", () => {
     expect(componentDisplayName("notAKind")).toBe("notAKind");
   });
 });
+
+/**
+ * PDF-3 item 1. The inspector title is the surface the report caught lying:
+ * "DC source" over a Waveform selector reading Sine
+ * (`screenshots/pdf3-report/img-001-000.png`). An independent source's identity
+ * is its waveform, and the waveform lives in the value.
+ */
+describe("an independent source is named for its waveform", () => {
+  it("names every voltage waveform with the Waveform dropdown's own word", () => {
+    expect(componentDisplayName("vsource", "5")).toBe("DC source");
+    expect(componentDisplayName("vsource", "SINE(0 1 1k)")).toBe("Sine voltage source");
+    expect(componentDisplayName("vsource", "PULSE(0 5 0 1n 1n 5u 10u)")).toBe("Pulse voltage source");
+    expect(componentDisplayName("vsource", "PWL(0 0 1m 1)")).toBe("Piecewise linear voltage source");
+    expect(componentDisplayName("vsource", "EXP(0 1 0 1u 1m 1u)")).toBe("Exponential voltage source");
+    expect(componentDisplayName("vsource", "SFFM(0 1 1k 1 100)")).toBe("Single-frequency FM voltage source");
+  });
+
+  it("names every current waveform the same way", () => {
+    expect(componentDisplayName("isource", "1m")).toBe("Current source");
+    expect(componentDisplayName("isource", "SINE(0 1m 1k)")).toBe("Sine current source");
+    expect(componentDisplayName("isource", "PULSE(0 1m 0 1n 1n 5u 10u)")).toBe("Pulse current source");
+    expect(componentDisplayName("isource", "PWL(0 0 1m 1m)")).toBe("Piecewise linear current source");
+    expect(componentDisplayName("isource", "EXP(0 1m 0 1u 1m 1u)")).toBe("Exponential current source");
+    expect(componentDisplayName("isource", "SFFM(0 1m 1k 1 100)")).toBe("Single-frequency FM current source");
+  });
+
+  it("reads an imported LTspice source correctly without mutating it", () => {
+    // The case a kind rewrite could never reach: this value arrived from a
+    // file, so nothing in Tau ever "chose" a waveform for it.
+    expect(componentDisplayName("vsource", "DC 2 SINE(0 1 1k)")).toBe("Sine voltage source");
+    expect(componentDisplayName("vsource", "SINE(0 1 1k) AC 1")).toBe("Sine voltage source");
+  });
+
+  it("decodes the legacy alias kinds in their own positional dialect", () => {
+    // `vac`'s "1 1k" is amplitude+frequency, not a DC level; `vpulse`'s four
+    // tokens are low/high/frequency/duty. Reading either as a plain number
+    // would title a sine source "DC source" all over again.
+    expect(componentDisplayName("vac", "1 1k")).toBe("Sine voltage source");
+    expect(componentDisplayName("iac", "1m 1k")).toBe("Sine current source");
+    expect(componentDisplayName("vpulse", "0 5 100k 0.5")).toBe("Pulse voltage source");
+    // A legal LTspice `vac` carrying an explicit pulse function (pinned in
+    // engine/spiceNetlist.test.ts) is a pulse source, whatever the kind says.
+    expect(componentDisplayName("vac", "DC 2 PULSE(0 5 0 1n 1n 5u 10u)")).toBe("Pulse voltage source");
+  });
+
+  it("never titles a non-DC waveform 'DC source' - the exact state the report caught", () => {
+    const values = [
+      "SINE(5 1 1k)", "DC 2 SINE(0 1 1k)", "PULSE(0 5 0 1n 1n 5u 10u)",
+      "PWL(0 0 1m 1)", "EXP(0 1 0 1u 1m 1u)", "SFFM(0 1 1k 1 100)", "SIN(0 1 1k)",
+    ];
+    for (const kind of ["vsource", "isource", "vac", "iac", "vpulse"] as const) {
+      for (const value of values) {
+        expect(componentDisplayName(kind, value), `${kind} ${value}`).not.toBe("DC source");
+      }
+    }
+  });
+
+  it("leaves the one-argument answer and every non-source kind exactly as they were", () => {
+    // 27 existing call sites still pass a bare kind; none of their answers moved.
+    expect(componentDisplayName("vsource")).toBe("DC source");
+    expect(componentDisplayName("isource")).toBe("Current source");
+    expect(componentDisplayName("vac")).toBe("Sine voltage source");
+    // A value on a kind that has no waveform is ignored, so callers may always
+    // pass the whole component without checking what it is first.
+    expect(componentDisplayName("resistor", "1k")).toBe("Resistor");
+    expect(componentDisplayName("led", "LED color=green")).toBe("LED");
+    expect(componentDisplayName("notAKind", "anything")).toBe("notAKind");
+  });
+});

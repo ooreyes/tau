@@ -179,6 +179,49 @@ describe("results drawer - heights", () => {
     expect(screen.getByRole("tab", { name: /Errors/ }).textContent).toContain("2");
   });
 
+  it("stops yanking itself open when only the live edit count moved (P3-14)", () => {
+    // The auto-raise above was written for import warnings, which arrive once.
+    // The Errors surface now also counts LIVE document diagnostics, so the
+    // badge changes on almost every keystroke - place a part and two
+    // floating-pin rows appear, wire it and they go. Raising a deliberately
+    // peeked drawer each time would fight the person drawing the circuit.
+    const { rerender } = render(
+      <ResultsDrawer
+        status="idle"
+        preferredHeight="peek"
+        errorBadge={{ text: "3", tone: "error" }}
+        badgeRaiseKey={null}
+        errors={<div>Diagnostics</div>}
+      />,
+    );
+    expect(drawer().className).toContain("results-drawer--peek");
+
+    // Same key, different count: still an edit, still no interruption.
+    rerender(
+      <ResultsDrawer
+        status="idle"
+        preferredHeight="peek"
+        errorBadge={{ text: "5", tone: "error" }}
+        badgeRaiseKey={null}
+        errors={<div>Diagnostics</div>}
+      />,
+    );
+    expect(drawer().className).toContain("results-drawer--peek");
+
+    // A run failing or an import reporting is what the raise was FOR, and the
+    // caller says so by moving the key.
+    rerender(
+      <ResultsDrawer
+        status="error"
+        preferredHeight="peek"
+        errorBadge={{ text: "6", tone: "error" }}
+        badgeRaiseKey="run:singular matrix"
+        errors={<div>Diagnostics</div>}
+      />,
+    );
+    expect(drawer().className).toContain("results-drawer--half");
+  });
+
   it("raises itself when a run lands, but not merely because it mounted", () => {
     const { rerender } = render(
       <ResultsDrawer status="idle" preferredHeight="peek" raiseSignal={0} errors={<div>Diagnostics</div>} />,
@@ -205,15 +248,32 @@ describe("results drawer - tabs", () => {
     ]);
   });
 
-  it("does not offer a tab with no content behind it", () => {
+  it("renders the ONE surface it has as a section heading, not as a one-tab strip (was: a single Errors tab)", () => {
     // The schematic has no waveforms, and a tab that opens onto nothing is
     // worse than an absent one: it reads as a broken feature.
-    renderDrawer({ waveforms: null, measurements: null });
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Errors"]);
+    //
+    // The expectation moved with P3-14. This used to assert
+    // `getAllByRole("tab") === ["Errors"]`, which was a chooser with one
+    // choice - and once the schematic dock became Errors-only that is the
+    // state it lives in permanently. A tab you can never switch away from is
+    // a heading; the report asks for "just having an errors section". A
+    // `role="tabpanel"` with no `tablist` was also invalid ARIA.
+    renderDrawer({ waveforms: null, measurements: null, errorBadge: { text: "3", tone: "error" } });
+    expect(screen.queryAllByRole("tab")).toEqual([]);
+    const heading = screen.getByRole("heading", { name: /Errors/ });
+    expect(heading.className).toContain("results-drawer-section");
+    // The count is the whole readout at peek, so it has to survive the
+    // demotion from tab to heading.
+    expect(heading.textContent).toContain("3");
+    expect(heading.querySelector(".results-drawer-badge--error")).not.toBeNull();
     expect(shownBody()).toBe("Diagnostics");
+    // The body is no longer a tabpanel, because nothing labels it as one.
+    const body = document.querySelector(".results-drawer-body")!;
+    expect(body.getAttribute("role")).toBeNull();
+    expect(body.getAttribute("aria-labelledby")).toBeNull();
   });
 
-  it("falls back to a real tab when the active one stops being offered", () => {
+  it("falls back to the surface that is still offered when the active one goes (was: to a one-tab strip)", () => {
     const { rerender } = renderDrawer({ preferredTab: "waveforms" });
     expect(shownBody()).toBe("Waveform control");
 
@@ -223,7 +283,11 @@ describe("results drawer - tabs", () => {
       <ResultsDrawer status="complete" preferredHeight="half" waveforms={null} errors={<div>Diagnostics</div>} />,
     );
     expect(shownBody()).toBe("Diagnostics");
-    expect(screen.getAllByRole("tab")).toHaveLength(1);
+    // Moved with P3-14: what is left is one surface, so the strip goes away
+    // entirely rather than shrinking to a single tab. Previously
+    // `getAllByRole("tab")).toHaveLength(1)`.
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Errors" })).toBeTruthy();
   });
 
   it("switches body with the tab", () => {

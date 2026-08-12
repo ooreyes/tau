@@ -228,7 +228,10 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
         <div>
           <svg viewBox="-44 -40 88 80">
             <g className="symbol">
-              <ComponentSymbol kind={preview.kind} value={preview.value} />
+              {/* `catalog`: this panel previews the part TYPE under the
+                  cursor, so an LED here must not wear its colour parameter.
+                  See ComponentSymbol's doc comment. */}
+              <ComponentSymbol kind={preview.kind} value={preview.value} catalog />
             </g>
           </svg>
           <strong>{preview.name}</strong>
@@ -261,7 +264,9 @@ function PaletteItem({ item, active, onPlace }: PaletteItemProps) {
     >
       <svg className="palette-icon" viewBox="-42 -40 84 80">
         <g className="symbol">
-          <ComponentSymbol kind={item.kind} value={item.value} />
+          {/* `catalog`: a browse row is an index of part types, not a placed
+              part - the LED row is drawn in the rail's monochrome stroke. */}
+          <ComponentSymbol kind={item.kind} value={item.value} catalog />
         </g>
       </svg>
       <span className="palette-name">{item.name}</span>

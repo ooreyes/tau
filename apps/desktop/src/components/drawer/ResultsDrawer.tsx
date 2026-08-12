@@ -173,6 +173,20 @@ export interface ResultsDrawerProps {
   preferredTab?: DrawerTab;
   preferredHeight?: DrawerHeight;
   /**
+   * Which badge changes are worth interrupting the reader for (P3-14).
+   *
+   * The auto-raise below was written for import warnings, which arrive once.
+   * Since the Errors surface also counts LIVE document diagnostics, the badge
+   * now changes on almost every edit — placing a part makes floating-pin rows
+   * appear and wiring it makes them go — and raising a peeked drawer each time
+   * would fight anyone who deliberately collapsed it.
+   *
+   * So the raise is keyed on this instead: the caller passes the part of the
+   * count that came from a run or an import. Omitting it falls back to the
+   * whole badge, which is exactly today's behaviour for every other caller.
+   */
+  badgeRaiseKey?: string | null;
+  /**
    * Which edge to dock to. `bottom` is the default deliberately: it is the
    * only shape the schematic ever uses and the fallback the simulator falls
    * back to, so a caller that says nothing gets today's drawer exactly.
@@ -219,6 +233,7 @@ export function ResultsDrawer({
   errorBadge = null,
   preferredTab = "waveforms",
   preferredHeight = "half",
+  badgeRaiseKey,
   orientation = "bottom",
   raiseSignal,
   onCoverChange,
@@ -234,6 +249,17 @@ export function ResultsDrawer({
     { value: "errors", label: "Errors", content: errors, badge: errorBadge },
   ];
   const offered = specs.filter((spec) => spec.content !== null);
+  /**
+   * One surface is a section, not a chooser (P3-14).
+   *
+   * A tab strip whose only tab is already selected asks a question with one
+   * answer: it reads as a broken feature, and a `role="tabpanel"` with no
+   * sibling tab to switch to is invalid ARIA anyway. The schematic's dock is
+   * exactly this case now that Measurements is simulator-only, and the report's
+   * ask is "just having an errors section". The badge stays on the heading —
+   * it is the whole readout at peek, so it has to survive the demotion.
+   */
+  const single = offered.length === 1 ? offered[0] : null;
   // Never leave the drawer pointing at a tab that is not offered any more -
   // switching to the schematic drops Waveforms, and a stale `tab` would render
   // an empty body under a tab strip that no longer contains it.
@@ -271,7 +297,9 @@ export function ResultsDrawer({
    * show a warning they can already see counted on the tab is worse than the
    * warning.
    */
-  const badgeKey = errorBadge ? `${errorBadge.tone}:${errorBadge.text}` : null;
+  const badgeKey = badgeRaiseKey !== undefined
+    ? badgeRaiseKey
+    : errorBadge ? `${errorBadge.tone}:${errorBadge.text}` : null;
   // Seeded null, not with the current badge, so a drawer that MOUNTS with
   // issues counts them as new. The case is real: dropping a netlist into an
   // empty workspace opens the first schematic and produces the warnings in
@@ -377,7 +405,18 @@ export function ResultsDrawer({
           {statusLine && <span className="results-drawer-info mono-num">{statusLine}</span>}
         </span>
 
-        {offered.length > 0 && (
+        {single && (
+          <h2 className="results-drawer-section">
+            {single.label}
+            {single.badge && (
+              <span className={`results-drawer-badge results-drawer-badge--${single.badge.tone}`}>
+                {single.badge.text}
+              </span>
+            )}
+          </h2>
+        )}
+
+        {offered.length > 1 && (
           <Tabs
             className="results-drawer-tabs-root"
             value={active?.value}
@@ -468,8 +507,14 @@ export function ResultsDrawer({
           key={spec.value}
           className="results-drawer-body"
           id={bodyId(panelId, spec.value)}
-          role="tabpanel"
-          aria-labelledby={tabId(panelId, spec.value)}
+          // A lone surface has no tab, so it must not claim to be a tabpanel:
+          // `role="tabpanel"` with no `tablist` is invalid ARIA, and its
+          // `aria-labelledby` would name an element that is not rendered. The
+          // class stays either way - it is what every reader of this surface
+          // keys off, in tests and in the acceptance harness alike.
+          {...(single
+            ? {}
+            : { role: "tabpanel", "aria-labelledby": tabId(panelId, spec.value) })}
           hidden={collapsed || spec.value !== active?.value}
         >
           {spec.content}
