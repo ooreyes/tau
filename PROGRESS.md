@@ -36,10 +36,26 @@ the layout numbers; captured by `scripts/uiux-followup-shot.mjs`. Details and
 the remaining open items are in `UI_UX_FIXES.md` under
 "Review follow-up — 2026-08-12".
 
+**Packaged confirmation (all four residual items closed).** Rebuilt `Tau.app`
+and drove it with synthesised Quartz input, reading geometry back through the
+accessibility API (`scripts/packaged-qa.py`,
+`screenshots/uiux-followup/packaged/`).
+
+- Corrected inspectors re-captured natively: the op-amp reads `1 MegV/V`,
+  `−15 V`, `15 V` where it previously read `0000` / `1000` / `1000` with no
+  values; the Zener reads `5.1 V` and `0.7 V`; the flip-flop no longer renders
+  an empty `Value` row.
+- A **physical** double-click zooms and restores:
+  `(120,64,1280,832) → (0,33,1512,949) → (120,64,1280,832)`. A stationary press
+  leaves the window untouched, and a real drag moves it while keeping its size.
+  The prior pass could only prove this by invoking the AX action directly.
+- The `COM` collision was with the body's own bottom stroke, not the diagonal
+  lead. Fixed by giving the flop body room and adding the missing invariant
+  (every caption clears every stroke of its own symbol), which found the same
+  defect in seven other chips — 24 captions, all fixed.
+
 **Next:** owner review of `fix/ui-ux-followup` against `auto/ltspice-parity`.
-Still owed: a packaged re-capture of the corrected inspector states, and a
-physical double-click zoom test on the packaged title bar. Final Sol High
-review remains **PENDING**.
+Final Sol High review remains **PENDING**.
 
 ---
 

@@ -114,19 +114,49 @@ collapses a symmetric pair to `±`, so a bound stays a glance.
 `pnpm -C apps/desktop typecheck` **exit 0**; `pnpm -C apps/desktop test`
 **262 files / 4,497 passed, 8 skipped**.
 
-### Open after this pass
+### Packaged confirmation — all four follow-ups closed
 
-- [ ] Packaged (Tauri) re-capture of the corrected inspector states. The
-      defect was reproduced and fixed in `dev:web`; the packaged matrix below
-      still shows the pre-fix rendering.
-- [ ] Real double-click zoom on the packaged title bar. The drag threshold
-      removes the known race, but the gesture is still only proven by unit
-      test and by the direct AX action — not by a physical double-click.
-- [ ] `COM` on the flip-flops still sits close to its own diagonal lead. The
-      caption-to-caption clearance is fixed; caption-over-lead is a separate
-      collision that no test covers.
-- [ ] The D flip-flop inspector shows an empty `Value` row (visible in
-      `screenshots/uiux-followup/after/flops-*.png`). Not touched here.
+Rebuilt `Tau.app` and drove it natively. Mouse input is synthesised with
+Quartz so a double-click is one event carrying `clickState = 2` rather than two
+clicks in a row, and every geometry claim is read back through the
+accessibility API. Driver: `scripts/packaged-qa.py`; captures and the machine
+log in `screenshots/uiux-followup/packaged/`.
+
+**Corrected inspectors, in the packaged app** — the exact states whose earlier
+screenshots showed the defect:
+
+| Packaged capture | Previously showed | Now shows |
+| --- | --- | --- |
+| `03-opamp-inspector.png` | `Open-loop gain 0000`, no value/unit | `1–1T` · **1 MegV/V**, `±1k` · **−15 V** / **15 V** |
+| `04-zener-inspector.png` | `−400` and `1–20`, no values | `0.1–400` · **5.1 V**, `0.1–20` · **0.7 V** |
+| `05-dflop-inspector.png` | an empty `Value` row | `Component ID` only |
+
+The same captures also confirm natively that the canvas zoom cluster is
+visible and clear of the parts rail, that a generic op-amp is captioned `U1`
+rather than `ideal`, and that a resting editor shows no status strip.
+
+**Physical title-bar gestures.** A real double-click, not an AX action:
+
+| Step | Window bounds (x, y, w, h) |
+| --- | --- |
+| initial | `(120, 64, 1280, 832)` |
+| after physical double-click | `(0, 33, 1512, 949)` — zoomed |
+| after second double-click | `(120, 64, 1280, 832)` — restored exactly |
+| after a stationary press | `(120, 64, 1280, 832)` — unmoved |
+| after a physical drag | `(232, 102, 1280, 832)` — moved, size kept |
+
+The stationary-press row is the half of the fix that matters: a press that does
+not travel no longer starts a window drag, which is why the second half of the
+double-click now reaches the app. Requested drag was +120,+40 and the window
+moved +112,+38; the ~8px is the 3px arm threshold plus the first synthesised
+move step, which is the mechanism working rather than an error.
+
+**Flip-flop captions.** The reported `COM` collision turned out to be with the
+body's own bottom stroke, not the diagonal lead: the caption box cleared it by
+0.5 units and the selected stroke is 2.35 wide. Fixed by giving the body room
+(56×56; pin rows unmoved) and adding the invariant that was missing — every
+caption must clear every stroke of its own symbol. That test found the same
+defect in seven other chips (24 captions in total) and all are fixed.
 
 ## Correction-pass acceptance record — 2026-08-12 (current)
 
@@ -767,10 +797,10 @@ control-port QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-
 
 ## Completion matrix
 
-- [ ] All 24 stable issues are `FIXED_WITH_CURRENT_EVIDENCE`. **Nine were
-      checked against packaged screenshots that show the defect still
-      present; the 2026-08-12 follow-up above fixes them and re-proves them
-      in `dev:web`. The packaged matrix has not been re-captured since.**
+- [x] All 24 stable issues are `FIXED_WITH_CURRENT_EVIDENCE`. Nine were
+      originally checked against packaged screenshots that showed the defect
+      still present; the 2026-08-12 follow-up above fixes them and re-proves
+      each one in both `dev:web` and the rebuilt packaged app.
 - [x] No issue remains `UNVERIFIED`, `IN PROGRESS`, or `BLOCKED` in the current
       tracker manifest.
 - [x] Every issue has a landing reference, literal test result, and a current

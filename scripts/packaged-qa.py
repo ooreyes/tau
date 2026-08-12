@@ -99,10 +99,31 @@ def drag(x1: float, y1: float, x2: float, y2: float, steps: int = 24) -> None:
     time.sleep(0.5)
 
 
+def _tau_window_id() -> int:
+    from Quartz import (
+        CGWindowListCopyWindowInfo,
+        kCGNullWindowID,
+        kCGWindowListOptionOnScreenOnly,
+    )
+
+    for window in CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID):
+        owner = str(window.get("kCGWindowOwnerName") or "")
+        if owner.lower() == APP_NAME.lower():
+            return int(window.get("kCGWindowNumber"))
+    raise SystemExit(f"no on-screen window owned by {APP_NAME}")
+
+
 def shot(path: str) -> None:
-    x, y, w, h = window_bounds()
+    """Capture Tau's window by id.
+
+    Deliberately not `screencapture -R <rect>`: on current macOS that path goes
+    through ScreenCaptureKit's private-window picker, which raises a consent
+    sheet - and the sheet then appears in the screenshot, over the thing being
+    photographed. `-l <windowid>` captures the window itself and leaves the
+    rest of the desktop (and any system sheet) out of the frame entirely.
+    """
     subprocess.run(
-        ["screencapture", "-x", "-R", f"{x},{y},{w},{h}", path], check=True
+        ["screencapture", "-x", "-o", f"-l{_tau_window_id()}", path], check=True
     )
 
 

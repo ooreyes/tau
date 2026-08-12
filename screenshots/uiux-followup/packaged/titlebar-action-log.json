@@ -1,0 +1,65 @@
+{
+  "note": "Physical Quartz events against the packaged Tau.app. Bounds are (x,y,w,h) read through the accessibility API.",
+  "steps": [
+    {
+      "step": "1. initial",
+      "bounds": [
+        120,
+        64,
+        1280,
+        832
+      ],
+      "shot": "10-titlebar-initial.png"
+    },
+    {
+      "step": "2. after physical double-click",
+      "bounds": [
+        0,
+        33,
+        1512,
+        949
+      ],
+      "shot": "11-titlebar-zoomed.png"
+    },
+    {
+      "step": "3. after second double-click",
+      "bounds": [
+        120,
+        64,
+        1280,
+        832
+      ],
+      "shot": "12-titlebar-restored.png"
+    },
+    {
+      "step": "4. after stationary press",
+      "bounds": [
+        120,
+        64,
+        1280,
+        832
+      ],
+      "shot": null
+    },
+    {
+      "step": "5. after physical drag +120,+40",
+      "bounds": [
+        232,
+        102,
+        1280,
+        832
+      ],
+      "shot": "13-titlebar-dragged.png"
+    }
+  ],
+  "verdict": {
+    "double_click_zoomed": true,
+    "double_click_restored": true,
+    "stationary_press_did_not_move": true,
+    "drag_moved": [
+      112,
+      38
+    ],
+    "drag_kept_size": true
+  }
+}
