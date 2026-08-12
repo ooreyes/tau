@@ -1,0 +1,49 @@
+{
+  "schema": "tau.ui-ux.titlebar.v2",
+  "codeTip": "d3c9c3d",
+  "capturedAt": "2026-08-11T23:46:51-05:00",
+  "app": "/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app",
+  "target": {
+    "accessibilityLabel": "Window drag area; double-click to maximize or restore",
+    "accessibilityElementIndex": 4,
+    "actionSurface": "direct AX button presses; no menu zoom used for the direct gesture"
+  },
+  "bounds": {
+    "source": "Computer Use app screenshot pixels; the Computer Use API exposes no outer-window x/y bounds",
+    "before": {"x": null, "y": null, "width": 1182, "height": 768, "requestedViewport": "1280x800"},
+    "maximized": {"x": null, "y": null, "width": 1224, "height": 768, "requestedViewport": "1280x800"},
+    "restored": {"x": null, "y": null, "width": 1182, "height": 768, "requestedViewport": "1280x800"},
+    "maximizedWidthChanged": true,
+    "restoredWidthMatchesBefore": true
+  },
+  "gestures": [
+    {
+      "kind": "double-click",
+      "method": "two direct AX presses on the labeled titlebar surface",
+      "pressCount": 2,
+      "interPressDelayMs": 120,
+      "beforePath": "screenshots/ui-ux-fixes/native/final/titlebar-before-light-1280x800.jpg",
+      "afterPath": "screenshots/ui-ux-fixes/native/final/titlebar-maximized-light-1280x800.jpg",
+      "observed": "width 1182 -> 1224"
+    },
+    {
+      "kind": "double-click",
+      "method": "two direct AX presses on the labeled titlebar surface",
+      "pressCount": 2,
+      "interPressDelayMs": 120,
+      "beforePath": "screenshots/ui-ux-fixes/native/final/titlebar-maximized-light-1280x800.jpg",
+      "afterPath": "screenshots/ui-ux-fixes/native/final/titlebar-restored-light-1280x800.jpg",
+      "observed": "width 1224 -> 1182"
+    }
+  ],
+  "drag": {
+    "method": "direct Computer Use drag on the labeled titlebar surface",
+    "origin": {"x": 450, "y": 20},
+    "destination": {"x": 550, "y": 60},
+    "beforePath": "screenshots/ui-ux-fixes/native/final/titlebar-before-light-1280x800.jpg",
+    "afterPath": "screenshots/ui-ux-fixes/native/final/titlebar-drag-after-light-1280x800.jpg",
+    "capturePixels": "1182x768",
+    "positionAssertion": "gesture dispatched; outer x/y movement is not asserted because Computer Use returns an app crop, not window-origin telemetry"
+  },
+  "finalSolReview": "PENDING"
+}

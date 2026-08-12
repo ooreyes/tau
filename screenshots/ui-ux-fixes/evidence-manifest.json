@@ -1,10 +1,10 @@
 {
   "schema": "tau.ui-ux.evidence.v2",
-  "capturedAt": "2026-08-11T20:58:04Z",
+  "capturedAt": "2026-08-12T00:16:42Z",
   "planningBase": "8fb45f6",
-  "codeTip": "44333cf",
-  "evidenceCommit": "3687171",
-  "packagedBinarySource": "811b0c7",
+  "codeTip": "d3c9c3d",
+  "evidenceCommit": "d3c9c3d",
+  "packagedBinarySource": "d3c9c3d",
   "packagedApp": "/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app",
   "nativeViewportConvention": {
     "requestedLogicalViewports": ["900x600", "1280x800", "1440x900"],
@@ -42,8 +42,10 @@
     {"issueIds":["SHELL-06","COMP-03","COMP-07","COMP-08","COMP-09","COMP-10","COMP-13","COMP-15","COMP-17"],"state":"component placement previews","theme":"dark","requestedViewport":"900x600","path":"screenshots/ui-ux-fixes/native/corrected-packaged-component-palette-dark-900x600.png","capturePixels":"979x653","assertions":["current-source glyph in palette","Explorer and editor populated","component palette present"]}
   ],
   "chromeMatrix": "screenshots/ui-ux-fixes/chrome/devweb-matrix.json",
-  "chromeConsole": "screenshots/ui-ux-fixes/chrome/devweb-console.log",
-  "titlebarActions": "screenshots/ui-ux-fixes/native/titlebar-actions.json",
+  "chromeConsole": "screenshots/ui-ux-fixes/chrome/devweb-console.json",
+  "titlebarActions": "screenshots/ui-ux-fixes/native/final/titlebar-action-log.json",
+  "nativeMatrix": "screenshots/ui-ux-fixes/native/matrix-manifest.json",
+  "currentFreshEvidence": true,
   "fixtureGenerator": "scripts/generate-sevenseg-fixtures.mjs",
   "fixtureRunner": "scripts/sevenseg-acceptance.sh",
   "finalSolHighReview": "PENDING"

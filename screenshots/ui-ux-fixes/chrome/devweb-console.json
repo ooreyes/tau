@@ -1,45 +1,12 @@
 {
-  "schema": "tau.ui-ux.chrome-devweb.v2",
+  "schema": "tau.ui-ux.chrome-console.v1",
   "codeTip": "d3c9c3d",
   "capturedAt": "2026-08-12T00:14:33.727Z",
-  "url": "http://127.0.0.1:1420/",
-  "browser": "Chrome",
-  "requestedMatrix": [
-    "light|900x600",
-    "light|1280x800",
-    "light|1440x900",
-    "dark|900x600",
-    "dark|1280x800",
-    "dark|1440x900"
-  ],
   "entries": [
     {
       "theme": "light",
       "requestedViewport": "900x600",
       "capturePixels": "900x600",
-      "path": "screenshots/ui-ux-fixes/chrome/final/light-900x600.png",
-      "capturedAt": "2026-08-12T00:13:59.917Z",
-      "measurement": {
-        "bodyText": "τ\ntau\nOpen a project\nSchematic\nSimulator\nRun\nSCHEMATICS\n\nChoose, create, or import a Schematics folder from the toolbar.\n\nBode · circuit assistant\nOpen a project folder\n\nTau keeps every schematic inside a project folder. Open one to start, or import an existing schematic or SPICE netlist.\n\nOpen folder\nImport circuit\nReady\nuntitled.asc\nSelect\nSettings\nSetting",
-        "devicePixelRatio": 1,
-        "documentHeight": 600,
-        "documentWidth": 900,
-        "hasTitlebar": true,
-        "horizontalOverflow": false,
-        "innerHeight": 600,
-        "innerWidth": 900,
-        "rootClass": "",
-        "rootTheme": "light",
-        "scrollHeight": 600,
-        "scrollWidth": 900,
-        "verticalOverflow": false
-      },
-      "assertions": [
-        "body rendered",
-        "titlebar accessible",
-        "horizontal overflow=false",
-        "application console errors=0"
-      ],
       "applicationConsole": [
         {
           "level": "debug",
@@ -133,39 +100,12 @@
           "timestamp": "2026-08-12T00:11:57.713Z",
           "url": "chrome-extension://nfmlkliedggdodlbgghmmchhgckjoaml/css.js"
         }
-      ],
-      "domAssertions": {
-        "hasSettings": true,
-        "hasOpenProject": true
-      }
+      ]
     },
     {
       "theme": "light",
       "requestedViewport": "1280x800",
       "capturePixels": "1280x800",
-      "path": "screenshots/ui-ux-fixes/chrome/final/light-1280x800.png",
-      "capturedAt": "2026-08-12T00:14:00.327Z",
-      "measurement": {
-        "bodyText": "τ\ntau\nOpen a project\nSchematic\nSimulator\nRun\nSCHEMATICS\n\nChoose, create, or import a Schematics folder from the toolbar.\n\nBode · circuit assistant\nOpen a project folder\n\nTau keeps every schematic inside a project folder. Open one to start, or import an existing schematic or SPICE netlist.\n\nOpen folder\nImport circuit\nReady\nuntitled.asc\nSelect\nSettings\nSetting",
-        "devicePixelRatio": 1,
-        "documentHeight": 800,
-        "documentWidth": 1280,
-        "hasTitlebar": true,
-        "horizontalOverflow": false,
-        "innerHeight": 800,
-        "innerWidth": 1280,
-        "rootClass": "",
-        "rootTheme": "light",
-        "scrollHeight": 800,
-        "scrollWidth": 1280,
-        "verticalOverflow": false
-      },
-      "assertions": [
-        "body rendered",
-        "titlebar accessible",
-        "horizontal overflow=false",
-        "application console errors=0"
-      ],
       "applicationConsole": [
         {
           "level": "debug",
@@ -259,39 +199,12 @@
           "timestamp": "2026-08-12T00:11:57.713Z",
           "url": "chrome-extension://nfmlkliedggdodlbgghmmchhgckjoaml/css.js"
         }
-      ],
-      "domAssertions": {
-        "hasSettings": true,
-        "hasOpenProject": true
-      }
+      ]
     },
     {
       "theme": "light",
       "requestedViewport": "1440x900",
       "capturePixels": "1440x900",
-      "path": "screenshots/ui-ux-fixes/chrome/final/light-1440x900.png",
-      "capturedAt": "2026-08-12T00:14:00.671Z",
-      "measurement": {
-        "bodyText": "τ\ntau\nOpen a project\nSchematic\nSimulator\nRun\nSCHEMATICS\n\nChoose, create, or import a Schematics folder from the toolbar.\n\nBode · circuit assistant\nOpen a project folder\n\nTau keeps every schematic inside a project folder. Open one to start, or import an existing schematic or SPICE netlist.\n\nOpen folder\nImport circuit\nReady\nuntitled.asc\nSelect\nSettings\nSetting",
-        "devicePixelRatio": 1,
-        "documentHeight": 900,
-        "documentWidth": 1440,
-        "hasTitlebar": true,
-        "horizontalOverflow": false,
-        "innerHeight": 900,
-        "innerWidth": 1440,
-        "rootClass": "",
-        "rootTheme": "light",
-        "scrollHeight": 900,
-        "scrollWidth": 1440,
-        "verticalOverflow": false
-      },
-      "assertions": [
-        "body rendered",
-        "titlebar accessible",
-        "horizontal overflow=false",
-        "application console errors=0"
-      ],
       "applicationConsole": [
         {
           "level": "debug",
@@ -385,39 +298,12 @@
           "timestamp": "2026-08-12T00:11:57.713Z",
           "url": "chrome-extension://nfmlkliedggdodlbgghmmchhgckjoaml/css.js"
         }
-      ],
-      "domAssertions": {
-        "hasSettings": true,
-        "hasOpenProject": true
-      }
+      ]
     },
     {
       "theme": "dark",
       "requestedViewport": "900x600",
       "capturePixels": "900x600",
-      "path": "screenshots/ui-ux-fixes/chrome/final/dark-900x600.png",
-      "capturedAt": "2026-08-12T00:14:12.511Z",
-      "measurement": {
-        "bodyText": "τ\ntau\nOpen a project\nSchematic\nSimulator\nRun\nSCHEMATICS\n\nChoose, create, or import a Schematics folder from the toolbar.\n\nBode · circuit assistant\nOpen a project folder\n\nTau keeps every schematic inside a project folder. Open one to start, or import an existing schematic or SPICE netlist.\n\nOpen folder\nImport circuit\nReady\nuntitled.asc\nSelect\nSettings\nSetting",
-        "devicePixelRatio": 1,
-        "documentHeight": 600,
-        "documentWidth": 900,
-        "hasTitlebar": true,
-        "horizontalOverflow": false,
-        "innerHeight": 600,
-        "innerWidth": 900,
-        "rootClass": "",
-        "rootTheme": "dark",
-        "scrollHeight": 600,
-        "scrollWidth": 900,
-        "verticalOverflow": false
-      },
-      "assertions": [
-        "body rendered",
-        "titlebar accessible",
-        "horizontal overflow=false",
-        "application console errors=0"
-      ],
       "applicationConsole": [
         {
           "level": "debug",
@@ -511,39 +397,12 @@
           "timestamp": "2026-08-12T00:11:57.713Z",
           "url": "chrome-extension://nfmlkliedggdodlbgghmmchhgckjoaml/css.js"
         }
-      ],
-      "domAssertions": {
-        "hasSettings": true,
-        "hasOpenProject": true
-      }
+      ]
     },
     {
       "theme": "dark",
       "requestedViewport": "1280x800",
       "capturePixels": "1280x800",
-      "path": "screenshots/ui-ux-fixes/chrome/final/dark-1280x800.png",
-      "capturedAt": "2026-08-12T00:14:12.932Z",
-      "measurement": {
-        "bodyText": "τ\ntau\nOpen a project\nSchematic\nSimulator\nRun\nSCHEMATICS\n\nChoose, create, or import a Schematics folder from the toolbar.\n\nBode · circuit assistant\nOpen a project folder\n\nTau keeps every schematic inside a project folder. Open one to start, or import an existing schematic or SPICE netlist.\n\nOpen folder\nImport circuit\nReady\nuntitled.asc\nSelect\nSettings\nSetting",
-        "devicePixelRatio": 1,
-        "documentHeight": 800,
-        "documentWidth": 1280,
-        "hasTitlebar": true,
-        "horizontalOverflow": false,
-        "innerHeight": 800,
-        "innerWidth": 1280,
-        "rootClass": "",
-        "rootTheme": "dark",
-        "scrollHeight": 800,
-        "scrollWidth": 1280,
-        "verticalOverflow": false
-      },
-      "assertions": [
-        "body rendered",
-        "titlebar accessible",
-        "horizontal overflow=false",
-        "application console errors=0"
-      ],
       "applicationConsole": [
         {
           "level": "debug",
@@ -637,39 +496,12 @@
           "timestamp": "2026-08-12T00:11:57.713Z",
           "url": "chrome-extension://nfmlkliedggdodlbgghmmchhgckjoaml/css.js"
         }
-      ],
-      "domAssertions": {
-        "hasSettings": true,
-        "hasOpenProject": true
-      }
+      ]
     },
     {
       "theme": "dark",
       "requestedViewport": "1440x900",
       "capturePixels": "1440x900",
-      "path": "screenshots/ui-ux-fixes/chrome/final/dark-1440x900.png",
-      "capturedAt": "2026-08-12T00:14:13.348Z",
-      "measurement": {
-        "bodyText": "τ\ntau\nOpen a project\nSchematic\nSimulator\nRun\nSCHEMATICS\n\nChoose, create, or import a Schematics folder from the toolbar.\n\nBode · circuit assistant\nOpen a project folder\n\nTau keeps every schematic inside a project folder. Open one to start, or import an existing schematic or SPICE netlist.\n\nOpen folder\nImport circuit\nReady\nuntitled.asc\nSelect\nSettings\nSetting",
-        "devicePixelRatio": 1,
-        "documentHeight": 900,
-        "documentWidth": 1440,
-        "hasTitlebar": true,
-        "horizontalOverflow": false,
-        "innerHeight": 900,
-        "innerWidth": 1440,
-        "rootClass": "",
-        "rootTheme": "dark",
-        "scrollHeight": 900,
-        "scrollWidth": 1440,
-        "verticalOverflow": false
-      },
-      "assertions": [
-        "body rendered",
-        "titlebar accessible",
-        "horizontal overflow=false",
-        "application console errors=0"
-      ],
       "applicationConsole": [
         {
           "level": "debug",
@@ -763,11 +595,7 @@
           "timestamp": "2026-08-12T00:11:57.713Z",
           "url": "chrome-extension://nfmlkliedggdodlbgghmmchhgckjoaml/css.js"
         }
-      ],
-      "domAssertions": {
-        "hasSettings": true,
-        "hasOpenProject": true
-      }
+      ]
     }
   ]
 }

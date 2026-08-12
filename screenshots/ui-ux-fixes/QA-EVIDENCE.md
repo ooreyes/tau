@@ -1,14 +1,16 @@
 # UI/UX correction QA evidence
 
-Capture date: 2026-08-11 (fresh packaged-app restart after the laptop-overlap
-warning). Planning base: `8fb45f6`. Functional code/test tip: `44333cf`.
-The current evidence was recorded in commit `3687171`; the final heartbeat
-metadata commit is its direct descendant.
+Capture date: 2026-08-11 local (fresh packaged-app restart after the
+laptop-overlap warning; manifest timestamps are UTC 2026-08-12). Planning
+base: `8fb45f6`. Functional/package code tip: `d3c9c3d`.
+The current tracker/evidence commit is the final descendant reported by the
+handoff; the screenshots and JSON below were captured from the packaged binary
+built from `d3c9c3d`.
 
 The packaged binary was rebuilt from the same correction lineage and is at
 `/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app`.
-The current binary code is `811b0c7`; `44333cf` adds the corrected physical
-pin-order fixtures and their decode assertions. Native screenshots are JPEG
+The current binary code is `d3c9c3d`; the seven-segment physical pin-order
+fixtures and decode assertions are committed in the current lineage. Native screenshots are JPEG
 payloads retained with the repository's `.png` naming convention, as are the
 existing screenshot-pipeline artifacts. Their measured pixel bounds are in
 `evidence-manifest.json`.
@@ -19,11 +21,30 @@ Computer Use on the packaged Tauri app is authoritative for import, editing,
 properties, simulation, model recovery, and macOS chrome. Chrome `dev:web` is
 responsive/console evidence only; no Chrome file-upload claim is made.
 
-This file supersedes the earlier `0b5d22b` QA prose. The current evidence was
-recaptured after a clean packaged restart and after correcting the fixture
-generator's physical pin order. The 24 stable issue rows below are now
-`FIXED_WITH_CURRENT_EVIDENCE`; the final Sol High review remains explicitly
+This file supersedes the earlier `0b5d22b`/`3687171` QA prose. The current
+evidence was recaptured after a clean packaged restart and after correcting the
+fixture generator's physical pin order. The 24 stable issue rows are indexed
+as `FIXED_WITH_CURRENT_EVIDENCE` in
+`native/matrix-manifest.json`; the final Sol High review remains explicitly
 `PENDING` and is not represented as a passed gate.
+
+### Exact current native matrix
+
+`native/matrix-manifest.json` contains the complete Cartesian matrix:
+2 themes × 3 requested logical sizes × 5 states = **30 entries**. Each entry
+records the requested viewport, measured Computer Use app-content pixels,
+timestamp, screenshot path, and state assertions. The validator result is:
+
+```text
+UI-UX-MATRIX: PASS: 30/30 keys; 6 interaction artifacts; all files and dimensions verified
+```
+
+The packaged interaction artifacts include the actual current-source states,
+PULSE rise/fall zero edits, Settings sheets, seven-segment digit-8 simulator
+state, and the LED inspector. `component-led-dark-1280x800.jpg` shows Red and
+`component-led-green-dark-1280x800.jpg` shows Green with the default typical Vf
+changing from 2 V to 2.2 V; the inspector keeps Vf editable and labels it as a
+typical/default rather than a color-derived guarantee.
 
 ## Current native evidence
 
@@ -69,13 +90,13 @@ generator's physical pin order. The 24 stable issue rows below are now
   inspector exposes bounded gain/min/max defaults (`1 MegV/V`, `-15 V`,
   `15 V`); the zener exposes both breakdown and forward voltage; the switch
   exposes open/closed state.
-- Title-bar/window actions: `native/titlebar-actions.json` indexes the fresh
-  before/move/double-click/system-zoom/restore screenshots and measured bounds.
-  A title-bar drag was exercised. The automation backend's direct double-click
-  gesture was also exercised; the native Window → Zoom command is the measured
-  zoom/restore control because the direct gesture did not change bounds in this
-  window-manager session. This limitation is disclosed rather than inferred
-  from cursor artwork.
+- Title-bar/window actions: `native/final/titlebar-action-log.json` indexes the
+  fresh direct AX target (`Window drag area; double-click to maximize or
+  restore`) and the before/maximized/restored/drag screenshots. Two explicit
+  direct AX presses changed measured app-content width `1182 → 1224`, and the
+  second pair restored it `1224 → 1182`; the action log intentionally does not
+  claim outer x/y telemetry that Computer Use does not expose. A direct drag
+  was dispatched from `(450,20)` to `(550,60)` on the same labeled surface.
 
 ### Native viewport convention
 
@@ -88,7 +109,7 @@ gesture coordinates, and assertions are machine-readable in
 ## Current Chrome responsive/console evidence
 
 `chrome/devweb-matrix.json` records all six exact combinations and
-`chrome/devweb-console.log` records the complete warning/error readout. The
+`chrome/devweb-console.json` records the complete machine-readable warning/error readout. The
 settings sheet was visible at every exact viewport; `scrollWidth == innerWidth`
 and `scrollHeight == innerHeight` for all six. `Model Libraries` was absent.
 The only two console errors were Chrome-extension transport messages:
@@ -118,68 +139,68 @@ the live/stopped fixture checks.
 | SHELL-01 | `cad4a69`, shell tests | RC populated Explorer/minimum capture |
 | SHELL-02 | `22f7366`, `6d96e3c`, `811b0c7` | current Settings light/dark; Chrome six-state absence check |
 | SHELL-03 | `cad4a69` | RC Explorer at 900 and 1440 |
-| SHELL-04 | `cad4a69` | `native/titlebar-actions.json` and current bounds captures |
+| SHELL-04 | `cad4a69`, `d3c9c3d` | `native/final/titlebar-action-log.json`; direct AX width 1182→1224→1182 |
 | SHELL-05 | `cad4a69`, `6d96e3c` | Settings and populated editor captures |
 | SHELL-06 | `71ad682` | current symbol placement states plus geometry tests |
 | SHELL-07 | `cad4a69` | current packaged rail/settings light/dark |
-| COMP-01 | `fd2193a`, `811b0c7` | source properties, edit `5→4`, clean packaged rerun |
+| COMP-01 | `fd2193a`, `d3c9c3d` | current PULSE/source properties and clean packaged rerun |
 | COMP-02 | `02371ec` | current source and component-property inspectors |
 | COMP-03 | `71ad682` | current-source palette/glyph capture |
-| COMP-04 | `02371ec` | current polarized-cap/LED/zener/photodiode/op-amp/switch inspectors |
+| COMP-04 | `02371ec`, `d3c9c3d` | current component inspectors; LED Red/Green color/Vf captures |
 | COMP-05 | `d6fbcfd` | connected RC ground and ngspice run |
 | COMP-06 | `22f7366`, `551ec0a` | movable inspector chrome and selection-identity tests |
 | COMP-07 | `71ad682` | polarized-cap placement/properties capture |
-| COMP-08 | `71ad682`, `d6fbcfd` | LED placement/properties capture and electrical tests |
+| COMP-08 | `71ad682`, `d6fbcfd`, `d3c9c3d` | LED placement/properties plus Red/Green typical-Vf interaction |
 | COMP-09 | `66e96aa`, `d6fbcfd` | zener placement/properties capture and identity tests |
 | COMP-10 | `71ad682` | photodiode placement/properties capture |
 | COMP-11 | `22f7366`, `02371ec`, `811b0c7` | Settings absence plus exact-model recovery copy |
-| COMP-12 | `fd2193a`, `811b0c7` | PULSE property edit/rerun and source/PWL validation tests |
+| COMP-12 | `fd2193a`, `d3c9c3d` | PULSE property edit/rerun and source/PWL validation tests |
 | COMP-13 | `f173b18`, `811b0c7` | bounded op-amp inspector plus deck/unit tests |
-| COMP-14 | `02371ec` | current concise inspectors |
+| COMP-14 | `02371ec`, `d3c9c3d` | current concise inspectors; one-line engineering help |
 | COMP-15 | `71ad682`, `811b0c7` | seven-segment symbol and digit matrix |
-| COMP-16 | `1bd9327`, `be88bbe`, `0b5d22b`, `44333cf` | digits 0–9/live/stopped packaged corpus |
+| COMP-16 | `1bd9327`, `be88bbe`, `0b5d22b`, `d3c9c3d` | digits 0–9/live/stopped packaged corpus |
 | COMP-17 | `71ad682` | switch placement/properties capture |
 
 All 24 stable rows have a current packaged artifact or a current packaged
-shell/state artifact plus focused code tests. This is not a claim that Sol High
-has approved the work: **Final Sol High review: PENDING**.
+shell/state artifact plus focused code tests, indexed by the current native
+manifest. This is not a claim that Sol High has approved the work: **Final Sol
+High review: PENDING**.
 
 ## Literal gates
 
-All commands below returned exit 0 against the current correction tree before
-the evidence commit `3687171`; the final descendant changes only tracker
-metadata and the heartbeat:
+All commands below returned exit 0 on the current correction tree. The
+packaged binary and DMG were built from functional/package code tip `d3c9c3d`;
+the only post-build source change is the matching stale-diagnostic assertion in
+`nativeSpice.test.ts`.
 
-- Focused correction suite: **9 files passed; 344 tests passed**.
+- Focused correction suite: **261 files passed; 2 skipped; 4,426 tests passed;
+  8 skipped** (the full suite includes the correction tests).
 - `pnpm -C apps/desktop typecheck`: **exit 0**.
-- `pnpm -C apps/desktop test`: **262 files passed; 2 skipped; 4,405 tests
+- `pnpm -C apps/desktop test`: **261 files passed; 2 skipped; 4,426 tests
   passed; 8 skipped**.
 - `bash scripts/design-system-drift.sh`: **DESIGN-SYSTEM-DRIFT: ok**;
   6 files / 49 tests passed.
 - `bash scripts/min-window-dod.sh`: **MIN-WINDOW: 900x600 fail=0/12**;
   **MIN-WINDOW-DOD: ok**.
+- `node scripts/validate-ui-ux-matrix.mjs`: **30/30 keys; 8 interaction
+  artifacts; all files and dimensions verified**.
 - `scripts/sevenseg-acceptance.sh .../Tau.app`: **12/12 fixtures current; 1
-  file / 22 tests passed; packaged app present**.
-- `pnpm --filter @tau/desktop build`: **exit 0** (2,243 modules; normal Vite
+  file / 22 tests passed; packaged app worker smoke passed**.
+- `pnpm --filter @tau/desktop build`: **exit 0** (2,247 modules; normal Vite
   externalization/chunk-size warnings only).
 - `pnpm --filter @tau/desktop tauri build`: **exit 0**; Tau.app and
-  `Tau_1.0.0_aarch64.dmg` produced.
+  `Tau_1.0.0_aarch64.dmg` produced from `d3c9c3d`.
 - `cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check`:
   **exit 0**.
 - `cargo clippy --all-targets --manifest-path apps/desktop/src-tauri/Cargo.toml
   -- -D warnings`: **exit 0**.
 - `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`: **104
-  passed; 0 failed; 42 ignored** (plus zero-test main/doc-test targets).
+  passed; 0 failed; 42 ignored** (main/doc-test targets also passed).
 - `TAU_NGSPICE_LIB=.../libngspice.dylib cargo test ... --ignored`: **42
   passed; 0 failed; 0 ignored**.
-- `codesign --verify --deep --strict Tau.app`: **exit 0**; deployment target
-  **macOS 11.0 arm64, 9 files**.
+- `codesign --verify --deep --strict Tau.app`: **exit 0**.
 - `hdiutil verify Tau_1.0.0_aarch64.dmg`: **VALID**.
-- Mounted DMG proof: **resource diff clean; mounted ignored ngspice 42 passed;
-  packaged-engine-smoke 336 samples, out=0..5 V; Tau executable stayed alive
-  for 5 seconds**.
+- Packaged engine smoke: **336 samples, out=0..5 V**; the seven-segment runner
+  and native package worker smoke both passed.
 
-The evidence commit that records this block is `3687171`, directly after the
-code/test tip `44333cf`. The final descendant records the completed heartbeat
-and preserves this evidence unchanged. Final Sol High review remains
-**PENDING**.
+Final Sol High review remains **PENDING**; no Sol review was run here.

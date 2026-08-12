@@ -1,12 +1,10 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-11**
+**Status: DONE - 2026-08-12**
 
-Unit: **Third Sol High correction — native title bar, full visual matrix, and
-model-recovery truth**. Sol rejected `3c4752b`; this unit adds deterministic
-native maximize/restore behavior, a shared seven-segment illumination
-threshold, reachable `.lib`/`.sub` file recovery, dead-surface cleanup, and
-honest fixture-runner semantics.
+Unit: **Current packaged acceptance correction — LED color/Vf UX, concise
+inspector copy, direct titlebar proof, and exact native matrix**. The current
+functional/package code tip is `d3c9c3d`; the planning base is `8fb45f6`.
 
 **Files:** current packaged/native and Chrome evidence is indexed in
 `screenshots/ui-ux-fixes/evidence-manifest.json`,
@@ -14,18 +12,30 @@ honest fixture-runner semantics.
 Chrome logs. This primary checkout remains the only owner of
 `PROGRESS.md`, `FEATURE_PARITY.md`, and `UI_UX_FIXES.md`.
 
-**Tests:** focused titlebar/model/seven-segment suite 7 files/298 tests passed;
-full frontend/native gates and the corrected packaged visual matrix remain in
-progress.
+**Tests:** fresh packaged Computer Use evidence is indexed by the 30-entry
+native matrix manifest; the validator passed 30/30 keys and the Chrome
+six-entry JSON has zero page-origin errors. Existing green results: frontend
+261 passed/2 skipped files and 4,426 passed/8 skipped tests; typecheck,
+design drift, min-window, web/package build, Rust fmt/clippy/cargo, real
+ngspice, seven-segment runner, codesign, DMG verify, and packaged smoke all
+passed.
 
 **Parity items:** source validation/PWL no-mutation, shared seven-segment
 polarity and directional loading, model recovery, bounded op-amp defaults,
-zener identity, and selection-identity inspector placement remain covered by
-code/tests. Current packaged proof now covers connected edit/run, properties,
-digits 0–9, live/stopped state, themes, sizes, and Chrome responsive/console.
+zener identity, selection-identity inspector placement, concise inspector
+copy, and LED color/Vf defaults remain covered by code/tests. Current packaged
+proof covers connected edit/run, properties, LED Red → Green, digits 0–9,
+live/stopped state, themes, sizes, and Chrome responsive/console.
 
-**Next:** rebuild, capture and validate the 30 packaged native states, then
-run full gates and push; Final Sol High review stays PENDING.
+**Next:** parent sends the pushed candidate to a fresh Sol High reviewer;
+Final Sol High review remains PENDING.
+
+**2026-08-12 — Candidate handoff:** Staged only the validated current native
+matrix/interaction artifacts, Chrome six-state JSON/PNG evidence, tracker
+updates, and the stale-diagnostic test correction. Superseded titlebar/probe
+captures and ten accidental `untitled*.asc` files remain quarantined outside
+the repository and are not evidence. No GUI or test work was performed after
+the usage emergency.
 
 ---
 

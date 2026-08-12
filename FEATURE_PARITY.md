@@ -2003,16 +2003,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Per-analysis ngspice option mapping
 
 ## 8. UX / app
-- 🟡 **PDF-directed UI/UX remediation evidence at `3687171` (2026-08-11; functional code/test tip `44333cf`):**
-  all 24 stable rows have landed code, focused tests, and a current packaged
-  evidence artifact in `UI_UX_FIXES.md` / `screenshots/ui-ux-fixes/evidence-manifest.json`.
-  The latest correction also fixes the seven-segment fixture's physical pin
-  order and asserts imported digits 0–9. Native Computer Use proves a
-  connected edit/run, current-source and component property states, digits
-  0–9, live/stopped simulation, both themes, and window actions. Chrome
-  `dev:web` proves the exact responsive/console matrix without claiming file
-  upload. **Final Sol High review remains PENDING and is not a completion
-  claim.**
+- 🟡 **PDF-directed UI/UX remediation evidence at current packaged code tip `d3c9c3d` (2026-08-12; planning base `8fb45f6`):**
+  all 24 stable rows have code/tests and current evidence indexed in
+  `screenshots/ui-ux-fixes/native/matrix-manifest.json` and
+  `screenshots/ui-ux-fixes/evidence-manifest.json`. The native manifest
+  validator reports 30/30 matrix keys with measured dimensions, and current
+  Computer Use evidence includes direct titlebar bounds change/restore,
+  current-source geometry, PULSE zero-edge editing, Settings recovery, and
+  LED Red → Green color/Vf inspector changes. Chrome `dev:web` is recorded in
+  the six-entry responsive/console JSON without claiming file upload. **Final
+  Sol High review remains PENDING and is not a completion claim.**
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - ✅ **Visual QA on the actual desktop app:** the current Tauri hot-reload app
   stays alive on `auto/ltspice-parity`; live browser QA verified centered

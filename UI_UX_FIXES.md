@@ -30,27 +30,26 @@ empty editor, populated schematic, selected component, properties, and
 simulator. Native Tauri/packaged evidence is authoritative; `dev:web` is useful
 for responsive and console diagnosis but cannot prove ngspice or native chrome.
 
-## Correction-pass acceptance record — 2026-08-11 (current)
+## Correction-pass acceptance record — 2026-08-12 (current)
 
 The current packaged correction run is indexed in
-`screenshots/ui-ux-fixes/evidence-manifest.json` and
+`screenshots/ui-ux-fixes/native/matrix-manifest.json`,
+`screenshots/ui-ux-fixes/evidence-manifest.json`, and
 `screenshots/ui-ux-fixes/QA-EVIDENCE.md`; it supersedes the historical worker
-paragraphs below. The functional code/test tip is `44333cf`, and the evidence
-is recorded at `3687171` (planning base `8fb45f6`).
-The packaged binary was restarted from a clean recovery state after the
-laptop-overlap warning. The seven-segment generator was corrected so the
-physical A/F/G/E/B/C/D/DP pin order is explicit; a committed acceptance test
-now decodes every imported digit 0–9, not merely the deck shape.
+paragraphs below. The functional/package code tip is `d3c9c3d` (planning base
+`8fb45f6`).
 
-Computer Use current evidence includes a connected RC/PULSE edit and clean
-ngspice rerun, real Settings sheets in both themes, source/op-amp/LED/zener/
-photodiode/polarized-capacitor/switch property states, seven-segment digits
-0–9, live/stopped runs, symbol placement previews, and title-bar/window
-actions. Chrome `dev:web` has exact 900×600, 1280×800, and 1440×900 settings
-captures in both themes with no overflow and zero page-origin console errors;
-the two extension transport messages are recorded verbatim. No Chrome file
-upload is claimed. Final Sol High review is **PENDING** and is intentionally
-not checked here.
+Computer Use captured the exact 30-key native matrix (both themes × three
+requested sizes × five states), the direct AX titlebar maximize/restore and
+drag action log, current-source geometry, PULSE zero-edge editing, real
+Settings sheets, and the LED Red → Green inspector interaction. The LED
+capture shows the selectable color set and the Green typical/default Vf
+changing to 2.2 V while retaining an editable override. The current Chrome
+`dev:web` evidence is the six-entry `devweb-matrix.json` plus
+`devweb-console.json`; it records exact viewport dimensions, no page-origin
+errors, and no file-upload claim. `node scripts/validate-ui-ux-matrix.mjs`
+proves **30/30** matrix keys, files, dimensions, and interaction artifacts.
+Final Sol High review is **PENDING** and is intentionally not checked here.
 
 ## Fleet ownership
 
@@ -666,12 +665,18 @@ control-port QA is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-
 
 ## Completion matrix
 
-- [x] All 24 stable issues are `FIXED` or evidence-backed `ALREADY SATISFIED`.
-- [x] No issue remains `UNVERIFIED`, `IN PROGRESS`, or `BLOCKED`.
-- [x] Every issue has commit, literal test result, and matching visual evidence.
-- [x] Light/dark and 900×600, 1280×800, 1440×900 matrices pass.
-- [x] Computer Use proves packaged native interactions and resizing.
-- [x] Chrome proves responsive `dev:web` behavior with no app-origin console errors.
+- [x] All 24 stable issues are `FIXED_WITH_CURRENT_EVIDENCE` or evidence-backed
+      `ALREADY SATISFIED` in `native/matrix-manifest.json`.
+- [x] No issue remains `UNVERIFIED`, `IN PROGRESS`, or `BLOCKED` in the current
+      tracker manifest.
+- [x] Every issue has a landing reference, literal test result, and a current
+      packaged artifact or a current packaged shell/state artifact.
+- [x] The native matrix validator proves 30/30 light/dark × 900×600, 1280×800,
+      1440×900 × empty/populated/selected/properties/simulator keys.
+- [x] Computer Use proves packaged native interactions, current-source/LED
+      inspector states, and direct titlebar bounds change/restore.
+- [x] Chrome proves responsive `dev:web` behavior with no page-origin console
+      errors; extension transport noise is recorded separately.
 - [x] Typecheck, frontend tests, design drift, minimum-window, production build,
       applicable Rust/native gates, and packaged-ngspice smoke pass.
 - [x] Exact model/import behavior and named-device fail-closed guarantees remain.

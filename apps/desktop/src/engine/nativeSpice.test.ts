@@ -645,7 +645,7 @@ describe("native ngspice adapter", () => {
     };
 
     await expect(runNativeTransient(schematic, { stopTime: 0.001, steps: 100 }))
-      .rejects.toThrow(/No imported library defines the subcircuit "LT1001"/);
+      .rejects.toThrow(/No imported file defines the subcircuit "LT1001"/);
     // The precise name is known before the deck is handed off, so no native
     // round trip is spent on an error the user cannot act on.
     expect(invoke).not.toHaveBeenCalled();
