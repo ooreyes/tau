@@ -2175,7 +2175,15 @@ function ComponentPropertyGroup({
                   {field.description && <InspectorHint text={field.description} />}
                 </Fragment>
               ))}
-              {visibleFields.length === 0 && entry && (
+              {/*
+                * The raw-value escape hatch, for a part with no field schema
+                * but something to edit. A flip-flop has neither: its catalog
+                * default is "" and nothing writes to it, so this rendered a
+                * row labelled `Value` containing an empty box - a control that
+                * looks broken because there is no value for it to hold.
+                */}
+              {visibleFields.length === 0 && entry
+                && Boolean(selected.value.trim() || entry.defaultValue.trim()) && (
                 <label className="property-field">
                   <span>Value</span>
                   <input

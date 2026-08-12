@@ -1142,6 +1142,34 @@ const textBox = (label: DrawnText): Box => {
   };
 };
 
+/**
+ * Does a straight segment pass through an axis-aligned box? Liang-Barsky, so
+ * diagonals (a flop's COM lead, an edge-trigger wedge) are handled exactly
+ * rather than by their bounding box, which would report false collisions.
+ */
+const segmentCrossesBox = (segment: Seg, box: Box): boolean => {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = segment.b.x - segment.a.x;
+  const dy = segment.b.y - segment.a.y;
+  const clip = (p: number, q: number): boolean => {
+    if (p === 0) return q >= 0;
+    const r = q / p;
+    if (p < 0) {
+      if (r > t1) return false;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return false;
+      if (r < t1) t1 = r;
+    }
+    return true;
+  };
+  return clip(-dx, segment.a.x - box.minX)
+    && clip(dx, box.maxX - segment.a.x)
+    && clip(-dy, segment.a.y - box.minY)
+    && clip(dy, box.maxY - segment.a.y);
+};
+
 const overlaps = (a: Box, b: Box): boolean =>
   a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
 
@@ -1271,6 +1299,40 @@ describe("digital parts carry a readable pinout (item 5)", () => {
         }
       }
     }
+  });
+
+  /**
+   * A caption also has to clear the lines it sits among, not just the other
+   * captions. `COM` on every flip-flop had 0.5 units between its box and the
+   * body's own bottom stroke; at the 2.35 selected weight that stroke is
+   * wider than the gap, so the caption was drawn on the frame.
+   */
+  it("keeps every caption clear of its symbol's own strokes", () => {
+    const violations: string[] = [];
+    for (const kind of Object.keys(PIN_LABEL_LAYOUT) as ComponentKind[]) {
+      const strokes = drawnElements(render(kind)).flatMap((element) => element.segments);
+      for (const label of drawnText(render(kind))) {
+        const box = textBox(label);
+        // Grow the caption by half the selected stroke: a line that touches
+        // this padded box is a line touching the glyphs.
+        const padded = {
+          minX: box.minX - SELECTED_STROKE / 2,
+          maxX: box.maxX + SELECTED_STROKE / 2,
+          minY: box.minY - SELECTED_STROKE / 2,
+          maxY: box.maxY + SELECTED_STROKE / 2,
+        };
+        for (const stroke of strokes) {
+          if (!segmentCrossesBox(stroke, padded)) continue;
+          violations.push(
+            `${kind}: "${label.text}" at (${label.x},${label.y}) is drawn on `
+            + `(${stroke.a.x},${stroke.a.y})-(${stroke.b.x},${stroke.b.y})`,
+          );
+        }
+      }
+    }
+    // Every offender at once: fixing these one failure at a time hides how
+    // many symbols share the defect.
+    expect(violations).toEqual([]);
   });
 
   it("keeps async flop labels in separate interior lanes with accessible names", () => {

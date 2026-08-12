@@ -1579,3 +1579,35 @@ describe("property row focus treatment (App.css contract)", () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.property-field,/);
   });
 });
+
+/**
+ * A part with no parameters should say nothing, not show an empty control.
+ * The flip-flops rendered a `Value` row containing a blank text box: their
+ * catalog default is "" and nothing ever writes to it, so the row was a
+ * control that looked broken rather than a control that was empty.
+ */
+describe("ComponentInspector - parts with no parameters", () => {
+  afterEach(() => cleanup());
+
+  const showBare = (component: SchematicComponent) => {
+    useSchematic.setState({
+      components: [component],
+      selectedId: component.id,
+      selectedIds: [component.id],
+    });
+    render(<ComponentInspector selected={component} />);
+  };
+
+  it("omits the raw Value row for a flip-flop", () => {
+    showBare({ id: "a1", kind: "dflop", x: 0, y: 0, rotation: 0, value: "", label: "A1" });
+    expect(screen.getByRole("textbox", { name: "Component ID" })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+    expect(screen.queryByText("Value")).toBeNull();
+  });
+
+  it("keeps the escape hatch for a schema-less part that does carry a value", () => {
+    showBare({ id: "t1", kind: "transformer", x: 0, y: 0, rotation: 0, value: "1:1", label: "T1" });
+    const raw = screen.queryByRole("textbox", { name: "Value" }) as HTMLInputElement | null;
+    if (raw) expect(raw.value).toBe("1:1");
+  });
+});

@@ -401,11 +401,20 @@ const CHIP_LABEL_X = 20;
  * Q net through the next stage's - which `assistantCircuitPlan.stress.test.ts`
  * catches as two nets that were supposed to stay isolated.
  */
-const FLOP_HALF_W = 24;
-const FLOP_HALF_H = 24;
+const FLOP_HALF_W = 28;
+/**
+ * Taller than wide, because the left column carries four captions.
+ *
+ * At 24 the bottom one (COM) had 0.5 units between its box and the body's own
+ * bottom stroke - and at selected weight that stroke is 2.35 wide, so the
+ * caption sat ON the border. There is no arrangement of four rows inside 48
+ * units that clears both its neighbour above and the frame below, so the frame
+ * is what gives. Pin rows are on the +/-16 and +/-32 grid and do not move.
+ */
+const FLOP_HALF_H = 28;
 const FLOP_PIN_X = 32;
 const FLOP_PIN_Y = 32;
-const FLOP_LABEL_X = 17;
+const FLOP_LABEL_X = 18;
 /** Same, for the nose-bodied parts (sample & hold, modulator). */
 const NOSE_HALF_W = 24;
 const NOSE_PIN_X = 32;
@@ -560,62 +569,62 @@ export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPl
   // 40 units, so K gives up 3 units as well.
   dflop: [
     { pin: "d", text: "D", x: -F, y: -16 },
-    { pin: "clk", text: "CLK", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -13, y: 20 },
-    { pin: "pre", text: "PRE", x: 4, y: -18 },
-    { pin: "clr", text: "CLR", x: 4, y: 19 },
+    { pin: "clk", text: "CLK", x: -15, y: 11 },
+    { pin: "com", text: "COM", x: -15, y: 21 },
+    { pin: "pre", text: "PRE", x: 5, y: -19 },
+    { pin: "clr", text: "CLR", x: 5, y: 20 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q\u0305", x: F, y: 16 },
   ],
   srflop: [
     { pin: "s", text: "S", x: -F, y: -16 },
-    { pin: "r", text: "R", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -13, y: 20 },
+    { pin: "r", text: "R", x: -F, y: 11 },
+    { pin: "com", text: "COM", x: -15, y: 21 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q\u0305", x: F, y: 16 },
   ],
   tflop: [
     { pin: "t", text: "T", x: -F, y: -16 },
-    { pin: "clk", text: "CLK", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -13, y: 20 },
-    { pin: "pre", text: "PRE", x: 4, y: -18 },
-    { pin: "clr", text: "CLR", x: 4, y: 19 },
+    { pin: "clk", text: "CLK", x: -15, y: 11 },
+    { pin: "com", text: "COM", x: -15, y: 21 },
+    { pin: "pre", text: "PRE", x: 5, y: -19 },
+    { pin: "clr", text: "CLR", x: 5, y: 20 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q\u0305", x: F, y: 16 },
   ],
   jkflop: [
     { pin: "j", text: "J", x: -F, y: -16 },
-    { pin: "k", text: "K", x: -F, y: -3 },
-    { pin: "clk", text: "CLK", x: -F, y: 9 },
-    { pin: "com", text: "COM", x: -13, y: 20 },
-    { pin: "pre", text: "PRE", x: 4, y: -18 },
-    { pin: "clr", text: "CLR", x: 4, y: 19 },
+    { pin: "k", text: "K", x: -F, y: -2 },
+    { pin: "clk", text: "CLK", x: -15, y: 11 },
+    { pin: "com", text: "COM", x: -15, y: 21 },
+    { pin: "pre", text: "PRE", x: 5, y: -19 },
+    { pin: "clr", text: "CLR", x: 5, y: 20 },
     { pin: "q", text: "Q", x: F, y: -16 },
     { pin: "qbar", text: "Q\u0305", x: F, y: 16 },
   ],
   counter: [
-    { pin: "clk", text: "CLK", x: -L, y: -16 },
+    { pin: "clk", text: "CLK", x: -14, y: -16 },
     { pin: "rst", text: "RST", x: -L, y: 16 },
-    { pin: "com", text: "COM", x: -L, y: 32 },
+    { pin: "com", text: "COM", x: -L, y: 29 },
     { pin: "q0", text: "Q0", x: L, y: -24 },
     { pin: "q1", text: "Q1", x: L, y: -8 },
     { pin: "q2", text: "Q2", x: L, y: 8 },
     { pin: "q3", text: "Q3", x: L, y: 24 },
   ],
   timer555: [
-    { pin: "reset", text: "RESET", x: -L, y: -32 },
+    { pin: "reset", text: "RESET", x: -17, y: -29 },
     { pin: "vcc", text: "VCC", x: -L, y: -16 },
     { pin: "trig", text: "TRIG", x: -L, y: 16 },
-    { pin: "gnd", text: "GND", x: -L, y: 32 },
-    { pin: "cont", text: "CTRL", x: L, y: -32 },
+    { pin: "gnd", text: "GND", x: -L, y: 29 },
+    { pin: "cont", text: "CTRL", x: 17, y: -29 },
     { pin: "out", text: "OUT", x: L, y: 0 },
-    { pin: "thres", text: "THRES", x: L, y: 16 },
-    { pin: "disch", text: "DISCH", x: L, y: 32 },
+    { pin: "thres", text: "THRES", x: 17, y: 16 },
+    { pin: "disch", text: "DISCH", x: 17, y: 29 },
   ],
   adc: [
     { pin: "vin", text: "VIN", x: -L, y: -16 },
     { pin: "vref", text: "VREF", x: -L, y: 16 },
-    { pin: "com", text: "COM", x: -L, y: 32 },
+    { pin: "com", text: "COM", x: -L, y: 29 },
     { pin: "d0", text: "D0", x: L, y: -24 },
     { pin: "d1", text: "D1", x: L, y: -8 },
     { pin: "d2", text: "D2", x: L, y: 8 },
@@ -626,34 +635,34 @@ export const PIN_LABEL_LAYOUT: Partial<Record<ComponentKind, readonly PinLabelPl
     { pin: "d1", text: "D1", x: -L, y: -8 },
     { pin: "d2", text: "D2", x: -L, y: 8 },
     { pin: "d3", text: "D3", x: -L, y: 24 },
-    { pin: "vref", text: "VREF", x: L, y: -32 },
+    { pin: "vref", text: "VREF", x: 17, y: -29 },
     { pin: "out", text: "OUT", x: L, y: 0 },
-    { pin: "com", text: "COM", x: L, y: 32 },
+    { pin: "com", text: "COM", x: L, y: 29 },
   ],
   sevenSeg: [
-    { pin: "a", text: "A", x: -24, y: -32 },
+    { pin: "a", text: "A", x: -24, y: -29 },
     { pin: "f", text: "F", x: -24, y: -16 },
     { pin: "g", text: "G", x: -24, y: 0 },
     { pin: "e", text: "E", x: -24, y: 16 },
-    { pin: "com", text: "COM", x: -24, y: 32 },
-    { pin: "b", text: "B", x: 24, y: -32 },
+    { pin: "com", text: "COM", x: -24, y: 29 },
+    { pin: "b", text: "B", x: 24, y: -29 },
     { pin: "c", text: "C", x: 24, y: -16 },
     { pin: "d", text: "D", x: 24, y: 0 },
     { pin: "dp", text: "DP", x: 24, y: 16 },
   ],
   sampleHold: [
-    { pin: "in+", text: "+", x: -NL, y: -32 },
+    { pin: "in+", text: "+", x: -NL, y: -29 },
     { pin: "in-", text: "-", x: -NL, y: -16 },
     { pin: "clk", text: "CLK", x: -NL, y: 0 },
     { pin: "sh", text: "S/H", x: -NL, y: 16 },
-    { pin: "com", text: "COM", x: -NL, y: 32 },
+    { pin: "com", text: "COM", x: -NL, y: 29 },
     { pin: "out", text: "OUT", x: 6, y: 0 },
   ],
   modulator: [
     { pin: "fm", text: "FM", x: -11, y: -16 },
     { pin: "am", text: "AM", x: -11, y: 16 },
-    { pin: "com", text: "COM", x: -11, y: 32 },
-    { pin: "out", text: "Q", x: 14, y: 0 },
+    { pin: "com", text: "COM", x: -11, y: 29 },
+    { pin: "out", text: "Q", x: 17, y: 0 },
   ],
 };
 
@@ -725,7 +734,7 @@ function FlopBody({
       <ChipLeads rows={left} side={-1} pinX={FLOP_PIN_X} bodyX={FLOP_HALF_W} />
       {clockRow !== undefined && (
         // Edge-trigger wedge, kept short so the CLK caption clears it.
-        <path d={`M ${-FLOP_HALF_W} ${clockRow - 5} L -21 ${clockRow} L ${-FLOP_HALF_W} ${clockRow + 5}`} />
+        <path d={`M ${-FLOP_HALF_W} ${clockRow - 5} L ${-FLOP_HALF_W + 3} ${clockRow} L ${-FLOP_HALF_W} ${clockRow + 5}`} />
       )}
       {asyncControls && (
         <>
@@ -799,10 +808,10 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   // inversion bubble that sits on the centreline output of an inverting gate.
   digitalGate: { minX: -32, minY: -40, maxX: 30, maxY: 40 },
   // Flip-flops: shared ±24 body plus the Q̅ inversion bubble reaching x = 30.
-  dflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
-  srflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
-  tflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
-  jkflop: { minX: -24, minY: -24, maxX: 30, maxY: 24 },
+  dflop: { minX: -28, minY: -28, maxX: 34, maxY: 28 },
+  srflop: { minX: -28, minY: -28, maxX: 34, maxY: 28 },
+  tflop: { minX: -28, minY: -28, maxX: 34, maxY: 28 },
+  jkflop: { minX: -28, minY: -28, maxX: 34, maxY: 28 },
   counter: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
   timer555: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
   adc: { minX: -32, minY: -36, maxX: 32, maxY: 36 },
@@ -861,10 +870,10 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   opamp: { halfW: 32, halfH: 34 },
   comparator: { halfW: 32, halfH: 34 },
   digitalGate: { halfW: 32, halfH: 40 },
-  dflop: { halfW: 30, halfH: 26 },
-  srflop: { halfW: 30, halfH: 26 },
-  tflop: { halfW: 30, halfH: 26 },
-  jkflop: { halfW: 30, halfH: 26 },
+  dflop: { halfW: 30, halfH: 30 },
+  srflop: { halfW: 30, halfH: 30 },
+  tflop: { halfW: 30, halfH: 30 },
+  jkflop: { halfW: 30, halfH: 30 },
   counter: { halfW: 34, halfH: 38 },
   timer555: { halfW: 34, halfH: 38 },
   adc: { halfW: 34, halfH: 38 },
