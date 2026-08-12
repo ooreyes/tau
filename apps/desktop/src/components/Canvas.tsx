@@ -48,6 +48,7 @@ import {
   type SevenSegmentNodeVoltages,
 } from "./simulator/SevenSegmentDisplay";
 import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
+import { probeCursor } from "./editor/ToolIcons";
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import {
   autoNetLabelOffset,
@@ -75,7 +76,6 @@ import {
   routeWireSmart,
   segmentIntersections,
   snap,
-  sourceValueLabel,
   symbolTransform,
   sourceSymbolFitScale,
   translateAttachedWireEndpoints,
@@ -1787,9 +1787,18 @@ export function Canvas({
    * it responds to a click. Both are set from the same hit test the pointer
    * handler uses, so the cursor and the click always agree.
    */
+  /* Probe mode gets the probe itself, not the generic crosshair it used to
+   * share with placing/wiring/labeling: the tool you picked should be the thing
+   * on the end of the pointer. `probeCursor()` reads --tool-probe-ink and
+   * --tool-steel-ink off the live document and builds the data URL at call
+   * time, so the cursor follows the theme and no raw colour enters this file;
+   * every failure path (no document, unreadable tokens) returns the bare
+   * "crosshair" literal, so jsdom and any headless path keep today's value. */
   const canvasCursor =
-    (interactive && (placing || wiring)) || probing || labeling
-      ? "crosshair"
+    probing
+      ? probeCursor()
+      : (interactive && (placing || wiring)) || labeling
+        ? "crosshair"
       : wiperDrag.current || (!interactive && hoverOperable?.wiper)
         ? "ew-resize"
         : !interactive && hoverOperable
@@ -2364,19 +2373,31 @@ function ComponentLabels({ components, wires }: { components: SchematicComponent
   return (
     <g className="label-layer" aria-hidden="true">
       {components.map((c) => {
-        const value = sourceValueLabel(c.kind, c.value);
         const placement = placements.get(c.id);
+        // No placement means the placer could not clear a slot even for a lone
+        // ellipsis. Drawing nothing is the floor that makes "never overlaps"
+        // (P3-07) true by construction rather than by luck.
         if (!placement) return null;
+        // The strings come from the PLACEMENT, never re-derived from the
+        // component here. The placer may have shortened the value, dropped it,
+        // or reduced the whole label to an ellipsis in order to find a clear
+        // slot, and it measured its boxes against exactly those strings -
+        // printing the original text instead would ink outside the rectangle
+        // the invariant was proved over, which is the bug all over again.
         return (
           <g key={c.id}>
-            {c.label && (
+            {/* In the elided case `refText` is a lone ellipsis, and that glyph
+                IS the affordance: it says "a part is labelled here, and the
+                inspector has the text". It therefore needs no class or style
+                of its own. */}
+            {placement.refText && (
               <text className="ref" x={placement.ref.x} y={placement.ref.y} textAnchor={placement.ref.anchor}>
-                {c.label}
+                {placement.refText}
               </text>
             )}
-            {value && (
+            {placement.valText && (
               <text className="val" x={placement.val.x} y={placement.val.y} textAnchor={placement.val.anchor}>
-                {value}
+                {placement.valText}
               </text>
             )}
           </g>
