@@ -3,6 +3,12 @@ import type { CSSProperties, DragEvent } from "react";
 import { Crosshair, Eye, EyeOff, Gauge, LockKeyhole, MousePointer2, Tag } from "lucide-react";
 import "./App.css";
 import "./styles/liveControls.css";
+/* Per-concern layers, loaded after App.css so they win at equal specificity.
+ * One owner each during the PDF-3 remediation - see UI_UX_PDF3.md. */
+import "./styles/explorerTree.css";
+import "./styles/sourceSymbols.css";
+import "./styles/editorToolbarIcons.css";
+import "./styles/diagnosticsDock.css";
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
 import { ComponentMeasurementsPanel } from "./components/ComponentMeasurementsPanel";

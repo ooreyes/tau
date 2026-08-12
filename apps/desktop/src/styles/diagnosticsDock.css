@@ -1,0 +1,10 @@
+/* diagnosticsDock.css — DOCK lane - P3-14 errors-only bottom dock, P3-05 discard-empty notices.
+ *
+ * Loaded from App.tsx immediately after App.css so rules here win the cascade
+ * at equal specificity without needing !important, and so the 10k-line
+ * App.css stays a single-owner file during the parallel PDF-3 remediation
+ * (see the file-ownership map in UI_UX_PDF3.md).
+ *
+ * Colour must arrive through the tokens in styles/tokens.css / App.css's
+ * :root. Raw hex in here fails scripts/design-system-dod.mjs.
+ */
