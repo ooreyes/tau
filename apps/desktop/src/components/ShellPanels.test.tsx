@@ -791,7 +791,13 @@ describe("ComponentInspector - independent source waveform controls", () => {
     expect(waveform.getAttribute("data-slot")).toBe("select-trigger");
     expect(waveform.textContent).toContain("Piecewise linear");
     expect(document.querySelector(".source-value-editor select[aria-label='Waveform type']")).toBeNull();
-    expect((screen.getByRole("textbox", { name: "DC operating point" }) as HTMLInputElement).value).toBe("0");
+    // Was: `DC operating point` reads "0". That row was the inferred bias
+    // duplicating the waveform's own first level, and it is gone for function
+    // waveforms (PDF-3 item 1). This source carries no explicit `DC <n>`, so
+    // there must be no bias row at all under any of its three labels.
+    expect(screen.queryByRole("textbox", { name: "DC operating point" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "DC bias" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "DC level" })).toBeNull();
     expect((screen.getByRole("textbox", { name: "PWL time 3" }) as HTMLInputElement).value).toBe("+1");
     const pwlPrefix = screen.getByRole("combobox", { name: "PWL time 3 SI prefix" });
     expect(pwlPrefix.tagName).toBe("BUTTON");
@@ -803,7 +809,7 @@ describe("ComponentInspector - independent source waveform controls", () => {
     expect(screen.queryByDisplayValue(/PWL\(/)).toBeNull();
   });
 
-  it("updates PWL rows and DC bias through controls", () => {
+  it("updates PWL rows through controls", () => {
     const selected = {
       id: "v-pwl-edit",
       kind: "vsource" as const,
@@ -814,15 +820,68 @@ describe("ComponentInspector - independent source waveform controls", () => {
       label: "V1",
     };
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    const { rerender } = render(<ComponentInspector selected={selected} />);
+    render(<ComponentInspector selected={selected} />);
 
     fireEvent.change(screen.getByRole("textbox", { name: "PWL level 2" }), { target: { value: "5" } });
     expect(useSchematic.getState().components[0].value).toBe("PWL(0 0 2u 5)");
+  });
 
+  /*
+   * This pair replaces a case that used to add `DC 2` to a bare PWL source
+   * through an always-present "DC operating point" row.
+   *
+   * That row is gone for function waveforms (PDF-3 item 1). It was rendering an
+   * INFERRED bias, not an authored one - `decodeIndependentSourceValue` seeds
+   * `dcBias` from the waveform's own offset - so a sine printed
+   * `DC operating point 5 V` directly above `Offset 5 V`: the same number twice
+   * under two names, which is exactly the frame the report photographed.
+   *
+   * What must NOT be lost with it is an EXPLICIT `DC <n>`, which LTspice allows
+   * beside a function (`DC 2 SINE(...)`) and which imports arrive holding. That
+   * is a genuinely second quantity - the operating-point bias, independent of
+   * the waveform's own offset - so it keeps an editable row and must survive a
+   * round trip through the inspector untouched. The first test below is the
+   * no-duplication claim; the second is the no-data-loss claim.
+   */
+  it("shows no inferred DC row beside a waveform's own offset control", () => {
+    const selected = {
+      id: "v-sine-nodup",
+      kind: "vsource" as const,
+      x: 160, y: 160, rotation: 0 as const,
+      value: "SINE(5 1 1k)",
+      label: "V1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    expect((screen.getByRole("textbox", { name: "Offset" }) as HTMLInputElement).value).toBe("5");
+    expect(screen.queryByRole("textbox", { name: "DC operating point" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "DC bias" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "DC level" })).toBeNull();
+  });
+
+  it("keeps an explicitly authored DC bias editable beside the waveform, and does not drop it", () => {
+    const selected = {
+      id: "v-sine-explicit-dc",
+      kind: "vsource" as const,
+      x: 160, y: 160, rotation: 0 as const,
+      value: "DC 2 SINE(0 1 1k)",
+      label: "V1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+
+    // Two distinct quantities, two distinct numbers, two distinct names.
+    expect((screen.getByRole("textbox", { name: "DC bias" }) as HTMLInputElement).value).toBe("2");
+    expect((screen.getByRole("textbox", { name: "Offset" }) as HTMLInputElement).value).toBe("0");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "DC bias" }), { target: { value: "3" } });
+    expect(useSchematic.getState().components[0].value).toBe("DC 3 SINE(0 1 1k)");
+
+    // Editing the waveform must not silently discard the authored bias.
     rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
-
-    fireEvent.change(screen.getByRole("textbox", { name: "DC operating point" }), { target: { value: "2" } });
-    expect(useSchematic.getState().components[0].value).toBe("DC 2 PWL(0 0 2u 5)");
+    fireEvent.change(screen.getByRole("textbox", { name: "Amplitude" }), { target: { value: "4" } });
+    expect(useSchematic.getState().components[0].value).toBe("DC 3 SINE(0 4 1k)");
   });
 
   it("switches waveform modes without requiring raw SINE syntax", async () => {

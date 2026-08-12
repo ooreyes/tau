@@ -143,11 +143,19 @@ const EXPLORER_ICON_SIZE = 22;
  *  exactly on the ≥8px bar, which a subpixel layout can round under. */
 const EXPLORER_OVERFLOW_CLEARANCE = 2;
 /** Narrowest the root identity may be squeezed to before an icon is dropped
- *  instead. 56px is the measured natural width of the default "SCHEMATICS"
- *  caption (10px/650/0.06em, uppercase) in the evidence screenshot - i.e. the
- *  point at which the name stops being truncated rather than an invented
- *  minimum. */
-const EXPLORER_ROOT_NAME_MIN = 56;
+ *  instead. This is the *measured* natural width of the default "SCHEMATICS"
+ *  caption, not an invented minimum: in the evidence shot img-002-003 (2x) the
+ *  caption's ink spans image columns 22-164, i.e. 71 CSS px at
+ *  10px/650/0.06em uppercase; 72 is that plus a pixel of rounding.
+ *
+ *  It was 56 here first, which is 15px short of the caption it claimed to
+ *  measure. The consequence was concrete and shipped-by-default: at the
+ *  panel's 226px default the budget then approved all five icons, leaving the
+ *  name box 58px and rendering "SCHEMATI…". The user's ask is explicitly
+ *  conditional - show the icons "as long as it has decent space from the text
+ *  of the folder name" - so the caption wins the tie and the least-essential
+ *  icon goes to the ⋯ instead. */
+const EXPLORER_ROOT_NAME_MIN = 72;
 
 /**
  * How many of the header's primary icon buttons fit beside the root name and
@@ -897,6 +905,18 @@ export function ExplorerPanel({
           void moveDraggedNode(rootPath, event);
         }}
       >
+        {/* The project root is a folder with children like any other, so it
+            gets the same `.tree-dir` wrapper - otherwise the one relationship
+            the reader looks at first (root → its own children, which is exactly
+            what img-003-005 crops) is the only one with no guide line. No
+            `data-project-dir-path` here: `.tree-list` already carries it, and a
+            second copy would only give `pointerDestination`'s closest() a
+            nearer element resolving to the same path. */}
+        <div
+          className="tree-dir tree-project-root-dir"
+          style={{ "--tree-indent": `${treeRowIndent(0)}px` } as CSSProperties}
+          data-open={expanded.includes(rootPath) || undefined}
+        >
         <button
           type="button"
           className="tree-folder-row tree-project-root-row"
@@ -997,6 +1017,7 @@ export function ExplorerPanel({
             onConsumeSuppressedClick={consumeSuppressedClick}
           />
         )}
+        </div>
       </div>
 
       {error && <p className="explorer-error" role="alert">{error}</p>}
@@ -1726,6 +1747,7 @@ function ComponentPropertyGroup({
   const entry = CATALOG_BY_KIND[selected.kind];
   const [groupOpen, setGroupOpen] = useState(true);
   const setValue = useSchematic((s) => s.setValue);
+  const setSourceIdentity = useSchematic((s) => s.setSourceIdentity);
   const setSubcircuitModel = useSchematic((s) => s.setSubcircuitModel);
   const setOpampModel = useSchematic((s) => s.setOpampModel);
   const setLabel = useSchematic((s) => s.setLabel);
@@ -1946,7 +1968,12 @@ function ComponentPropertyGroup({
           ? junctionModelSummary(selected, null)
           : `Generic starter · fine for topology checks; not a manufacturer part.`;
 
-  const title = componentDisplayName(selected.kind);
+  /* The value, not just the kind: a `vsource` holding `SINE(...)` is a sine
+   * source and must say so. Titling it from the kind alone is the exact frame
+   * the report photographed - "DC source" above a Waveform reading Sine. The
+   * second argument is optional and ignored for every non-source kind, so it is
+   * safe to pass unconditionally. */
+  const title = componentDisplayName(selected.kind, selected.value);
   const headline = componentHeadline(selected);
 
   return (
@@ -2039,6 +2066,12 @@ function ComponentPropertyGroup({
               legacyKind={selected.kind === "vac" || selected.kind === "iac" || selected.kind === "vpulse" ? selected.kind : undefined}
               onBeginChange={beginParamChange}
               onValueChange={(value) => setValue(selected.id, value)}
+              /* Alias convergence. A part stored as vac/vpulse whose new
+               * waveform that dialect cannot hold becomes canonical vsource in
+               * the SAME undoable transaction as the value rewrite, so kind and
+               * value can never disagree. No beginParamChange beside it - the
+               * store action snapshots itself. */
+              onIdentityChange={(kind, value) => { setSourceIdentity(selected.id, kind, value); }}
             />
           ) : selected.kind === "bsource" ? (
             <BehavioralSourceEditor
