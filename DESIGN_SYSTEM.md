@@ -29,6 +29,40 @@ Corollaries:
 - Status color appears as a lamp, a hairline, a small text run, or a shallow tint. Never as
   a full-saturation fill behind a paragraph.
 
+### 0.1 The one exception: tool-object ink
+
+A tool in the editor tool strip depicts a **physical object** - a hookup wire, a paper tag, a
+multimeter probe, a rubber eraser, a bin. Its color is that object's identity, in the same
+sense that §0 already concedes a legend swatch carrying a trace color "**is** data". A probe
+is red because probes are red; that is a fact about the bench, not a decoration, and a strip
+of nine identical grey glyphs asks the user to read a label where they could have recognised
+a shape.
+
+This is a **narrow, closed exception**, and every clause is load-bearing:
+
+- It applies to the **editor tool strip only** (`.editor-toolbar`) - not panels, not headers,
+  not tabs, not the parts rail, not any other control anywhere in the app.
+- It tints the **glyph** only: `stroke` and `fill` inside the 16 px `svg`. It may never
+  produce a filled background, a wash, a tinted card, or a colored border on the button.
+- The inks are a **closed named set** (`--tool-*-ink`, defined once in `App.css` per §7.4).
+  A new one requires editing this section.
+- **A tool ink may never enter the trace palette.** No plot, legend, or measurement may
+  assign a `--tool-*-ink`, and no tool may use a `--trace-*`. The two sets stay disjoint, so
+  color on the canvas still means measurement and nothing else.
+- **Disabled desaturates.** A disabled tool must read as disabled at a glance; dimming a
+  saturated glyph is not enough, so disabled state drops to the neutral ink.
+- Restraint still applies. Tools whose real counterpart is neutral - a steel bin, a grey
+  pointer - **stay neutral**. Coloring all nine would be the rainbow this document exists to
+  prevent.
+
+Rationale for the amendment, recorded so a future reader can weigh it: the product owner
+asked for exactly this ("id like icons with color schemes like the design reference images …
+a gray trascan … A red wire. The goal is to just have these items look like their real
+counterparts while maining the strict style guides"), and §0's own header requires that a
+conflicting change update this document in the same commit rather than quietly ignore it.
+The disjoint-palette clause is what keeps §0's actual guarantee intact: saturated color on
+the *instrument face* still means a measurement.
+
 ---
 
 ## 1. Themes
