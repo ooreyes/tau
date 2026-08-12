@@ -71,7 +71,7 @@
   --tool-tag-ink:        #c4a24e;   /* kraft/manila tag */
   --tool-eraser-ink:     #d9829a;   /* rubber eraser */
   --tool-steel-ink:      #9aa3ae;   /* bin: brushed steel, deliberately neutral */
-  --tool-undo-ink:       #8e8fc4;   /* history back */
+  --tool-undo-ink:       #9b9ce0;   /* history back */
   --tool-redo-ink:       #5fb3a6;   /* history forward */
   --tool-ink-disabled:   var(--faint);
 
@@ -374,7 +374,7 @@
     --tool-tag-ink:        #7a601b;
     --tool-eraser-ink:     #9f4463;
     --tool-steel-ink:      #5b6572;
-    --tool-undo-ink:       #5a5c99;
+    --tool-undo-ink:       #4a4ea6;
     --tool-redo-ink:       #286d62;
     --tool-ink-disabled:   var(--faint);
 
@@ -524,7 +524,7 @@
   --tool-tag-ink:        #7a601b;
   --tool-eraser-ink:     #9f4463;
   --tool-steel-ink:      #5b6572;
-  --tool-undo-ink:       #5a5c99;
+  --tool-undo-ink:       #4a4ea6;
   --tool-redo-ink:       #286d62;
   --tool-ink-disabled:   var(--faint);
 
@@ -663,7 +663,7 @@
   --tool-tag-ink:        #c4a24e;   /* kraft/manila tag */
   --tool-eraser-ink:     #d9829a;   /* rubber eraser */
   --tool-steel-ink:      #9aa3ae;   /* bin: brushed steel, deliberately neutral */
-  --tool-undo-ink:       #8e8fc4;   /* history back */
+  --tool-undo-ink:       #9b9ce0;   /* history back */
   --tool-redo-ink:       #5fb3a6;   /* history forward */
   --tool-ink-disabled:   var(--faint);
 
