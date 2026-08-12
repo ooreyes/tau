@@ -65,34 +65,55 @@ const THEMES = quick ? ["dark"] : ["light", "dark"];
 const EMPTY_ASC = "Version 4\nSHEET 1 880 680\n";
 
 /**
- * A deliberately cramped sheet: twelve parts on a 64-unit pitch with long
- * values, which is the condition the report's overlap screenshot was taken in.
- * Written as `.asc` text rather than placed part-by-part so the layout is
- * byte-identical on every run — a label-collision invariant that only holds for
- * some random layouts is not an invariant.
+ * A cramped sheet, parameterised by pitch and rotation.
+ *
+ * The report's overlap screenshot is a capacitor and a resistor a few grid
+ * units apart whose value labels print on top of each other ("1µ" over "1k Ω"),
+ * so the generator alternates exactly that pair and sweeps the separation:
+ * "no overlap EVER" is a claim about the whole range, and a single hand-picked
+ * pitch is the one layout a fix is most likely to have been tuned against.
+ * Written as `.asc` text rather than placed part-by-part so each sheet is
+ * byte-identical run to run.
  */
-function densyAsc() {
+function densAsc({ pitch = 64, rotate = false, rows = 3, cols = 4 } = {}) {
   const lines = ["Version 4", "SHEET 1 1200 900"];
   const kinds = [
-    ["res", "R", "1k"],
     ["cap", "C", "1µ"],
+    ["res", "R", "1k"],
     ["ind", "L", "10m"],
     ["res", "R", "4.7Meg"],
   ];
   let n = 0;
-  for (let row = 0; row < 3; row += 1) {
-    for (let col = 0; col < 4; col += 1) {
-      const [sym, prefix, value] = kinds[col];
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const [sym, prefix, value] = kinds[col % kinds.length];
       n += 1;
-      const x = 160 + col * 64;
-      const y = 160 + row * 64;
-      lines.push(`SYMBOL ${sym} ${x} ${y} R0`);
+      const orient = rotate && (n % 2 === 0) ? "R90" : "R0";
+      lines.push(`SYMBOL ${sym} ${160 + col * pitch} ${160 + row * pitch} ${orient}`);
       lines.push(`SYMATTR InstName ${prefix}${n}`);
       lines.push(`SYMATTR Value ${value}`);
     }
   }
+  // Net labels share the sheet with part labels, and the Canvas comment says
+  // net names deliberately sit *under* ref/value labels - z-order is not a
+  // licence to overlap, so they are in the measured set too.
+  for (let i = 0; i < 3; i += 1) {
+    lines.push(`FLAG ${160 + i * pitch} ${160 + rows * pitch} node_${i}`);
+  }
   return `${lines.join("\n")}\n`;
 }
+
+/** The sheets P3-07 must hold on. */
+const OVERLAP_SHEETS = [
+  { name: "pitch32", asc: densAsc({ pitch: 32 }) },
+  { name: "pitch48", asc: densAsc({ pitch: 48 }) },
+  { name: "pitch64", asc: densAsc({ pitch: 64 }) },
+  { name: "pitch96", asc: densAsc({ pitch: 96 }) },
+  { name: "pitch48rot", asc: densAsc({ pitch: 48, rotate: true }) },
+  { name: "pitch64rot", asc: densAsc({ pitch: 64, rotate: true }) },
+  { name: "tight2x6", asc: densAsc({ pitch: 40, rows: 2, cols: 6 }) },
+];
+const densyAsc = () => densAsc({ pitch: 64 });
 
 async function waitForServer(url, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
@@ -217,20 +238,23 @@ const CHECKS = [
       const before = await read();
       await shot(page, `P3-01-dc-${ctx.tag}`);
 
-      // Switch the waveform through the real control.
-      const switched = await page.evaluate(() => {
-        const selects = [...document.querySelectorAll(".component-inspector select")];
-        const wave = selects.find((s) => [...s.options].some((o) => /sine/i.test(o.textContent ?? "")));
-        if (!wave) return { ok: false, reason: "no waveform select in the inspector" };
-        const option = [...wave.options].find((o) => /sine/i.test(o.textContent ?? ""));
-        wave.value = option.value;
-        wave.dispatchEvent(new Event("change", { bubbles: true }));
-        return { ok: true, chose: option.textContent?.trim() };
-      });
-      if (!switched.ok) {
-        return { pass: false, detail: `could not reach the waveform control: ${switched.reason}`, data: { before } };
+      // Switch the waveform through the real control. It is a Radix Select
+      // (a button labelled "Waveform type"), not a native <select>, so it has
+      // to be clicked open and the option clicked - setting a value would not
+      // exercise the code path a user does.
+      const trigger = page.getByRole("combobox", { name: "Waveform type" });
+      if ((await trigger.count()) === 0) {
+        return { pass: false, detail: "no control labelled 'Waveform type' in the inspector", data: { before } };
       }
-      await page.waitForTimeout(300);
+      await trigger.click();
+      await page.waitForTimeout(150);
+      const sine = page.getByRole("option", { name: /sine/i }).first();
+      if ((await sine.count()) === 0) {
+        await page.keyboard.press("Escape");
+        return { pass: false, detail: "the Waveform control offers no Sine option", data: { before } };
+      }
+      await sine.click();
+      await page.waitForTimeout(400);
       const after = await read();
       await shot(page, `P3-01-sine-${ctx.tag}`);
 
@@ -341,34 +365,58 @@ const CHECKS = [
     id: "P3-04A",
     title: "the explorer overflow trigger survives a narrow window",
     async run(page, ctx) {
-      await freshSchematic(page, `p3-04a-${ctx.tag}`);
-      const m = await page.evaluate(() => {
-        const head = document.querySelector(".explorer-head");
-        const trigger = document.querySelector(".explorer-overflow-trigger");
-        const name = document.querySelector(".explorer-root-name");
-        if (!head || !trigger || !name) {
-          return { missing: { head: !head, trigger: !trigger, name: !name } };
-        }
-        const h = head.getBoundingClientRect();
-        const t = trigger.getBoundingClientRect();
-        const n = name.getBoundingClientRect();
-        return {
-          headRight: Math.round(h.right), triggerRight: Math.round(t.right),
-          triggerWidth: Math.round(t.width), triggerVisible: t.width > 0 && t.height > 0,
-          insideHead: t.right <= h.right + 1 && t.left >= h.left - 1,
-          gapToName: Math.round(t.left - n.right),
-          nameTruncated: name.scrollWidth > name.clientWidth + 1,
-          headOverflowing: head.scrollWidth > head.clientWidth + 1,
-        };
-      });
-      await shot(page, `P3-04A-header-${ctx.tag}`);
-      if (m.missing) return { pass: false, detail: `header parts missing: ${JSON.stringify(m.missing)}`, data: m };
-      const pass = m.triggerVisible && m.insideHead && m.gapToName >= 8 && !m.headOverflowing;
+      /*
+       * Swept across the explorer's own width, not just the window's. The panel
+       * is its own CSS query container (App.css:5192), so the breakpoint that
+       * decides this is the PANEL width - 168px is EXPLORER_PANEL_WIDTH.minWidth,
+       * 226px the default, 420px the max. A check that only ever looked at the
+       * default width would sit on one side of a binary swap and never see it.
+       */
+      const WIDTHS = [168, 226, 420];
+      const perWidth = [];
+      for (const w of WIDTHS) {
+        await page.evaluate((width) => {
+          try { localStorage.setItem("tau.ui.explorerWidth", String(width)); } catch { /* private mode */ }
+        }, w);
+        await freshSchematic(page, `p3-04a-${w}-${ctx.tag}`);
+        const m = await page.evaluate(() => {
+          const head = document.querySelector(".explorer-head");
+          const name = document.querySelector(".explorer-root-name");
+          if (!head || !name) return { missing: { head: !head, name: !name } };
+          const trigger = document.querySelector(".explorer-overflow-trigger");
+          const vis = (el) => {
+            if (!el) return false;
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== "none";
+          };
+          const icons = [...head.querySelectorAll(".explorer-primary-actions button")].filter(vis);
+          const h = head.getBoundingClientRect();
+          const n = name.getBoundingClientRect();
+          const t = trigger?.getBoundingClientRect();
+          return {
+            panelWidth: Math.round(document.querySelector(".explorer-panel")?.getBoundingClientRect().width ?? 0),
+            triggerVisible: vis(trigger),
+            triggerWidth: t ? Math.round(t.width) : 0,
+            insideHead: t ? t.right <= h.right + 1 && t.left >= h.left - 1 : false,
+            gapToName: t ? Math.round(t.left - n.right) : null,
+            primaryIconsVisible: icons.length,
+            headOverflowing: head.scrollWidth > head.clientWidth + 1,
+          };
+        });
+        perWidth.push({ asked: w, ...m });
+        await shot(page, `P3-04A-header-${w}-${ctx.tag}`);
+      }
+      await page.evaluate(() => { try { localStorage.removeItem("tau.ui.explorerWidth"); } catch { /* ok */ } });
+
+      const bad = perWidth.filter((m) => m.missing
+        || !m.triggerVisible || !m.insideHead || (m.gapToName ?? -1) < 8 || m.headOverflowing);
       return {
-        pass,
-        detail: `overflow trigger ${m.triggerWidth}px wide, inside header: ${m.insideHead}, `
-          + `gap to root name: ${m.gapToName}px (need >= 8), header overflowing: ${m.headOverflowing}`,
-        data: m,
+        pass: bad.length === 0,
+        detail: perWidth.map((m) => `@${m.asked}px(actual ${m.panelWidth}): ⋯ visible ${m.triggerVisible}`
+          + `, inside header ${m.insideHead}, gap to name ${m.gapToName}px, ${m.primaryIconsVisible} primary icon(s)`
+          + `, header overflowing ${m.headOverflowing}`).join(" | ")
+          + `; failing widths: ${bad.map((m) => m.asked).join(", ") || "none"} (⋯ must survive every width with >= 8px clear)`,
+        data: perWidth,
       };
     },
   },
@@ -429,18 +477,24 @@ const CHECKS = [
       });
       await shot(page, `P3-06-tree-${ctx.tag}`);
       const rootRow = rows.find((r) => r.isRoot);
-      const children = rows.filter((r) => !r.isRoot);
       const rootIndent = rootRow?.contentLeft ?? 0;
-      const flush = children.filter((r) => r.contentLeft <= rootIndent);
       const nested = rows.find((r) => /nested\.asc/.test(r.text ?? ""));
       const folder = rows.find((r) => /Project Storage/.test(r.text ?? ""));
-      const deeperThanFolder = nested && folder ? nested.contentLeft > folder.contentLeft : null;
+      // The bar is a step a reader can SEE. The pre-fix tree stepped by 2px per
+      // level, which satisfies "greater than" and satisfies nobody looking at
+      // it; 10px is roughly the width of the caret it should clear.
+      const STEP = 10;
+      const rootToFolder = folder ? folder.contentLeft - rootIndent : null;
+      const folderToFile = nested && folder ? nested.contentLeft - folder.contentLeft : null;
+      const shallow = [
+        rootToFolder !== null && rootToFolder < STEP ? `root->folder ${rootToFolder}px` : null,
+        folderToFile !== null && folderToFile < STEP ? `folder->file ${folderToFile}px` : null,
+      ].filter(Boolean);
       return {
-        pass: flush.length === 0 && deeperThanFolder === true,
-        detail: `root row content at ${rootIndent}px; ${flush.length} child row(s) flush with or left of it `
-          + `(${flush.map((r) => `${r.text}@${r.contentLeft}`).join(", ") || "none"}); `
-          + `nested.asc at ${nested?.contentLeft}px vs its folder at ${folder?.contentLeft}px -> deeper: ${deeperThanFolder}`,
-        data: rows,
+        pass: shallow.length === 0 && rootToFolder !== null && folderToFile !== null,
+        detail: `indent steps: root(${rootIndent}px) -> folder(+${rootToFolder}px) -> nested file(+${folderToFile}px); `
+          + `need >= ${STEP}px per level; too shallow: ${shallow.join(", ") || "none"}`,
+        data: { rows, rootIndent, rootToFolder, folderToFile },
       };
     },
   },
@@ -449,34 +503,56 @@ const CHECKS = [
     id: "P3-07",
     title: "no two labels overlap, ever",
     async run(page, ctx) {
-      await freshSchematic(page, `p3-07-${ctx.tag}`, densyAsc());
-      await page.waitForTimeout(500);
-      const overlaps = await page.evaluate(() => {
-        const texts = [...document.querySelectorAll(".label-layer text.ref, .label-layer text.val, .net-label-layer text.net-label-text")];
-        const boxes = texts.map((t) => {
-          const r = t.getBoundingClientRect();
-          return { text: t.textContent?.trim(), cls: t.getAttribute("class"), x: r.left, y: r.top, w: r.width, h: r.height, r: r.right, b: r.bottom };
-        }).filter((b) => b.w > 0 && b.h > 0);
-        const hits = [];
-        for (let i = 0; i < boxes.length; i += 1) {
-          for (let j = i + 1; j < boxes.length; j += 1) {
-            const a = boxes[i], c = boxes[j];
-            const ox = Math.min(a.r, c.r) - Math.max(a.x, c.x);
-            const oy = Math.min(a.b, c.b) - Math.max(a.y, c.y);
-            if (ox > 0.5 && oy > 0.5) {
-              hits.push({ a: a.text, b: c.text, overlapPx: `${ox.toFixed(1)}x${oy.toFixed(1)}` });
+      const perSheet = [];
+      for (const sheet of OVERLAP_SHEETS) {
+        await freshSchematic(page, `p3-07-${sheet.name}-${ctx.tag}`, sheet.asc);
+        await page.waitForTimeout(400);
+        const measured = await page.evaluate(() => {
+          const texts = [...document.querySelectorAll(
+            ".label-layer text.ref, .label-layer text.val, .net-label-layer text.net-label-text",
+          )];
+          const boxes = texts.map((t) => {
+            const r = t.getBoundingClientRect();
+            return { text: t.textContent?.trim(), x: r.left, y: r.top, w: r.width, h: r.height, r: r.right, b: r.bottom };
+          }).filter((b) => b.w > 0 && b.h > 0);
+          const hits = [];
+          for (let i = 0; i < boxes.length; i += 1) {
+            for (let j = i + 1; j < boxes.length; j += 1) {
+              const a = boxes[i], c = boxes[j];
+              const ox = Math.min(a.r, c.r) - Math.max(a.x, c.x);
+              const oy = Math.min(a.b, c.b) - Math.max(a.y, c.y);
+              // Half a pixel of antialiasing touch is not an overlap; a whole
+              // pixel of shared ink in BOTH axes is.
+              if (ox > 1 && oy > 1) hits.push({ a: a.text, b: c.text, overlapPx: `${ox.toFixed(1)}x${oy.toFixed(1)}` });
             }
           }
-        }
-        return { count: boxes.length, hits };
-      });
+          // Artwork collisions matter too: a value printed across another
+          // part's body is the same defect wearing a different hat.
+          const art = [...document.querySelectorAll("svg.canvas .component")].map((el) => el.getBoundingClientRect());
+          const onArt = [];
+          for (const b of boxes) {
+            for (const a of art) {
+              const ox = Math.min(b.r, a.right) - Math.max(b.x, a.left);
+              const oy = Math.min(b.b, a.bottom) - Math.max(b.y, a.top);
+              if (ox > 2 && oy > 2) onArt.push({ text: b.text, overlapPx: `${ox.toFixed(1)}x${oy.toFixed(1)}` });
+            }
+          }
+          return { count: boxes.length, hits, onArt: onArt.slice(0, 8), onArtCount: onArt.length };
+        });
+        perSheet.push({ sheet: sheet.name, ...measured });
+        if (measured.hits.length > 0) await shot(page, `P3-07-overlap-${sheet.name}-${ctx.tag}`);
+      }
       await shot(page, `P3-07-dense-${ctx.tag}`);
+      const worst = perSheet.reduce((a, b) => (b.hits.length > a.hits.length ? b : a), perSheet[0]);
+      const totalHits = perSheet.reduce((n, s) => n + s.hits.length, 0);
       return {
-        pass: overlaps.hits.length === 0,
-        detail: `${overlaps.count} label boxes measured on a 12-part sheet at 64-unit pitch; `
-          + `${overlaps.hits.length} overlapping pair(s)`
-          + (overlaps.hits.length ? `: ${overlaps.hits.slice(0, 6).map((h) => `"${h.a}"x"${h.b}" ${h.overlapPx}px`).join("; ")}` : ""),
-        data: overlaps,
+        pass: totalHits === 0,
+        detail: `${OVERLAP_SHEETS.length} sheets swept (pitch 32-96, straight and rotated, net labels included), `
+          + `${perSheet.reduce((n, s) => n + s.count, 0)} label boxes measured; ${totalHits} overlapping pair(s)`
+          + (totalHits ? `; worst sheet "${worst.sheet}" with ${worst.hits.length}: `
+              + worst.hits.slice(0, 5).map((h) => `"${h.a}"x"${h.b}" ${h.overlapPx}px`).join("; ") : "")
+          + `; label-over-artwork collisions: ${perSheet.reduce((n, s) => n + s.onArtCount, 0)}`,
+        data: perSheet,
       };
     },
   },
@@ -486,27 +562,66 @@ const CHECKS = [
     title: "ground lands pin-up on every placement path",
     async run(page, ctx) {
       await freshSchematic(page, `p3-08-${ctx.tag}`);
-      // Rotate the placement tool first: a sticky rotation from a previous part
-      // is the most likely way a ground ends up sideways, so provoke it.
-      await place(page, "Resistor", 0.25, 0.3);
+      const groundsNow = () => page.evaluate(() => window.__TAU_DEV__.useSchematic.getState().components
+        .filter((c) => c.kind === "ground")
+        .map((c) => ({ rot: c.rotation, mir: Boolean(c.mirrored) })));
+
+      // Path 1: palette click, with a sticky tool rotation provoked first -
+      // a rotation left over from a previous part is the likeliest way a ground
+      // ends up sideways.
+      await place(page, "Resistor", 0.25, 0.28);
       await page.keyboard.press("r");
       await page.keyboard.press("r");
-      await place(page, "Ground", 0.45, 0.55);
+      await place(page, "Ground", 0.4, 0.5);
       await page.waitForTimeout(200);
-      const state = await page.evaluate(() => {
-        const s = window.__TAU_DEV__.useSchematic.getState();
-        return s.components
-          .filter((c) => c.kind === "ground")
-          .map((c) => ({ id: c.id, kind: c.kind, rotation: c.rotation, mirrored: Boolean(c.mirrored) }));
-      });
+      const afterClick = await groundsNow();
+
+      // Path 2: mirror the tool as well, then place again.
+      await page.keyboard.press("r");
+      await page.keyboard.press("m").catch(() => {});
+      await place(page, "Ground", 0.6, 0.5);
+      await page.waitForTimeout(200);
+      const afterMirror = await groundsNow();
+
+      // Path 3: drag the palette entry onto the canvas, which is a different
+      // code path from a palette click and the one most likely to skip the rule.
+      let dragNote = "not attempted";
+      try {
+        const tagged = await page.evaluate(() => {
+          const item = [...document.querySelectorAll("button.palette-item")]
+            .find((b) => b.querySelector(".palette-name")?.textContent?.trim() === "Ground");
+          if (!item) return false;
+          item.setAttribute("data-shot-target", "1");
+          return true;
+        });
+        if (tagged) {
+          const { canvas, box, usableWidth } = await usableCanvas(page);
+          await page.locator('button.palette-item[data-shot-target="1"]').hover();
+          await page.mouse.down();
+          await page.mouse.move(box.x + usableWidth * 0.35, box.y + box.height * 0.72, { steps: 12 });
+          await page.mouse.up();
+          await page.waitForTimeout(250);
+          await canvas.click({ position: { x: usableWidth * 0.35, y: box.height * 0.72 } }).catch(() => {});
+          await page.keyboard.press("Escape");
+          await page.evaluate(() => document.querySelector('[data-shot-target="1"]')?.removeAttribute("data-shot-target"));
+          dragNote = "attempted";
+        }
+      } catch (err) {
+        dragNote = `threw: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      await page.waitForTimeout(200);
+      const afterDrag = await groundsNow();
       await shot(page, `P3-08-ground-${ctx.tag}`);
-      const bad = state.filter((g) => g.rotation !== 0 || g.mirrored);
+
+      const all = afterDrag.length ? afterDrag : afterMirror;
+      const bad = all.filter((g) => g.rot !== 0 || g.mir);
       return {
-        pass: state.length > 0 && bad.length === 0,
-        detail: `${state.length} ground(s) placed after two tool rotations; `
-          + `orientations ${JSON.stringify(state.map((g) => ({ rot: g.rotation, mir: g.mirrored })))}; `
-          + `${bad.length} not pin-up`,
-        data: state,
+        pass: all.length > 0 && bad.length === 0,
+        detail: `grounds after palette click (tool rotated twice): ${JSON.stringify(afterClick)}; `
+          + `after also mirroring the tool: ${JSON.stringify(afterMirror)}; `
+          + `after a palette drag (${dragNote}): ${JSON.stringify(afterDrag)}; `
+          + `${bad.length} of ${all.length} not pin-up`,
+        data: { afterClick, afterMirror, afterDrag, dragNote },
       };
     },
   },
@@ -642,41 +757,68 @@ const CHECKS = [
       await freshSchematic(page, `p3-13-${ctx.tag}`);
       await place(page, "Resistor", 0.35, 0.4);
       await page.waitForTimeout(200);
+      /*
+       * Judged in HSL, not by raw channel spread.
+       *
+       * A first version of this check used max-minus-min channel and passed the
+       * LIGHT theme with zero colour applied: the strip's neutral ink there is
+       * rgb(78, 92, 110), a blue-grey whose channel spread is 32. Saturation
+       * tells the truth about it (0.17 - neutral), and hue tells the truth about
+       * whether two tools really differ rather than being two shades of one
+       * accent. So: an accent needs saturation, and "distinct" needs hue
+       * separation.
+       */
       const strip = await page.evaluate(() => {
-        const chroma = (rgb) => {
-          const [r, g, b] = (rgb.match(/[\d.]+/g) ?? [0, 0, 0]).map(Number);
-          return Math.max(r, g, b) - Math.min(r, g, b);
+        const hsl = (rgb) => {
+          const [r, g, b] = (rgb.match(/[\d.]+/g) ?? [0, 0, 0]).map((n) => Number(n) / 255);
+          const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+          if (max === min) return { h: 0, s: 0, l };
+          const d = max - min;
+          const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          let h;
+          if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+          else if (max === g) h = (b - r) / d + 2;
+          else h = (r - g) / d + 4;
+          return { h: h * 60, s, l };
         };
         const btns = [...document.querySelectorAll(".editor-toolbar .editor-icon-btn")];
         return btns.map((b) => {
-          const colours = [...b.querySelectorAll("svg, svg *")].flatMap((el) => {
+          const raw = [...b.querySelectorAll("svg, svg *")].flatMap((el) => {
             const cs = getComputedStyle(el);
-            return [cs.stroke, cs.fill, cs.color].filter((c) => c && c !== "none" && !/rgba\(0, 0, 0, 0\)/.test(c));
+            return [cs.stroke, cs.fill, cs.color].filter((c) => c && c !== "none" && !/rgba\([^)]*,\s*0\)/.test(c));
           });
+          const parsed = [...new Set(raw)].map((c) => ({ c, ...hsl(c) }));
+          const dominant = parsed.slice().sort((x, y) => y.s - x.s)[0] ?? null;
           return {
             label: b.getAttribute("aria-label"),
             disabled: b.disabled,
-            maxChroma: Math.max(0, ...colours.map(chroma)),
-            colours: [...new Set(colours)].slice(0, 4),
+            colours: parsed.map((p) => `${p.c} h${Math.round(p.h)} s${p.s.toFixed(2)}`).slice(0, 3),
+            hue: dominant ? Math.round(dominant.h) : null,
+            sat: dominant ? Number(dominant.s.toFixed(2)) : null,
           };
         });
       });
       await page.locator(".editor-toolbar").screenshot({ path: path.join(outDir, `P3-13-strip-${ctx.tag}.png`) }).catch(() => {});
       await shot(page, `P3-13-editor-${ctx.tag}`);
 
+      const SAT = 0.3;      // below this a colour reads as ink, not as an accent
+      const HUE_SEP = 25;   // two accents closer than this read as one colour
       const enabled = strip.filter((b) => !b.disabled);
-      const coloured = enabled.filter((b) => b.maxChroma > 12);
+      const accented = enabled.filter((b) => (b.sat ?? 0) >= SAT);
+      const hues = accented.map((b) => b.hue).sort((a, b) => a - b);
+      const distinct = hues.filter((h, i) => i === 0 || Math.abs(h - hues[i - 1]) > HUE_SEP).length;
       const probe = strip.find((b) => /probe/i.test(b.label ?? ""));
-      const probeRed = probe ? probe.colours.some((c) => {
-        const [r, g, b] = (c.match(/[\d.]+/g) ?? [0, 0, 0]).map(Number);
-        return r > 110 && r > g * 1.5 && r > b * 1.5;
-      }) : false;
-      const distinctAccents = new Set(enabled.filter((b) => b.maxChroma > 12).map((b) => b.colours[0])).size;
+      // Red, meaning hue near 0/360 with real saturation - not "the red channel
+      // happens to be highest", which every warm grey satisfies.
+      const probeRed = Boolean(probe && (probe.sat ?? 0) >= SAT
+        && (probe.hue <= 25 || probe.hue >= 335));
+      const need = Math.max(4, Math.ceil(enabled.length * 0.6));
       return {
-        pass: enabled.length > 0 && coloured.length >= Math.max(4, Math.ceil(enabled.length * 0.6)) && probeRed && distinctAccents >= 3,
-        detail: `${strip.length} tool buttons (${enabled.length} enabled); ${coloured.length} carry a chromatic accent `
-          + `(chroma > 12); ${distinctAccents} distinct accents; probe button reads red: ${probeRed} `
-          + `(${probe ? probe.colours.join(" | ") : "no probe button found"})`,
+        pass: enabled.length > 0 && accented.length >= need && probeRed && distinct >= 3,
+        detail: `${strip.length} tool buttons (${enabled.length} enabled); ${accented.length}/${need} carry a real `
+          + `accent (saturation >= ${SAT}); ${distinct} hues distinct by > ${HUE_SEP}deg `
+          + `[${accented.map((b) => `${b.label}:h${b.hue}/s${b.sat}`).join(", ") || "none"}]; `
+          + `probe reads red: ${probeRed} (${probe ? `h${probe.hue} s${probe.sat}` : "no probe button found"})`,
         data: strip,
       };
     },
@@ -687,34 +829,93 @@ const CHECKS = [
     title: "the schematic dock is Errors only and flags problems before Run",
     async run(page, ctx) {
       await freshSchematic(page, `p3-14-${ctx.tag}`);
-      // A resistor with no ground and no source: several classes of error, and
-      // not one simulation has been run.
+
+      /*
+       * Two questions, and the order matters.
+       *
+       * First: does the dock flag a broken schematic BEFORE any run? A lone
+       * resistor has no ground, no source and two floating pins - three error
+       * classes the report expects to see without pressing Run.
+       *
+       * Second: is the Measurements tab really gone from schematic mode? Asking
+       * that on an empty sheet proves nothing, because App.tsx already drops the
+       * tab when there are no measurement rows to show. It has to be asked in
+       * the state where measurements EXIST - after a real run - which is why
+       * this check runs the built-in RC example and comes back.
+       */
       await place(page, "Resistor", 0.4, 0.45);
-      await page.waitForTimeout(500);
-      const dock = await page.evaluate(() => {
-        const tabs = [...document.querySelectorAll('[role="tab"]')].map((t) => t.textContent?.replace(/\s+/g, " ").trim());
-        const drawer = document.querySelector(".results-drawer") ?? document.querySelector("[class*=drawer]");
+      await page.waitForTimeout(600);
+      const preRun = await page.evaluate(() => {
+        const drawer = document.querySelector(".results-drawer") ?? document.querySelector("[class*='results-drawer']");
         const rows = [...document.querySelectorAll(".bottom-errors *")]
           .filter((el) => el.children.length === 0 && (el.textContent ?? "").trim().length > 0)
           .map((el) => el.textContent.trim());
-        const badge = document.querySelector(".results-drawer-tab .badge, [class*=badge]");
+        return {
+          rows: [...new Set(rows)].slice(0, 12),
+          text: drawer?.textContent?.replace(/\s+/g, " ").trim().slice(0, 500) ?? null,
+        };
+      });
+      await shot(page, `P3-14-prerun-${ctx.tag}`);
+
+      // Now a circuit that really simulates, so measurements exist.
+      let ranNote = "not attempted";
+      try {
+        const rc = page.getByRole("button", { name: /Try RC Charging/i });
+        if (await rc.count()) {
+          await rc.first().click();
+          await page.waitForTimeout(900);
+        }
+        const run = page.getByRole("button", { name: /^Run simulation$/i });
+        if (await run.count()) {
+          await run.first().click({ force: true });
+          await page.waitForTimeout(3_500);
+          ranNote = "ran";
+        } else {
+          ranNote = "no Run button found";
+        }
+        // Back to the schematic editor - the Measurements tab must be absent HERE.
+        const back = page.getByRole("button", { name: /Return to schematic editor/i });
+        if (await back.count()) {
+          await back.first().click();
+          await page.waitForTimeout(600);
+        }
+      } catch (err) {
+        ranNote = `threw: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      await page.waitForTimeout(500);
+      const dock = await page.evaluate(() => {
+        // Scope to the drawer: the editor's file tabs also carry role="tab",
+        // and counting them made an earlier version of this check report the
+        // open filename as a dock tab.
+        const drawer = document.querySelector(".results-drawer") ?? document.querySelector("[class*='results-drawer']");
+        const tabs = [...(drawer?.querySelectorAll('[role="tab"]') ?? [])]
+          .map((t) => t.textContent?.replace(/\s+/g, " ").trim());
+        const rows = [...document.querySelectorAll(".bottom-errors *")]
+          .filter((el) => el.children.length === 0 && (el.textContent ?? "").trim().length > 0)
+          .map((el) => el.textContent.trim());
+        const badge = drawer?.querySelector("[class*=badge]");
         return {
           tabs,
           hasMeasurementsTab: tabs.some((t) => /measurement/i.test(t ?? "")),
           hasErrorsTab: tabs.some((t) => /error/i.test(t ?? "")),
+          drawerFound: Boolean(drawer),
           drawerText: drawer?.textContent?.replace(/\s+/g, " ").trim().slice(0, 400) ?? null,
           rows: [...new Set(rows)].slice(0, 12),
           badgeText: badge?.textContent?.trim() ?? null,
         };
       });
       await shot(page, `P3-14-dock-${ctx.tag}`);
-      const flagsSomething = dock.rows.length > 0 || /ground|source|floating|unconnected|no .*(ground|source)/i.test(dock.drawerText ?? "");
+      const flagsPreRun = preRun.rows.length > 0
+        || /no ground|ground reference|no source|floating|unconnected|not connected/i.test(preRun.text ?? "");
+      const mode = await page.evaluate(() => document.querySelector(".mode-toggle [aria-pressed=true]")?.textContent?.trim()
+        ?? document.querySelector("[data-mode]")?.getAttribute("data-mode") ?? "unknown");
       return {
-        pass: !dock.hasMeasurementsTab && flagsSomething,
-        detail: `schematic-mode dock tabs [${dock.tabs.join(", ")}]; Measurements tab present: ${dock.hasMeasurementsTab}; `
-          + `pre-run diagnostics surfaced for a lone ungrounded resistor: ${flagsSomething} `
-          + `(${dock.rows.length} row(s), badge "${dock.badgeText}")`,
-        data: dock,
+        pass: !dock.hasMeasurementsTab && dock.hasErrorsTab && flagsPreRun,
+        detail: `pre-run, a lone ungrounded resistor produced ${preRun.rows.length} diagnostic row(s) `
+          + `-> flagged: ${flagsPreRun}; then after ${ranNote} and returning to the schematic (mode "${mode}"), `
+          + `dock tabs are [${dock.tabs.join(", ")}] - Measurements present: ${dock.hasMeasurementsTab}, `
+          + `Errors present: ${dock.hasErrorsTab}, badge "${dock.badgeText}"`,
+        data: { preRun, dock, ranNote, mode },
       };
     },
   },

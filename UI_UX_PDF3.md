@@ -165,15 +165,32 @@ to show the settings. I like the current three dot approach but we should be
 able to see them at a smaller window size as long as it has decent space from
 the text of the folder name it should be able to dynamically adjust."*
 
-The `SCHEMATICS` header keeps five primary icon buttons **and** the `⋯`
-overflow; below some width the row overflows and `⋯` is the casualty, even
-though the panel is mostly empty space.
+**Cause corrected by recon — the first reading of this item was wrong.** There
+is no overflow and the `⋯` is never clipped. The five primary icons and the `⋯`
+are never on screen together: `App.css:5192-5199` makes the panel its own query
+container, `App.css:5288` sets `.explorer-overflow-trigger { display: none }`
+unconditionally, and `App.css:5320-5332` flips it to `display: grid` while
+hiding `.explorer-primary-actions` only inside
+`@container explorer-shell (max-width: 280px)`. So the header is a **binary swap
+keyed at 280 px**: wide gives five icons and no `⋯`, narrow gives `⋯` and no
+icons. The reported screenshot is the narrow half.
 
-**Done when:** at 900×600 (and at the explorer's `minWidth`, 208 px) the `⋯`
-trigger is inside the header's client box with a measured gap of ≥ 8 px to the
-root-name text, and the primary icons drop out progressively (widest-first)
-rather than the overflow being clipped. Prove with measured `getBoundingClientRect`
-numbers in a test, not by eye.
+Read against that, the ask is the one the user actually wrote — keep the `⋯`
+(they like it), keep the actions reachable as the window shrinks, and let the
+header *adjust* instead of flipping.
+
+**Done when:** the header degrades progressively — as width falls, primary icons
+drop out widest-first and the `⋯` **always** remains, holding everything that
+dropped; at every width the `⋯` is inside the header's client box with a measured
+gap of ≥ 8 px to the root-name text; and no width exists where an action is
+unreachable from both the icon row and the menu. Measured at explorer widths
+168 px (`EXPLORER_PANEL_WIDTH.minWidth`), 226 px (the default) and 420 px, at
+900×600 and 1440×900.
+
+An unknown or zero measured width must **fail open** and render all five icons:
+jsdom evaluates no CSS, and 27 existing header-button queries across
+`ExplorerPanel.test.tsx`, `App.import.test.tsx` and `EmptyState.test.tsx` — two
+of those files in other lanes — would break if a zero width hid the icons.
 
 ---
 
@@ -229,14 +246,25 @@ surfaces a notice.
 **Report (item 6).** Evidence: `img-003-005.png`. *"Id like for the files to
 look indented almost to denote they live within a folder."*
 
-`ProjectTree` indents with `paddingLeft: 8 + depth * 12` and renders the project
-root's own children at `depth = 0` — the same 8 px as the root row itself, so
-root-level files sit flush with the folder that contains them.
+Two mechanisms, both confirmed by measurement:
 
-**Done when:** every row is indented strictly more than its parent row, at every
-depth, measured; a vertical guide line marks the parent–child relationship; the
-caret/icon/label baseline stays aligned; a test walks the rendered rows and
-asserts monotonically increasing indentation per level.
+1. **Depth basis.** `ProjectTree` indents with `paddingLeft: 8 + depth * 12` and
+   renders the project root's own children at `depth = 0`, while the root row
+   itself carries no inline padding at all (it inherits the `<button>` UA
+   default, ~6 px). Measured on the pre-fix tree: root row content at 62 px, its
+   child folder at **+2 px**, the file inside that folder at +12 px. A 2 px step
+   satisfies "greater than" and satisfies nobody looking at it.
+2. **Missing caret column.** File rows render no caret spacer, so a file's icon
+   does not line up with a sibling folder's icon — the thing that makes the
+   screenshot read as "flat list" rather than "tree".
+
+**Done when:** each level is indented **≥ 10 px** more than its parent (roughly
+the caret width — a step a reader can see, not merely a positive number), the
+root row's own padding is explicit rather than inherited from a UA default, file
+rows carry the caret-column spacer so icons align with sibling folders, a
+vertical guide marks the parent–child relationship, and the guide's x derives
+from the same depth value the padding does so the two cannot drift. Measured at
+every depth.
 
 ---
 
