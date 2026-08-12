@@ -21,7 +21,7 @@ import { useSchematic } from "../../store/useSchematic";
  * strip of controls rather than a sheet of path data. Select and Simulation
  * setup keep their lucide glyphs - they depict no object, so DESIGN_SYSTEM 0.1
  * keeps them neutral and there was nothing to redraw. */
-import { EraserIcon, ProbeIcon, RedoIcon, TagIcon, TrashIcon, UndoIcon, WireIcon } from "./ToolIcons";
+import { EraserIcon, MultimeterIcon, RedoIcon, TagIcon, TOOL_ICON_SIZE, TrashIcon, UndoIcon, WireIcon } from "./ToolIcons";
 
 export function EditorToolbar({
   mode,
@@ -66,7 +66,7 @@ export function EditorToolbar({
   return (
     <div className="editor-toolbar" aria-label="Editor toolbar">
       <IconButton title="Select" active={tool.mode === "select"} onClick={cancel}>
-        <MousePointer2 size={16} strokeWidth={1.6} />
+        <MousePointer2 size={TOOL_ICON_SIZE} strokeWidth={1.6} />
       </IconButton>
       <IconButton title="Wire" tone="wire" active={tool.mode === "wire"} disabled={readOnly} onClick={startWiring}>
         <WireIcon />
@@ -75,7 +75,9 @@ export function EditorToolbar({
         <TagIcon />
       </IconButton>
       <IconButton title="Probe" tone="probe" active={tool.mode === "probe"} onClick={startProbing}>
-        <ProbeIcon />
+        {/* The METER, not a lead: the button is the instrument you pick up,
+            and the cursor (probeCursor) is the red lead you touch to a node. */}
+        <MultimeterIcon />
       </IconButton>
       <span className="toolbar-divider" />
       <IconButton title="Undo" tone="undo" disabled={!canUndo || readOnly} onClick={undo}>
@@ -91,7 +93,7 @@ export function EditorToolbar({
         <EraserIcon />
       </IconButton>
       <IconButton title="Simulation setup" disabled={readOnly} onClick={onOpenSimulationSetup}>
-        <SlidersHorizontal size={16} strokeWidth={1.6} />
+        <SlidersHorizontal size={TOOL_ICON_SIZE} strokeWidth={1.6} />
       </IconButton>
       <div className="editor-toolbar-spacer" />
       <div className="transport">

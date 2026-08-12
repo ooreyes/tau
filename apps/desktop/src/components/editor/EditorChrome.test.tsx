@@ -105,20 +105,31 @@ describe("EditorToolbar tool-object ink (P3-13)", () => {
   });
 });
 
+/**
+ * The button draws the METER; the cursor draws the red LEAD.
+ *
+ * These two used to share a probe glyph, and the review's verdict on it was
+ * "looks terrible": at 18 px a lone lead is a coloured tick with no silhouette.
+ * The instrument is what identifies the tool in a strip of nine, and the lead is
+ * what you touch to a node - so they are two objects, and the tests say so
+ * separately.
+ */
 describe("EditorToolbar probe glyph (P3-12)", () => {
-  it("draws a multimeter probe instead of lucide's crosshair", () => {
+  it("draws the multimeter itself, not a lone lead and not lucide's crosshair", () => {
     renderToolbar();
     const probe = screen.getByRole("button", { name: "Probe" });
     expect(probe.querySelector(".lucide-crosshair")).toBeNull();
-    expect(probe.querySelector('[data-tool-icon="probe"]')).not.toBeNull();
+    expect(probe.querySelector('[data-tool-icon="multimeter"]')).not.toBeNull();
+    // The lead belongs on the cursor; it must not also be on the button.
+    expect(probe.querySelector('[data-tool-icon="probe"]')).toBeNull();
     expect(probe.getAttribute("data-tone")).toBe("probe");
   });
 
-  it("keeps the probe enabled in the read-only simulator view, still as a probe", () => {
+  it("keeps the probe enabled in the read-only simulator view, still as the meter", () => {
     renderToolbar("simulator");
     const probe = screen.getByRole("button", { name: "Probe" });
     expect((probe as HTMLButtonElement).disabled).toBe(false);
-    expect(probe.querySelector('[data-tool-icon="probe"]')).not.toBeNull();
+    expect(probe.querySelector('[data-tool-icon="multimeter"]')).not.toBeNull();
   });
 });
 
@@ -134,15 +145,42 @@ describe("probeCursor (P3-12, canvas affordance)", () => {
     expect(probeCursor()).toBe("crosshair");
   });
 
-  it("builds a themed data-URL cursor with the hotspot on the needle tip", () => {
+  it("puts the hotspot exactly on the needle tip, read out of the art itself", () => {
     document.documentElement.style.setProperty("--tool-probe-ink", "#ea4f42");
     document.documentElement.style.setProperty("--tool-steel-ink", "#9aa3ae");
     const cursor = probeCursor();
     expect(cursor).toMatch(/^url\("data:image\/svg\+xml,/);
-    // Hotspot 4 4 is ProbeIcon's tip (2.9, 2.9) scaled 16 -> 24, and the plain
-    // keyword stays on as the browser's own fallback.
-    expect(cursor).toMatch(/\) 4 4, crosshair$/);
-    expect(decodeURIComponent(cursor)).toContain("#ea4f42");
+    const svg = decodeURIComponent(cursor);
+
+    /*
+     * The alignment is DERIVED from the artwork, not restated from the source.
+     *
+     * The previous assertion hardcoded `4 4` and explained it as the tip scaled
+     * 16 -> 24 - but the tip was at 2.9, so it actually landed at 4.35 and the
+     * cursor was a third of a pixel off the point it claimed to mark. An
+     * assertion that repeats the implementation's own number cannot catch that.
+     * So: parse the needle's first coordinate out of the emitted SVG, parse the
+     * declared hotspot, and require them to be equal.
+     */
+    const hotspot = /\)\s+([\d.]+)\s+([\d.]+),\s*crosshair$/.exec(cursor);
+    expect(hotspot).not.toBeNull();
+    const needleStart = /<path d="M([\d.]+) ([\d.]+) L/.exec(svg);
+    expect(needleStart).not.toBeNull();
+    expect(Number(hotspot![1])).toBeCloseTo(Number(needleStart![1]), 5);
+    expect(Number(hotspot![2])).toBeCloseTo(Number(needleStart![2]), 5);
+
+    // 1:1 authoring is what keeps that equality true at any size: a viewBox that
+    // disagreed with width/height would reintroduce the scaling error.
+    const box = /width="(\d+)" height="(\d+)" viewBox="0 0 (\d+) (\d+)"/.exec(svg);
+    expect(box).not.toBeNull();
+    expect(box![1]).toBe(box![3]);
+    expect(box![2]).toBe(box![4]);
+
+    // The tip is steel, the barrel is red - the review asked for a grey tip.
+    expect(needleStart).not.toBeNull();
+    expect(svg).toMatch(/<path d="M3 3 [^"]*" fill="#9aa3ae"\/>/);
+    expect(svg).toContain('fill="#ea4f42"');
+    expect(cursor).toMatch(/, crosshair$/);
     document.documentElement.style.removeProperty("--tool-probe-ink");
     document.documentElement.style.removeProperty("--tool-steel-ink");
   });

@@ -971,10 +971,20 @@ const CHECKS = [
       const hues = accented.map((b) => b.hue).sort((a, b) => a - b);
       const distinct = hues.filter((h, i) => i === 0 || Math.abs(h - hues[i - 1]) > HUE_SEP).length;
       const probe = strip.find((b) => /probe/i.test(b.label ?? ""));
-      // Red, meaning hue near 0/360 with real saturation - not "the red channel
-      // happens to be highest", which every warm grey satisfies.
-      const probeRed = Boolean(probe && (probe.sat ?? 0) >= SAT
-        && (probe.hue <= 25 || probe.hue >= 335));
+      /*
+       * The probe BUTTON is now the meter (orange bezel and dial), not a red
+       * lead - the red lives on the canvas cursor, which this DOM probe cannot
+       * see because it is an inline `style="cursor:url(…)"`. So the button is
+       * checked for the meter's amber-orange, and the cursor's red is pinned by
+       * the unit test that parses probeCursor()'s emitted SVG and requires the
+       * declared hotspot to equal the needle's own first coordinate.
+       *
+       * An earlier version of this check asserted hue <= 25 or >= 335 on the
+       * button. It would now fail correct code, for the same reason the P3-01
+       * and P3-14 checks did: it encoded a design the product had moved past.
+       */
+      const probeIsMeter = Boolean(probe && (probe.sat ?? 0) >= SAT
+        && probe.hue >= 18 && probe.hue <= 50);
       /*
        * A COUNT, not a percentage, and deliberately.
        *
@@ -988,11 +998,13 @@ const CHECKS = [
        */
       const need = 5;
       return {
-        pass: enabled.length > 0 && accented.length >= need && probeRed && distinct >= 3,
+        pass: enabled.length > 0 && accented.length >= need && probeIsMeter && distinct >= 3,
         detail: `${strip.length} tool buttons (${enabled.length} enabled); ${accented.length}/${need} carry a real `
           + `accent (saturation >= ${SAT}); ${distinct} hues distinct by > ${HUE_SEP}deg `
           + `[${accented.map((b) => `${b.label}:h${b.hue}/s${b.sat}`).join(", ") || "none"}]; `
-          + `probe reads red: ${probeRed} (${probe ? `h${probe.hue} s${probe.sat}` : "no probe button found"})`,
+          + `probe button reads as the meter's amber-orange: ${probeIsMeter} `
+          + `(${probe ? `h${probe.hue} s${probe.sat}` : "no probe button found"}); `
+          + `the red lead is on the cursor, pinned by probeCursor()'s unit test`,
         data: strip,
       };
     },

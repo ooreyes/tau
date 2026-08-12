@@ -55,9 +55,14 @@
   --ti-2: var(--tool-steel-ink);
 }
 
-/* Multimeter probe: red barrel, chromed needle and lead (P3-12). */
+/* The probe tool's BUTTON is the meter: orange bezel and range dial, pale LCD
+   (P3-12). The red lead lives on the cursor instead - see probeCursor() in
+   components/editor/ToolIcons.tsx, which reads --tool-probe-ink directly off the
+   document because an inline style="cursor:…" cannot be reached from here.
+   That split is why this rule feeds --tool-meter-ink and NOT --tool-probe-ink:
+   the two glyphs are two different objects. */
 .editor-toolbar .editor-icon-btn.tool-probe {
-  --ti-1: var(--tool-probe-ink);
+  --ti-1: var(--tool-meter-ink);
   --ti-2: var(--tool-steel-ink);
 }
 

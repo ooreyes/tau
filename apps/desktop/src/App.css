@@ -66,9 +66,10 @@
      and they are DISJOINT from --trace-*, so saturated colour on the canvas
      still means a measurement and nothing else. A tool whose real counterpart
      is neutral - the bin, the pointer - stays on --muted by design. */
-  --tool-wire-ink:       #e4574b;   /* hookup wire */
+  --tool-wire-ink:       #f5483a;   /* hookup wire */
   --tool-probe-ink:      #ea4f42;   /* multimeter probe body */
-  --tool-tag-ink:        #c4a24e;   /* kraft/manila tag */
+  --tool-meter-ink:      #f5901e;   /* multimeter bezel and range dial */
+  --tool-tag-ink:        #e0b955;   /* kraft/manila tag */
   --tool-eraser-ink:     #d9829a;   /* rubber eraser */
   --tool-steel-ink:      #9aa3ae;   /* bin: brushed steel, deliberately neutral */
   --tool-undo-ink:       #9b9ce0;   /* history back */
@@ -369,9 +370,10 @@
     /* Tool-object ink - see DESIGN_SYSTEM §0.1 and the note in the dark block.
        Darkened for paper (§1: light is derived, not inverted) so each glyph still
        clears 4.5:1 against --panel-3 while keeping its object identity. */
-    --tool-wire-ink:       #c0392b;
+    --tool-wire-ink:       #c61906;
     --tool-probe-ink:      #b32b22;
-    --tool-tag-ink:        #7a601b;
+    --tool-meter-ink:      #9e5405;
+    --tool-tag-ink:        #866509;
     --tool-eraser-ink:     #9f4463;
     --tool-steel-ink:      #5b6572;
     --tool-undo-ink:       #4a4ea6;
@@ -519,9 +521,10 @@
   /* Tool-object ink - see DESIGN_SYSTEM §0.1 and the note in the dark block.
      Darkened for paper (§1: light is derived, not inverted) so each glyph still
      clears 4.5:1 against --panel-3 while keeping its object identity. */
-  --tool-wire-ink:       #c0392b;
+  --tool-wire-ink:       #c61906;
   --tool-probe-ink:      #b32b22;
-  --tool-tag-ink:        #7a601b;
+  --tool-meter-ink:      #9e5405;
+  --tool-tag-ink:        #866509;
   --tool-eraser-ink:     #9f4463;
   --tool-steel-ink:      #5b6572;
   --tool-undo-ink:       #4a4ea6;
@@ -658,9 +661,10 @@
      and they are DISJOINT from --trace-*, so saturated colour on the canvas
      still means a measurement and nothing else. A tool whose real counterpart
      is neutral - the bin, the pointer - stays on --muted by design. */
-  --tool-wire-ink:       #e4574b;   /* hookup wire */
+  --tool-wire-ink:       #f5483a;   /* hookup wire */
   --tool-probe-ink:      #ea4f42;   /* multimeter probe body */
-  --tool-tag-ink:        #c4a24e;   /* kraft/manila tag */
+  --tool-meter-ink:      #f5901e;   /* multimeter bezel and range dial */
+  --tool-tag-ink:        #e0b955;   /* kraft/manila tag */
   --tool-eraser-ink:     #d9829a;   /* rubber eraser */
   --tool-steel-ink:      #9aa3ae;   /* bin: brushed steel, deliberately neutral */
   --tool-undo-ink:       #9b9ce0;   /* history back */
