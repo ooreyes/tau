@@ -160,6 +160,30 @@ this is a part titled *Sine voltage source*, drawn as a sine source, captioned
 `Sine · 1 V @ 1k Hz`, with sine fields and no DC row — their requirement met,
 without a data-model change that would corrupt an export.
 
+#### ⚠ Open question for Omar — one capability narrowed, deliberately, not silently
+
+The bias row is now gated on `source.mode === "dc" || source.dcExplicit`. That
+kills the duplication exactly as reported, and **loses no data**: a document or
+import holding an explicit `DC 2 SINE(0 1 1k)` keeps an editable *DC bias* row
+beside *Offset*, and a test pins that it survives a later amplitude edit.
+
+What it costs: starting from a function source with **no** explicit `DC n`, there
+is no longer a control to **add** one. LTspice permits `DC 2 SINE(...)`, where the
+operating-point bias is genuinely independent of the waveform's offset, so this is
+a real if expert-level narrowing — and it applies to every function waveform, not
+just PWL.
+
+The alternative considered and not taken: keep the row always visible but render
+it empty with an `auto` placeholder when the bias is merely inferred, so typing in
+it authors an explicit `DC n`. That preserves authoring and still shows no
+duplicated number — but it puts a row back into a panel the report called
+cluttered, and item 1 is the one the report says to *"ask follow up questions if
+unsure"* about. Rather than invent that UI unattended, it is flagged here.
+
+**Recommendation:** take the placeholder variant if authoring a `.op` bias beside
+a waveform matters to you; keep the current gating if it does not. Either is one
+small change to `IndependentSourceEditor.tsx`.
+
 <details>
 <summary>Superseded first decision (kept for the record)</summary>
 
