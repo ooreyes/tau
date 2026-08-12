@@ -1,5 +1,52 @@
 # Orchestrator notes to the lanes (read this if your lane is named)
 
+## TOOLBAR — both of your P3-13 blockers are cleared. Do not work around them.
+
+Your recon was right on both counts, and both were the orchestrator's to fix.
+Done in commit `539e07e`:
+
+1. **`DESIGN_SYSTEM.md` now permits this.** New **§0.1 "The one exception:
+   tool-object ink"** grants a narrow, closed exception for exactly this strip.
+   Read it before you style anything — every clause binds you: editor tool strip
+   only; glyph `stroke`/`fill` inside the 16 px `svg` only, **never** a surface
+   fill, wash, tinted card or coloured button border; a **closed** `--tool-*-ink`
+   set (a new one means editing that section); the set is **disjoint from
+   `--trace-*`** in both directions; **disabled desaturates to the neutral ink**,
+   because dimming a saturated glyph does not read as disabled; and tools whose
+   real counterpart is neutral — the bin, the pointer — **stay neutral**. That
+   last one is an instruction, not a licence to skip them: the report asks for
+   "a gray trascan".
+
+2. **The tokens exist, in all four theme blocks of `App.css`.** You were right
+   that §7.4 requires them there and that `design-system-dod-grep.mjs` would
+   hard-fail a hex literal in a lane stylesheet. Available now:
+
+   | Token | Object | Dark | Light |
+   | --- | --- | --- | --- |
+   | `--tool-wire-ink` | hookup wire | `#e4574b` | `#c0392b` |
+   | `--tool-probe-ink` | multimeter probe body | `#ea4f42` | `#b32b22` |
+   | `--tool-tag-ink` | kraft / manila tag | `#c4a24e` | `#7a601b` |
+   | `--tool-eraser-ink` | rubber eraser | `#d9829a` | `#9f4463` |
+   | `--tool-steel-ink` | bin, brushed steel (near-neutral by design) | `#9aa3ae` | `#5b6572` |
+   | `--tool-undo-ink` | history back | `#8e8fc4` | `#5a5c99` |
+   | `--tool-redo-ink` | history forward | `#5fb3a6` | `#286d62` |
+   | `--tool-ink-disabled` | any disabled tool | `var(--faint)` | `var(--faint)` |
+
+   Every one was measured against its own theme's `--panel-3`; the lowest ratio
+   is **4.62:1** and four first-draft values came in at 3.96–4.19 and were
+   corrected. **Consume them with `var()` — do not restate the hex**, and if a
+   value is wrong for the design, file the change in `docs/handoff/TOOLBAR.md`
+   rather than editing `App.css`; the orchestrator will apply it and re-measure.
+
+   `--tool-steel-ink` at saturation 0.11 will not register as an "accent" in the
+   verification gate, and that is intentional — the gate asks for five accents
+   out of nine, not nine.
+
+Your remaining `App.tsx` requests (the `schematicOpen` / `onShowParts` props at
+`:3560`, and the `data-parts-flash` hook on `<main className="stage">`) are for
+DOCK, which owns that file and is checking `docs/handoff/`. File them there; the
+orchestrator will apply anything DOCK does not.
+
 ## EVERYONE — the CSS gate in your brief was the wrong script
 
 Your brief told you to run `scripts/design-system-dod.mjs` and
