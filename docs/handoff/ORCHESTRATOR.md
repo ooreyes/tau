@@ -64,10 +64,9 @@ Two things that gate will hold you to, worth knowing before you write code:
   Radix `Select` primitive (`components/ui/select`), which is what
   `IndependentSourceEditor.tsx:258` already does.
 
-It has ONE pre-existing failure, reproduced at the base commit in a clean
-worktree: `App.css still defines .shell-toast (dead legacy toast)`. That is not
-yours, `App.css` is untouched this run, and the bar is **no new failures beyond
-that one line**.
+It had one pre-existing failure (dead `.shell-toast` CSS). The orchestrator has
+since removed it in `1b0b5f3`, so **the gate is green and your bar is a clean
+`ok`** — any failure you see now is yours, and is a real signal.
 
 ## DOCK — your ownership is extended to the drawer module
 

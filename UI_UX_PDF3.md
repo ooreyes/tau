@@ -52,13 +52,20 @@ That last-but-one item matters to two lanes: a new native `<select>` anywhere in
 production code fails the gate, so any new dropdown must use the existing Radix
 `Select` primitive.
 
-**Known pre-existing failure, reproduced at the base commit in a clean
-worktree:** `DESIGN-SYSTEM-GREP: FAIL — App.css still defines .shell-toast (dead
-legacy toast)`. It is dead CSS at `App.css:10276` (only a comment in
-`components/ui/sonner.tsx` and a "markup is gone" assertion in
-`uiux/Wave2Regression.test.tsx:327` still mention it). It is **not** this
-remediation's to fix — `App.css` is deliberately untouched this run — so the bar
-for every lane is **no NEW gate failures beyond that line**.
+**That gate is now GREEN, so the bar is a clean PASS.** It used to fail at the
+base commit on dead CSS (`App.css still defines .shell-toast`); the orchestrator
+removed that 15-line block in `1b0b5f3` — toasts render through
+`components/ui/sonner.tsx`, and the only remaining mentions (sonner's comment and
+`Wave2Regression.test.tsx:327`'s "markup is gone" assertion) are still accurate
+and untouched. It now prints:
+
+```
+DESIGN-SYSTEM-GREP: hex-outside-tokens=0 native-select=0
+DESIGN-SYSTEM-GREP: primitives=command+resizable+sonner+instrument-icon wired
+DESIGN-SYSTEM-GREP: ok
+```
+
+Any failure from here is a real signal and belongs to whoever caused it.
 
 ---
 
