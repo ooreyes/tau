@@ -4397,9 +4397,9 @@ function App() {
       </Sheet>
       {confirmClearOpen && (
         <ConfirmDialog
-          title="Clear schematic?"
-          body="This starts a new untitled schematic and leaves the original file unchanged. Components, wires, labels, directives, probes, and the current analysis are cleared."
-          confirmLabel="Clear schematic"
+          title="Delete schematic?"
+          body="Your saved file is NOT deleted - it stays on disk exactly as it is. This empties the sheet in front of you and starts a new untitled schematic: components, wires, labels, directives, probes, and the current analysis all go."
+          confirmLabel="Delete schematic"
           onConfirm={clearScratchpad}
           onCancel={() => setConfirmClearOpen(false)}
         />

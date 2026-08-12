@@ -102,45 +102,45 @@
     "theme": "light",
     "viewport": "900x600",
     "pass": true,
-    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 306): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 137px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 46px, 1 primary icon(s), name \"Schematics\" 75px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 102px, 3 primary icon(s), name \"Schematics\" 77px truncated false, header overflowing false | @420px(actual 306): ⋯ visible true, inside header true, gap to name 158px, 5 primary icon(s), name \"Schematics\" 101px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
     "data": [
       {
         "asked": 168,
         "panelWidth": 168,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 40,
+        "gapToName": 46,
         "primaryIconsVisible": 1,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 87,
+        "nameWidth": 75,
         "headOverflowing": false
       },
       {
         "asked": 226,
         "panelWidth": 226,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 106,
-        "primaryIconsVisible": 4,
+        "gapToName": 102,
+        "primaryIconsVisible": 3,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 79,
+        "nameWidth": 77,
         "headOverflowing": false
       },
       {
         "asked": 420,
         "panelWidth": 306,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 128,
+        "gapToName": 158,
         "primaryIconsVisible": 5,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 137,
+        "nameWidth": 101,
         "headOverflowing": false
       }
     ]
@@ -370,7 +370,7 @@
     "theme": "light",
     "viewport": "900x600",
     "pass": true,
-    "detail": "9 tool buttons (8 enabled); 7/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Select:h211/s1, Wire:h6/s0.63, Net label (F4):h44/s0.64, Probe:h4/s0.68, Undo:h237/s0.38, Delete selection (Delete):h213/s0.31, Clear schematic:h340/s0.4]; probe reads red: true (h4 s0.68)",
+    "detail": "9 tool buttons (8 enabled); 7/5 carry a real accent (saturation >= 0.3); 3 hues distinct by > 25deg [Select:h211/s1, Wire:h6/s0.94, Net label (F4):h44/s0.87, Probe:h31/s0.94, Undo:h237/s0.38, Erase selection (Delete):h340/s0.4, Delete schematic:h213/s0.31]; probe button reads as the meter's amber-orange: true (h31 s0.94); the red lead is on the cursor, pinned by probeCursor()'s unit test",
     "data": [
       {
         "label": "Select",
@@ -385,31 +385,32 @@
         "label": "Wire",
         "disabled": false,
         "colours": [
-          "rgb(192, 57, 43) h6 s0.63",
+          "rgb(198, 25, 6) h6 s0.94",
           "rgb(91, 101, 114) h214 s0.11"
         ],
         "hue": 6,
-        "sat": 0.63
+        "sat": 0.94
       },
       {
         "label": "Net label (F4)",
         "disabled": false,
         "colours": [
-          "rgb(122, 96, 27) h44 s0.64",
+          "rgb(134, 101, 9) h44 s0.87",
           "rgb(91, 101, 114) h214 s0.11"
         ],
         "hue": 44,
-        "sat": 0.64
+        "sat": 0.87
       },
       {
         "label": "Probe",
         "disabled": false,
         "colours": [
-          "rgb(179, 43, 34) h4 s0.68",
-          "rgb(91, 101, 114) h214 s0.11"
+          "rgb(158, 84, 5) h31 s0.94",
+          "rgb(91, 101, 114) h214 s0.11",
+          "rgb(232, 237, 243) h213 s0.31"
         ],
-        "hue": 4,
-        "sat": 0.68
+        "hue": 31,
+        "sat": 0.94
       },
       {
         "label": "Undo",
@@ -430,17 +431,7 @@
         "sat": 0.12
       },
       {
-        "label": "Delete selection (Delete)",
-        "disabled": false,
-        "colours": [
-          "rgb(91, 101, 114) h214 s0.11",
-          "rgb(232, 237, 243) h213 s0.31"
-        ],
-        "hue": 213,
-        "sat": 0.31
-      },
-      {
-        "label": "Clear schematic",
+        "label": "Erase selection (Delete)",
         "disabled": false,
         "colours": [
           "rgb(159, 68, 99) h340 s0.40",
@@ -448,6 +439,16 @@
         ],
         "hue": 340,
         "sat": 0.4
+      },
+      {
+        "label": "Delete schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(91, 101, 114) h214 s0.11",
+          "rgb(232, 237, 243) h213 s0.31"
+        ],
+        "hue": 213,
+        "sat": 0.31
       },
       {
         "label": "Simulation setup",
@@ -600,45 +601,45 @@
     "theme": "light",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 251px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 46px, 1 primary icon(s), name \"Schematics\" 75px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 102px, 3 primary icon(s), name \"Schematics\" 77px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 158px, 5 primary icon(s), name \"Schematics\" 215px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
     "data": [
       {
         "asked": 168,
         "panelWidth": 168,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 40,
+        "gapToName": 46,
         "primaryIconsVisible": 1,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 87,
+        "nameWidth": 75,
         "headOverflowing": false
       },
       {
         "asked": 226,
         "panelWidth": 226,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 106,
-        "primaryIconsVisible": 4,
+        "gapToName": 102,
+        "primaryIconsVisible": 3,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 79,
+        "nameWidth": 77,
         "headOverflowing": false
       },
       {
         "asked": 420,
         "panelWidth": 420,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 128,
+        "gapToName": 158,
         "primaryIconsVisible": 5,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 251,
+        "nameWidth": 215,
         "headOverflowing": false
       }
     ]
@@ -868,7 +869,7 @@
     "theme": "light",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "9 tool buttons (8 enabled); 7/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Select:h211/s1, Wire:h6/s0.63, Net label (F4):h44/s0.64, Probe:h4/s0.68, Undo:h237/s0.38, Delete selection (Delete):h213/s0.31, Clear schematic:h340/s0.4]; probe reads red: true (h4 s0.68)",
+    "detail": "9 tool buttons (8 enabled); 7/5 carry a real accent (saturation >= 0.3); 3 hues distinct by > 25deg [Select:h211/s1, Wire:h6/s0.94, Net label (F4):h44/s0.87, Probe:h31/s0.94, Undo:h237/s0.38, Erase selection (Delete):h340/s0.4, Delete schematic:h213/s0.31]; probe button reads as the meter's amber-orange: true (h31 s0.94); the red lead is on the cursor, pinned by probeCursor()'s unit test",
     "data": [
       {
         "label": "Select",
@@ -883,31 +884,32 @@
         "label": "Wire",
         "disabled": false,
         "colours": [
-          "rgb(192, 57, 43) h6 s0.63",
+          "rgb(198, 25, 6) h6 s0.94",
           "rgb(91, 101, 114) h214 s0.11"
         ],
         "hue": 6,
-        "sat": 0.63
+        "sat": 0.94
       },
       {
         "label": "Net label (F4)",
         "disabled": false,
         "colours": [
-          "rgb(122, 96, 27) h44 s0.64",
+          "rgb(134, 101, 9) h44 s0.87",
           "rgb(91, 101, 114) h214 s0.11"
         ],
         "hue": 44,
-        "sat": 0.64
+        "sat": 0.87
       },
       {
         "label": "Probe",
         "disabled": false,
         "colours": [
-          "rgb(179, 43, 34) h4 s0.68",
-          "rgb(91, 101, 114) h214 s0.11"
+          "rgb(158, 84, 5) h31 s0.94",
+          "rgb(91, 101, 114) h214 s0.11",
+          "rgb(232, 237, 243) h213 s0.31"
         ],
-        "hue": 4,
-        "sat": 0.68
+        "hue": 31,
+        "sat": 0.94
       },
       {
         "label": "Undo",
@@ -928,17 +930,7 @@
         "sat": 0.12
       },
       {
-        "label": "Delete selection (Delete)",
-        "disabled": false,
-        "colours": [
-          "rgb(91, 101, 114) h214 s0.11",
-          "rgb(232, 237, 243) h213 s0.31"
-        ],
-        "hue": 213,
-        "sat": 0.31
-      },
-      {
-        "label": "Clear schematic",
+        "label": "Erase selection (Delete)",
         "disabled": false,
         "colours": [
           "rgb(159, 68, 99) h340 s0.40",
@@ -946,6 +938,16 @@
         ],
         "hue": 340,
         "sat": 0.4
+      },
+      {
+        "label": "Delete schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(91, 101, 114) h214 s0.11",
+          "rgb(232, 237, 243) h213 s0.31"
+        ],
+        "hue": 213,
+        "sat": 0.31
       },
       {
         "label": "Simulation setup",
@@ -1098,45 +1100,45 @@
     "theme": "light",
     "viewport": "1440x900",
     "pass": true,
-    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 251px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 46px, 1 primary icon(s), name \"Schematics\" 75px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 102px, 3 primary icon(s), name \"Schematics\" 77px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 158px, 5 primary icon(s), name \"Schematics\" 215px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
     "data": [
       {
         "asked": 168,
         "panelWidth": 168,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 40,
+        "gapToName": 46,
         "primaryIconsVisible": 1,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 87,
+        "nameWidth": 75,
         "headOverflowing": false
       },
       {
         "asked": 226,
         "panelWidth": 226,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 106,
-        "primaryIconsVisible": 4,
+        "gapToName": 102,
+        "primaryIconsVisible": 3,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 79,
+        "nameWidth": 77,
         "headOverflowing": false
       },
       {
         "asked": 420,
         "panelWidth": 420,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 128,
+        "gapToName": 158,
         "primaryIconsVisible": 5,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 251,
+        "nameWidth": 215,
         "headOverflowing": false
       }
     ]
@@ -1366,7 +1368,7 @@
     "theme": "light",
     "viewport": "1440x900",
     "pass": true,
-    "detail": "9 tool buttons (8 enabled); 7/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Select:h211/s1, Wire:h6/s0.63, Net label (F4):h44/s0.64, Probe:h4/s0.68, Undo:h237/s0.38, Delete selection (Delete):h213/s0.31, Clear schematic:h340/s0.4]; probe reads red: true (h4 s0.68)",
+    "detail": "9 tool buttons (8 enabled); 7/5 carry a real accent (saturation >= 0.3); 3 hues distinct by > 25deg [Select:h211/s1, Wire:h6/s0.94, Net label (F4):h44/s0.87, Probe:h31/s0.94, Undo:h237/s0.38, Erase selection (Delete):h340/s0.4, Delete schematic:h213/s0.31]; probe button reads as the meter's amber-orange: true (h31 s0.94); the red lead is on the cursor, pinned by probeCursor()'s unit test",
     "data": [
       {
         "label": "Select",
@@ -1381,31 +1383,32 @@
         "label": "Wire",
         "disabled": false,
         "colours": [
-          "rgb(192, 57, 43) h6 s0.63",
+          "rgb(198, 25, 6) h6 s0.94",
           "rgb(91, 101, 114) h214 s0.11"
         ],
         "hue": 6,
-        "sat": 0.63
+        "sat": 0.94
       },
       {
         "label": "Net label (F4)",
         "disabled": false,
         "colours": [
-          "rgb(122, 96, 27) h44 s0.64",
+          "rgb(134, 101, 9) h44 s0.87",
           "rgb(91, 101, 114) h214 s0.11"
         ],
         "hue": 44,
-        "sat": 0.64
+        "sat": 0.87
       },
       {
         "label": "Probe",
         "disabled": false,
         "colours": [
-          "rgb(179, 43, 34) h4 s0.68",
-          "rgb(91, 101, 114) h214 s0.11"
+          "rgb(158, 84, 5) h31 s0.94",
+          "rgb(91, 101, 114) h214 s0.11",
+          "rgb(232, 237, 243) h213 s0.31"
         ],
-        "hue": 4,
-        "sat": 0.68
+        "hue": 31,
+        "sat": 0.94
       },
       {
         "label": "Undo",
@@ -1426,17 +1429,7 @@
         "sat": 0.12
       },
       {
-        "label": "Delete selection (Delete)",
-        "disabled": false,
-        "colours": [
-          "rgb(91, 101, 114) h214 s0.11",
-          "rgb(232, 237, 243) h213 s0.31"
-        ],
-        "hue": 213,
-        "sat": 0.31
-      },
-      {
-        "label": "Clear schematic",
+        "label": "Erase selection (Delete)",
         "disabled": false,
         "colours": [
           "rgb(159, 68, 99) h340 s0.40",
@@ -1444,6 +1437,16 @@
         ],
         "hue": 340,
         "sat": 0.4
+      },
+      {
+        "label": "Delete schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(91, 101, 114) h214 s0.11",
+          "rgb(232, 237, 243) h213 s0.31"
+        ],
+        "hue": 213,
+        "sat": 0.31
       },
       {
         "label": "Simulation setup",
@@ -1596,45 +1599,45 @@
     "theme": "dark",
     "viewport": "900x600",
     "pass": true,
-    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 306): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 137px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 46px, 1 primary icon(s), name \"Schematics\" 75px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 102px, 3 primary icon(s), name \"Schematics\" 77px truncated false, header overflowing false | @420px(actual 306): ⋯ visible true, inside header true, gap to name 158px, 5 primary icon(s), name \"Schematics\" 101px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
     "data": [
       {
         "asked": 168,
         "panelWidth": 168,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 40,
+        "gapToName": 46,
         "primaryIconsVisible": 1,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 87,
+        "nameWidth": 75,
         "headOverflowing": false
       },
       {
         "asked": 226,
         "panelWidth": 226,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 106,
-        "primaryIconsVisible": 4,
+        "gapToName": 102,
+        "primaryIconsVisible": 3,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 79,
+        "nameWidth": 77,
         "headOverflowing": false
       },
       {
         "asked": 420,
         "panelWidth": 306,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 128,
+        "gapToName": 158,
         "primaryIconsVisible": 5,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 137,
+        "nameWidth": 101,
         "headOverflowing": false
       }
     ]
@@ -1864,7 +1867,7 @@
     "theme": "dark",
     "viewport": "900x600",
     "pass": true,
-    "detail": "9 tool buttons (8 enabled); 6/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Wire:h5/s0.74, Net label (F4):h43/s0.5, Probe:h5/s0.8, Undo:h239/s0.53, Clear schematic:h343/s0.53, Simulation setup:h240/s0.33]; probe reads red: true (h5 s0.8)",
+    "detail": "9 tool buttons (8 enabled); 6/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Wire:h4/s0.9, Net label (F4):h43/s0.69, Probe:h32/s0.91, Undo:h239/s0.53, Erase selection (Delete):h343/s0.53, Simulation setup:h240/s0.33]; probe button reads as the meter's amber-orange: true (h32 s0.91); the red lead is on the cursor, pinned by probeCursor()'s unit test",
     "data": [
       {
         "label": "Select",
@@ -1879,31 +1882,32 @@
         "label": "Wire",
         "disabled": false,
         "colours": [
-          "rgb(228, 87, 75) h5 s0.74",
+          "rgb(245, 72, 58) h4 s0.90",
           "rgb(154, 163, 174) h213 s0.11"
         ],
-        "hue": 5,
-        "sat": 0.74
+        "hue": 4,
+        "sat": 0.9
       },
       {
         "label": "Net label (F4)",
         "disabled": false,
         "colours": [
-          "rgb(196, 162, 78) h43 s0.50",
+          "rgb(224, 185, 85) h43 s0.69",
           "rgb(154, 163, 174) h213 s0.11"
         ],
         "hue": 43,
-        "sat": 0.5
+        "sat": 0.69
       },
       {
         "label": "Probe",
         "disabled": false,
         "colours": [
-          "rgb(234, 79, 66) h5 s0.80",
-          "rgb(154, 163, 174) h213 s0.11"
+          "rgb(245, 144, 30) h32 s0.91",
+          "rgb(154, 163, 174) h213 s0.11",
+          "rgb(22, 22, 23) h240 s0.02"
         ],
-        "hue": 5,
-        "sat": 0.8
+        "hue": 32,
+        "sat": 0.91
       },
       {
         "label": "Undo",
@@ -1924,17 +1928,7 @@
         "sat": 0.33
       },
       {
-        "label": "Delete selection (Delete)",
-        "disabled": false,
-        "colours": [
-          "rgb(154, 163, 174) h213 s0.11",
-          "rgb(22, 22, 23) h240 s0.02"
-        ],
-        "hue": 213,
-        "sat": 0.11
-      },
-      {
-        "label": "Clear schematic",
+        "label": "Erase selection (Delete)",
         "disabled": false,
         "colours": [
           "rgb(217, 130, 154) h343 s0.53",
@@ -1942,6 +1936,16 @@
         ],
         "hue": 343,
         "sat": 0.53
+      },
+      {
+        "label": "Delete schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(154, 163, 174) h213 s0.11",
+          "rgb(22, 22, 23) h240 s0.02"
+        ],
+        "hue": 213,
+        "sat": 0.11
       },
       {
         "label": "Simulation setup",
@@ -2094,45 +2098,45 @@
     "theme": "dark",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 251px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 46px, 1 primary icon(s), name \"Schematics\" 75px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 102px, 3 primary icon(s), name \"Schematics\" 77px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 158px, 5 primary icon(s), name \"Schematics\" 215px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
     "data": [
       {
         "asked": 168,
         "panelWidth": 168,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 40,
+        "gapToName": 46,
         "primaryIconsVisible": 1,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 87,
+        "nameWidth": 75,
         "headOverflowing": false
       },
       {
         "asked": 226,
         "panelWidth": 226,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 106,
-        "primaryIconsVisible": 4,
+        "gapToName": 102,
+        "primaryIconsVisible": 3,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 79,
+        "nameWidth": 77,
         "headOverflowing": false
       },
       {
         "asked": 420,
         "panelWidth": 420,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 128,
+        "gapToName": 158,
         "primaryIconsVisible": 5,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 251,
+        "nameWidth": 215,
         "headOverflowing": false
       }
     ]
@@ -2362,7 +2366,7 @@
     "theme": "dark",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "9 tool buttons (8 enabled); 6/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Wire:h5/s0.74, Net label (F4):h43/s0.5, Probe:h5/s0.8, Undo:h239/s0.53, Clear schematic:h343/s0.53, Simulation setup:h240/s0.33]; probe reads red: true (h5 s0.8)",
+    "detail": "9 tool buttons (8 enabled); 6/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Wire:h4/s0.9, Net label (F4):h43/s0.69, Probe:h32/s0.91, Undo:h239/s0.53, Erase selection (Delete):h343/s0.53, Simulation setup:h240/s0.33]; probe button reads as the meter's amber-orange: true (h32 s0.91); the red lead is on the cursor, pinned by probeCursor()'s unit test",
     "data": [
       {
         "label": "Select",
@@ -2377,31 +2381,32 @@
         "label": "Wire",
         "disabled": false,
         "colours": [
-          "rgb(228, 87, 75) h5 s0.74",
+          "rgb(245, 72, 58) h4 s0.90",
           "rgb(154, 163, 174) h213 s0.11"
         ],
-        "hue": 5,
-        "sat": 0.74
+        "hue": 4,
+        "sat": 0.9
       },
       {
         "label": "Net label (F4)",
         "disabled": false,
         "colours": [
-          "rgb(196, 162, 78) h43 s0.50",
+          "rgb(224, 185, 85) h43 s0.69",
           "rgb(154, 163, 174) h213 s0.11"
         ],
         "hue": 43,
-        "sat": 0.5
+        "sat": 0.69
       },
       {
         "label": "Probe",
         "disabled": false,
         "colours": [
-          "rgb(234, 79, 66) h5 s0.80",
-          "rgb(154, 163, 174) h213 s0.11"
+          "rgb(245, 144, 30) h32 s0.91",
+          "rgb(154, 163, 174) h213 s0.11",
+          "rgb(22, 22, 23) h240 s0.02"
         ],
-        "hue": 5,
-        "sat": 0.8
+        "hue": 32,
+        "sat": 0.91
       },
       {
         "label": "Undo",
@@ -2422,17 +2427,7 @@
         "sat": 0.33
       },
       {
-        "label": "Delete selection (Delete)",
-        "disabled": false,
-        "colours": [
-          "rgb(154, 163, 174) h213 s0.11",
-          "rgb(22, 22, 23) h240 s0.02"
-        ],
-        "hue": 213,
-        "sat": 0.11
-      },
-      {
-        "label": "Clear schematic",
+        "label": "Erase selection (Delete)",
         "disabled": false,
         "colours": [
           "rgb(217, 130, 154) h343 s0.53",
@@ -2440,6 +2435,16 @@
         ],
         "hue": 343,
         "sat": 0.53
+      },
+      {
+        "label": "Delete schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(154, 163, 174) h213 s0.11",
+          "rgb(22, 22, 23) h240 s0.02"
+        ],
+        "hue": 213,
+        "sat": 0.11
       },
       {
         "label": "Simulation setup",
@@ -2592,45 +2597,45 @@
     "theme": "dark",
     "viewport": "1440x900",
     "pass": true,
-    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 40px, 1 primary icon(s), name \"Schematics\" 87px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 106px, 4 primary icon(s), name \"Schematics\" 79px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 128px, 5 primary icon(s), name \"Schematics\" 251px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
+    "detail": "@168px(actual 168): ⋯ visible true, inside header true, gap to name 46px, 1 primary icon(s), name \"Schematics\" 75px truncated false, header overflowing false | @226px(actual 226): ⋯ visible true, inside header true, gap to name 102px, 3 primary icon(s), name \"Schematics\" 77px truncated false, header overflowing false | @420px(actual 420): ⋯ visible true, inside header true, gap to name 158px, 5 primary icon(s), name \"Schematics\" 215px truncated false, header overflowing false; failing widths: none (⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)",
     "data": [
       {
         "asked": 168,
         "panelWidth": 168,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 40,
+        "gapToName": 46,
         "primaryIconsVisible": 1,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 87,
+        "nameWidth": 75,
         "headOverflowing": false
       },
       {
         "asked": 226,
         "panelWidth": 226,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 106,
-        "primaryIconsVisible": 4,
+        "gapToName": 102,
+        "primaryIconsVisible": 3,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 79,
+        "nameWidth": 77,
         "headOverflowing": false
       },
       {
         "asked": 420,
         "panelWidth": 420,
         "triggerVisible": true,
-        "triggerWidth": 22,
+        "triggerWidth": 28,
         "insideHead": true,
-        "gapToName": 128,
+        "gapToName": 158,
         "primaryIconsVisible": 5,
         "nameTruncated": false,
         "nameText": "Schematics",
-        "nameWidth": 251,
+        "nameWidth": 215,
         "headOverflowing": false
       }
     ]
@@ -2860,7 +2865,7 @@
     "theme": "dark",
     "viewport": "1440x900",
     "pass": true,
-    "detail": "9 tool buttons (8 enabled); 6/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Wire:h5/s0.74, Net label (F4):h43/s0.5, Probe:h5/s0.8, Undo:h239/s0.53, Clear schematic:h343/s0.53, Simulation setup:h240/s0.33]; probe reads red: true (h5 s0.8)",
+    "detail": "9 tool buttons (8 enabled); 6/5 carry a real accent (saturation >= 0.3); 4 hues distinct by > 25deg [Wire:h4/s0.9, Net label (F4):h43/s0.69, Probe:h32/s0.91, Undo:h239/s0.53, Erase selection (Delete):h343/s0.53, Simulation setup:h240/s0.33]; probe button reads as the meter's amber-orange: true (h32 s0.91); the red lead is on the cursor, pinned by probeCursor()'s unit test",
     "data": [
       {
         "label": "Select",
@@ -2875,31 +2880,32 @@
         "label": "Wire",
         "disabled": false,
         "colours": [
-          "rgb(228, 87, 75) h5 s0.74",
+          "rgb(245, 72, 58) h4 s0.90",
           "rgb(154, 163, 174) h213 s0.11"
         ],
-        "hue": 5,
-        "sat": 0.74
+        "hue": 4,
+        "sat": 0.9
       },
       {
         "label": "Net label (F4)",
         "disabled": false,
         "colours": [
-          "rgb(196, 162, 78) h43 s0.50",
+          "rgb(224, 185, 85) h43 s0.69",
           "rgb(154, 163, 174) h213 s0.11"
         ],
         "hue": 43,
-        "sat": 0.5
+        "sat": 0.69
       },
       {
         "label": "Probe",
         "disabled": false,
         "colours": [
-          "rgb(234, 79, 66) h5 s0.80",
-          "rgb(154, 163, 174) h213 s0.11"
+          "rgb(245, 144, 30) h32 s0.91",
+          "rgb(154, 163, 174) h213 s0.11",
+          "rgb(22, 22, 23) h240 s0.02"
         ],
-        "hue": 5,
-        "sat": 0.8
+        "hue": 32,
+        "sat": 0.91
       },
       {
         "label": "Undo",
@@ -2920,17 +2926,7 @@
         "sat": 0.33
       },
       {
-        "label": "Delete selection (Delete)",
-        "disabled": false,
-        "colours": [
-          "rgb(154, 163, 174) h213 s0.11",
-          "rgb(22, 22, 23) h240 s0.02"
-        ],
-        "hue": 213,
-        "sat": 0.11
-      },
-      {
-        "label": "Clear schematic",
+        "label": "Erase selection (Delete)",
         "disabled": false,
         "colours": [
           "rgb(217, 130, 154) h343 s0.53",
@@ -2938,6 +2934,16 @@
         ],
         "hue": 343,
         "sat": 0.53
+      },
+      {
+        "label": "Delete schematic",
+        "disabled": false,
+        "colours": [
+          "rgb(154, 163, 174) h213 s0.11",
+          "rgb(22, 22, 23) h240 s0.02"
+        ],
+        "hue": 213,
+        "sat": 0.11
       },
       {
         "label": "Simulation setup",

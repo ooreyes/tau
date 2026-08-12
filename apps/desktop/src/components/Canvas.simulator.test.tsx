@@ -902,7 +902,7 @@ describe("Canvas - schematic selection chrome", () => {
     useSchematic.setState({ selectedId: "r1", selectedIds: ["r1"] });
     render(<Canvas interactive />);
 
-    expect(screen.queryByRole("button", { name: "Delete selection" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Erase selection" })).toBeNull();
     expect(document.querySelector(".selection-delete-pill")).toBeNull();
   });
 });

@@ -137,8 +137,16 @@ const EXPLORER_HEAD_PADDING = 18;
 /** `.explorer-head` flex gap, `var(--sp-2)`. Also the contract's minimum clear
  *  between the ⋯ and the root name, which is why nothing may narrow it. */
 const EXPLORER_HEAD_GAP = 8;
-/** Every header control is a 22px square (`.explorer-icons button`). */
-const EXPLORER_ICON_SIZE = 22;
+/**
+ * Every header control is a `--control-hit` square (`.explorer-icons button`).
+ *
+ * Mirrors the CSS token deliberately rather than measuring the DOM: this number
+ * feeds the icon budget below, which has to be computable before layout and in
+ * jsdom, where no stylesheet is applied. It was 22px, which failed WCAG 2.2
+ * SC 2.5.8's 24px floor; if `--control-hit` changes in App.css this must change
+ * with it, and `explorerPrimaryActionCount`'s tests pin the arithmetic either way.
+ */
+const EXPLORER_ICON_SIZE = 28;
 /** Extra clear left of the ⋯ on top of the flex gap. The gap alone lands
  *  exactly on the ≥8px bar, which a subpixel layout can round under. */
 const EXPLORER_OVERFLOW_CLEARANCE = 2;
@@ -155,7 +163,7 @@ const EXPLORER_OVERFLOW_CLEARANCE = 2;
  *  conditional - show the icons "as long as it has decent space from the text
  *  of the folder name" - so the caption wins the tie and the least-essential
  *  icon goes to the ⋯ instead. */
-const EXPLORER_ROOT_NAME_MIN = 72;
+export const EXPLORER_ROOT_NAME_MIN = 72;
 
 /**
  * How many of the header's primary icon buttons fit beside the root name and

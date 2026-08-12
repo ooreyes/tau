@@ -322,24 +322,34 @@ export function probeCursor(): string {
      * point on a red-heavy schematic is also the one colour that could be
      * mistaken for a trace.
      */
+    /*
+     * Every vertex below is DERIVED, not drawn by eye.
+     *
+     * One axis runs from the tip at (3,3) along 45deg; each feature is placed by
+     * its distance `s` along that axis with a half-width perpendicular to it, so
+     * needle, collar, barrel, guard and lead are collinear by construction and
+     * symmetric about the same centre line. The previous version placed each
+     * part by hand and the review's verdict was that the drawing was "a bit
+     * mismatched" - it was, because five independently-typed coordinate pairs do
+     * not share an axis unless someone does the trigonometry.
+     *
+     * 32px, up from 28, per the review's "slightly bigger".
+     */
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none">`
-      // Needle: a tapered polygon from the very tip at (3,3) to the collar.
-      + `<path d="M3 3 L5.1 4.3 L10.6 9.8 L9.8 10.6 L4.3 5.1 Z" fill="${metal}"/>`
+      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">`
+      // Needle: a triangle whose apex IS the hotspot, so they cannot drift.
+      + `<path d="M3 3 L8.80 9.93 L9.93 8.80 Z" fill="${metal}"/>`
       // Collar: the chromed band where needle meets barrel.
-      + `<path d="M9.7 11.4 L11.4 9.7 L13.5 11.8 L11.8 13.5 Z" fill="${metal}"/>`
-      /*
-       * Barrel: a four-point body, fattest at the finger guard and narrowing
-       * into the boot, with a rounded join so it reads as a moulded grip rather
-       * than a faceted wedge. The first version had six points and picked up a
-       * visible step on its lower edge.
-       */
-      + `<path d="M12.1 14.6 L14.6 12.1 L19.9 16.6 L16.6 19.9 Z" fill="${ink}" stroke="${ink}"`
-      + ` stroke-width="1.1" stroke-linejoin="round"/>`
-      // Finger guard: a short ridge, not a band across the whole barrel.
-      + `<path d="M14.6 16.9 L16.9 14.6" stroke="${metal}" stroke-width="1.3" stroke-linecap="round" opacity="0.75"/>`
-      // Lead leaving the boot.
-      + `<path d="M19.4 20.7 L25 26.3" stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>`
+      + `<path d="M10.35 8.37 L8.37 10.35 L11.06 13.04 L13.04 11.06 Z" fill="${metal}"/>`
+      // Barrel: fattest at the guard (4.6 wide), tapering to the boot (3.5).
+      + `<path d="M13.68 10.42 L10.42 13.68 L17.67 20.15 L20.15 17.67 Z" fill="${ink}"`
+      + ` stroke="${ink}" stroke-width="1.1" stroke-linejoin="round"/>`
+      // Finger guard: a ridge across the barrel, perpendicular to the axis.
+      + `<path d="M15.16 12.62 L12.62 15.16" stroke="${metal}" stroke-width="1.3"`
+      + ` stroke-linecap="round" opacity="0.75"/>`
+      // Lead, running out along the same axis to the far corner.
+      + `<path d="M18.91 18.91 L29.87 29.87" stroke="${ink}" stroke-width="2.4"`
+      + ` stroke-linecap="round"/>`
       + `</svg>`;
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 3 3, ${FALLBACK}`;
   } catch {

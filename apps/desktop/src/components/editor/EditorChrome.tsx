@@ -86,11 +86,19 @@ export function EditorToolbar({
       <IconButton title="Redo" tone="redo" disabled={!canRedo || readOnly} onClick={redo}>
         <RedoIcon />
       </IconButton>
-      <IconButton title="Delete selection (Delete)" tone="trash" disabled={!hasSelection || readOnly} onClick={deleteSelected}>
-        <TrashIcon />
-      </IconButton>
-      <IconButton title="Clear schematic" tone="eraser" disabled={readOnly} onClick={onClearScratchpad}>
+      {/*
+        Eraser rubs OUT what you picked; the bin throws the WHOLE sheet away.
+        These were the other way round, which is backwards against the physical
+        objects the glyphs depict - you do not put one resistor in the bin, and
+        you cannot rub out a whole schematic. The icons stayed put and the
+        actions moved, so the destructive-scope order also now reads
+        left-to-right: selection first, document second.
+      */}
+      <IconButton title="Erase selection (Delete)" tone="eraser" disabled={!hasSelection || readOnly} onClick={deleteSelected}>
         <EraserIcon />
+      </IconButton>
+      <IconButton title="Delete schematic" tone="trash" disabled={readOnly} onClick={onClearScratchpad}>
+        <TrashIcon />
       </IconButton>
       <IconButton title="Simulation setup" disabled={readOnly} onClick={onOpenSimulationSetup}>
         <SlidersHorizontal size={TOOL_ICON_SIZE} strokeWidth={1.6} />

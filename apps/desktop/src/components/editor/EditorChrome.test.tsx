@@ -9,7 +9,7 @@
  * not rename a single control", and it has to live next to the swap.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { EditorToolbar } from "./EditorChrome";
 import { probeCursor } from "./ToolIcons";
 import { useSchematic } from "../../store/useSchematic";
@@ -45,8 +45,8 @@ const TOOL_LABELS = [
   "Probe",
   "Undo",
   "Redo",
-  "Delete selection (Delete)",
-  "Clear schematic",
+  "Erase selection (Delete)",
+  "Delete schematic",
   "Simulation setup",
 ];
 
@@ -58,6 +58,59 @@ describe("EditorToolbar accessible-name contract", () => {
     }
     expect(screen.getByRole("button", { name: "Run simulation" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Stop simulation" })).toBeTruthy();
+  });
+});
+
+/**
+ * Which control does which job. Pinned because it was WRONG and swapping it back
+ * would be an easy accident: the bin used to delete the selection and the eraser
+ * used to wipe the sheet, which is backwards against the objects the glyphs
+ * depict. You do not put one resistor in the bin, and you cannot rub out a whole
+ * schematic. The scope also now grows left-to-right - selection, then document.
+ */
+describe("EditorToolbar destructive scope (review swap)", () => {
+  it("gives the eraser the SELECTION and the bin the WHOLE schematic", () => {
+    const onClearScratchpad = vi.fn();
+    render(
+      <EditorToolbar
+        mode="schematic" isRunning={false}
+        onRun={vi.fn()} onStop={vi.fn()}
+        onClearScratchpad={onClearScratchpad}
+        onOpenSimulationSetup={vi.fn()}
+      />,
+    );
+    // One component, selected, so the eraser is live. Inside act() because the
+    // eraser's disabled state is derived from the store at render time - without
+    // the flush the click lands on a still-disabled button and does nothing,
+    // which reads as "the swap did not work".
+    act(() => {
+      useSchematic.setState({
+        components: [{ id: "r1", kind: "resistor", x: 96, y: 96, rotation: 0, value: "1k", label: "R1" }],
+        selectedId: "r1", selectedIds: ["r1"],
+      });
+    });
+
+    const eraser = screen.getByRole("button", { name: "Erase selection (Delete)" });
+    const bin = screen.getByRole("button", { name: "Delete schematic" });
+    expect(eraser.getAttribute("data-tone")).toBe("eraser");
+    expect(bin.getAttribute("data-tone")).toBe("trash");
+
+    // The eraser removes the selected part and does NOT reach for the document.
+    act(() => { fireEvent.click(eraser); });
+    expect(useSchematic.getState().components).toHaveLength(0);
+    expect(onClearScratchpad).not.toHaveBeenCalled();
+
+    // The bin asks App to clear the sheet - it never deletes a part directly.
+    act(() => { fireEvent.click(bin); });
+    expect(onClearScratchpad).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the eraser with nothing selected, and leaves the bin live", () => {
+    useSchematic.setState({ components: [], selectedId: null, selectedIds: [] });
+    renderToolbar();
+    expect((screen.getByRole("button", { name: "Erase selection (Delete)" }) as HTMLButtonElement).disabled).toBe(true);
+    // An empty sheet is still a sheet you may want to reset, so the bin stays on.
+    expect((screen.getByRole("button", { name: "Delete schematic" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
 

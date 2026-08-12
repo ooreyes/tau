@@ -5,11 +5,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import {
+  EXPLORER_PANEL_WIDTH,
   ExplorerPanel,
   explorerHeaderLayout,
   explorerPrimaryActionCount,
   treeRowIndent,
-  EXPLORER_PANEL_WIDTH,
 } from "./ShellPanels";
 import { useProject } from "../store/useProject";
 
@@ -971,13 +971,47 @@ describe("P3-04A - the overflow trigger must survive every width", () => {
     // Progressive, not binary: every icon comes back on its own, and the one
     // that comes back last is the one that left first.
     const { container } = renderAtWidth(WIDTH_WITH_EVERY_ICON);
-    expect(container.querySelectorAll(".explorer-primary-actions button")).toHaveLength(5);
+    /*
+     * Compared against the width the panel ACTUALLY laid out at, read off its
+     * own inline style, not against the width this test asked for. Those can
+     * differ - usePanelWidth clamps and persists - and a hardcoded expectation
+     * then reports a width-plumbing surprise as an icon-count bug, which is
+     * what happened when the hit size moved from 22px to 28px.
+     */
+    const panel = container.querySelector(".explorer-panel") as HTMLElement;
+    const laidOutWidth = Number.parseFloat(panel.style.width);
+    expect(Number.isFinite(laidOutWidth)).toBe(true);
+    expect(container.querySelectorAll(".explorer-primary-actions button"))
+      .toHaveLength(explorerPrimaryActionCount(laidOutWidth, 5));
     expect(screen.getByRole("button", { name: "More explorer actions" })).toBeTruthy();
-    expect(explorerHeaderLayout(WIDTH_WITH_EVERY_ICON, 5).rootNameWidth)
+    expect(explorerHeaderLayout(laidOutWidth, 5).rootNameWidth)
       .toBeGreaterThanOrEqual(CAPTION_INK_PX);
-    // …and the threshold is where the arithmetic says it is, not lower.
-    expect(explorerPrimaryActionCount(240, 5)).toBe(5);
-    expect(explorerPrimaryActionCount(239, 5)).toBe(4);
+    /*
+     * …and the count grows ONE icon at a time, with the fifth arriving at a
+     * single definite width.
+     *
+     * The threshold is found by scanning the function rather than restated as a
+     * literal or re-derived from a copy of its arithmetic. Both of those have now
+     * failed once each in this file: the literal was 240, correct only while an
+     * icon was 22px, and a hand-rederivation omitted the header's padding and its
+     * two flex gaps. What is actually worth asserting is the SHAPE - monotonic,
+     * never skipping a step, and exactly one width where 4 becomes 5 - which
+     * survives any change to the constants behind it.
+     */
+    let fifthIconAt = 0;
+    let previous = 0;
+    for (let width = 100; width <= 600; width += 1) {
+      const count = explorerPrimaryActionCount(width, 5);
+      expect(count - previous, `count jumped by more than one at ${width}px`).toBeLessThanOrEqual(1);
+      expect(count, `count went backwards at ${width}px`).toBeGreaterThanOrEqual(previous);
+      if (count === 5 && fifthIconAt === 0) fifthIconAt = width;
+      previous = count;
+    }
+    expect(fifthIconAt, "no width in 100-600px shows all five icons").toBeGreaterThan(0);
+    expect(explorerPrimaryActionCount(fifthIconAt - 1, 5)).toBe(4);
+    // And the shipped default is deliberately BELOW it - that is the fix for the
+    // truncated caption, not an accident.
+    expect(EXPLORER_PANEL_WIDTH.defaultWidth).toBeLessThan(fifthIconAt);
   });
 
   it("keeps every dropped action reachable from the ⋯ menu at the narrowest width", async () => {

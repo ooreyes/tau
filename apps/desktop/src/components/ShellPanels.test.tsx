@@ -87,14 +87,14 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     expect(screen.getByRole("button", { name: "Stop simulation" })).toBeTruthy();
   });
 
-  it("disables Wire, Net label, Undo, Redo, selection deletion, and Clear schematic in simulator mode", () => {
+  it("disables Wire, Net label, Undo, Redo, erase-selection, and delete-schematic in simulator mode", () => {
     const emptyDoc = { components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], textAnnotations: [], ascShapes: [], ascDataFlags: [], ascForeignSymbols: [], ascHierarchicalBlocks: [], ascSheet: null, userModelLibraries: [] };
     // Both past and future populated so canUndo/canRedo would be true if the
     // mode gate weren't there - proves the gate, not just an empty history.
     useSchematic.setState({ past: [emptyDoc], future: [emptyDoc] });
     render(<EditorToolbar mode="simulator" {...noopToolbarProps} />);
 
-    for (const name of ["Wire", "Net label (F4)", "Undo", "Redo", "Delete selection (Delete)", "Clear schematic"]) {
+    for (const name of ["Wire", "Net label (F4)", "Undo", "Redo", "Erase selection (Delete)", "Delete schematic"]) {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
     }
   });
@@ -120,7 +120,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
   it("does not open the clear-schematic confirmation when clicked in simulator mode", () => {
     const onClearScratchpad = vi.fn();
     render(<EditorToolbar mode="simulator" {...noopToolbarProps} onClearScratchpad={onClearScratchpad} />);
-    fireEvent.click(screen.getByRole("button", { name: "Clear schematic" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete schematic" }));
     expect(onClearScratchpad).not.toHaveBeenCalled();
   });
 
@@ -137,11 +137,11 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     expect(onOpenSimulationSetup).toHaveBeenCalledOnce();
   });
 
-  it("enables Wire, Undo (with history), and Clear schematic in schematic mode", () => {
+  it("enables Wire, Undo (with history), and delete-schematic in schematic mode", () => {
     useSchematic.setState({ past: [{ components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], textAnnotations: [], ascShapes: [], ascDataFlags: [], ascForeignSymbols: [], ascHierarchicalBlocks: [], ascSheet: null, userModelLibraries: [] }] });
     render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
 
-    for (const name of ["Wire", "Net label (F4)", "Undo", "Clear schematic"]) {
+    for (const name of ["Wire", "Net label (F4)", "Undo", "Delete schematic"]) {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(false);
     }
   });
@@ -154,7 +154,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     });
     render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
 
-    const remove = screen.getByRole("button", { name: "Delete selection (Delete)" }) as HTMLButtonElement;
+    const remove = screen.getByRole("button", { name: "Erase selection (Delete)" }) as HTMLButtonElement;
     expect(remove.disabled).toBe(false);
     fireEvent.click(remove);
     expect(useSchematic.getState().components).toEqual([]);
@@ -162,7 +162,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
 
   it("keeps the selection action disabled when there is nothing to remove", () => {
     render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
-    expect((screen.getByRole("button", { name: "Delete selection (Delete)" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Erase selection (Delete)" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("does not expose model-library authoring in the default toolbar", () => {

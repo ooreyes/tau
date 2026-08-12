@@ -642,10 +642,10 @@ describe("App schematic workspace tools", () => {
     expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);
     fireEvent.click(screen.getByRole("button", { name: "Schematic" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear schematic" }));
-    const dialog = await screen.findByRole("alertdialog", { name: "Clear schematic?" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete schematic" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Delete schematic?" });
     expect(within(dialog).getByText(/starts a new untitled schematic/i)).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear schematic" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete schematic" }));
 
     expect(await screen.findByRole("tab", { name: /untitled\.asc/ })).toBeTruthy();
     expect(useSchematic.getState().components).toEqual([]);

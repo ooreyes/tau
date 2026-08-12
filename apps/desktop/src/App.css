@@ -204,6 +204,25 @@
   --r-xl:   14px;
   --r-pill: 999px; /* stadium chips / pills */
 
+  /* ── Hit-target scale ────────────────────────────────────────────────────
+   *
+   * Sourced, not invented. Apple's macOS HIG sets NO minimum control size for
+   * pointer input - its 44x44pt figure is explicitly a TOUCH target for
+   * iOS/iPadOS - so the binding floor here is WCAG 2.2 SC 2.5.8 "Target Size
+   * (Minimum)" at level AA: an interactive target must be at least 24x24 CSS
+   * px, or be spaced so a 24px circle centred on it touches no other target.
+   *
+   * --control-hit is 28, above that floor, because macOS toolbars conventionally
+   * run 28pt and Apple's own icon-button guidance asks for a margin around the
+   * glyph rather than a tight crop. --control-hit-compact IS the 24px floor, for
+   * a target that sits inside another row and cannot grow (a tab's close box).
+   * Nothing interactive may be smaller than the compact value.
+   *
+   * Sizes are theme-independent, so unlike the colour tokens these are defined
+   * once here and not repeated in the three other theme blocks. */
+  --control-hit:         28px;
+  --control-hit-compact: 24px;
+
   /* Materials / elevation - soft Apple shadows, not neon glow */
   --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
   --elev-2:   0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
@@ -4939,7 +4958,10 @@ body {
 .mode-toggle {
   display: flex;
   align-items: center;
-  height: 28px;
+  /* The shell carries 2px of padding, so it has to be the hit size PLUS that
+     padding for the inner .mode-btn to land on --control-hit. At the old 28px
+     the buttons measured 24 - at WCAG's floor by accident rather than design. */
+  height: calc(var(--control-hit) + 4px);
   padding: 2px;
   border: 0.5px solid var(--border);
   border-radius: var(--r-md);
@@ -5301,8 +5323,11 @@ body {
 }
 
 .explorer-icons button {
-  width: 22px;
-  height: 22px;
+  /* Was 22px, under WCAG 2.2 SC 2.5.8's 24px floor. EXPLORER_ICON_SIZE in
+     components/ShellPanels.tsx mirrors this number for the header's icon
+     budget and must move with it. */
+  width: var(--control-hit);
+  height: var(--control-hit);
   display: grid;
   place-items: center;
   border: 0;
@@ -5339,8 +5364,11 @@ body {
 }
 
 .explorer-overflow-trigger {
-  width: 22px;
-  height: 22px;
+  /* Same floor as the primary icons it stands in for - and it is the ONE
+     control that is always present at every panel width, so an undersized
+     hit area here would be the one the reader meets most often. */
+  width: var(--control-hit);
+  height: var(--control-hit);
   display: none;
   flex: none;
   place-items: center;
@@ -6098,8 +6126,9 @@ body {
 
 .editor-icon-btn {
   position: relative;
-  width: 32px;
-  height: 28px;
+  /* Square and on the hit-target scale; was 32x28, which was neither. */
+  width: var(--control-hit);
+  height: var(--control-hit);
   display: grid;
   place-items: center;
   border: 0;
@@ -6201,8 +6230,9 @@ body {
    --row-h/--row-h-dense on purpose (width and height are both bespoke to
    this compact transport cluster). */
 .transport button {
-  width: 27px;
-  height: 26px;
+  /* Was 27x26 - just under the floor, and not square. */
+  width: var(--control-hit);
+  height: var(--control-hit);
   display: grid;
   place-items: center;
   border: 0;
@@ -6299,8 +6329,11 @@ body {
 }
 
 .tab-close {
-  width: 18px;
-  height: 18px;
+  /* The compact floor, not --control-hit: this sits inside a 33px tab row
+     beside the title, so 28 would crowd the label it belongs to. 24 is WCAG
+     2.2 SC 2.5.8's minimum exactly, and 18 was under it. */
+  width: var(--control-hit-compact);
+  height: var(--control-hit-compact);
   display: grid;
   place-items: center;
   margin-left: 2px;
@@ -9421,7 +9454,10 @@ button.bottom-panel-head:focus-visible {
   align-items: center;
   gap: var(--sp-2);
   width: 100%;
-  height: 22px;
+  /* A collapse/expand control, so it is interactive and bound by the same
+     floor; the compact value because it is a full-width row inside a dense
+     list, where 28 would cost a visible part slot per section. */
+  height: var(--control-hit-compact);
   margin-top: var(--sp-1);
   padding: 0 var(--sp-2);
   background: transparent;
