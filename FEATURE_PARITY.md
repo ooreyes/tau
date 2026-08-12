@@ -2003,12 +2003,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Per-analysis ngspice option mapping
 
 ## 8. UX / app
-- 🟡 **PDF-directed UI/UX remediation evidence at current packaged code tip `d3c9c3d` (2026-08-12; planning base `8fb45f6`):**
-  all 24 stable rows have code/tests and current evidence indexed in
+- 🟡 **PDF-directed UI/UX remediation evidence baseline `d3c9c3d` plus targeted
+  correction `24f7583` (2026-08-12; planning base `8fb45f6`):** all 24 stable
+  rows have code/tests and evidence indexed in
   `screenshots/ui-ux-fixes/native/matrix-manifest.json` and
   `screenshots/ui-ux-fixes/evidence-manifest.json`. The native manifest
   validator reports 30/30 matrix keys with measured dimensions, and current
-  Computer Use evidence includes direct titlebar bounds change/restore,
+  Computer Use evidence includes direct titlebar bounds change/restore and a
+  measured native drag delta,
   current-source geometry, PULSE zero-edge editing, Settings recovery, and
   LED Red → Green color/Vf inspector changes. Chrome `dev:web` is recorded in
   the six-entry responsive/console JSON without claiming file upload. **Final

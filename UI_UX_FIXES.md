@@ -162,11 +162,13 @@ controls remain excluded from the drag region and traffic lights stay usable.
 **Acceptance/tests:** Prove in packaged Tauri with Computer Use at all three
 sizes; test click, drag, double-click, traffic lights, tab controls, and focus.
 
-**Evidence:** implementation landed in `cad4a69` from worker `159e9088`; native
-title-bar contract assertions are included, worker focused shell suite is **5
-files / 75 passed**, and typecheck is **exit 0**. Packaged Computer Use proof
-of drag, double-click zoom/restore, traffic lights, controls, focus, and all
-three sizes is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (SHELL-04).
+**Evidence:** implementation landed in `cad4a69` from worker `159e9088`; the
+deterministic native-pointer/AX gesture correction landed in `24f7583`, with
+focused Toolbar regressions. The fresh packaged-app drag proof measured the
+window at `(116,63,1280,832)` before and `(216,103,1280,832)` after, a numeric
+`(+100,+40)` movement; see `native/final/titlebar-action-log.json` and its
+two referenced drag-proof captures. Existing direct AX zoom/restore proof is
+preserved (content width `1182 → 1224 → 1182`).
 
 ### [x] SHELL-05 - Remove redundant bottom rail/settings/status clutter
 
@@ -419,7 +421,8 @@ controls are missing; a long ideal-model paragraph consumes the inspector.
 **Required behavior:** `COMP-08A` spaces arrows cleanly. `COMP-08B` adds an LED
 color selector and validated forward voltage defaulting to 2 V for generic new
 LEDs, removes the paragraph, and preserves imported exact models. Color affects
-visual emission only unless an explicit physical model defines behavior.
+visual emission and a labeled typical/default Vf; an explicit, custom, or
+imported `Vfwd` always wins and remains exact.
 
 **Acceptance/tests:** New/imported LED, supported colors, valid/invalid voltage,
 deck behavior, save/reopen, simulator indication, both themes, and no silent
@@ -428,11 +431,12 @@ replacement of named models.
 **Evidence:** `COMP-08A` LED arrow geometry landed in `71ad682` from worker
 `2d80d0f`; `COMP-08B` color/forward-voltage schema, generic defaults, and
 exact-model preservation landed in `d6fbcfd` from worker `ec86d30`, with shared
-inspector presentation in `02371ec` from worker `3b8e97c`. Electrical focused
-coverage was **12 files / 723 passed** and inspector focused coverage was **3
-files / 114 passed**; integrated frontend and native gates remain green.
-LED property interaction, save/reopen, simulator indication, and packaged
-both-theme visual evidence is complete; see `screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-08).
+inspector presentation in `02371ec` from worker `3b8e97c`. The targeted
+correction landed in `24f7583`: Red → Green → Blue derives `2 → 2.2 → 3 V`
+without serializing a false `Vfwd`, while explicit/custom/imported values
+remain exact. Focused Toolbar/LED coverage is **6 files / 372 passed**;
+typecheck, web build, and packaged Tauri build are exit 0. See
+`screenshots/ui-ux-fixes/QA-EVIDENCE.md` (COMP-08).
 
 ### [x] COMP-09 - Replace Zener prose with editable parameters
 

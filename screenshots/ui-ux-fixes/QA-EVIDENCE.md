@@ -2,15 +2,16 @@
 
 Capture date: 2026-08-11 local (fresh packaged-app restart after the
 laptop-overlap warning; manifest timestamps are UTC 2026-08-12). Planning
-base: `8fb45f6`. Functional/package code tip: `d3c9c3d`.
-The current tracker/evidence commit is the final descendant reported by the
-handoff; the screenshots and JSON below were captured from the packaged binary
-built from `d3c9c3d`.
+base: `8fb45f6`. Targeted correction candidate: `24f7583`.
+The existing matrix and interaction artifacts below were captured from the
+prior packaged evidence tip `d3c9c3d`; the titlebar drag-proof captures and
+action log were captured from a fresh package built with `24f7583`.
 
-The packaged binary was rebuilt from the same correction lineage and is at
+The fresh targeted package was rebuilt from the same correction lineage and is at
 `/Users/omarreyes/Desktop/Tau/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app`.
-The current binary code is `d3c9c3d`; the seven-segment physical pin-order
-fixtures and decode assertions are committed in the current lineage. Native screenshots are JPEG
+The fresh targeted package is at the path above; the seven-segment physical
+pin-order fixtures and decode assertions remain committed in the prior
+lineage. Native screenshots are JPEG
 payloads retained with the repository's `.png` naming convention, as are the
 existing screenshot-pipeline artifacts. Their measured pixel bounds are in
 `evidence-manifest.json`.
@@ -94,9 +95,10 @@ typical/default rather than a color-derived guarantee.
   fresh direct AX target (`Window drag area; double-click to maximize or
   restore`) and the before/maximized/restored/drag screenshots. Two explicit
   direct AX presses changed measured app-content width `1182 → 1224`, and the
-  second pair restored it `1224 → 1182`; the action log intentionally does not
-  claim outer x/y telemetry that Computer Use does not expose. A direct drag
-  was dispatched from `(450,20)` to `(550,60)` on the same labeled surface.
+  second pair restored it `1224 → 1182`. The fresh packaged pointer drag moved
+  the AX window from `(116,63,1280,832)` to `(216,103,1280,832)`, a measured
+  `(+100,+40)` delta; the matching before/after captures are indexed by the
+  action log.
 
 ### Native viewport convention
 
@@ -139,18 +141,18 @@ the live/stopped fixture checks.
 | SHELL-01 | `cad4a69`, shell tests | RC populated Explorer/minimum capture |
 | SHELL-02 | `22f7366`, `6d96e3c`, `811b0c7` | current Settings light/dark; Chrome six-state absence check |
 | SHELL-03 | `cad4a69` | RC Explorer at 900 and 1440 |
-| SHELL-04 | `cad4a69`, `d3c9c3d` | `native/final/titlebar-action-log.json`; direct AX width 1182→1224→1182 |
+| SHELL-04 | `cad4a69`, `24f7583` | `native/final/titlebar-action-log.json`; direct AX width 1182→1224→1182 and measured drag delta |
 | SHELL-05 | `cad4a69`, `6d96e3c` | Settings and populated editor captures |
 | SHELL-06 | `71ad682` | current symbol placement states plus geometry tests |
 | SHELL-07 | `cad4a69` | current packaged rail/settings light/dark |
 | COMP-01 | `fd2193a`, `d3c9c3d` | current PULSE/source properties and clean packaged rerun |
 | COMP-02 | `02371ec` | current source and component-property inspectors |
 | COMP-03 | `71ad682` | current-source palette/glyph capture |
-| COMP-04 | `02371ec`, `d3c9c3d` | current component inspectors; LED Red/Green color/Vf captures |
+| COMP-04 | `02371ec`, `24f7583` | current component inspectors; LED Red/Green color/Vf captures |
 | COMP-05 | `d6fbcfd` | connected RC ground and ngspice run |
 | COMP-06 | `22f7366`, `551ec0a` | movable inspector chrome and selection-identity tests |
 | COMP-07 | `71ad682` | polarized-cap placement/properties capture |
-| COMP-08 | `71ad682`, `d6fbcfd`, `d3c9c3d` | LED placement/properties plus Red/Green typical-Vf interaction |
+| COMP-08 | `71ad682`, `d6fbcfd`, `24f7583` | LED placement/properties plus Red/Green typical-Vf interaction |
 | COMP-09 | `66e96aa`, `d6fbcfd` | zener placement/properties capture and identity tests |
 | COMP-10 | `71ad682` | photodiode placement/properties capture |
 | COMP-11 | `22f7366`, `02371ec`, `811b0c7` | Settings absence plus exact-model recovery copy |

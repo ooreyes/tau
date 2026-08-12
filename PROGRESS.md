@@ -2,23 +2,21 @@
 
 **Status: DONE - 2026-08-12**
 
-Unit: **Current packaged acceptance correction — LED color/Vf UX, concise
-inspector copy, direct titlebar proof, and exact native matrix**. The current
-functional/package code tip is `d3c9c3d`; the planning base is `8fb45f6`.
+Unit: **Targeted final Sol correction — titlebar gesture determinism, LED
+derived Vf semantics, and measurable native drag proof**. The current
+functional/package code tip is `24f7583`; the planning base is `8fb45f6`.
 
-**Files:** current packaged/native and Chrome evidence is indexed in
+**Files:** prior packaged/native matrix and Chrome evidence remains indexed in
 `screenshots/ui-ux-fixes/evidence-manifest.json`,
 `screenshots/ui-ux-fixes/QA-EVIDENCE.md`, and the machine-readable native/
-Chrome logs. This primary checkout remains the only owner of
+Chrome logs; the targeted titlebar log and drag captures are indexed separately.
+This primary checkout remains the only owner of
 `PROGRESS.md`, `FEATURE_PARITY.md`, and `UI_UX_FIXES.md`.
 
-**Tests:** fresh packaged Computer Use evidence is indexed by the 30-entry
-native matrix manifest; the validator passed 30/30 keys and the Chrome
-six-entry JSON has zero page-origin errors. Existing green results: frontend
-261 passed/2 skipped files and 4,426 passed/8 skipped tests; typecheck,
-design drift, min-window, web/package build, Rust fmt/clippy/cargo, real
-ngspice, seven-segment runner, codesign, DMG verify, and packaged smoke all
-passed.
+**Tests:** targeted correction suite: **6 files / 372 tests passed**;
+`pnpm -C apps/desktop typecheck`: **exit 0**; web build and packaged Tauri
+build: **exit 0**. Existing 30-entry native matrix/Chrome artifacts remain
+unchanged and are not being recaptured in this targeted correction.
 
 **Parity items:** source validation/PWL no-mutation, shared seven-segment
 polarity and directional loading, model recovery, bounded op-amp defaults,
@@ -30,7 +28,22 @@ live/stopped state, themes, sizes, and Chrome responsive/console.
 **Next:** parent sends the pushed candidate to a fresh Sol High reviewer;
 Final Sol High review remains PENDING.
 
-**2026-08-12 — Candidate handoff:** Staged only the validated current native
+**2026-08-12 — Targeted final correction:** The deterministic titlebar state
+machine now toggles exactly once for native pointer and AX click sequences;
+LED color-derived Vf is display/default state rather than a false explicit
+override; and the fresh packaged pointer drag moved the measured AX window
+from `(116,63)` to `(216,103)`, delta `(+100,+40)`. Focused tests/typecheck/
+build/package passed. Only the two referenced drag-proof captures and the
+machine-readable titlebar log were added; matrix/Chrome/full suites were not
+rerun. Final Sol High review remains **PENDING**.
+
+**2026-08-12 — Candidate handoff:** Staged only the validated prior-lineage
+native matrix/interaction artifacts, Chrome six-state JSON/PNG evidence,
+tracker updates, and the stale-diagnostic test correction. The targeted
+correction adds only the two measured drag-proof captures and its log/tracker
+references; no matrix/Chrome/full-suite rerun was performed.
+
+**2026-08-12 — Prior candidate handoff:** Staged only the validated current native
 matrix/interaction artifacts, Chrome six-state JSON/PNG evidence, tracker
 updates, and the stale-diagnostic test correction. Superseded titlebar/probe
 captures and ten accidental `untitled*.asc` files remain quarantined outside
