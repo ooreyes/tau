@@ -660,9 +660,59 @@ describe("Canvas - placement preview", () => {
       [{ x: 0, y: 32 }, { x: 0, y: 96 }],
     ]);
   });
+
+  it("uses the palette value override for value-dependent placement artwork", () => {
+    useSchematic.setState({
+      components: [],
+      wires: [],
+      tool: { mode: "place", kind: "switch", value: "MYSW" },
+    });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector<SVGSVGElement>("svg.canvas")!;
+
+    fireEvent.pointerMove(canvas, { clientX: 0, clientY: 0, pointerId: 12 });
+    expect(document.querySelector(".ghost [data-switch-control='voltage']")).toBeTruthy();
+
+    act(() => {
+      useSchematic.setState({ tool: { mode: "place", kind: "digitalGate", value: "nand Inputs=5" } });
+    });
+    fireEvent.pointerMove(canvas, { clientX: 0, clientY: 0, pointerId: 12 });
+    // `nand` is an inverting AND: the silhouette remains the AND body while
+    // the value controls the output bubble.
+    expect(document.querySelector(".ghost [data-gate-body='and']")).toBeTruthy();
+    expect(document.querySelector(".ghost [data-gate-invert='q']")).toBeTruthy();
+  });
 });
 
 describe("Canvas - schematic selection chrome", () => {
+  it("reports only an active selected-component drag through the narrow inspector seam", () => {
+    const onSelectedComponentDragChange = vi.fn();
+    useSchematic.setState({ wires: [], selectedId: "r1", selectedIds: ["r1"] });
+    render(<Canvas interactive onSelectedComponentDragChange={onSelectedComponentDragChange} />);
+    const canvas = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0, pointerId: 31 });
+    expect(onSelectedComponentDragChange).toHaveBeenLastCalledWith(true);
+    fireEvent.pointerUp(canvas, { button: 0, clientX: 0, clientY: 0, pointerId: 31 });
+    expect(onSelectedComponentDragChange).toHaveBeenLastCalledWith(false);
+
+    onSelectedComponentDragChange.mockClear();
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 100, clientY: 100, pointerId: 32 });
+    fireEvent.pointerUp(canvas, { button: 0, clientX: 100, clientY: 100, pointerId: 32 });
+    expect(onSelectedComponentDragChange).not.toHaveBeenCalled();
+  });
+
+  it("does not suspend the inspector for a wire-only drag", () => {
+    const onSelectedComponentDragChange = vi.fn();
+    useSchematic.setState({ selectedWireId: "w1", selectedWireIds: ["w1"], selectedId: null, selectedIds: [] });
+    render(<Canvas interactive onSelectedComponentDragChange={onSelectedComponentDragChange} />);
+    const wire = document.querySelector(".wire-group")!;
+
+    fireEvent.pointerDown(wire, { button: 0, clientX: 0, clientY: 20, pointerId: 33 });
+    fireEvent.pointerUp(wire, { button: 0, clientX: 0, clientY: 20, pointerId: 33 });
+    expect(onSelectedComponentDragChange).not.toHaveBeenCalled();
+  });
+
   it("selects an individual component through the canvas pointer gesture", () => {
     useSchematic.setState({ wires: [] });
     render(<Canvas interactive />);

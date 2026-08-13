@@ -15,7 +15,7 @@ import {
   type ParamScope,
 } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
-import { isCapacitorKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps, relayCoilOhms } from "../schematic/kindGroups";
+import { isCapacitorKind, isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchValue, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps, relayCoilOhms } from "../schematic/kindGroups";
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { asciiFold } from "../schematic/projectSubcircuit";
@@ -1301,8 +1301,7 @@ function currentSwitchRefusal(ref: string, reason: string): Error {
  *  `.model … SW(…)`. These are authored in Tau, not imported, and stay a fixed
  *  resistance even if their control pins are wired. */
 function isStaticSwitchState(value: string): boolean {
-  const state = value.trim().toLowerCase();
-  return state === "" || state.startsWith("open") || state.startsWith("closed");
+  return isStaticSwitchValue(value);
 }
 
 /** The two nodes driving a voltage-controlled switch, or null when the control

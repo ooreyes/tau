@@ -671,11 +671,26 @@ describe("symbol geometry remediation: sources, capacitors, and light arrows", (
   });
 
   it.each(["diode", "led", "zener", "photodiode"] as const)(
-    "%s visibly distinguishes anode from cathode",
+    "%s visibly names anode and cathode instead of assuming +/−",
     (kind) => {
       const markup = renderWith(kind);
-      expect(markup).toContain('data-polarity-mark="anode"');
-      expect(markup).toContain('data-polarity-mark="cathode"');
+      expect(markup).toContain('data-terminal-identity="anode"');
+      expect(markup).toContain('data-terminal-identity="cathode"');
+      expect(markup).toContain('data-pin-label="A" aria-label="anode terminal"');
+      expect(markup).toContain('data-pin-label="K" aria-label="cathode terminal"');
+      expect(markup).not.toContain('data-polarity-mark="anode"');
+      expect(markup).not.toContain('data-polarity-mark="cathode"');
+    },
+  );
+
+  it.each(["diode", "led", "zener", "photodiode"] as const)(
+    "%s keeps its A/K identity cues through rotation and mirror",
+    (kind) => {
+      const markup = renderWith(kind, undefined, 180, true);
+      const anode = markup.match(/<g data-terminal-identity="anode">([\s\S]*?)<\/g>/)?.[1];
+      const cathode = markup.match(/<g data-terminal-identity="cathode">([\s\S]*?)<\/g>/)?.[1];
+      expect(anode).toContain('transform="translate(-20 -8) scale(-1 1) rotate(180)"');
+      expect(cathode).toContain('transform="translate(20 -8) scale(-1 1) rotate(180)"');
     },
   );
 

@@ -14,6 +14,7 @@ import { behavioralSpecText, checkBehavioral } from "../simulation/behavioral";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { SchematicComponent } from "../schematic/types";
 import { useSchematic } from "../store/useSchematic";
+import { useProject } from "../store/useProject";
 import { usePanelWidth } from "@/components/ui/resizable";
 
 /**
@@ -57,6 +58,7 @@ function resetStore() {
     past: [],
     future: [],
   });
+  useProject.setState({ rootPath: null, rootName: null, tree: [], expanded: [], error: null });
 }
 
 beforeEach(() => resetStore());
@@ -394,6 +396,68 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
+
+  it("routes a named switch through exact SW resolution instead of a static State field", () => {
+    const selected = {
+      id: "s-model",
+      kind: "switch" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "MYSW",
+      label: "S1",
+    };
+    useSchematic.setState({
+      components: [selected],
+      selectedId: selected.id,
+      selectedIds: [selected.id],
+      directives: [".model MYSW SW(Ron=1 Roff=1Meg Vt=1)"],
+    });
+    render(<ComponentInspector selected={selected} onAttachModelFile={vi.fn()} />);
+
+    expect(screen.queryByRole("textbox", { name: "State" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("Ready · exact SW model from This document");
+    expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
+    expect(useSchematic.getState().components[0].value).toBe("MYSW");
+  });
+
+  it("keeps exact-model recovery available only for an unresolved named switch", () => {
+    const selected = {
+      id: "s-missing",
+      kind: "switch" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "MYSW",
+      label: "S1",
+    };
+    const openLibraries = vi.fn();
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} onAttachModelFile={openLibraries} />);
+
+    expect(screen.queryByRole("textbox", { name: "State" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain('Needs exact SWITCH "MYSW"');
+    fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
+    expect(openLibraries).toHaveBeenCalledOnce();
+    expect(useSchematic.getState().components[0].value).toBe("MYSW");
+  });
+
+  it("keeps a native static switch on its State field without a model-recovery action", () => {
+    const selected = {
+      id: "s-static",
+      kind: "switch" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "open",
+      label: "S1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} onAttachModelFile={vi.fn()} />);
+
+    expect((screen.getByRole("textbox", { name: "State" }) as HTMLInputElement).value).toBe("open");
+    expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
+  });
 });
 
 describe("ComponentInspector - native subcircuit chooser", () => {
@@ -540,6 +604,45 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     expect(screen.getByRole("status").textContent).toContain("Run is refused");
     fireEvent.click(screen.getByRole("button", { name: "Attach .lib/.sub file" }));
     expect(openLibraries).toHaveBeenCalledOnce();
+  });
+
+  it("offers an accessible sibling-sheet and ordered-port contract without guessing", async () => {
+    const selected = {
+      id: "x-project",
+      kind: "subckt" as const,
+      x: 0,
+      y: 0,
+      rotation: 0 as const,
+      value: "tau_passthrough",
+      label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+        { name: "legacy.asc", path: "/project/legacy.asc", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} projectFilePath="/project/root.sim" />);
+
+    const sheet = screen.getByRole("combobox", { name: "Project sheet" });
+    fireEvent.pointerDown(sheet, { button: 0, pointerId: 5, pointerType: "mouse" });
+    const child = await screen.findByRole("option", { name: "child.sim" });
+    fireEvent.click(child);
+    fireEvent.change(screen.getByRole("textbox", { name: "Project model name" }), { target: { value: "ChildModel" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ordered project ports" }), { target: { value: "IN, OUT, GND" } });
+    fireEvent.click(screen.getByRole("button", { name: "Link project sheet" }));
+
+    expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
+      sheetPath: "child.sim",
+      model: "ChildModel",
+      ports: ["IN", "OUT", "GND"],
+    });
+    expect(screen.getByRole("group", { name: "Project sheet link" }).querySelector('[role="status"]')?.textContent)
+      .toContain("child’s public ports match in order");
+    expect(screen.queryByRole("option", { name: "legacy.asc" })).toBeNull();
   });
 });
 
@@ -701,7 +804,9 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
     show(junction("led", "LED"));
     expect(screen.getByRole("status").textContent).toContain("Generic LED · Vf 2 V typical/default");
     expect(screen.getByRole("combobox", { name: "Color" })).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: "Typical Vf (default)" })).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "Forward voltage" }) as HTMLInputElement).value).toBe("2");
+    expect(screen.getByText("Each color starts with a typical forward voltage.")).toBeTruthy();
+    expect(screen.getByText("Uses the selected color’s default until you enter an override for this LED.")).toBeTruthy();
 
     cleanup();
     show(junction("zener", "5V1"));
@@ -722,11 +827,15 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
     show(junction("diode", "D"), [], true);
     expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
 
-    const disclosure = screen.getByRole("button", { name: "Toggle advanced settings" });
+    const disclosure = screen.getByRole("button", { name: "Toggle Advanced device model parameters" });
     expect(disclosure.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(disclosure);
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText(/Named or attached models replace this ideal/)).toBeTruthy();
+    const modelParameters = screen.getByRole("group", { name: "Advanced device model parameters" });
+    expect(modelParameters.contains(screen.getByRole("textbox", { name: "Saturation current" }))).toBe(true);
+    expect(screen.getByText("Sets reverse leakage and shifts the forward current curve.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
 
     const chooser = screen.getByRole("combobox", { name: "Simulation model" });
     fireEvent.pointerDown(chooser, { button: 0, pointerId: 1, pointerType: "mouse" });
@@ -745,7 +854,7 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
     expect(status).not.toContain("Ideal model");
     expect(status).toContain("Imported exact model · identity and provenance are read-only");
     expect(screen.queryByRole("combobox", { name: "Simulation model" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Toggle advanced settings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Toggle Advanced device model parameters" })).toBeNull();
   });
 
   it("shows imported exact provenance without exposing generic Zener knobs", () => {
@@ -804,7 +913,9 @@ describe("ComponentInspector - independent source waveform controls", () => {
     expect(pwlPrefix.getAttribute("data-slot")).toBe("select-trigger");
     expect(pwlPrefix.textContent).toContain("µs");
     expect((screen.getByRole("textbox", { name: "PWL level 3" }) as HTMLInputElement).value).toBe("1");
-    expect((screen.getByRole("textbox", { name: "AC amplitude (.ac)" }) as HTMLInputElement).value).toBe("2");
+    const acDisclosure = screen.getByRole("button", { name: "Toggle AC analysis stimulus" });
+    expect(acDisclosure.getAttribute("aria-expanded")).toBe("true");
+    expect((screen.getByRole("textbox", { name: "AC amplitude" }) as HTMLInputElement).value).toBe("2");
     expect(screen.queryByRole("textbox", { name: "DC level" })).toBeNull();
     expect(screen.queryByDisplayValue(/PWL\(/)).toBeNull();
   });
@@ -1395,6 +1506,52 @@ describe("ComponentInspector - a field with declared bounds enforces them", () =
     render(<ComponentInspector selected={resistor} />);
     expect(screen.queryByText("2–5")).toBeNull();
   });
+
+  it("keeps malformed transformer text visible and out of the document", () => {
+    const transformer = {
+      id: "t-1",
+      kind: "transformer" as const,
+      x: 0,
+      y: 0,
+      rotation: 0 as const,
+      value: "1:1",
+      label: "T1",
+    };
+    useSchematic.setState({ components: [transformer], selectedId: transformer.id, selectedIds: [transformer.id] });
+    render(<ComponentInspector selected={transformer} />);
+
+    const ratio = screen.getByRole("textbox", { name: "Turns ratio" }) as HTMLInputElement;
+    fireEvent.change(ratio, { target: { value: "1:0" } });
+    fireEvent.blur(ratio);
+
+    expect(ratio.value).toBe("1:0");
+    expect(ratio.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("alert").textContent).toContain("positive turns ratio");
+    expect(useSchematic.getState().components[0].value).toBe("1:1");
+  });
+
+  it("keeps an invalid native-switch State draft visible without rewriting it as a model", () => {
+    const selected = {
+      id: "s-1",
+      kind: "switch" as const,
+      x: 0,
+      y: 0,
+      rotation: 0 as const,
+      value: "open",
+      label: "S1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    const state = screen.getByRole("textbox", { name: "State" }) as HTMLInputElement;
+    fireEvent.change(state, { target: { value: "ejeeje" } });
+    fireEvent.blur(state);
+
+    expect(state.value).toBe("ejeeje");
+    expect(state.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("alert").textContent).toContain("Open or Closed");
+    expect(useSchematic.getState().components[0].value).toBe("open");
+  });
 });
 
 /**
@@ -1531,6 +1688,27 @@ describe("ComponentInspector - titled property groups", () => {
     const componentId = screen.getByRole("textbox", { name: "Component ID" }) as HTMLInputElement;
     expect(componentId.value).toBe("");
     expect(componentId.getAttribute("placeholder")).toBe("none");
+  });
+
+  it("keeps a case-insensitive component-ID collision as an invalid local draft", () => {
+    show(
+      part("resistor", "r-1", "1k", "R1"),
+      part("resistor", "r-2", "2k", "R2"),
+    );
+
+    const [, second] = screen.getAllByRole("textbox", { name: "Component ID" }) as HTMLInputElement[];
+    fireEvent.change(second, { target: { value: "r1" } });
+    fireEvent.blur(second);
+
+    expect(second.value).toBe("r1");
+    expect(second.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("alert").textContent).toContain("Reference “r1” is already used by R1");
+    expect(useSchematic.getState().components.map((component) => component.label)).toEqual(["R1", "R2"]);
+  });
+
+  it("explains that relay voltage controls the contact while resistance only sets coil current", () => {
+    show(part("relay", "k-1", "100", "K1"));
+    expect(screen.getByText("Coil voltage controls the contact; resistance affects coil current only.")).toBeTruthy();
   });
 
   it("still serves a kind's fields instead of one raw Value box", () => {

@@ -559,9 +559,13 @@ describe("every catalogued field set survives an edit", () => {
     for (const field of fields) {
       it(`${entry.kind}: editing ${field.key} keeps every other field`, () => {
         const base = decodeParams(entry.kind, entry.defaultValue);
-        const edited = { ...base, [field.key]: SAMPLE };
+        // `2` is a model identity for a voltage-controlled switch, not a
+        // native SPST state. Keep this generic codec test inside the static
+        // vocabulary so it verifies the actual editable surface.
+        const sample = entry.kind === "switch" && field.key === "state" ? "closed" : SAMPLE;
+        const edited = { ...base, [field.key]: sample };
         const roundTripped = decodeParams(entry.kind, encodeParams(entry.kind, edited));
-        expect(roundTripped[field.key]).toBe(SAMPLE);
+        expect(roundTripped[field.key]).toBe(sample);
         for (const other of fields) {
           if (other.key === field.key) continue;
           expect(roundTripped[other.key]).toBe(base[other.key]);

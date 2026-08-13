@@ -737,6 +737,8 @@ function App() {
   const [inspectorClosedFor, setInspectorClosedFor] = useState<string | null>(null);
   /** Bumped by the explicit keyboard command, never by a canvas selection. */
   const [inspectorFocusSignal, setInspectorFocusSignal] = useState(0);
+  /** Canvas owns the gesture; the floating inspector only suspends for that gesture. */
+  const [selectedComponentDragActive, setSelectedComponentDragActive] = useState(false);
   /** Shell-body box in client coordinates, measured alongside its width. */
   const [shellBox, setShellBox] = useState({ minX: 0, minY: 0, maxX: 0, maxY: 0 });
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
@@ -3959,6 +3961,7 @@ function App() {
                 revealComponentId={revealTarget.id}
                 revealSignal={revealTarget.signal}
                 onSelectionRect={setSelectionRect}
+                onSelectedComponentDragChange={setSelectedComponentDragActive}
               />
             </Suspense>
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
@@ -4202,6 +4205,7 @@ function App() {
                     revealComponentId={revealTarget.id}
                     revealSignal={revealTarget.signal}
                     onSelectionRect={setSelectionRect}
+                    onSelectedComponentDragChange={setSelectedComponentDragActive}
                     currentVisualizer={currentVisualizer}
                   />
                 </Suspense>
@@ -4253,6 +4257,7 @@ function App() {
             title={inspectorTitle}
             selectionKey={inspectionKey}
             focusSignal={inspectorFocusSignal}
+            suspended={selectedComponentDragActive}
             onDismiss={() => setInspectorClosedFor(inspectionKey)}
           >
             {inspectedWire
@@ -4262,6 +4267,7 @@ function App() {
                   selected={inspectedParts}
                   manualModelControls={false}
                   onAttachModelFile={attachModelFile}
+                  projectFilePath={activeFilePath}
                 />
               )}
           </SelectionInspector>

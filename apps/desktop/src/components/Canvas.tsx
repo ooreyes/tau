@@ -280,6 +280,7 @@ export function Canvas({
   revealComponentId = null,
   revealSignal = 0,
   onSelectionRect,
+  onSelectedComponentDragChange,
   currentVisualizer = false,
 }: {
   /** Last DC operating point; drives the current-flow visualizer. */
@@ -333,6 +334,8 @@ export function Canvas({
    * subtly wrong.
    */
   onSelectionRect?: (rect: { minX: number; minY: number; maxX: number; maxY: number } | null) => void;
+  /** Narrow lifecycle seam for suspending only the selected-component inspector while it moves. */
+  onSelectedComponentDragChange?: (active: boolean) => void;
   /** Current Mode: animated flow dots along the wires, from real branch
    *  currents. Defaults OFF and is opted into by the simulator only - it is a
    *  reading of a completed run, and an editor canvas showing moving current
@@ -356,6 +359,15 @@ export function Canvas({
   const boxDragRef = useRef<BoxDrag | null>(null);
   /** True while a component (or group) is being dragged - drives snap-dot visibility. */
   const [movingParts, setMovingParts] = useState(false);
+  const selectedComponentDragActive = useRef(false);
+  const setSelectedComponentDragActive = useCallback((active: boolean) => {
+    if (selectedComponentDragActive.current === active) return;
+    selectedComponentDragActive.current = active;
+    onSelectedComponentDragChange?.(active);
+  }, [onSelectedComponentDragChange]);
+  useEffect(() => () => {
+    setSelectedComponentDragActive(false);
+  }, [setSelectedComponentDragActive]);
 
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -1023,7 +1035,12 @@ export function Canvas({
     return true;
   };
 
-  const beginSelectedGroupDrag = (event: ReactPointerEvent<SVGElement>, anchor: Point, id?: string) => {
+  const beginSelectedGroupDrag = (
+    event: ReactPointerEvent<SVGElement>,
+    anchor: Point,
+    id?: string,
+    selectedComponent = false,
+  ) => {
     const snapshotComps = components.filter((component) => selectedIds.includes(component.id));
     const groupSourcePins = new Map<string, Point[]>();
     for (const component of snapshotComps) {
@@ -1059,6 +1076,7 @@ export function Canvas({
       sourceWires: wires.map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
     };
     setMovingParts(true);
+    if (selectedComponent) setSelectedComponentDragActive(true);
     svgRef.current?.setPointerCapture(event.pointerId);
   };
 
@@ -1128,7 +1146,7 @@ export function Canvas({
       const selectedObjectCount = selectedIds.length + selectedWireIds.length + selectedLabelIds.length + selectedProbeIds.length;
       const isInGroup = selectedIds.includes(hit.id) && selectedObjectCount > 1;
       if (isInGroup) {
-        beginSelectedGroupDrag(e, world, hit.id);
+        beginSelectedGroupDrag(e, world, hit.id, true);
       } else {
         select(hit.id);
         drag.current = {
@@ -1143,6 +1161,7 @@ export function Canvas({
           sourceWires: wires.map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
         };
         setMovingParts(true);
+        setSelectedComponentDragActive(true);
       }
     } else {
       // Empty canvas click: start rubber-band box select (not pan).
@@ -1319,6 +1338,7 @@ export function Canvas({
 
   const resetDrag = useCallback(() => {
     setMovingParts(false);
+    setSelectedComponentDragActive(false);
     boxDragRef.current = null;
     setBoxDrag(null);
     drag.current.mode = "none";
@@ -1333,7 +1353,7 @@ export function Canvas({
     drag.current.groupOrigins = undefined;
     drag.current.groupLabelOrigins = undefined;
     drag.current.groupProbeOrigins = undefined;
-  }, []);
+  }, [setSelectedComponentDragActive]);
 
   const rollbackDrag = useCallback(() => {
     const active = drag.current;
@@ -2111,7 +2131,7 @@ export function Canvas({
           {placing && ghost && (
             <g className="ghost" transform={`translate(${ghost.x} ${ghost.y})`}>
               <g className="symbol" transform={symbolTransform(placeRotation, placeMirror)}>
-                <ComponentSymbol kind={tool.kind} />
+                <ComponentSymbol kind={tool.kind} value={tool.value} />
               </g>
             </g>
           )}

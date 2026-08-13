@@ -11,6 +11,7 @@ import {
   ledTypicalForwardVolts,
 } from "../engine/ledSpec";
 import { formatEngineering, parseQuantity } from "../simulation/quantity";
+import { isStaticSwitchValue } from "./kindGroups";
 
 /**
  * Structured parameter fields per component kind. The canonical storage stays a
@@ -573,20 +574,26 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
     ],
     codec: { form: "positional" },
   },
-  // Semiconductor symbols use Tau's generic built-in models. Arbitrary vendor
-  // names stay unavailable until a parsed library-to-symbol mapping can affect
-  // the generated deck instead of being silently ignored.
+  // A palette SPST accepts only Tau's own static vocabulary. Any other value
+  // is a voltage-controlled `.model … SW` identity (for example `MYSW`) and
+  // must bypass this field entirely, retaining its control pins and exact
+  // model-resolution path rather than being coerced to Open or Closed.
   switch: [{
+    when: /^\s*(?:open|closed|pressed|on|off|no|0|1)?\s*$/i,
     fields: [{
       key: "state",
       label: "State",
       unit: "",
       kind: "text",
-      validate: (raw) => /^\s*(?:open|closed|pressed|on|off|no|0|1)\s*$/i.test(raw)
+      validate: (raw) => isStaticSwitchValue(raw)
         ? null
         : "Use Open or Closed for a native SPST contact.",
       description: "A static SPST contact connects A to B only while closed.",
     }],
+  }, {
+    // Named/imported SW models have no static state field: their Value is the
+    // authored model name and selecting one must never rewrite it.
+    fields: [],
   }],
   // `state` stays the leading bare token because the solver reads the raw value
   // with `isStaticContactClosed`, which tests the string's first word. Moving it
@@ -634,7 +641,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
     fields: [],
   }],
   relay: { fields: [{ key: "coil", label: "Coil resistance", unit: "Ω", kind: "number", min: 0.001,
-    description: "Coil resistance; lower values draw more current to close the contact." }] },
+    description: "Coil voltage controls the contact; resistance affects coil current only." }] },
   motor: {
     fields: [
       { key: "r", label: "Armature R", unit: "Ω", kind: "number", token: "R", fallback: "10", min: 0.001,

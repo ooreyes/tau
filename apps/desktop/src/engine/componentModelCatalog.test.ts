@@ -52,4 +52,21 @@ describe("componentModelOptions", () => {
     }]);
     expect(options.find((option) => option.name === "ONLY_LIB")?.sourceLabel).toBe("vendor.lib");
   });
+
+  it("routes a named voltage-controlled switch only to SW model cards", () => {
+    const options = componentModelOptions("switch", [
+      ".model MYSW SW(Ron=1 Roff=1Meg Vt=1)",
+      ".model WRONG CSW(Ron=1 Roff=1Meg It=1m)",
+    ], [{
+      name: "switches.lib",
+      text: ".model LIBSW SW(Ron=2 Roff=2Meg Vt=2)",
+    }]);
+
+    expect(options).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "TAU_SW", source: "generic" }),
+      expect.objectContaining({ name: "MYSW", modelType: "sw", source: "document" }),
+      expect.objectContaining({ name: "LIBSW", modelType: "sw", source: "library" }),
+    ]));
+    expect(options.map((option) => option.name)).not.toContain("WRONG");
+  });
 });

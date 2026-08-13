@@ -21,6 +21,7 @@ import { componentDisplayName } from "../schematic/componentNames";
 import { engineeringSpelling } from "../schematic/engineering";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import { isStaticSwitchValue } from "../schematic/kindGroups";
 import {
   decodeParams,
   displayParamField,
@@ -74,9 +75,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSchematic } from "../store/useSchematic";
+import { referenceRenameResult, useSchematic } from "../store/useSchematic";
 import { useProject } from "../store/useProject";
-import { basename, isAscFile, type ProjectNode } from "../project/types";
+import { basename, isAscFile, isSimFile, type ProjectNode } from "../project/types";
+import { projectRelativeSheetPath } from "../schematic/projectSubcircuit";
 import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
 import { formatEngineering, parseQuantity } from "../simulation/quantity";
@@ -342,6 +344,36 @@ function findProjectNode(nodes: readonly ProjectNode[], path: string): ProjectNo
     if (nested) return nested;
   }
   return null;
+}
+
+interface ProjectSheetChoice {
+  path: string;
+  label: string;
+}
+
+/** Flatten only project-owned Tau sheets; ASC files are not valid hierarchy children. */
+function projectSheetChoices(
+  nodes: readonly ProjectNode[],
+  projectRoot: string | null,
+  currentPath: string | null,
+): ProjectSheetChoice[] {
+  if (!projectRoot) return [];
+  const currentRelative = currentPath ? projectRelativeSheetPath(projectRoot, currentPath) : null;
+  const choices: ProjectSheetChoice[] = [];
+  const visit = (items: readonly ProjectNode[]) => {
+    for (const node of items) {
+      if (node.kind === "dir") {
+        visit(node.children ?? []);
+        continue;
+      }
+      if (!isSimFile(node.name)) continue;
+      const relative = projectRelativeSheetPath(projectRoot, node.path);
+      if (!relative || relative === currentRelative) continue;
+      choices.push({ path: relative, label: node.name });
+    }
+  };
+  visit(nodes);
+  return choices.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
 }
 
 export function ExplorerPanel({
@@ -1505,7 +1537,7 @@ function BoundedParamInput({
         aria-label={field.label}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
-        inputMode="decimal"
+        inputMode={field.kind === "number" ? "decimal" : undefined}
         spellCheck={false}
         onFocus={() => {
           focused.current = true;
@@ -1524,6 +1556,98 @@ function BoundedParamInput({
           if (event.key === "Escape") {
             event.preventDefault();
             setDraft(value);
+          }
+        }}
+      />
+      {error && <span id={errorId} className="property-validation-error" role="alert">{error}</span>}
+    </>
+  );
+}
+
+/**
+ * A component reference is a draft for the same reason a bounded parameter is:
+ * a collision must remain readable long enough for its author to fix it. The
+ * store owns the case-insensitive rule; this control asks that exact rule
+ * before opening an undo transaction, then uses the store result again on
+ * commit in case another edit changed the selection underneath it.
+ */
+function ComponentIdInput({
+  component,
+  components,
+  onBeginChange,
+  onFocusField,
+  onCommit,
+}: {
+  component: SchematicComponent;
+  components: readonly SchematicComponent[];
+  onBeginChange: () => void;
+  onFocusField: () => void;
+  onCommit: (label: string) => ReturnType<typeof referenceRenameResult>;
+}) {
+  const [draft, setDraft] = useState(component.label);
+  const [error, setError] = useState<string | null>(null);
+  const focused = useRef(false);
+  const errorId = useId();
+
+  useEffect(() => {
+    if (!focused.current) {
+      setDraft(component.label);
+      setError(null);
+    }
+  }, [component.label]);
+
+  const validate = (next: string) => referenceRenameResult(components, component.id, next);
+  const commit = () => {
+    const next = draft.trim();
+    const result = validate(next);
+    if (!result.ok) {
+      setError(result.error ?? "Choose a unique component ID.");
+      return;
+    }
+    if (next === component.label) {
+      setError(null);
+      if (draft !== component.label) setDraft(component.label);
+      return;
+    }
+    onBeginChange();
+    const committed = onCommit(next);
+    setError(committed.ok ? null : committed.error ?? "Choose a unique component ID.");
+  };
+
+  return (
+    <>
+      <input
+        className="mono-num"
+        value={draft}
+        aria-label="Component ID"
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        placeholder="none"
+        spellCheck={false}
+        onFocus={() => {
+          focused.current = true;
+          onFocusField();
+        }}
+        onBlur={() => {
+          focused.current = false;
+          commit();
+        }}
+        onChange={(event) => {
+          const next = event.currentTarget.value;
+          setDraft(next);
+          const result = validate(next);
+          setError(result.ok ? null : result.error ?? "Choose a unique component ID.");
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setDraft(component.label);
+            setError(null);
+            event.currentTarget.blur();
           }
         }}
       />
@@ -1663,7 +1787,7 @@ function ParamValueControl({
       onValueChange={commit}
       externalValidationMessage={externalValidationMessage}
     />
-  ) : isBoundedParamField(shown) || field.kind === "number" ? (
+  ) : isBoundedParamField(shown) || field.kind === "number" || Boolean(field.validate) ? (
     <BoundedParamInput
       field={shown}
       value={shownValue}
@@ -1729,6 +1853,102 @@ function componentHeadline(component: SchematicComponent): string {
 }
 
 /**
+ * Minimal project hierarchy authoring surface. The compiler still owns the
+ * electrical proof: this control records an explicit sibling sheet and an
+ * ordered port contract, while Run refuses until the child declares the same
+ * public ports. It never guesses from symbol pins or screen position.
+ */
+function ProjectSubcircuitLinkEditor({
+  component,
+  choices,
+}: {
+  component: SchematicComponent;
+  choices: readonly ProjectSheetChoice[];
+}) {
+  const setProjectSubcircuitLink = useSchematic((s) => s.setProjectSubcircuitLink);
+  const link = component.projectSubcircuit;
+  const [sheetPath, setSheetPath] = useState(link?.sheetPath ?? choices[0]?.path ?? "");
+  const [model, setModel] = useState(link?.model ?? (component.label.trim() || "X1"));
+  const [ports, setPorts] = useState(link?.ports.join(", ") ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSheetPath(link?.sheetPath ?? choices[0]?.path ?? "");
+    setModel(link?.model ?? (component.label.trim() || "X1"));
+    setPorts(link?.ports.join(", ") ?? "");
+    setError(null);
+    setSaved(false);
+  }, [choices, component.id, component.label, link?.model, link?.ports, link?.sheetPath]);
+
+  const availableChoices = link && !choices.some((choice) => choice.path === link.sheetPath)
+    ? [{ path: link.sheetPath, label: `${link.sheetPath} · saved link` }, ...choices]
+    : choices;
+
+  const apply = () => {
+    const orderedPorts = ports.split(/[\s,]+/).map((port) => port.trim()).filter(Boolean);
+    const result = setProjectSubcircuitLink(component.id, { sheetPath, model, ports: orderedPorts });
+    if (!result.ok) {
+      setError(result.error ?? "Could not save the project-sheet link.");
+      setSaved(false);
+      return;
+    }
+    setError(null);
+    setSaved(true);
+  };
+
+  return (
+    <div className="property-advanced project-sheet-link" role="group" aria-label="Project sheet link">
+      <p className="property-hint">
+        Choose a sibling Tau sheet and name its ordered public ports. Run checks that contract against the child sheet; it never infers ports.
+      </p>
+      <label className="property-field">
+        <span>Project sheet</span>
+        <Select value={sheetPath || undefined} onValueChange={(next) => { setSheetPath(next); setSaved(false); }}>
+          <SelectTrigger size="sm" className="property-select mono-num w-full max-w-[168px]" aria-label="Project sheet">
+            <SelectValue placeholder="Choose a Tau sheet" />
+          </SelectTrigger>
+          <SelectContent>
+            {availableChoices.map((choice) => (
+              <SelectItem key={choice.path} value={choice.path}>{choice.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </label>
+      <label className="property-field">
+        <span>Project model name</span>
+        <input
+          className="mono-num property-text"
+          value={model}
+          aria-label="Project model name"
+          spellCheck={false}
+          onChange={(event) => { setModel(event.currentTarget.value); setSaved(false); }}
+        />
+      </label>
+      <label className="property-field">
+        <span>Ordered project ports</span>
+        <input
+          className="mono-num property-text"
+          value={ports}
+          aria-label="Ordered project ports"
+          placeholder="IN, OUT, GND"
+          spellCheck={false}
+          onChange={(event) => { setPorts(event.currentTarget.value); setSaved(false); }}
+        />
+      </label>
+      {choices.length === 0 && !link && (
+        <p className="property-hint">No sibling .sim or .tau.json sheet is available in the open project yet.</p>
+      )}
+      <Button type="button" variant="outline" size="sm" disabled={!sheetPath} onClick={apply}>
+        {link ? "Update project sheet link" : "Link project sheet"}
+      </Button>
+      {error && <p className="property-validation-error" role="alert">{error}</p>}
+      {saved && <p className="property-hint" role="status">Project sheet contract saved; Run will refuse until the child’s public ports match in order.</p>}
+    </div>
+  );
+}
+
+/**
  * One collapsible, titled group of properties for one part.
  *
  * This is the unit the reference builds its panel out of, and the reason a
@@ -1743,6 +1963,7 @@ function ComponentPropertyGroup({
   onAttachModelFile,
   manualModelControls = true,
   groupCount = 1,
+  projectFilePath = null,
 }: {
   component: SchematicComponent;
   /** Explicit file-driven recovery path; the default shell keeps it hidden. */
@@ -1750,6 +1971,8 @@ function ComponentPropertyGroup({
   manualModelControls?: boolean;
   /** How many groups are on screen; see the aria-label note below. */
   groupCount?: number;
+  /** Current tab path, used to offer sibling project sheets only. */
+  projectFilePath?: string | null;
 }) {
   const selected = component;
   const entry = CATALOG_BY_KIND[selected.kind];
@@ -1760,8 +1983,15 @@ function ComponentPropertyGroup({
   const setOpampModel = useSchematic((s) => s.setOpampModel);
   const setLabel = useSchematic((s) => s.setLabel);
   const beginChange = useSchematic((s) => s.beginChange);
+  const components = useSchematic((s) => s.components);
   const directives = useSchematic((s) => s.directives);
   const modelLibraries = useSchematic((s) => s.userModelLibraries);
+  const projectTree = useProject((s) => s.tree);
+  const projectRootPath = useProject((s) => s.rootPath);
+  const projectSheetOptions = useMemo(
+    () => projectSheetChoices(projectTree, projectRootPath, projectFilePath),
+    [projectFilePath, projectRootPath, projectTree],
+  );
   const editKeyRef = useRef<string | null>(null);
   // Empty catalog values (e.g. Class-D MOSFETs) still show editable defaults.
   const valueSource = selected
@@ -1775,7 +2005,13 @@ function ComponentPropertyGroup({
     value: decoded[field.key] ?? "",
     editable: true,
   }));
-  const modelKind = selected && isModelComponentKind(selected.kind) ? selected.kind : null;
+  // A palette SPST state is Tau's own two-terminal contact. A different
+  // value, including an imported `MYSW`, is an authored SW model identity and
+  // must reach the exact-model surface without being coerced through State.
+  const modelKind = selected && isModelComponentKind(selected.kind)
+    && !(selected.kind === "switch" && isStaticSwitchValue(valueSource))
+    ? selected.kind
+    : null;
   const modelOptions = useMemo(
     () => modelKind ? componentModelOptions(modelKind, directives, modelLibraries) : [],
     [modelKind, directives, modelLibraries],
@@ -1856,23 +2092,37 @@ function ComponentPropertyGroup({
     && !hasLtspiceProvenance(selected)
     && selectedModelOption?.source === "generic",
   );
-  const modelParamFields = modelKind && (genericModel || manualModelControls) ? visibleFields.filter((field) => {
+  const modelParameterFields = modelKind && (genericModel || manualModelControls) ? visibleFields.filter((field) => {
     if (field.key === "model") return false;
     if (selectedModelOption?.modelType === "vdmos") return false;
     if (!genericModel && (field.key === "kp" || field.key === "vto")) return false;
     return true;
-  }).map((field) => (
-    <label key={field.key} className="property-field">
-      <span>{field.label}</span>
-      <ParamValueControl
-        field={field}
-        value={field.value}
-        onBeginChange={() => beginParamChange(field.key)}
-        onFocusField={() => { editKeyRef.current = null; }}
-        onValueChange={(value) => updateParam(field.key, value)}
-      />
-    </label>
-  )) : null;
+  }) : [];
+  const renderModelParamField = (field: typeof visibleFields[number]) => (
+    <Fragment key={field.key}>
+      <label className="property-field">
+        <span>{field.label}</span>
+        <ParamValueControl
+          field={field}
+          value={field.value}
+          onBeginChange={() => beginParamChange(field.key)}
+          onFocusField={() => { editKeyRef.current = null; }}
+          onValueChange={(value) => updateParam(field.key, value)}
+        />
+      </label>
+      {field.description && <InspectorHint text={field.description} />}
+    </Fragment>
+  );
+  const modelParamFields = modelParameterFields.length > 0 ? (
+    <>
+      {modelParameterFields.filter((field) => !field.advanced).map(renderModelParamField)}
+      {modelParameterFields.some((field) => field.advanced) && (
+        <div className="property-advanced-fields" role="group" aria-label="Advanced device model parameters">
+          {modelParameterFields.filter((field) => field.advanced).map(renderModelParamField)}
+        </div>
+      )}
+    </>
+  ) : null;
 
   // The full chooser is intentionally an explicit host opt-in. The desktop
   // shell keeps it out of the default inspector, but the small compatibility
@@ -1934,8 +2184,7 @@ function ComponentPropertyGroup({
     </label>
   ) : null;
 
-  const attachLibraryAction = onAttachModelFile
-    && (!selectedModelOption || selectedModelOption.source === "generic") ? (
+  const attachLibraryAction = onAttachModelFile && !selectedModelOption ? (
       <Button type="button" variant="outline" size="sm" onClick={onAttachModelFile}>
         Attach .lib/.sub file
       </Button>
@@ -1945,22 +2194,25 @@ function ComponentPropertyGroup({
     && opamp?.mode === "behavioral"
     && !opamp.imported
     ? visibleFields.filter((field) => field.key !== "model").map((field) => (
-      <label key={field.key} className="property-field">
-        <span>{field.label}</span>
-        <ParamValueControl
-          field={field}
-          value={field.value}
-          onBeginChange={() => beginParamChange(field.key)}
-          onFocusField={() => {
-            editKeyRef.current = null;
-            setCrossFieldError(null);
-          }}
-          externalValidationMessage={
-            field.key === "vmin" || field.key === "vmax" ? crossFieldError : null
-          }
-          onValueChange={(value) => updateParam(field.key, value)}
-        />
-      </label>
+      <Fragment key={field.key}>
+        <label className="property-field">
+          <span>{field.label}</span>
+          <ParamValueControl
+            field={field}
+            value={field.value}
+            onBeginChange={() => beginParamChange(field.key)}
+            onFocusField={() => {
+              editKeyRef.current = null;
+              setCrossFieldError(null);
+            }}
+            externalValidationMessage={
+              field.key === "vmin" || field.key === "vmax" ? crossFieldError : null
+            }
+            onValueChange={(value) => updateParam(field.key, value)}
+          />
+        </label>
+        {field.description && <InspectorHint text={field.description} />}
+      </Fragment>
     ))
     : null;
 
@@ -2049,21 +2301,12 @@ function ComponentPropertyGroup({
           ) : (
             <label className="property-field">
               <span>Component ID</span>
-              <input
-                className="mono-num"
-                value={selected.label}
-                aria-label="Component ID"
-                // An empty box says nothing; "none" says the part has no
-                // designator yet, which is a different and true statement.
-                placeholder="none"
-                spellCheck={false}
-                onFocus={() => {
-                  editKeyRef.current = null;
-                }}
-                onChange={(event) => {
-                  beginParamChange("label");
-                  setLabel(selected.id, event.currentTarget.value);
-                }}
+              <ComponentIdInput
+                component={selected}
+                components={components}
+                onBeginChange={() => beginParamChange("label")}
+                onFocusField={() => { editKeyRef.current = null; }}
+                onCommit={(label) => setLabel(selected.id, label)}
               />
             </label>
           )}
@@ -2089,6 +2332,7 @@ function ComponentPropertyGroup({
             />
           ) : selected.kind === "subckt" ? (
             <>
+              <ProjectSubcircuitLinkEditor component={selected} choices={projectSheetOptions} />
               {manualModelControls ? (
                 <label className="property-field">
                   <span>Subcircuit model</span>
@@ -2224,9 +2468,9 @@ function ComponentPropertyGroup({
                       className="disclosure-header"
                       onClick={() => setAdvancedOpen((open) => !open)}
                       aria-expanded={advancedOpen}
-                      aria-label="Toggle advanced settings"
+                      aria-label="Toggle Advanced device model parameters"
                     >
-                      <span className="disclosure-label">Advanced</span>
+                      <span className="disclosure-label">Advanced device model parameters</span>
                       <span className="disclosure-rule" aria-hidden="true" />
                       <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
                     </button>
@@ -2469,10 +2713,12 @@ export function ComponentInspector({
   selected,
   onAttachModelFile,
   manualModelControls = false,
+  projectFilePath = null,
 }: {
   selected: SchematicComponent | readonly SchematicComponent[] | null;
   onAttachModelFile?: () => void;
   manualModelControls?: boolean;
+  projectFilePath?: string | null;
 }) {
   const parts: readonly SchematicComponent[] = !selected
     ? []
@@ -2509,6 +2755,7 @@ export function ComponentInspector({
           groupCount={parts.length}
           manualModelControls={manualModelControls}
           onAttachModelFile={onAttachModelFile}
+          projectFilePath={projectFilePath}
         />
       ))}
     </div>

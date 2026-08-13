@@ -12,7 +12,8 @@ export type ModelComponentKind =
   | "njf"
   | "pjf"
   | "npn"
-  | "pnp";
+  | "pnp"
+  | "switch";
 
 export interface ModelLibraryText {
   readonly name: string;
@@ -27,7 +28,7 @@ export interface ComponentModelOption {
 }
 
 const MODEL_KINDS = new Set<ComponentKind>([
-  "diode", "led", "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
+  "diode", "led", "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp", "switch",
 ]);
 
 const GENERIC_MODELS: Record<ModelComponentKind, string> = {
@@ -40,6 +41,7 @@ const GENERIC_MODELS: Record<ModelComponentKind, string> = {
   pjf: "PJF",
   npn: "NPN",
   pnp: "PNP",
+  switch: "TAU_SW",
 };
 
 export function isModelComponentKind(kind: ComponentKind): kind is ModelComponentKind {
@@ -63,6 +65,8 @@ function isCompatible(kind: ModelComponentKind, descriptor: { type: string; pCha
     case "led":
     case "zener":
       return descriptor.type === "d";
+    case "switch":
+      return descriptor.type === "sw";
     case "npn":
       return descriptor.type === "npn";
     case "pnp":

@@ -748,6 +748,33 @@ function SymbolPinLabels({
 }
 
 /**
+ * A junction's polarity is terminal identity, not a generic plus/minus
+ * convention. These labels travel with the anode/cathode leads while the
+ * glyph remains upright under rotation and mirror, just like named IC pins.
+ */
+function JunctionTerminalIdentityMarks({
+  kind,
+  rotation,
+  mirrored,
+}: {
+  kind: ComponentKind;
+  rotation: Rotation;
+  mirrored: boolean;
+}) {
+  if (kind !== "diode" && kind !== "led" && kind !== "zener" && kind !== "photodiode") return null;
+  return (
+    <>
+      <g data-terminal-identity="anode">
+        <PinLabel text="A" ariaLabel="anode terminal" x={-20} y={-8} rotation={rotation} mirrored={mirrored} />
+      </g>
+      <g data-terminal-identity="cathode">
+        <PinLabel text="K" ariaLabel="cathode terminal" x={20} y={-8} rotation={rotation} mirrored={mirrored} />
+      </g>
+    </>
+  );
+}
+
+/**
  * The frame every flip-flop shares: inputs down the left, the true output and
  * the bubbled complement on the right, and the reference below them. `Q̅` is
  * the one output that is always inverted, so it is the one that always carries
@@ -993,6 +1020,7 @@ export function ComponentSymbol({
   return (
     <>
       {symbolArtwork(kind, value, imported, catalog)}
+      <JunctionTerminalIdentityMarks kind={kind} rotation={rotation} mirrored={mirrored} />
       <SymbolPinLabels kind={kind} rotation={rotation} mirrored={mirrored} />
     </>
   );
@@ -1158,12 +1186,6 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <line x1={10} y1={-14} x2={10} y2={14} />
           <line x1={10} y1={0} x2={32} y2={0} />
-          <g data-polarity-mark="anode" aria-hidden="true">
-            <path d="M -23 -8 H -17 M -20 -11 V -5" />
-          </g>
-          <g data-polarity-mark="cathode" aria-hidden="true">
-            <path d="M 17 -8 H 23" />
-          </g>
         </>
       );
 
@@ -1178,12 +1200,6 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
             <path d="M -12 -13 L 10 0 L -12 13 Z" />
             <line x1={10} y1={-14} x2={10} y2={14} />
             <line x1={10} y1={0} x2={32} y2={0} />
-            <g data-polarity-mark="anode" aria-hidden="true">
-              <path d="M -23 -8 H -17 M -20 -11 V -5" />
-            </g>
-            <g data-polarity-mark="cathode" aria-hidden="true">
-              <path d="M 17 -8 H 23" />
-            </g>
           </g>
           {/* Two outward arrows share a diagonal lane but keep a clear gap
               between their heads at selected stroke weight. */}
@@ -1201,12 +1217,6 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <path d="M 10 -14 V 14 M 10 -14 L 16 -18 M 10 14 L 4 18" />
           <line x1={10} y1={0} x2={32} y2={0} />
-          <g data-polarity-mark="anode" aria-hidden="true">
-            <path d="M -23 -8 H -17 M -20 -11 V -5" />
-          </g>
-          <g data-polarity-mark="cathode" aria-hidden="true">
-            <path d="M 17 -8 H 23" />
-          </g>
         </>
       );
 
@@ -1217,12 +1227,6 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <line x1={10} y1={-14} x2={10} y2={14} />
           <line x1={10} y1={0} x2={32} y2={0} />
-          <g data-polarity-mark="anode" aria-hidden="true">
-            <path d="M -23 -8 H -17 M -20 -11 V -5" />
-          </g>
-          <g data-polarity-mark="cathode" aria-hidden="true">
-            <path d="M 17 -8 H 23" />
-          </g>
           {/* Incoming light arrows (opposite of LED emission arrows). */}
           <path data-light-arrow="one" d="M 31 -33 L 18 -20 M 18 -20 L 20 -28 M 18 -20 L 26 -22" />
           <path data-light-arrow="two" d="M 18 -33 L 5 -20 M 5 -20 L 7 -28 M 5 -20 L 13 -22" />
