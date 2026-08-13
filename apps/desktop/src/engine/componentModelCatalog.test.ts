@@ -69,4 +69,18 @@ describe("componentModelOptions", () => {
     ]));
     expect(options.map((option) => option.name)).not.toContain("WRONG");
   });
+
+  it("offers no generic photodiode model and only exact diode cards", () => {
+    const options = componentModelOptions("photodiode", [
+      ".model BPW34 D(Is=10p N=1.2)",
+      ".model WRONG NPN(Bf=100)",
+    ], []);
+
+    expect(options).toEqual(expect.arrayContaining([expect.objectContaining({
+      name: "BPW34",
+      modelType: "d",
+      source: "document",
+    })]));
+    expect(options.map((option) => option.name)).not.toContain("");
+  });
 });

@@ -42,6 +42,9 @@ export function isStaticContactClosed(value: string): boolean {
     || state === "1";
 }
 
+/** One grammar shared by the inspector validator and the engine classifier. */
+export const STATIC_SWITCH_VALUE_RE = /^\s*(?:open|closed|pressed|on|off|no|0|1)?\s*$/i;
+
 /**
  * Tau's palette SPST values are deliberately a small static vocabulary. Any
  * other switch value is an authored model identity (for example `MYSW`) and
@@ -49,16 +52,12 @@ export function isStaticContactClosed(value: string): boolean {
  * open static contact would silently discard that authored behavior.
  */
 export function isStaticSwitchValue(value: string): boolean {
-  const head = value.trim().toLowerCase().split(/\s+/, 1)[0] ?? "";
-  return head === ""
-    || head === "open"
-    || head === "closed"
-    || head === "pressed"
-    || head === "on"
-    || head === "off"
-    || head === "no"
-    || head === "0"
-    || head === "1";
+  return STATIC_SWITCH_VALUE_RE.test(value);
+}
+
+/** Closed state for a native SPST only after the shared grammar accepts it. */
+export function isStaticSwitchClosed(value: string): boolean {
+  return isStaticSwitchValue(value) && isStaticContactClosed(value);
 }
 
 /** SPDT throw toward the normally-open pole (default). NC / 2 → other pole. */
@@ -68,8 +67,25 @@ export function isSpdtThrowToNo(value: string): boolean {
   return true;
 }
 
+/** True for Tau's numeric photocurrent form, not a named photodiode model. */
+export function isPhotodiodePhotocurrentValue(value: string): boolean {
+  const t = value.trim().replace(/µ/g, "u");
+  if (!t || /^d(iode)?$/i.test(t)) return true;
+  try {
+    const amps = parseQuantity(t, "A");
+    return Number.isFinite(amps) && amps >= 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Photodiode photocurrent (A). Value is Iph; blank / "D" → 100 µA. */
 export function photodiodePhotocurrentAmps(value: string): number {
+  if (!isPhotodiodePhotocurrentValue(value)) {
+    throw new Error(
+      `Photodiode value "${value}" names a model; resolve its exact .model from this document or an attached library before running.`,
+    );
+  }
   const t = value.trim().replace(/µ/g, "u");
   if (!t || /^d(iode)?$/i.test(t)) return 100e-6;
   try {

@@ -682,6 +682,29 @@ describe("Canvas - placement preview", () => {
     expect(document.querySelector(".ghost [data-gate-body='and']")).toBeTruthy();
     expect(document.querySelector(".ghost [data-gate-invert='q']")).toBeTruthy();
   });
+
+  it("passes placement rotation and mirror into polarity labels", () => {
+    useSchematic.setState({
+      components: [],
+      wires: [],
+      tool: { mode: "place", kind: "photodiode", value: "D" },
+      placeRotation: 180,
+      placeMirror: true,
+    });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector<SVGSVGElement>("svg.canvas")!;
+    fireEvent.pointerMove(canvas, { clientX: 0, clientY: 0, pointerId: 13 });
+
+    const symbol = document.querySelector<SVGGElement>(".ghost .symbol")!;
+    expect(symbol.getAttribute("transform")).toBe("rotate(180) scale(-1 1)");
+    for (const label of ["A", "K"]) {
+      const transform = document
+        .querySelector(`.ghost [data-pin-label='${label}']`)
+        ?.getAttribute("transform");
+      expect(transform).toContain("scale(-1 1)");
+      expect(transform).toContain("rotate(180)");
+    }
+  });
 });
 
 describe("Canvas - schematic selection chrome", () => {

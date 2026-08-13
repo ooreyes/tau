@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { ComponentInspector, ComponentsRail } from "./ShellPanels";
 import { EditorToolbar } from "./editor/EditorChrome";
@@ -87,6 +87,13 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     expect(toolbar).toBeTruthy();
     expect(screen.getByRole("button", { name: "Run simulation" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Stop simulation" })).toBeNull();
+  });
+
+  it("opens the child-sheet interface authoring surface from the production toolbar", () => {
+    const onOpenProjectInterface = vi.fn();
+    render(<EditorToolbar mode="schematic" {...noopToolbarProps} onOpenProjectInterface={onOpenProjectInterface} />);
+    fireEvent.click(screen.getByRole("button", { name: "Child sheet interface" }));
+    expect(onOpenProjectInterface).toHaveBeenCalledOnce();
   });
 
   it("disables Wire, Net label, Undo, Redo, erase-selection, and delete-schematic in simulator mode", () => {
@@ -644,6 +651,40 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       .toContain("child’s public ports match in order");
     expect(screen.queryByRole("option", { name: "legacy.asc" })).toBeNull();
   });
+
+  it("reports linked-sheet presence truthfully and suppresses contradictory attachment recovery", () => {
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "ChildModel", label: "X1",
+      projectSubcircuit: { sheetPath: "child.sim", model: "ChildModel", ports: ["IN", "OUT"] },
+    };
+    const openLibraries = vi.fn();
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} projectFilePath="/project/root.sim" onAttachModelFile={openLibraries} />);
+
+    const linkGroup = screen.getByRole("group", { name: "Project sheet link" });
+    expect(within(linkGroup).getByRole("status").textContent).toMatch(/child\.sim is present/i);
+    expect(screen.getByText("Linked project model")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
+    expect(screen.queryByText(/Needs definition/)).toBeNull();
+
+    cleanup();
+    useProject.setState({
+      rootPath: "/project",
+      tree: [{ name: "root.sim", path: "/project/root.sim", kind: "file" }],
+    });
+    render(<ComponentInspector selected={selected} projectFilePath="/project/root.sim" onAttachModelFile={openLibraries} />);
+    expect(screen.getByRole("group", { name: "Project sheet link" }).textContent).toMatch(/child\.sim is not present/i);
+    expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
+    expect(screen.queryByText(/Needs definition/)).toBeNull();
+  });
 });
 
 describe("ComponentInspector - charge-defined capacitor", () => {
@@ -775,7 +816,7 @@ describe("ComponentInspector - controlled sources", () => {
  */
 describe("ComponentInspector - ideal by default, real behind Advanced", () => {
   const junction = (
-    kind: "diode" | "led" | "zener",
+    kind: "diode" | "led" | "zener" | "photodiode",
     value: string,
     extra: Record<string, unknown> = {},
   ) => ({ id: `${kind}-1`, kind, x: 160, y: 160, rotation: 0 as const, value, label: "D1", ...extra });
@@ -843,6 +884,55 @@ describe("ComponentInspector - ideal by default, real behind Advanced", () => {
     fireEvent.pointerUp(part, { button: 0, pointerId: 1, pointerType: "mouse" });
     fireEvent.click(part);
     expect(useSchematic.getState().components[0].value).toBe("1N4148");
+  });
+
+  it("keeps generic saturation/model parameters collapsed in the production host", () => {
+    const selected = junction("diode", "D");
+    const openLibraries = vi.fn();
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} onAttachModelFile={openLibraries} />);
+
+    const disclosure = screen.getByRole("button", { name: "Toggle Advanced device model parameters" });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("textbox", { name: "Saturation current" })).toBeNull();
+    fireEvent.click(disclosure);
+    expect(screen.getByRole("textbox", { name: "Saturation current" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
+  });
+
+  it("treats a generic voltage-marked zener as Tau-owned and hides attachment recovery", () => {
+    const selected = junction("zener", "12V");
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} onAttachModelFile={vi.fn()} />);
+
+    expect(screen.getByRole("status").textContent).toContain("Generic Zener · 0.7 V forward · 12 V reverse.");
+    expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Breakdown voltage" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Forward voltage" })).toBeTruthy();
+  });
+
+  it("keeps a named photodiode exact-or-refused instead of exposing generic photocurrent", () => {
+    const selected = junction("photodiode", "BPW34");
+    const openLibraries = vi.fn();
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} onAttachModelFile={openLibraries} />);
+
+    expect(screen.getByRole("status").textContent).toMatch(/Needs exact PHOTODIODE "BPW34"/i);
+    expect(screen.queryByRole("textbox", { name: "Photocurrent" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Attach .lib/.sub file" })).toBeTruthy();
+
+    cleanup();
+    const exact = junction("photodiode", "BPW34");
+    useSchematic.setState({
+      components: [exact],
+      selectedId: exact.id,
+      selectedIds: [exact.id],
+      userModelLibraries: [{ name: "photodiodes.lib", text: ".model BPW34 D(Is=10p N=1.2)" }],
+    });
+    render(<ComponentInspector selected={exact} onAttachModelFile={openLibraries} />);
+    expect(screen.getByRole("status").textContent).toMatch(/Ready · exact D model from photodiodes\.lib/i);
+    expect(screen.queryByText(/Generic photocurrent/i)).toBeNull();
   });
 
   it("never calls an imported diode ideal, and leaves its real model in plain sight", () => {
@@ -1551,6 +1641,24 @@ describe("ComponentInspector - a field with declared bounds enforces them", () =
     expect(state.getAttribute("aria-invalid")).toBe("true");
     expect(screen.getByRole("alert").textContent).toContain("Open or Closed");
     expect(useSchematic.getState().components[0].value).toBe("open");
+  });
+
+  it("does not classify an invalid persisted switch string as a static State field", () => {
+    const selected = {
+      id: "s-invalid",
+      kind: "switch" as const,
+      x: 0,
+      y: 0,
+      rotation: 0 as const,
+      value: "closed ejeeje",
+      label: "S1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} onAttachModelFile={vi.fn()} />);
+
+    expect(screen.queryByRole("textbox", { name: "State" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toMatch(/Needs exact SWITCH|Generic starter/i);
   });
 });
 

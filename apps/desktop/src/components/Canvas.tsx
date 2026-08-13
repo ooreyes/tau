@@ -279,6 +279,8 @@ export function Canvas({
   fitInsetBottom = 0,
   revealComponentId = null,
   revealSignal = 0,
+  revealNetPoint = null,
+  revealNetSignal = 0,
   onSelectionRect,
   onSelectedComponentDragChange,
   currentVisualizer = false,
@@ -312,6 +314,10 @@ export function Canvas({
   /** Bumped alongside `revealComponentId` so revealing the SAME part twice
    *  works; the id alone would not change and the effect would not re-fire. */
   revealSignal?: number;
+  /** Bring a diagnostic net's known point into view without selecting a part. */
+  revealNetPoint?: { x: number; y: number } | null;
+  /** Bumped alongside `revealNetPoint` so the same net can be focused twice. */
+  revealNetSignal?: number;
   /**
    * Pixels along the bottom edge that something is covering, so the fit frames
    * the circuit into the part of the canvas the reader can actually see.
@@ -1665,6 +1671,31 @@ export function Canvas({
     return () => cancelAnimationFrame(frame);
   }, [revealSignal, revealComponentId, components, fitInsetBottom]);
 
+  // Net diagnostics do not always have a single component to select (a bare
+  // label is a valid probe target). Pan their structured point through the
+  // same camera margins as component focus, without changing zoom or
+  // inventing a selection.
+  useEffect(() => {
+    if (!revealNetSignal || !revealNetPoint) return;
+    const el = svgRef.current;
+    if (!el) return;
+    const frame = requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return;
+      setView((v) => {
+        const sx = revealNetPoint.x * v.zoom + v.x;
+        const sy = revealNetPoint.y * v.zoom + v.y;
+        const margin = 72;
+        const right = Math.max(margin, r.width - stageRailInset(el) - margin);
+        const bottom = Math.max(margin, r.height - fitInsetBottom - margin);
+        const dx = sx < margin ? margin - sx : sx > right ? right - sx : 0;
+        const dy = sy < margin ? margin - sy : sy > bottom ? bottom - sy : 0;
+        return dx === 0 && dy === 0 ? v : { ...v, x: v.x + dx, y: v.y + dy };
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [revealNetSignal, revealNetPoint, fitInsetBottom]);
+
   // Re-fit when the canvas changes size: the window, a tab's split, a sibling
   // panel drag, the read-only simulator's column.
   //
@@ -2131,7 +2162,12 @@ export function Canvas({
           {placing && ghost && (
             <g className="ghost" transform={`translate(${ghost.x} ${ghost.y})`}>
               <g className="symbol" transform={symbolTransform(placeRotation, placeMirror)}>
-                <ComponentSymbol kind={tool.kind} value={tool.value} />
+                <ComponentSymbol
+                  kind={tool.kind}
+                  value={tool.value}
+                  rotation={placeRotation}
+                  mirrored={placeMirror}
+                />
               </g>
             </g>
           )}

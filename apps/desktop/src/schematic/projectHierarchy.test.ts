@@ -1,6 +1,5 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { buildSubcircuitPinOverride } from "./subcircuitGeometry";
@@ -158,9 +157,13 @@ describe("Tau project-linked hierarchy compiler", () => {
     expect(result.deck.netlist).toMatch(/X1\s+\S+\s+\S+\s+\S+\s+TauBuck/);
   });
 
-  it("runs the two-sheet fixture through Tau's native ngspice fixture without losing port order", () => {
-    const ngspice = process.env.TAU_NGSPICE_BIN ?? "/opt/homebrew/bin/ngspice";
-    expect(existsSync(ngspice), `Tau native ngspice fixture is required at ${ngspice}; set TAU_NGSPICE_BIN for the staged binary.`).toBe(true);
+  const stagedWorker = process.env.TAU_PACKAGED_WORKER;
+  const stagedLibrary = process.env.TAU_NGSPICE_LIB;
+  const hasStagedWorker = Boolean(
+    stagedWorker && stagedLibrary && existsSync(stagedWorker) && existsSync(stagedLibrary),
+  );
+
+  it.skipIf(!hasStagedWorker)("runs the two-sheet fixture through Tau's staged --tau-spice-worker protocol (TAU_PACKAGED_WORKER + TAU_NGSPICE_LIB)", () => {
     const instance = linkedInstance("x1", "X1", 100, 0, "power/buck-cell.sim", "TauBuck", ["VIN", "VOUT", "GND"]);
     const root = simpleRoot(instance);
     const gndPin = instance.pinOverride![2]!;
@@ -171,22 +174,39 @@ describe("Tau project-linked hierarchy compiler", () => {
       sheets: [buckSheet()],
       analysis: { kind: "op" },
     });
-    const directory = mkdtempSync(join(tmpdir(), "tau-project-hierarchy-"));
-    const deckPath = join(directory, "buck.cir");
-    try {
-      writeFileSync(deckPath, deck.netlist);
-      const native = spawnSync(ngspice, ["-b", deckPath], { encoding: "utf8" });
-      expect(native.status, `${native.stdout}\n${native.stderr}`).toBe(0);
-      expect(`${native.stdout}\n${native.stderr}`).not.toMatch(/\berror\b/i);
-      // The child is intentionally asymmetric: 1 kΩ from VIN to VOUT and a
-      // 10 Ω root load. Both the voltage and source current prove that the
-      // ordered VIN/VOUT/GND contract reached the native deck.
-      const output = `${native.stdout}\n${native.stderr}`;
-      expect(output).toMatch(/9\.999000e\+00/);
-      expect(output).toMatch(/-9\.99900e-01/);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
+    // This is deliberately the same private worker protocol exercised by
+    // scripts/packaged-engine-smoke.py: the test does not shell to a developer
+    // ngspice binary. Set TAU_PACKAGED_WORKER to Tau.app's executable and
+    // TAU_NGSPICE_LIB to its staged Resources/ngspice/lib/libngspice.dylib,
+    // then run this file to prove hierarchy deck text through the production
+    // worker/library boundary.
+    const request = JSON.stringify({
+      request: { netlist: deck.netlist },
+      libraryCandidates: [resolve(stagedLibrary!)],
+    });
+    const native = spawnSync(stagedWorker!, ["--tau-spice-worker"], {
+      input: request,
+      encoding: "utf8",
+      timeout: 30_000,
+    });
+    expect(native.status, `${native.stdout}\n${native.stderr}`).toBe(0);
+    const marker = "TAU_SPICE_RESPONSE_V1:";
+    const markerIndex = native.stdout.lastIndexOf(marker);
+    expect(markerIndex, `${native.stdout}\n${native.stderr}`).toBeGreaterThanOrEqual(0);
+    const response = JSON.parse(native.stdout.slice(markerIndex + marker.length)) as {
+      result?: { libraryPath?: string; vectors?: Array<{ name?: string; real?: number[] }> };
+      error?: string | null;
+    };
+    expect(response.error).toBeFalsy();
+    expect(resolve(response.result?.libraryPath ?? "")).toBe(resolve(stagedLibrary!));
+    const vectors = new Map((response.result?.vectors ?? []).map((vector) => [
+      (vector.name ?? "").toLowerCase(), vector.real ?? [],
+    ]));
+    // The child is intentionally asymmetric: 1 kΩ from VIN to VOUT and a
+    // 10 Ω root load. Both values prove the ordered VIN/VOUT/GND contract
+    // reached Tau's staged native engine.
+    expect(vectors.get("vout")?.[0]).toBeCloseTo(9.999, 3);
+    expect(vectors.get("v1#branch")?.[0]).toBeCloseTo(-0.9999, 3);
   });
 
   it("orders recursive blocks dependency-first independently of project tree order", () => {
@@ -221,6 +241,8 @@ describe("Tau project-linked hierarchy compiler", () => {
       sheets: [], analysis: { kind: "op" },
     });
     expect(missing.code).toBe("missing-sheet");
+    expect(missing.componentFocus).toEqual({ componentId: "x1", reference: "X1" });
+    expect(missing.message).toContain('instance "X1"');
 
     const aInstance = linkedInstance("xb", "XB", 64, 0, "b.sim", "BCell", ["VIN", "VOUT"]);
     const bInstance = linkedInstance("xa", "XA", 64, 0, "a.sim", "ACell", ["VIN", "VOUT"]);

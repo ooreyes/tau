@@ -6938,6 +6938,53 @@ button.bottom-panel-head:focus-visible {
   text-transform: uppercase;
 }
 
+.project-sheet-ports-editor {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.project-sheet-port-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-sheet-port-row {
+  display: grid;
+  grid-template-columns: 24px minmax(110px, 1fr) minmax(120px, 1fr) 88px auto;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+  min-height: var(--row-h);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--sp-1);
+}
+
+.project-sheet-port-row input,
+.project-sheet-port-row [data-slot="select-trigger"] {
+  min-width: 0;
+  width: 100%;
+}
+
+.project-sheet-port-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.project-sheet-port-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
 /* Behavioral source (B). The expression is the subject of the panel, not one
    value among several, so it leaves the label/value grid for a full-width
    stacked row; everything else keeps the property grid's rhythm. */

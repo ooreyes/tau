@@ -15,7 +15,7 @@ import {
   type ParamScope,
 } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
-import { isCapacitorKind, isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchValue, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps, relayCoilOhms } from "../schematic/kindGroups";
+import { isCapacitorKind, isPhotodiodePhotocurrentValue, isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchClosed, isStaticSwitchValue, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps, relayCoilOhms } from "../schematic/kindGroups";
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { asciiFold } from "../schematic/projectSubcircuit";
@@ -682,7 +682,7 @@ export function buildSpiceDeck(
     currentSwitchSpecs.set(index, { ...spec, controlSource: controlName });
   });
   const SEMI_KINDS: ReadonlySet<ComponentKind> = new Set([
-    "diode", "led", "zener", "npn", "pnp", "nmos", "pmos", "njf", "pjf",
+    "diode", "led", "zener", "photodiode", "npn", "pnp", "nmos", "pmos", "njf", "pjf",
   ]);
   const emittedStandard = new Set<string>();
   for (const { component } of circuit.components) {
@@ -1710,8 +1710,19 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       return [`${name} ${node("a")} ${node("k")} ${deviceModel(starter)}`];
     }
     case "photodiode": {
-      // Value is photocurrent (A), not a .model name — never route it through
-      // deviceModel() or "100u" looks like an unresolved vendor diode.
+      // Numeric values are Tau's explicit photocurrent form. A named value is
+      // an authored diode model identity and must resolve exactly; routing
+      // `BPW34` through the old 100uA starter made a believable but false
+      // photodiode and discarded the user's part identity.
+      const requested = component.value.trim().split(/\s+/)[0] ?? "";
+      if (!isPhotodiodePhotocurrentValue(component.value)) {
+        if (!requested || !userModels.has(requested.toLowerCase())) {
+          throw new Error(
+            `Simulation refused: ${component.label.trim() || name} names photodiode model "${requested || component.value}" but no exact .model is available. Attach or define the model; no generic TAU_DIODE substitution was made.`,
+          );
+        }
+        return [`${name} ${node("a")} ${node("k")} ${requested}`];
+      }
       const base = safeName(component.label || `D${index + 1}`);
       const iph = formatEngineering(photodiodePhotocurrentAmps(component.value))
         .replace(/\s+/g, "")
@@ -2210,13 +2221,28 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // cannot switch is never silent.
       const control = switchControlNodes(entry, netPinCount);
       if (control && !isStaticSwitchState(component.value)) {
-        const named = component.value.trim().split(/\s+/)[0] ?? "";
+        const tokens = component.value.trim().split(/\s+/).filter(Boolean);
+        const named = tokens[0] ?? "";
+        if (tokens.length !== 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(named)) {
+          throw new Error(
+            `Simulation refused: ${component.label.trim() || name} has invalid voltage-controlled switch value "${component.value}"; use one exact SW model name or Tau's Open/Closed grammar. No approximate or partial circuit was run.`,
+          );
+        }
         const model = named && userModels.has(named.toLowerCase())
           ? named
           : genericModel(named, "TAU_SW");
         return [`${name} ${node("a")} ${node("b")} ${control.positive} ${control.negative} ${model}`];
       }
-      const closed = isStaticContactClosed(component.value);
+      if (!control && !isStaticSwitchState(component.value)) {
+        const tokens = component.value.trim().split(/\s+/).filter(Boolean);
+        const named = tokens[0] ?? "";
+        if (tokens.length !== 1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(named)) {
+          throw new Error(
+            `Simulation refused: ${component.label.trim() || name} has invalid voltage-controlled switch value "${component.value}"; use one exact SW model name or Tau's Open/Closed grammar. No approximate or partial circuit was run.`,
+          );
+        }
+      }
+      const closed = isStaticSwitchClosed(component.value);
       return [`R_${safeName(component.label || `S${index + 1}`)} ${node("a")} ${node("b")} ${closed ? "1m" : "1e12"}`];
     }
     case "pushButton": {

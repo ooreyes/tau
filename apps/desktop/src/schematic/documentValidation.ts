@@ -1071,6 +1071,13 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
       input.probeDeck();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const componentFocus = error && typeof error === "object" && "componentFocus" in error
+        ? (error as { componentFocus?: { componentId?: unknown; reference?: unknown } }).componentFocus
+        : undefined;
+      const focused = componentFocus
+        && typeof componentFocus.componentId === "string"
+        ? components.find((component) => component.id === componentFocus.componentId)
+        : undefined;
       // Attribution is by designator match, which is all the engine's copy
       // offers - it names parts (`M1 names model "IRF540"`), not ids.
       const named = components.find((component) => {
@@ -1080,7 +1087,7 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
       push({
         code: "directive-or-model",
         severity: "error",
-        ...(named ? componentDiagnosticTarget(named) : {}),
+        ...(focused ? componentDiagnosticTarget(focused) : named ? componentDiagnosticTarget(named) : {}),
         message,
       });
     }

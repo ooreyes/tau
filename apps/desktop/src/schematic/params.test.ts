@@ -517,6 +517,7 @@ describe("electromechanical editor values", () => {
     const throwField = paramFields("spdt", "no")[0]!;
     expect(paramValidationMessage(state, "ejeeje")).toContain("Open or Closed");
     expect(paramValidationMessage(state, "closed")).toBeNull();
+    expect(paramValidationMessage(state, "closed ejeeje")).toContain("Open or Closed");
     expect(paramValidationMessage(throwField, "ejeeje")).toContain("Choose");
     expect(paramValidationMessage(throwField, "nc")).toBeNull();
     // A named controlled switch remains visibly invalid until Chrome routes it

@@ -7,6 +7,7 @@ export type ModelComponentKind =
   | "diode"
   | "led"
   | "zener"
+  | "photodiode"
   | "nmos"
   | "pmos"
   | "njf"
@@ -28,13 +29,14 @@ export interface ComponentModelOption {
 }
 
 const MODEL_KINDS = new Set<ComponentKind>([
-  "diode", "led", "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp", "switch",
+  "diode", "led", "zener", "photodiode", "nmos", "pmos", "njf", "pjf", "npn", "pnp", "switch",
 ]);
 
 const GENERIC_MODELS: Record<ModelComponentKind, string> = {
   diode: "D",
   led: "LED",
   zener: "5V1",
+  photodiode: "",
   nmos: "NMOS",
   pmos: "PMOS",
   njf: "NJF",
@@ -64,6 +66,7 @@ function isCompatible(kind: ModelComponentKind, descriptor: { type: string; pCha
     case "diode":
     case "led":
     case "zener":
+    case "photodiode":
       return descriptor.type === "d";
     case "switch":
       return descriptor.type === "sw";
@@ -120,13 +123,20 @@ export function componentModelOptions(
   libraries: readonly ModelLibraryText[],
 ): ComponentModelOption[] {
   const genericName = GENERIC_MODELS[kind];
-  const options: ComponentModelOption[] = [{
-    name: genericName,
-    modelType: kind,
-    source: "generic",
-    sourceLabel: `Tau generic ${kind.toUpperCase()}`,
-  }];
-  const claimed = new Set([genericName.toLowerCase()]);
+  const options: ComponentModelOption[] = [];
+  const claimed = new Set<string>();
+  // A photodiode's numeric Tau value is an explicit photocurrent mode, not a
+  // selectable generic device model. Named values therefore show only exact
+  // D cards from the document, attached libraries, or Tau's bundled catalog.
+  if (genericName) {
+    options.push({
+      name: genericName,
+      modelType: kind,
+      source: "generic",
+      sourceLabel: `Tau generic ${kind.toUpperCase()}`,
+    });
+    claimed.add(genericName.toLowerCase());
+  }
 
   const documentText = modelLibLinesFromDirectives(directives).join("\n");
   if (documentText) {

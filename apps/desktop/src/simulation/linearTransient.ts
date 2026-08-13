@@ -1,4 +1,4 @@
-import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
+import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchClosed, logicConstantVolts, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { formatEngineering, parseQuantity } from "./quantity";
@@ -473,6 +473,8 @@ export async function runTransientAnalysis(
           gainOf.set(id, parseQuantity(entry.component.value, "V/A"));
           break;
         case "switch":
+          if (isStaticSwitchClosed(entry.component.value)) closedSwitches.add(id);
+          break;
         case "pushButton":
           if (isStaticContactClosed(entry.component.value)) closedSwitches.add(id);
           break;
@@ -663,6 +665,10 @@ export async function runTransientAnalysis(
             break;
           }
           case "switch":
+            if (closedSwitches.has(entry.component.id)) {
+              stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), 1e9);
+            }
+            break;
           case "pushButton":
             if (closedSwitches.has(entry.component.id)) {
               stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), 1e9);

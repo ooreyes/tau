@@ -549,6 +549,22 @@ describe("live schematic diagnostics (P3-14)", () => {
     expect(liveSchematicDiagnostics({ components, wires, probeDeck: deckProbe(components, wires) })).toEqual([]);
   });
 
+  it("recovers a hierarchy compiler's structured instance focus", () => {
+    const { components, wires } = soundCircuit();
+    const error = Object.assign(
+      new Error('Linked sheet "child.sim" used by instance "R1" is missing from the open project.'),
+      { componentFocus: { componentId: "r1", reference: "R1" } },
+    );
+    const rows = liveSchematicDiagnostics({ components, wires, probeDeck: () => { throw error; } });
+    const row = rows.find((candidate) => candidate.code === "directive-or-model");
+
+    expect(row).toMatchObject({
+      componentId: "r1",
+      reference: "R1",
+      focus: { kind: "component", componentId: "r1", reference: "R1" },
+    });
+  });
+
   it("flags no ground, no source and both floating pins on a lone resistor, with no run", () => {
     // The exact state the acceptance harness drops the app into: one part, no
     // wires, nothing run. Three of the nine classes have to fire from that.

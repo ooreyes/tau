@@ -11,7 +11,7 @@ import {
   ledTypicalForwardVolts,
 } from "../engine/ledSpec";
 import { formatEngineering, parseQuantity } from "../simulation/quantity";
-import { isStaticSwitchValue } from "./kindGroups";
+import { isStaticSwitchValue, STATIC_SWITCH_VALUE_RE } from "./kindGroups";
 
 /**
  * Structured parameter fields per component kind. The canonical storage stays a
@@ -579,7 +579,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   // must bypass this field entirely, retaining its control pins and exact
   // model-resolution path rather than being coerced to Open or Closed.
   switch: [{
-    when: /^\s*(?:open|closed|pressed|on|off|no|0|1)?\s*$/i,
+    when: STATIC_SWITCH_VALUE_RE,
     fields: [{
       key: "state",
       label: "State",
@@ -595,9 +595,9 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
     // authored model name and selecting one must never rewrite it.
     fields: [],
   }],
-  // `state` stays the leading bare token because the solver reads the raw value
-  // with `isStaticContactClosed`, which tests the string's first word. Moving it
-  // behind a `state=` key would make every closed button read as open.
+  // `state` stays the leading bare token because the push-button solver reads
+  // the raw contact state. Moving it behind a `state=` key would make every
+  // closed button read as open.
   // `form` and `action` are omitted while they hold their defaults, so an
   // untouched button is still spelled exactly "open" on disk.
   pushButton: {

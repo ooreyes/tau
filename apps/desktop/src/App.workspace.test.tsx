@@ -90,6 +90,40 @@ describe("schematicDocumentSignature", () => {
       components: [{ ...reloaded.components[0], value: "2k" }],
     })).not.toBe(schematicDocumentSignature(first));
   });
+
+  it("canonicalizes child-sheet port label ids across a reopened document", () => {
+    const first = {
+      components: [],
+      wires: [],
+      netLabels: [{ id: "label-old", x: 64, y: 0, text: "OUT", port: "Out" as const }],
+      projectPorts: [{ name: "OUT", labelId: "label-old", direction: "Out" as const }],
+      directives: [],
+    };
+    const reopened = {
+      ...first,
+      netLabels: [{ ...first.netLabels[0], id: "label-new" }],
+      projectPorts: [{ ...first.projectPorts[0], labelId: "label-new" }],
+    };
+
+    expect(schematicDocumentSignature(reopened)).toBe(schematicDocumentSignature(first));
+    expect(schematicDocumentSignature({
+      ...reopened,
+      projectPorts: [{ ...reopened.projectPorts[0], name: "IN" }],
+    })).not.toBe(schematicDocumentSignature(first));
+
+    // Exercise the real reopen path too: loadCircuit remints the label id and
+    // remaps the port reference, but the saved semantic signature stays clean.
+    useSchematic.getState().loadCircuit(first);
+    const liveAfterReopen = useSchematic.getState();
+    expect(liveAfterReopen.netLabels[0]?.id).not.toBe("label-old");
+    expect(schematicDocumentSignature({
+      components: liveAfterReopen.components,
+      wires: liveAfterReopen.wires,
+      netLabels: liveAfterReopen.netLabels,
+      projectPorts: liveAfterReopen.projectPorts,
+      directives: liveAfterReopen.directives,
+    })).toBe(schematicDocumentSignature(first));
+  });
 });
 
 const storage = new Map<string, string>();
@@ -713,6 +747,16 @@ describe("The modal editors are fetched only from default routes", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Simulation setup" });
     expect(within(dialog).getByText(/Choose a common analysis/)).toBeTruthy();
+  });
+
+  it("mounts the child-sheet interface dialog from a fresh schematic toolbar", async () => {
+    await renderOpenProject();
+
+    fireEvent.click(screen.getByRole("button", { name: "Child sheet interface" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Child sheet interface" });
+    expect(within(dialog).getByRole("group", { name: "Child sheet project ports" })).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Add project port" })).toBeTruthy();
   });
 });
 

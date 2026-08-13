@@ -6,6 +6,7 @@ import {
   isCapacitorKind,
   isSpdtThrowToNo,
   isStaticContactClosed,
+  isStaticSwitchClosed,
   logicConstantVolts,
   motorArmature,
   photodiodePhotocurrentAmps,
@@ -129,6 +130,8 @@ describe("EveryCircuit library — push-button + SPDT + photodiode", () => {
     expect(isStaticContactClosed("open")).toBe(false);
     expect(isStaticContactClosed("pressed")).toBe(true);
     expect(isStaticContactClosed("closed")).toBe(true);
+    expect(isStaticSwitchClosed("closed")).toBe(true);
+    expect(isStaticSwitchClosed("closed ejeeje")).toBe(false);
     expect(isSpdtThrowToNo("no")).toBe(true);
     expect(isSpdtThrowToNo("nc")).toBe(false);
     expect(photodiodePhotocurrentAmps("100u")).toBeCloseTo(100e-6, 12);

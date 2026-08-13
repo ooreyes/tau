@@ -43,6 +43,7 @@ export class ProjectHierarchyError extends Error {
     readonly code: ProjectHierarchyErrorCode,
     message: string,
     readonly sheetPath?: string,
+    readonly componentFocus?: { componentId: string; reference: string },
   ) {
     super(message);
     this.name = "ProjectHierarchyError";
@@ -133,19 +134,21 @@ function displayInstance(component: SchematicComponent): string {
 }
 
 function exactLinkForComponent(component: SchematicComponent, ownerPath: string): ProjectSubcircuitLink {
+  const componentFocus = { componentId: component.id, reference: displayInstance(component) };
   const link = component.projectSubcircuit;
   if (!link || component.kind !== "subckt") {
-    throw new ProjectHierarchyError("invalid-contract", `${displayInstance(component)} is not a Tau project-linked subcircuit.`, ownerPath);
+    throw new ProjectHierarchyError("invalid-contract", `${displayInstance(component)} is not a Tau project-linked subcircuit.`, ownerPath, componentFocus);
   }
   const validation = projectSubcircuitLinkValidation(link);
   if (!validation.ok) {
-    throw new ProjectHierarchyError("invalid-contract", `${displayInstance(component)} has an invalid project link: ${validation.error}`, ownerPath);
+    throw new ProjectHierarchyError("invalid-contract", `${displayInstance(component)} has an invalid project link: ${validation.error}`, ownerPath, componentFocus);
   }
   if (component.value !== link.model) {
     throw new ProjectHierarchyError(
       "invalid-contract",
       `${displayInstance(component)} must use project model "${link.model}" as its exact value.`,
       ownerPath,
+      componentFocus,
     );
   }
   if (component.ltSymbolType || component.ltModelName || component.ltModelFile || component.ltWindows || component.ltExtraAttrs) {
@@ -153,6 +156,7 @@ function exactLinkForComponent(component: SchematicComponent, ownerPath: string)
       "invalid-contract",
       `${displayInstance(component)} cannot combine a Tau project link with imported file-backed symbol metadata.`,
       ownerPath,
+      componentFocus,
     );
   }
   const pins = getComponentPins(component)
@@ -164,6 +168,7 @@ function exactLinkForComponent(component: SchematicComponent, ownerPath: string)
       "invalid-contract",
       `${displayInstance(component)} needs an exact ordered p1…pN bank for ${link.model}.`,
       ownerPath,
+      componentFocus,
     );
   }
   return link;
@@ -409,10 +414,13 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
   const compiled = new Set<string>();
   const blocks: ProjectHierarchyBlock[] = [];
 
-  const visit = (link: ProjectSubcircuitLink, ownerPath: string): void => {
+  const visit = (link: ProjectSubcircuitLink, ownerPath: string, ownerComponent?: SchematicComponent): void => {
+    const componentFocus = ownerComponent
+      ? { componentId: ownerComponent.id, reference: displayInstance(ownerComponent) }
+      : undefined;
     const target = sheets.get(keyFor(link.sheetPath));
     if (!target) {
-      throw new ProjectHierarchyError("missing-sheet", `Linked sheet "${link.sheetPath}" used by "${ownerPath}" is missing from the open project.`, ownerPath);
+      throw new ProjectHierarchyError("missing-sheet", `Linked sheet "${link.sheetPath}" used by ${ownerComponent ? `instance "${displayInstance(ownerComponent)}" in ` : ""}"${ownerPath}" is missing from the open project.`, ownerPath, componentFocus);
     }
     const targetInterface = sheetInterface(target);
     if (!hasMatchingOrderedProjectPorts(link.ports, targetInterface.ports.map(({ port }) => port))) {
@@ -420,6 +428,7 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
         "invalid-contract",
         `Linked sheet "${target.path}" ports do not exactly match ${link.model}'s ordered instance contract.`,
         ownerPath,
+        componentFocus,
       );
     }
     const modelKey = keyFor(link.model);
@@ -429,6 +438,7 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
         "duplicate-definition",
         `Project model "${link.model}" collides with ordinary root X instance "${displayInstance(ordinaryRootX)}". Link that instance explicitly or choose a different project model name.`,
         ownerPath,
+        componentFocus,
       );
     }
     const existingModel = generatedByModel.get(modelKey);
@@ -437,6 +447,7 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
         "duplicate-model",
         `Project model "${link.model}" is linked to both "${sheets.get(existingModel.sheetKey)?.path}" and "${target.path}".`,
         ownerPath,
+        componentFocus,
       );
     }
     const priorModel = modelBySheet.get(target.key);
@@ -445,6 +456,7 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
         "invalid-contract",
         `Linked sheet "${target.path}" is used as both "${priorModel}" and "${link.model}"; choose one stable project model name.`,
         ownerPath,
+        componentFocus,
       );
     }
     if (reservedDefinitions.has(modelKey) || bundledSubcircuitBlock(modelKey) !== null) {
@@ -452,6 +464,7 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
         "duplicate-definition",
         `Project model "${link.model}" collides with an inline, attached, or Tau-owned subcircuit definition.`,
         ownerPath,
+        componentFocus,
       );
     }
     generatedByModel.set(modelKey, { sheetKey: target.key, model: link.model });
@@ -461,7 +474,7 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
       const chain = [...compiling.slice(cycleStart), target.key]
         .map((key) => sheets.get(key)?.path ?? key)
         .join(" → ");
-      throw new ProjectHierarchyError("cycle", `Project-linked hierarchy contains a cycle: ${chain}.`, ownerPath);
+      throw new ProjectHierarchyError("cycle", `Project-linked hierarchy contains a cycle: ${chain}.`, ownerPath, componentFocus);
     }
     if (compiled.has(target.key)) return;
 
@@ -477,7 +490,7 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
     try {
       for (const dependency of dependencies) {
         childLinks.set(dependency.component.id, dependency.link);
-        visit(dependency.link, target.path);
+        visit(dependency.link, target.path, dependency.component);
       }
       const text = compileChildBlock(target, link.model, childLinks);
       blocks.push({ model: link.model, sheetPath: target.path, text });
@@ -494,7 +507,7 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
       compareStable(left.link.model, right.link.model)
       || compareStable(left.link.sheetPath, right.link.sheetPath)
       || compareStable(left.component.id, right.component.id));
-  for (const { link } of rootLinks) visit(link, root.path);
+  for (const { component, link } of rootLinks) visit(link, root.path, component);
 
   const deck = buildSpiceDeck(
     rootDeckInput(

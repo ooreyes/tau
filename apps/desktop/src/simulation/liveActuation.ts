@@ -82,7 +82,7 @@ import {
 } from "../engine/nativeLive";
 import { parsePotentiometerSpec, potentiometerLegs } from "../engine/potentiometerSpec";
 import { NON_ACTUABLE, isActuable, isDraggableWiper } from "../schematic/actuation";
-import { isSpdtThrowToNo, isStaticContactClosed } from "../schematic/kindGroups";
+import { isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchClosed } from "../schematic/kindGroups";
 import type { LiveControlForm } from "../schematic/liveControls";
 import type { SchematicComponent } from "../schematic/types";
 import { formatEngineering, parseQuantity } from "./quantity";
@@ -318,8 +318,8 @@ const NOT_A_CONTROL = "is not a control Tau can operate while the circuit is run
  * `nextValue` is a whole encoded component value, i.e. what
  * `actuatedValue()` / `wiperValue()` in `schematic/actuation.ts` returned. Both
  * the current and the target state are then read with the SAME readers the
- * netlist emitter uses (`isStaticContactClosed`, `isSpdtThrowToNo`,
- * `parsePotentiometerSpec`), which is the only way the live circuit and a
+ * netlist emitter uses (`isStaticContactClosed`, `isStaticSwitchClosed`,
+ * `isSpdtThrowToNo`, `parsePotentiometerSpec`), which is the only way the live circuit and a
  * restarted deck are guaranteed to agree about what "closed" means.
  *
  * Per-kind, what the emitter really requires:
@@ -398,8 +398,9 @@ function planStaticContact(
   name: string,
   nextValue: string,
 ): LiveActuationTarget {
-  const closed = isStaticContactClosed(nextValue);
-  if (closed === isStaticContactClosed(component.value)) {
+  const closed = component.kind === "switch" ? isStaticSwitchClosed(nextValue) : isStaticContactClosed(nextValue);
+  const currentClosed = component.kind === "switch" ? isStaticSwitchClosed(component.value) : isStaticContactClosed(component.value);
+  if (closed === currentClosed) {
     return { kind: "unchanged", controlId: component.id };
   }
 

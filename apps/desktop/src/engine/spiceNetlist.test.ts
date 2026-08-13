@@ -322,6 +322,31 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/D1 \S+ \S+ TAU_DIODE/);
   });
 
+  it("refuses a named BPW34 instead of silently using the 100uA TAU_DIODE", () => {
+    expect(() => buildSpiceDeck({
+      components: [
+        component("photodiode", "D1", "BPW34", 0, 0),
+        component("ground", "", "", 64, 0),
+      ],
+      wires: [wire("w-bpw34-ground", [{ x: 32, y: 0 }, { x: 64, y: 0 }])],
+    }, { kind: "op" })).toThrow(/BPW34.*exact \.model.*no generic TAU_DIODE/i);
+  });
+
+  it("emits an attached named photodiode model exactly", () => {
+    const deck = buildSpiceDeck({
+      components: [
+        component("photodiode", "D1", "BPW34", 0, 0),
+        component("ground", "", "", 64, 0),
+      ],
+      wires: [wire("w-bpw34-ground", [{ x: 32, y: 0 }, { x: 64, y: 0 }])],
+      userModelLibraries: [".model BPW34 D(Is=10p N=1.2)"],
+    }, { kind: "op" });
+    expect(deck.netlist).toMatch(/^\.model BPW34 D\(Is=10p N=1\.2\)/m);
+    expect(deck.netlist).toMatch(/^D1 \S+ \S+ BPW34$/m);
+    expect(deck.netlist).not.toMatch(/^D1 \S+ \S+ TAU_DIODE$/m);
+    expect(deck.netlist).not.toMatch(/^I_D1_ph /m);
+  });
+
   it("maps top-level document ideal D(Ron=/Ilimit=) onto sidiode A-instances", () => {
     // HandsFreePreamp ElectretMic path: on-schematic ideal diode must not stay
     // as Berkeley D (ngspice ignores Ron/Ilimit → waveform miss).
@@ -1860,6 +1885,14 @@ describe("buildSpiceDeck", () => {
     closed.components[2] = component("switch", "S1", "closed", 0, 0);
     expect(buildSpiceDeck(closed, { kind: "op" }).netlist).toMatch(/^R_S1 \S+ \S+ 1m$/m);
     expect(buildSpiceDeck(closed, { kind: "op" }).circuit.warnings).toEqual([]);
+  });
+
+  it("refuses an invalid persisted static-switch string instead of opening it", () => {
+    const invalid = { ...switchedLoad(false), components: switchedLoad(false).components };
+    invalid.components[2] = component("switch", "S1", "closed ejeeje", 0, 0);
+    expect(() => buildSpiceDeck(invalid, { kind: "op" })).toThrow(
+      /invalid voltage-controlled switch value.*closed ejeeje.*Open\/Closed grammar/i,
+    );
   });
 
   it("refuses a named switch model when the document defines none", () => {

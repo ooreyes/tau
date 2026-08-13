@@ -10,6 +10,7 @@ import { useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   MousePointer2,
+  Network,
   Play,
   Plus,
   SlidersHorizontal,
@@ -31,6 +32,7 @@ export function EditorToolbar({
   onStop,
   onClearScratchpad,
   onOpenSimulationSetup,
+  onOpenProjectInterface = () => {},
 }: {
   mode: "schematic" | "simulator";
   /** A run is in flight, so a second Run must not begin over it. */
@@ -45,6 +47,7 @@ export function EditorToolbar({
   onStop: () => void;
   onClearScratchpad: () => void;
   onOpenSimulationSetup: () => void;
+  onOpenProjectInterface?: () => void;
 }) {
   // The simulator view is read-only (pan/zoom/probe only - see Canvas's
   // `interactive` prop and App.tsx's keydown gate); every editing control in
@@ -110,6 +113,9 @@ export function EditorToolbar({
       </IconButton>
       <IconButton title="Simulation setup" disabled={readOnly} onClick={onOpenSimulationSetup}>
         <SlidersHorizontal size={TOOL_ICON_SIZE} strokeWidth={1.6} />
+      </IconButton>
+      <IconButton title="Child sheet interface" disabled={readOnly} onClick={onOpenProjectInterface}>
+        <Network size={TOOL_ICON_SIZE} strokeWidth={1.6} />
       </IconButton>
       <div className="editor-toolbar-spacer" />
       <div

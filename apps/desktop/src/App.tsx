@@ -30,6 +30,7 @@ import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { ProbeIcon } from "./components/editor/ToolIcons";
 import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
+import { ProjectSheetPortsDialog } from "./components/ProjectSheetPortsDialog";
 import { UnsavedRecoveryDialog } from "./components/UnsavedRecoveryDialog";
 import {
   ExternalEditConflictDialog,
@@ -142,7 +143,7 @@ import {
   runNativeSteppedAcSweep,
   runNativeSteppedDcSweep,
 } from "./engine/nativeSpice";
-import { canUseNativeStepPath, stepAnalysisDomain } from "./simulation/nativeStepFamily";
+import { canUseNativeStepPath, nativeStepPathRefusal, stepAnalysisDomain } from "./simulation/nativeStepFamily";
 import { useProject } from "./store/useProject";
 import { loadProjectHierarchySheets, type OpenProjectDocument } from "./schematic/projectHierarchyRuntime";
 import {
@@ -169,6 +170,7 @@ import {
   liveSchematicDiagnostics,
   retiredKindNotices,
   validateSchematicDocument,
+  type DiagnosticFocusTarget,
 } from "./schematic/documentValidation";
 import { strandedTerminalNotices } from "./schematic/relocatedPins";
 import { importProjectAsc } from "./io/projectAscImport";
@@ -469,6 +471,7 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
   // two open copies never collide in the live store. They are not authored
   // circuit content and therefore must not make a clean import look edited.
   const componentIds = new Map(doc.components.map((component, index) => [component.id, `component:${index}`]));
+  const netLabelIds = new Map((doc.netLabels ?? []).map((label, index) => [label.id, `net-label:${index}`]));
   return JSON.stringify({
     components: doc.components.map(({ id: _id, ...component }) => component),
     wires: doc.wires.map(({ id: _id, ...wire }) => wire),
@@ -485,7 +488,15 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
     ascHierarchicalBlocks: doc.ascHierarchicalBlocks ?? [],
     ascSheet: doc.ascSheet ?? null,
     userModelLibraries: doc.userModelLibraries ?? [],
-    projectPorts: doc.projectPorts ?? [],
+    // `copyDocument` remints net-label ids when a sheet is reopened. Project
+    // ports point at those internal ids, so carrying the raw labelId here
+    // makes a clean reopened child sheet look dirty even though its ordered
+    // interface is unchanged. The label order is authored content and stays
+    // stable across that remint; only the identity token is canonicalized.
+    projectPorts: (doc.projectPorts ?? []).map(({ labelId, ...port }) => ({
+      ...port,
+      labelId: netLabelIds.get(labelId) ?? labelId,
+    })),
   });
 }
 
@@ -495,6 +506,39 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
 // Names the engine on an error result: nothing was returned to attribute, but
 // the failure still came from whichever solver the run reached for.
 const attemptedEngine = (): SimulationEngine => (isNativeSpiceRuntime() ? "ngspice" : "preview");
+
+/** A project-linked sheet has one honest execution path: the packaged native
+ * engine with the recursive project deck builder. `resolveEngineResult` is the
+ * ordinary native-first helper for flat documents, but its preview fallback
+ * would silently flatten a hierarchy if the bridge declined a request after
+ * runtime detection. Refuse that case explicitly instead. */
+function resolveAppEngineResult<T extends object>(
+  native: T | null,
+  fallback: () => T,
+  projectHierarchyActive: boolean,
+  analysisLabel: string,
+): T & EngineProvenance {
+  if (projectHierarchyActive && native === null) {
+    throw new ProjectHierarchyError(
+      "unsupported-child",
+      `Project-linked hierarchy cannot run its ${analysisLabel} through Tau's packaged ngspice bridge; no preview or flattened fallback was used.`,
+    );
+  }
+  return resolveEngineResult(native, fallback);
+}
+
+function projectHierarchyStepRefusal(
+  domain: "AC" | "DC",
+  specs: Parameters<typeof nativeStepPathRefusal>[0],
+  components: readonly SchematicComponent[],
+): ProjectHierarchyError {
+  const detail = nativeStepPathRefusal(specs, { components })
+    ?? "Tau's native single-deck step bridge did not return a family.";
+  return new ProjectHierarchyError(
+    "unsupported-child",
+    `Project-linked ${domain} stepping is refused: ${detail} Tau will not run a preview family or flatten the linked sheet.`,
+  );
+}
 
 /** The seven analyses, in the vocabulary the analysis mode rail uses. */
 type RunKind = "tran" | "op" | "ac" | "dc" | "tf" | "noise" | "step";
@@ -680,8 +724,10 @@ function App() {
   const [importWarningsByPath, setImportWarningsByPath] = useState<Record<string, string[]>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [simulationSetupOpen, setSimulationSetupOpen] = useState(false);
+  const [projectSheetPortsOpen, setProjectSheetPortsOpen] = useState(false);
   const paletteMounted = useMountedOnceOpened(paletteOpen);
   const simulationSetupMounted = useMountedOnceOpened(simulationSetupOpen);
+  const projectSheetPortsMounted = useMountedOnceOpened(projectSheetPortsOpen);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
   const [savingCloseTab, setSavingCloseTab] = useState(false);
@@ -1594,13 +1640,11 @@ function App() {
    *
    * Selecting is the half this file can do today, and it is the half that
    * matters on a schematic that fits the viewport — the part highlights and
-   * the inspector opens on it. CENTRING is the deliberately-named seam: the
-   * canvas exposes only `fitSignal`, which frames all artwork and would stomp
-   * the reader's pan, so a reveal input belongs on `Canvas.tsx` and that file
-   * is not this lane's to change (docs/handoff/DOCK.md). When it lands, bump a
-   * reveal signal here alongside the select; nothing else about the row moves.
+   * the inspector opens on it. Canvas also accepts a separate structured
+   * reveal target, so net diagnostics can pan without selecting a component.
    */
   const [revealTarget, setRevealTarget] = useState<{ id: string; signal: number }>({ id: "", signal: 0 });
+  const [revealNetTarget, setRevealNetTarget] = useState<{ point: { x: number; y: number } | null; signal: number }>({ point: null, signal: 0 });
   const revealDiagnosticComponent = useCallback((componentId: string) => {
     select(componentId);
     // Selecting says WHICH part; this says WHERE. Canvas pans it into view
@@ -1610,6 +1654,16 @@ function App() {
     // works after the reader has panned away.
     setRevealTarget((prev) => ({ id: componentId, signal: prev.signal + 1 }));
   }, [select]);
+  const focusDiagnostic = useCallback((target: DiagnosticFocusTarget) => {
+    if (target.kind === "component") {
+      revealDiagnosticComponent(target.componentId);
+      return;
+    }
+    setRevealNetTarget((prev) => ({
+      point: { x: target.x, y: target.y },
+      signal: prev.signal + 1,
+    }));
+  }, [revealDiagnosticComponent]);
 
   /**
    * The live rows the dock will actually render, with anything the run has
@@ -1722,6 +1776,12 @@ function App() {
       assertCurrentSimulationIntegrity();
       assertProjectHierarchyCanRun();
       const nativeResult = await runNativeTransient(nativeSchematic, options);
+      if (projectHierarchyActive && nativeResult === null) {
+        throw new ProjectHierarchyError(
+          "unsupported-child",
+          "Project-linked hierarchy could not use Tau's packaged ngspice bridge for this transient; no preview or flattened fallback was used.",
+        );
+      }
       if (nativeResult) {
         // Stop marks this request stale even if the worker happened to finish
         // during cancellation, so a late native result can never overwrite UI.
@@ -1770,7 +1830,7 @@ function App() {
       // run that's actually still abortable.
       if (transientAbortRef.current === controller) transientAbortRef.current = null;
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
 
   // Pre-run guard (Fix 3): a step count big enough to genuinely stall the UI
   // for a while gets a confirmation instead of launching silently. Native is
@@ -1914,9 +1974,11 @@ function App() {
     try {
       assertCurrentSimulationIntegrity();
       assertProjectHierarchyCanRun();
-      const result = resolveEngineResult(
+      const result = resolveAppEngineResult(
         await runNativeOperatingPoint(nativeSchematic),
         () => runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true }),
+        projectHierarchyActive,
+        "operating-point analysis",
       );
       if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis(result);
@@ -1926,7 +1988,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
 
   const runAcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -1938,9 +2000,11 @@ function App() {
       // An imported LTspice .ac directive is the user's analysis definition.
       // Suggest a useful range only when the document does not provide one.
       const acSweep = analysesFromDirectives(directives).ac ?? suggestAcSweep(components);
-      const result = resolveEngineResult(
+      const result = resolveAppEngineResult(
         await runNativeAcSweep(nativeSchematic, acSweep),
         () => runAcSweep({ components, wires, netLabels, params, couplings }, acSweep),
+        projectHierarchyActive,
+        "AC analysis",
       );
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis(result);
@@ -1949,6 +2013,14 @@ function App() {
       const specs = runnableStepsFromDirectives(directives);
       if (specs.length === 0) {
         setAcStepFamily(null);
+      } else if (projectHierarchyActive) {
+        if (!isNativeSpiceRuntime() || !canUseNativeStepPath(specs, { components })) {
+          throw projectHierarchyStepRefusal("AC", specs, components);
+        }
+        const nativeFamily = await runNativeSteppedAcSweep(nativeSchematic, acSweep, specs);
+        if (!nativeFamily) throw projectHierarchyStepRefusal("AC", specs, components);
+        if (analysisRequestRef.current !== requestId) return;
+        setAcStepFamily(nativeFamily);
       } else if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
         const nativeFamily = await runNativeSteppedAcSweep(nativeSchematic, acSweep, specs);
         if (analysisRequestRef.current !== requestId) return;
@@ -1981,7 +2053,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, couplings, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, couplings, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
 
   useEffect(() => {
     setDcSetup((d) => defaultDcSetup(components, d));
@@ -2002,9 +2074,11 @@ function App() {
       assertProjectHierarchyCanRun();
       // ngspice first: the TS solver has no semiconductor stamps, so it cannot
       // sweep a transistor at all.
-      const result = resolveEngineResult(
+      const result = resolveAppEngineResult(
         await runNativeDcSweep(nativeSchematic, dc),
         () => runDcSweep({ components, wires, netLabels, params }, dc),
+        projectHierarchyActive,
+        "DC analysis",
       );
       if (analysisRequestRef.current !== requestId) return;
       setDcAnalysis(result);
@@ -2012,6 +2086,14 @@ function App() {
       const specs = runnableStepsFromDirectives(directives);
       if (specs.length === 0) {
         setDcStepFamily(null);
+      } else if (projectHierarchyActive) {
+        if (!isNativeSpiceRuntime() || !canUseNativeStepPath(specs, { components })) {
+          throw projectHierarchyStepRefusal("DC", specs, components);
+        }
+        const nativeFamily = await runNativeSteppedDcSweep(nativeSchematic, dc, specs);
+        if (!nativeFamily) throw projectHierarchyStepRefusal("DC", specs, components);
+        if (analysisRequestRef.current !== requestId) return;
+        setDcStepFamily(nativeFamily);
       } else if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
         const nativeFamily = await runNativeSteppedDcSweep(nativeSchematic, dc, specs);
         if (analysisRequestRef.current !== requestId) return;
@@ -2031,7 +2113,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
+  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
 
   const runTfAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -2043,9 +2125,11 @@ function App() {
       assertProjectHierarchyCanRun();
       // ngspice first, for the same reason as the DC sweep: the TS solver has
       // no semiconductor stamps, so it cannot take an amplifier's gain at all.
-      const result = resolveEngineResult(
+      const result = resolveAppEngineResult(
         await runNativeTransferFunction(nativeSchematic, tf),
         () => runTransferFunction({ components, wires, netLabels, params }, tf),
+        projectHierarchyActive,
+        "transfer-function analysis",
       );
       if (analysisRequestRef.current !== requestId) return;
       setTfAnalysis(result);
@@ -2055,7 +2139,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, tfSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
+  }, [components, wires, netLabels, params, directives, tfSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
 
   const runNoiseAnalysis_ = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -2068,9 +2152,11 @@ function App() {
       // ngspice first: the TS solver has only resistor thermal noise and
       // refuses any circuit with a semiconductor in it, so it cannot report a
       // real amplifier's noise at all.
-      const result = resolveEngineResult(
+      const result = resolveAppEngineResult(
         await runNativeNoise(nativeSchematic, noise),
         () => runNoiseAnalysis({ components, wires, netLabels, params }, noise),
+        projectHierarchyActive,
+        "noise analysis",
       );
       if (analysisRequestRef.current !== requestId) return;
       setNoiseAnalysis(result);
@@ -2080,7 +2166,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, noiseSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
+  }, [components, wires, netLabels, params, directives, noiseSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
 
   const runStepAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -2111,6 +2197,23 @@ function App() {
       // stays exclusive (never emitNativeStep under that loop).
       if (domain === "ac") {
         const acSweep = analysesFromDirectives(directives).ac ?? suggestAcSweep(components);
+        if (projectHierarchyActive) {
+          if (!isNativeSpiceRuntime() || !canUseNativeStepPath(specs, { components })) {
+            throw projectHierarchyStepRefusal("AC", specs, components);
+          }
+          const nativeFamily = await runNativeSteppedAcSweep(schematic, acSweep, specs);
+          if (!nativeFamily) throw projectHierarchyStepRefusal("AC", specs, components);
+          if (analysisRequestRef.current !== requestId) return;
+          setAcStepFamily(nativeFamily);
+          setStepFamily({
+            ok: nativeFamily.ok,
+            message: nativeFamily.message,
+            members: [],
+            warnings: nativeFamily.warnings,
+            engine: nativeFamily.ok ? "ngspice" : attemptedEngine(),
+          });
+          return;
+        }
         if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
           const nativeFamily = await runNativeSteppedAcSweep(schematic, acSweep, specs);
           if (analysisRequestRef.current !== requestId) return;
@@ -2146,6 +2249,23 @@ function App() {
 
       if (domain === "dc") {
         const dc = analysesFromDirectives(directives).dc ?? dcSetup;
+        if (projectHierarchyActive) {
+          if (!isNativeSpiceRuntime() || !canUseNativeStepPath(specs, { components })) {
+            throw projectHierarchyStepRefusal("DC", specs, components);
+          }
+          const nativeFamily = await runNativeSteppedDcSweep(schematic, dc, specs);
+          if (!nativeFamily) throw projectHierarchyStepRefusal("DC", specs, components);
+          if (analysisRequestRef.current !== requestId) return;
+          setDcStepFamily(nativeFamily);
+          setStepFamily({
+            ok: nativeFamily.ok,
+            message: nativeFamily.message,
+            members: [],
+            warnings: nativeFamily.warnings,
+            engine: nativeFamily.ok ? "ngspice" : attemptedEngine(),
+          });
+          return;
+        }
         if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
           const nativeFamily = await runNativeSteppedDcSweep(schematic, dc, specs);
           if (analysisRequestRef.current !== requestId) return;
@@ -2229,6 +2349,12 @@ function App() {
           ...(projectHierarchyActive ? { buildDeck: makeProjectDeckBuilder(stepDocument, ctx.params, stepDirectives) } : {}),
         };
         const native = await runNativeTransient(stepSchematic, effectiveAnalysisOptions);
+        if (projectHierarchyActive && native === null) {
+          throw new ProjectHierarchyError(
+            "unsupported-child",
+            "Project-linked transient stepping could not use Tau's packaged ngspice bridge for one family member; no preview or flattened fallback was used.",
+          );
+        }
         const result = native
           ? withEngine(native, "ngspice")
           : withEngine(await runTransientAnalysisOffThread({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions), "preview");
@@ -3915,6 +4041,7 @@ function App() {
             onStop={stopAnalysis}
             onClearScratchpad={() => setConfirmClearOpen(true)}
             onOpenSimulationSetup={() => setSimulationSetupOpen(true)}
+            onOpenProjectInterface={() => setProjectSheetPortsOpen(true)}
           />
           <EditorTabs
             tabs={visibleTabs}
@@ -3960,6 +4087,8 @@ function App() {
                 fitInsetBottom={drawerCover.bottom}
                 revealComponentId={revealTarget.id}
                 revealSignal={revealTarget.signal}
+                revealNetPoint={revealNetTarget.point}
+                revealNetSignal={revealNetTarget.signal}
                 onSelectionRect={setSelectionRect}
                 onSelectedComponentDragChange={setSelectedComponentDragActive}
               />
@@ -4204,6 +4333,8 @@ function App() {
                      * Errors row is clickable here too and must reveal here too. */
                     revealComponentId={revealTarget.id}
                     revealSignal={revealTarget.signal}
+                    revealNetPoint={revealNetTarget.point}
+                    revealNetSignal={revealNetTarget.signal}
                     onSelectionRect={setSelectionRect}
                     onSelectedComponentDragChange={setSelectedComponentDragActive}
                     currentVisualizer={currentVisualizer}
@@ -4308,6 +4439,7 @@ function App() {
                 notices={activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : []}
                 issues={dockIssues}
                 onSelectComponent={revealDiagnosticComponent}
+                onFocusDiagnostic={focusDiagnostic}
               />
             }
             // P3-14: Measurements is a SIMULATOR surface. It leaked into the
@@ -4472,6 +4604,9 @@ function App() {
       <Suspense fallback={null}>
         {simulationSetupMounted && (
           <SimulationSetupDialog open={simulationSetupOpen} onOpenChange={setSimulationSetupOpen} />
+        )}
+        {projectSheetPortsMounted && (
+          <ProjectSheetPortsDialog open={projectSheetPortsOpen} onOpenChange={setProjectSheetPortsOpen} />
         )}
       </Suspense>
       <LocalAiSetupDialog onReady={() => showNotice("Local AI is ready on this Mac.")} />

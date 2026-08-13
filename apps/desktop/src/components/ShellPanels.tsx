@@ -21,7 +21,7 @@ import { componentDisplayName } from "../schematic/componentNames";
 import { engineeringSpelling } from "../schematic/engineering";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
-import { isStaticSwitchValue } from "../schematic/kindGroups";
+import { isPhotodiodePhotocurrentValue, isStaticSwitchValue } from "../schematic/kindGroups";
 import {
   decodeParams,
   displayParamField,
@@ -1884,6 +1884,7 @@ function ProjectSubcircuitLinkEditor({
   const availableChoices = link && !choices.some((choice) => choice.path === link.sheetPath)
     ? [{ path: link.sheetPath, label: `${link.sheetPath} · saved link` }, ...choices]
     : choices;
+  const linkedSheetPresent = Boolean(link && choices.some((choice) => choice.path === link.sheetPath));
 
   const apply = () => {
     const orderedPorts = ports.split(/[\s,]+/).map((port) => port.trim()).filter(Boolean);
@@ -1902,6 +1903,13 @@ function ProjectSubcircuitLinkEditor({
       <p className="property-hint">
         Choose a sibling Tau sheet and name its ordered public ports. Run checks that contract against the child sheet; it never infers ports.
       </p>
+      {link && (
+        <p className="property-hint" role="status">
+          {linkedSheetPresent
+            ? `Linked project sheet · ${link.sheetPath} is present in this project; Run checks its exact ordered port contract.`
+            : `Linked project sheet · ${link.sheetPath} is not present in the open project; Run is refused until that sheet is available.`}
+        </p>
+      )}
       <label className="property-field">
         <span>Project sheet</span>
         <Select value={sheetPath || undefined} onValueChange={(next) => { setSheetPath(next); setSaved(false); }}>
@@ -2010,6 +2018,7 @@ function ComponentPropertyGroup({
   // must reach the exact-model surface without being coerced through State.
   const modelKind = selected && isModelComponentKind(selected.kind)
     && !(selected.kind === "switch" && isStaticSwitchValue(valueSource))
+    && !(selected.kind === "photodiode" && isPhotodiodePhotocurrentValue(valueSource))
     ? selected.kind
     : null;
   const modelOptions = useMemo(
@@ -2092,12 +2101,14 @@ function ComponentPropertyGroup({
     && !hasLtspiceProvenance(selected)
     && selectedModelOption?.source === "generic",
   );
-  const modelParameterFields = modelKind && (genericModel || manualModelControls) ? visibleFields.filter((field) => {
+  const modelParameterFields = modelKind && (genericModel || manualModelControls || Boolean(idealJunction)) ? visibleFields.filter((field) => {
     if (field.key === "model") return false;
     if (selectedModelOption?.modelType === "vdmos") return false;
     if (!genericModel && (field.key === "kp" || field.key === "vto")) return false;
     return true;
   }) : [];
+  const basicModelParameterFields = modelParameterFields.filter((field) => !field.advanced);
+  const advancedModelParameterFields = modelParameterFields.filter((field) => field.advanced);
   const renderModelParamField = (field: typeof visibleFields[number]) => (
     <Fragment key={field.key}>
       <label className="property-field">
@@ -2123,6 +2134,29 @@ function ComponentPropertyGroup({
       )}
     </>
   ) : null;
+  const modelAdvancedDisclosure = advancedModelParameterFields.length > 0 ? (
+    <div className="advanced-settings property-advanced">
+      <button
+        type="button"
+        className="disclosure-header"
+        onClick={() => setAdvancedOpen((open) => !open)}
+        aria-expanded={advancedOpen}
+        aria-label="Toggle Advanced device model parameters"
+      >
+        <span className="disclosure-label">Advanced device model parameters</span>
+        <span className="disclosure-rule" aria-hidden="true" />
+        <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
+      </button>
+      {advancedOpen && (
+        <div className="advanced-body" role="group" aria-label="Advanced device model parameters">
+          {advancedModelParameterFields.map(renderModelParamField)}
+        </div>
+      )}
+    </div>
+  ) : null;
+  const basicModelParamFields = basicModelParameterFields.length > 0
+    ? <>{basicModelParameterFields.map(renderModelParamField)}</>
+    : null;
 
   // The full chooser is intentionally an explicit host opt-in. The desktop
   // shell keeps it out of the default inspector, but the small compatibility
@@ -2184,7 +2218,7 @@ function ComponentPropertyGroup({
     </label>
   ) : null;
 
-  const attachLibraryAction = onAttachModelFile && !selectedModelOption ? (
+  const attachLibraryAction = onAttachModelFile && !selectedModelOption && !idealJunction ? (
       <Button type="button" variant="outline" size="sm" onClick={onAttachModelFile}>
         Attach .lib/.sub file
       </Button>
@@ -2333,7 +2367,22 @@ function ComponentPropertyGroup({
           ) : selected.kind === "subckt" ? (
             <>
               <ProjectSubcircuitLinkEditor component={selected} choices={projectSheetOptions} />
-              {manualModelControls ? (
+              {selected.projectSubcircuit ? (
+                <>
+                  <div className="property-field">
+                    <span>Linked project model</span>
+                    <span className="mono-num property-readonly">{selected.projectSubcircuit.model}</span>
+                  </div>
+                  <ol className="port-list" aria-label="Linked project port order">
+                    {selected.projectSubcircuit.ports.map((port, index) => (
+                      <li key={`${index}-${port}`}>
+                        <span className="port-index mono-num">{index + 1}</span>
+                        <span className="port-name mono-num">{port}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              ) : manualModelControls ? (
                 <label className="property-field">
                   <span>Subcircuit model</span>
                   <Select
@@ -2378,16 +2427,18 @@ function ComponentPropertyGroup({
                   <span className="mono-num property-readonly">{subcircuitInstance?.name || "none"}</span>
                 </div>
               )}
-              <p className="property-hint" role="status">
-                {selectedSubcircuit
-                  ? `Ready · ${selectedSubcircuit.ports.length} terminals from ${selectedSubcircuit.sourceLabel}`
-                  : `Needs definition · ${subcircuitInstance?.name || "No subcircuit"} is not attached; Run is refused.`}
-              </p>
+              {!selected.projectSubcircuit && (
+                <p className="property-hint" role="status">
+                  {selectedSubcircuit
+                    ? `Ready · ${selectedSubcircuit.ports.length} terminals from ${selectedSubcircuit.sourceLabel}`
+                    : `Needs definition · ${subcircuitInstance?.name || "No subcircuit"} is not attached; Run is refused.`}
+                </p>
+              )}
               {/* The status line names the terminals; it cannot say which pin on
                   the drawing is which. This does, in the declaration order the
                   netlist writes the nodes in, so a reader can wire the block
                   without opening the .lib that defines it. */}
-              {selectedSubcircuit && (
+              {!selected.projectSubcircuit && selectedSubcircuit && (
                 <ol className="port-list" aria-label="Terminal order">
                   {selectedSubcircuit.ports.map((port, index) => {
                     const side = subcircuitPortSides(selected, selectedSubcircuit.ports)[index];
@@ -2401,7 +2452,7 @@ function ComponentPropertyGroup({
                   })}
                 </ol>
               )}
-              {selectedSubcircuit?.parameters.map((parameter) => {
+              {!selected.projectSubcircuit && selectedSubcircuit?.parameters.map((parameter) => {
                 const parameterLabel = parameter.label ?? parameter.name;
                 const parameterValue = subcircuitInstance
                   ? subcircuitParameterValue(subcircuitInstance.overrides, parameter.name) ?? parameter.defaultValue
@@ -2445,10 +2496,10 @@ function ComponentPropertyGroup({
                   </div>
                 );
               })}
-              {selectedSubcircuit && selectedSubcircuit.parameters.length === 0 && (
+              {!selected.projectSubcircuit && selectedSubcircuit && selectedSubcircuit.parameters.length === 0 && (
                 <p className="property-hint">Terminals only; this model has no instance parameters.</p>
               )}
-              {onAttachModelFile && (
+              {!selected.projectSubcircuit && onAttachModelFile && (
                 <>
                   <p className="property-hint">Open or drop a compatible .lib/.sub into this schematic.</p>
                   <Button type="button" variant="outline" size="sm" onClick={onAttachModelFile}>
@@ -2458,46 +2509,45 @@ function ComponentPropertyGroup({
               )}
             </>
           ) : modelKind ? (
-            manualModelControls ? (
-              idealJunction ? (
-                <>
-                  <p className="property-hint" role="status">{modelStatusHint}</p>
-                  <div className="advanced-settings property-advanced">
-                    <button
-                      type="button"
-                      className="disclosure-header"
-                      onClick={() => setAdvancedOpen((open) => !open)}
-                      aria-expanded={advancedOpen}
-                      aria-label="Toggle Advanced device model parameters"
-                    >
-                      <span className="disclosure-label">Advanced device model parameters</span>
-                      <span className="disclosure-rule" aria-hidden="true" />
-                      <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
-                    </button>
-                    {advancedOpen && (
-                      <div className="advanced-body">
-                        <p className="property-hint">
-                          Named or attached models replace this ideal; Tau never substitutes a generic named device.
-                        </p>
-                        {modelChooserField}
-                        {modelParamFields}
-                        {attachLibraryAction}
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  {modelChooserField}
-                  <p className="property-hint" role="status">{modelStatusHint}</p>
-                  {modelParamFields}
-                  {attachLibraryAction}
-                </>
-              )
+            manualModelControls && idealJunction ? (
+              <>
+                <p className="property-hint" role="status">{modelStatusHint}</p>
+                <div className="advanced-settings property-advanced">
+                  <button
+                    type="button"
+                    className="disclosure-header"
+                    onClick={() => setAdvancedOpen((open) => !open)}
+                    aria-expanded={advancedOpen}
+                    aria-label="Toggle Advanced device model parameters"
+                  >
+                    <span className="disclosure-label">Advanced device model parameters</span>
+                    <span className="disclosure-rule" aria-hidden="true" />
+                    <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
+                  </button>
+                  {advancedOpen && (
+                    <div className="advanced-body">
+                      <p className="property-hint">
+                        Named or attached models replace this ideal; Tau never substitutes a generic named device.
+                      </p>
+                      {modelChooserField}
+                      {modelParamFields}
+                      {attachLibraryAction}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : manualModelControls ? (
+              <>
+                {modelChooserField}
+                <p className="property-hint" role="status">{modelStatusHint}</p>
+                {modelParamFields}
+                {attachLibraryAction}
+              </>
             ) : (
               <>
                 <p className="property-hint" role="status">{modelStatusHint}</p>
-                {modelParamFields}
+                {basicModelParamFields}
+                {modelAdvancedDisclosure}
                 {attachLibraryAction}
               </>
             )

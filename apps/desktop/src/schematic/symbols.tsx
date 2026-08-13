@@ -1,7 +1,7 @@
 import { nativelyPlacedGateSpec, parseDigitalGate } from "../engine/digitalGateSpec";
 import { ledColorFromValue } from "../engine/ledSpec";
 import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
-import { isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchValue } from "./kindGroups";
+import { isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchClosed, isStaticSwitchValue } from "./kindGroups";
 import type { ComponentKind, Rotation } from "./types";
 import {
   GATE_COM_Y,
@@ -1592,7 +1592,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
      * makes "closed" verifiable rather than a matter of a few units of slope.
      */
     case "switch": {
-      const closed = isStaticContactClosed(value ?? "");
+      const closed = isStaticSwitchClosed(value ?? "");
       return (
         <>
           <line x1={-32} y1={0} x2={-12} y2={0} />

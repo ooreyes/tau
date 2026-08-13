@@ -17,7 +17,7 @@
  */
 
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
-import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
+import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchClosed, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
@@ -503,6 +503,12 @@ export function runOperatingPoint(
         }
 
         case "switch":
+          if (isStaticSwitchClosed(entry.component.value)) {
+            const a = nodeIdx(entry.pins["a"], nodeIndex);
+            const b = nodeIdx(entry.pins["b"], nodeIndex);
+            stampConductance(matrix, a, b, 1e9);
+          }
+          break;
         case "pushButton":
           if (isStaticContactClosed(entry.component.value)) {
             const a = nodeIdx(entry.pins["a"], nodeIndex);

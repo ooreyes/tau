@@ -324,8 +324,11 @@ interface SchematicState extends Doc {
   userModelLibraries: SchematicModelLibrary[];
   /** Explicit ordered public ports for this document's project-linked interface. */
   projectPorts: ProjectSheetPort[];
-  /** Set the sheet interface and matching label direction markers atomically. */
-  setProjectSheetPorts: (ports: readonly ProjectSheetPort[]) => ProjectSubcircuitResult;
+  /** Set the sheet interface and matching label text/direction markers atomically. */
+  setProjectSheetPorts: (
+    ports: readonly ProjectSheetPort[],
+    labelTextById?: Readonly<Record<string, string>>,
+  ) => ProjectSubcircuitResult;
   /** Attach a model file; a same-named attachment is replaced so re-attaching updates in place. */
   attachModelLibrary: (library: SchematicModelLibrary) => void;
   /** Remove the attachment with the given name (no-op if absent). */
@@ -1058,7 +1061,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
 
     setDirectives: (directives) => set((s) => ({ ...recordInto(s), directives: [...directives] })),
 
-    setProjectSheetPorts: (ports) => {
+    setProjectSheetPorts: (ports, labelTextById = {}) => {
       const nextPorts = ports.map((port) => ({
         name: port.name.trim(),
         labelId: port.labelId.trim(),
@@ -1071,7 +1074,8 @@ export const useSchematic = create<SchematicState>()((set, get) => {
       for (const port of nextPorts) {
         const label = labelsById.get(port.labelId);
         if (!label) return { ok: false, error: `Port "${port.name}" needs an existing net label.` };
-        if (label.text !== port.name) {
+        const labelText = labelTextById[label.id] ?? label.text;
+        if (labelText !== port.name) {
           return { ok: false, error: `Port "${port.name}" must exactly match its net label text.` };
         }
       }
@@ -1080,7 +1084,8 @@ export const useSchematic = create<SchematicState>()((set, get) => {
         const byId = new Map(nextPorts.map((port) => [port.labelId, port]));
         const netLabels = s.netLabels.map((label) => {
           const port = byId.get(label.id);
-          if (port) return { ...label, port: port.direction };
+          const text = labelTextById[label.id];
+          if (port) return { ...label, ...(text !== undefined ? { text } : {}), port: port.direction };
           if (!previousIds.has(label.id)) return label;
           const { port: _port, ...withoutPort } = label;
           return withoutPort;
