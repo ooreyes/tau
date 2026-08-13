@@ -12,7 +12,39 @@
  */
 import { useEffect, useState } from "react";
 import type { RunOutcome } from "../../App";
-import type { LiveDiagnostic } from "../../schematic/documentValidation";
+import type { DiagnosticFocusTarget, LiveDiagnostic } from "../../schematic/documentValidation";
+
+/** Treat formatting-only engine/live wording changes as one diagnosis.
+ * Engine output is authoritative and rendered first, so the document row is
+ * the one suppressed when the two say the same thing. Exported for shells
+ * that maintain their own badge count alongside this panel. */
+export function diagnosticMessageKey(message: string): string {
+  return message.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+function focusTargetFor(issue: LiveDiagnostic): DiagnosticFocusTarget | undefined {
+  if (issue.focus) return issue.focus;
+  if (issue.componentId) {
+    const reference = issue.reference ?? issue.componentId;
+    return { kind: "component", componentId: issue.componentId, reference };
+  }
+  if (issue.net) {
+    return {
+      kind: "net",
+      netId: issue.net.id,
+      x: issue.net.x,
+      y: issue.net.y,
+      ...(issue.net.label ? { label: issue.net.label } : {}),
+    };
+  }
+  return undefined;
+}
+
+function focusActionLabel(target: DiagnosticFocusTarget): string {
+  return target.kind === "component"
+    ? `Focus ${target.reference}`
+    : `Focus net ${target.label ?? target.netId}`;
+}
 
 export function BottomPanel({
   result,
@@ -20,6 +52,7 @@ export function BottomPanel({
   notices = [],
   issues = [],
   onSelectComponent,
+  onFocusDiagnostic,
 }: {
   mode?: "schematic" | "simulator";
   /**
@@ -51,6 +84,11 @@ export function BottomPanel({
   /** Click-through for a row that names a part: the row selects it on the
    *  canvas. Rows with no `componentId` (no ground, no source) stay inert. */
   onSelectComponent?: (componentId: string) => void;
+  /** Rich focus seam for component and net rows. The editor shell owns the
+   * actual select/pan action; keeping this callback data-only avoids a drawer
+   * dependency on Canvas. `onSelectComponent` remains the compatibility
+   * fallback while callers migrate. */
+  onFocusDiagnostic?: (target: DiagnosticFocusTarget) => void;
 }) {
   // A live run supersedes the previous result's diagnostics. Keeping stale
   // success/error classes during a rerun would contradict the amber Run state.
@@ -61,7 +99,11 @@ export function BottomPanel({
   ];
   // Live rows are withheld mid-run for the same reason the run's own are: the
   // document may already have moved on from the circuit being solved.
-  const liveIssues = isRunning ? [] : issues;
+  const liveIssues = isRunning
+    ? []
+    : issues.filter((issue) => !messages.some((message) => (
+      diagnosticMessageKey(message) === diagnosticMessageKey(issue.message)
+    )));
   const hasIssues = messages.length + liveIssues.length > 0;
   const hasError = !isRunning
     && (Boolean(result && !result.ok) || liveIssues.some((issue) => issue.severity === "error"));
@@ -172,16 +214,26 @@ export function BottomPanel({
               <span className="bottom-error-message">{issue.message}</span>
             </>
           );
-          // A row that names a part is a button, so it is reachable by keyboard
-          // and announces itself as actionable; a document-level row (no
-          // ground, no source) has nothing to select and stays a plain div
-          // rather than a button that would do nothing when pressed.
-          return issue.componentId && onSelectComponent ? (
+          const target = focusTargetFor(issue);
+          const actionLabel = target ? focusActionLabel(target) : undefined;
+          // A row with an explicit target is a button, so it is reachable by
+          // keyboard and announces what it will focus. Document-level rows
+          // (no ground, no source) stay plain text rather than buttons that
+          // would do nothing when pressed. The old component callback still
+          // works for callers that have not installed the richer focus seam.
+          const onClick = target && onFocusDiagnostic
+            ? () => onFocusDiagnostic(target)
+            : target?.kind === "component" && onSelectComponent
+              ? () => onSelectComponent(target.componentId)
+              : undefined;
+          return onClick ? (
             <button
               key={issue.id}
               type="button"
               className={`${issue.severity} bottom-error-row bottom-error-row--actionable`}
-              onClick={() => onSelectComponent(issue.componentId!)}
+              aria-label={`${actionLabel}: ${issue.message}`}
+              title={actionLabel}
+              onClick={onClick}
             >
               {body}
             </button>

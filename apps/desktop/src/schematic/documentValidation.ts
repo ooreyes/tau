@@ -715,6 +715,37 @@ export type LiveDiagnosticCode =
   | "label-names-nothing"
   | "connectivity";
 
+/** A navigation contract deliberately independent of the editor shell.
+ *
+ * The linter knows what object is wrong; Canvas/App own selection and
+ * viewport movement. Carrying the target as data lets the diagnostics UI stay
+ * useful before a run and lets any shell focus a component or a net without
+ * scraping its human-readable message for an id. */
+export type DiagnosticFocusTarget =
+  | {
+    kind: "component";
+    componentId: string;
+    /** Human reference for an accessible action label, e.g. `R1`. */
+    reference: string;
+  }
+  | {
+    kind: "net";
+    netId: string;
+    x: number;
+    y: number;
+    /** A reader's label when one exists, otherwise the stable extracted id. */
+    label?: string;
+  };
+
+/** Structured net context shown by a diagnostic row and usable by callers
+ * that want to cross-highlight a waveform/net inspector. */
+export interface DiagnosticNetContext {
+  id: string;
+  x: number;
+  y: number;
+  label?: string;
+}
+
 export interface LiveDiagnostic {
   /** Stable within one pass; used as a React key and for deduplication. */
   id: string;
@@ -731,6 +762,12 @@ export interface LiveDiagnostic {
   /** The offending part, so a row can select it. Absent for document-level
    *  problems (no ground, no source) that belong to no single part. */
   componentId?: string;
+  /** Reference designator / catalog name for display without parsing prose. */
+  reference?: string;
+  /** Electrical net affected by this row, when the linter can identify one. */
+  net?: DiagnosticNetContext;
+  /** Explicit focus action target for the editor shell. */
+  focus?: DiagnosticFocusTarget;
 }
 
 export interface LiveDiagnosticsInput {
@@ -779,6 +816,34 @@ function isIndependentSource(kind: ComponentKind): boolean {
 /** What to call this part in a row: its designator, else its kind's name. */
 function partName(component: SchematicComponent): string {
   return component.label.trim() || CATALOG_BY_KIND[component.kind]?.name || component.kind;
+}
+
+function componentDiagnosticTarget(component: SchematicComponent): Pick<LiveDiagnostic, "componentId" | "reference" | "focus"> {
+  const reference = partName(component);
+  return {
+    componentId: component.id,
+    reference,
+    focus: { kind: "component", componentId: component.id, reference },
+  };
+}
+
+function netDiagnosticTarget(
+  net: { id: string; points: readonly Point[] },
+  labels: readonly NetLabel[],
+): Pick<LiveDiagnostic, "net" | "focus"> {
+  // Every extracted net originates from a pin, wire, or label and therefore
+  // has a point. Keep the guard anyway: a future extractor bug should yield a
+  // non-actionable row, never an invented coordinate at the canvas origin.
+  const point = net.points[0];
+  if (!point) return {};
+  const label = labels.find((candidate) => net.points.some((candidatePoint) => (
+    candidatePoint.x === candidate.x && candidatePoint.y === candidate.y
+  )))?.text.trim() || undefined;
+  const context: DiagnosticNetContext = { id: net.id, x: point.x, y: point.y, ...(label ? { label } : {}) };
+  return {
+    net: context,
+    focus: { kind: "net", netId: context.id, x: context.x, y: context.y, ...(context.label ? { label: context.label } : {}) },
+  };
 }
 
 /** `extractCircuit`'s single-pin warning, so its text can be matched back to
@@ -858,19 +923,26 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
     push({
       code: "shorted-source",
       severity: "error",
-      componentId: source.id,
+      ...componentDiagnosticTarget(source),
       message: `${partName(source)} is shorted: every terminal sits on the same net, so it drives nothing.`,
     });
   }
 
   // ── duplicate reference designators ────────────────────────────────────
   for (const duplicate of duplicateReferenceDesignators(components)) {
+    const collider = components.find((component) => component.id === duplicate.componentIds[1]);
     push({
       code: "duplicate-reference",
       severity: "error",
       // The second occurrence, not the first: the first one is where the name
       // legitimately came from, and the collider is the part to go and rename.
       componentId: duplicate.componentIds[1],
+      reference: duplicate.display,
+      focus: {
+        kind: "component",
+        componentId: duplicate.componentIds[1],
+        reference: collider ? partName(collider) : duplicate.display,
+      },
       message: `Duplicate reference: "${duplicate.display}" is used ${duplicate.count} times; each component name must be unique.`,
     });
   }
@@ -888,7 +960,7 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
     push({
       code: "bad-parameter",
       severity: "error",
-      componentId: component.id,
+      ...componentDiagnosticTarget(component),
       message: `${partName(component)}: ${message}`,
     });
   }
@@ -903,7 +975,7 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
     push({
       code: "unsupported-model",
       severity: "error",
-      ...(named ? { componentId: named.id } : {}),
+      ...(named ? componentDiagnosticTarget(named) : {}),
       message: refusal,
     });
   }
@@ -926,7 +998,7 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
       push({
         code: "directive-or-model",
         severity: "error",
-        ...(named ? { componentId: named.id } : {}),
+        ...(named ? componentDiagnosticTarget(named) : {}),
         message,
       });
     }
@@ -939,11 +1011,11 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
   // unused terminals, a switch's control pair is optional). Restating those
   // here would make a valid part look broken the first time one changed. Only
   // the mapping back to a component id is done locally.
-  const pinOwnerByName = new Map<string, string>();
+  const pinOwnerByName = new Map<string, { componentId: string; net: typeof circuit.nets[number] }>();
   for (const net of circuit.nets) {
     for (const pin of net.pins) {
       const key = `${pin.componentLabel || pin.componentId}.${pin.label}`;
-      if (!pinOwnerByName.has(key)) pinOwnerByName.set(key, pin.componentId);
+      if (!pinOwnerByName.has(key)) pinOwnerByName.set(key, { componentId: pin.componentId, net });
     }
   }
   for (const warning of circuit.warnings) {
@@ -956,11 +1028,14 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
       push({ code: "connectivity", severity: "warning", message: warning });
       continue;
     }
-    const componentId = pinOwnerByName.get(single[1]);
+    const owner = pinOwnerByName.get(single[1]);
+    const component = owner ? components.find((candidate) => candidate.id === owner.componentId) : undefined;
+    const netTarget = owner ? netDiagnosticTarget(owner.net, netLabels) : {};
     push({
       code: "floating-pin",
       severity: "warning",
-      ...(componentId ? { componentId } : {}),
+      ...(component ? componentDiagnosticTarget(component) : netTarget),
+      ...(netTarget.net ? { net: netTarget.net } : {}),
       message: warning,
     });
   }
@@ -979,6 +1054,7 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
       push({
         code: "label-names-nothing",
         severity: "warning",
+        ...netDiagnosticTarget(net, netLabels),
         message: `Net label "${label.text}" names nothing: it is not on a wire or a pin.`,
       });
     }

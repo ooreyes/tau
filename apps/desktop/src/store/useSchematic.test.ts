@@ -12,6 +12,8 @@ const localStorageValues = vi.hoisted(() => {
 });
 
 import {
+  lowestAvailableReference,
+  referenceRenameResult,
   useSchematic,
   type SchematicDocument,
   type SchematicHistory,
@@ -67,6 +69,12 @@ function resetStore() {
     probes: [],
     netLabels: [],
     directives: [],
+    textAnnotations: [],
+    ascShapes: [],
+    ascDataFlags: [],
+    ascForeignSymbols: [],
+    ascHierarchicalBlocks: [],
+    ascSheet: null,
     userModelLibraries: [],
     past: [],
     future: [],
@@ -1509,6 +1517,171 @@ describe("addProbe - one probe per net, net-identity dedup ", () => {
     useSchematic.getState().toggleCurrentProbe("r-1");
     useSchematic.getState().toggleCurrentProbe("r-1");
     expect(useSchematic.getState().probes).toHaveLength(0); // still toggles independently
+  });
+});
+
+describe("P4 probe document invariants", () => {
+  it("repairs legacy same-net markers and duplicate colors, then reuses a freed net color deterministically", () => {
+    useSchematic.getState().loadCircuit({
+      components: [],
+      wires: [
+        { id: "same-net", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] },
+        { id: "second-net", points: [{ x: 0, y: 64 }, { x: 64, y: 64 }] },
+        { id: "third-net", points: [{ x: 0, y: 128 }, { x: 64, y: 128 }] },
+        { id: "fourth-net", points: [{ x: 0, y: 192 }, { x: 64, y: 192 }] },
+      ],
+      // A document authored before net ownership can contain both markers on
+      // the first conductor and manual duplicate palette selections.
+      probes: [
+        { id: "legacy-a", x: 16, y: 0, color: "var(--trace-red)" },
+        { id: "legacy-b", x: 48, y: 0, color: "var(--trace-red)" },
+        { id: "legacy-c", x: 16, y: 64, color: "var(--trace-red)" },
+      ],
+    });
+
+    let probes = useSchematic.getState().probes;
+    expect(probes).toHaveLength(2);
+    expect(probes.map((probe) => probe.color)).toEqual([
+      "var(--trace-red)",
+      "var(--trace-purple)",
+    ]);
+    expect(new Set(probes.map((probe) => probe.netId)).size).toBe(2);
+
+    // A new electrical net gets the next distinct automatic color, not a
+    // position-based color that happened to be consumed by the discarded data.
+    useSchematic.getState().addProbe(16, 128);
+    probes = useSchematic.getState().probes;
+    expect(probes.map((probe) => probe.color)).toEqual([
+      "var(--trace-red)",
+      "var(--trace-purple)",
+      "var(--trace-cyan)",
+    ]);
+
+    useSchematic.getState().removeProbe(probes[0].id);
+    useSchematic.getState().addProbe(16, 192);
+    expect(useSchematic.getState().probes.map((probe) => probe.color)).toEqual([
+      "var(--trace-purple)",
+      "var(--trace-cyan)",
+      "var(--trace-red)",
+    ]);
+  });
+
+  it("keeps owned net colors stable through undo, redo, and a document reload", () => {
+    useSchematic.setState({
+      wires: [
+        { id: "n1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] },
+        { id: "n2", points: [{ x: 0, y: 64 }, { x: 64, y: 64 }] },
+      ],
+    });
+    useSchematic.getState().addProbe(16, 0);
+    useSchematic.getState().addProbe(16, 64);
+    const colors = useSchematic.getState().probes.map((probe) => probe.color);
+    expect(colors).toEqual(["var(--trace-red)", "var(--trace-purple)"]);
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().probes.map((probe) => probe.color)).toEqual(["var(--trace-red)"]);
+    useSchematic.getState().redo();
+    expect(useSchematic.getState().probes.map((probe) => probe.color)).toEqual(colors);
+
+    useSchematic.getState().loadCircuit(currentDocument());
+    expect(useSchematic.getState().probes.map((probe) => probe.color)).toEqual(colors);
+  });
+});
+
+describe("P4 reference designator invariants", () => {
+  it("finds the lowest free suffix case-insensitively instead of trusting a high-water counter", () => {
+    const components = [
+      { id: "r1", label: "R1" },
+      { id: "r3", label: "r3" },
+      { id: "other", label: "C1" },
+    ];
+    expect(lowestAvailableReference(components, "R")).toBe(2);
+    expect(lowestAvailableReference(components, "r")).toBe(2);
+
+    useSchematic.setState({
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+        { id: "r3", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "r3" },
+      ],
+      counters: { R: 99 },
+    });
+    useSchematic.getState().addComponent("resistor", 192, 0);
+    const placed = useSchematic.getState().components;
+    expect(placed[placed.length - 1]?.label).toBe("R2");
+    expect(useSchematic.getState().components.slice(0, 2).map((component) => component.label)).toEqual(["R1", "r3"]);
+  });
+
+  it("refuses a case-insensitive rename collision without silently renumbering either part", () => {
+    useSchematic.setState({
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+        { id: "r2", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R2" },
+      ],
+    });
+
+    expect(referenceRenameResult(useSchematic.getState().components, "r2", "r1")).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("already used"),
+    });
+    expect(useSchematic.getState().setLabel("r2", "r1")).toMatchObject({ ok: false });
+    expect(useSchematic.getState().components.map((component) => component.label)).toEqual(["R1", "R2"]);
+
+    expect(useSchematic.getState().setLabel("r2", "R3")).toEqual({ ok: true });
+    expect(useSchematic.getState().components.map((component) => component.label)).toEqual(["R1", "R3"]);
+  });
+});
+
+describe("P4 clear schematic store operation", () => {
+  it("empties every in-memory document field in one undoable operation without any file concern", () => {
+    useSchematic.setState({
+      components: [{ id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" }],
+      wires: [{ id: "w1", points: [{ x: 32, y: 0 }, { x: 96, y: 0 }] }],
+      counters: { R: 1 },
+      probes: [{ id: "p1", x: 32, y: 0, color: "var(--trace-red)" }],
+      netLabels: [{ id: "n1", x: 32, y: 0, text: "OUT" }],
+      directives: [".op"],
+      textAnnotations: [{ x: 0, y: 0, directive: false, text: "note" }],
+      ascShapes: [{ kind: "LINE", width: "Normal", coords: [0, 0, 16, 16] }],
+      ascDataFlags: [{ x: 0, y: 0, expr: "V(OUT)" }],
+      ascForeignSymbols: [{ type: "Vendor\\Unknown", x: 0, y: 0, orientation: "R0", attrs: { Value: "X" } }],
+      ascHierarchicalBlocks: [{ type: "block", x: 16, y: 16, orientation: "R0", attrs: { Value: "child" } }],
+      ascSheet: { index: 1, width: 800, height: 600 },
+      userModelLibraries: [{ name: "vendor.lib", text: ".model DTEST D" }],
+      selectedId: "r1",
+      selectedIds: ["r1"],
+      selectedWireId: "w1",
+      selectedWireIds: ["w1"],
+      selectedLabelIds: ["n1"],
+      selectedProbeIds: ["p1"],
+      clipboard: {
+        components: [], wires: [], netLabels: [], probes: [],
+      },
+    });
+
+    useSchematic.getState().clearSheet();
+    const cleared = useSchematic.getState();
+    expect(cleared.components).toEqual([]);
+    expect(cleared.wires).toEqual([]);
+    expect(cleared.probes).toEqual([]);
+    expect(cleared.netLabels).toEqual([]);
+    expect(cleared.directives).toEqual([]);
+    expect(cleared.textAnnotations).toEqual([]);
+    expect(cleared.ascShapes).toEqual([]);
+    expect(cleared.ascDataFlags).toEqual([]);
+    expect(cleared.ascForeignSymbols).toEqual([]);
+    expect(cleared.ascHierarchicalBlocks).toEqual([]);
+    expect(cleared.ascSheet).toBeNull();
+    expect(cleared.userModelLibraries).toEqual([]);
+    expect(cleared.counters).toEqual({});
+    expect(cleared.clipboard).toBeNull();
+    expect(cleared.past).toHaveLength(1);
+
+    useSchematic.getState().undo();
+    const restored = useSchematic.getState();
+    expect(restored.components).toHaveLength(1);
+    expect(restored.directives).toEqual([".op"]);
+    expect(restored.ascDataFlags).toHaveLength(1);
+    expect(restored.userModelLibraries).toEqual([{ name: "vendor.lib", text: ".model DTEST D" }]);
   });
 });
 

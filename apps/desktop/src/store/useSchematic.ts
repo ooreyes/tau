@@ -244,6 +244,12 @@ interface SchematicState extends Doc {
   /** Duplicate the selected component in place (copy + paste in one step, Ctrl+D). */
   duplicateSelected: () => void;
   deleteSelected: () => void;
+  /**
+   * Empty this in-memory sheet as one undoable document operation. This never
+   * touches the project tree or a file on disk; the shell decides whether a
+   * subsequent Save targets a new file.
+   */
+  clearSheet: () => void;
   /** Clear any active selection (single, multi, or wire). */
   clearSelection: () => void;
   setValue: (id: string, value: string) => void;
@@ -280,7 +286,7 @@ interface SchematicState extends Doc {
   /** Select a real op-amp subcircuit while preserving imported Value/Value2 slots. */
   setOpampModel: (id: string, model: string) => void;
   /** Rename a component's reference designator (canvas label). */
-  setLabel: (id: string, label: string) => void;
+  setLabel: (id: string, label: string) => ReferenceRenameResult;
   /** Set optional series resistance on a wire (empty / "0" = ideal). */
   setWireResistance: (id: string, resistance: string) => void;
 
@@ -316,15 +322,64 @@ interface SchematicState extends Doc {
 }
 
 const HISTORY_LIMIT = 100;
-/** Multimeter-lead colors, cycled as probes are added. */
-const PROBE_COLORS = [
+/** Multimeter-lead colors, in deterministic document order. */
+export const PROBE_COLORS = [
   "var(--trace-red)",
   "var(--trace-purple)",
   "var(--trace-cyan)",
   "var(--trace-green)",
   "var(--trace-amber)",
   "var(--trace-cream)",
-];
+] as const;
+
+export interface ReferenceRenameResult {
+  ok: boolean;
+  /** Present when the proposed name would collide case-insensitively. */
+  error?: string;
+}
+
+/**
+ * Lowest unused positive suffix for a ref-des prefix. SPICE treats instance
+ * names case-insensitively, so R1 and r1 reserve the same number. Deliberately
+ * do not use the historical high-water counter here: deleting R2 makes R2
+ * available again, while existing designators are never silently renumbered.
+ */
+export function lowestAvailableReference(
+  components: readonly Pick<SchematicComponent, "label">[],
+  prefix: string,
+): number {
+  const key = prefix.trim().toLocaleLowerCase();
+  const used = new Set<number>();
+  for (const component of components) {
+    const match = /^([A-Za-z]+)([1-9]\d*)$/.exec(component.label.trim());
+    if (!match || match[1].toLocaleLowerCase() !== key) continue;
+    const suffix = Number(match[2]);
+    if (Number.isSafeInteger(suffix) && suffix > 0) used.add(suffix);
+  }
+  let candidate = 1;
+  while (used.has(candidate)) candidate += 1;
+  return candidate;
+}
+
+/** Inline validation seam for the inspector: it can keep an invalid draft
+ * visible and announce this exact message without committing a collision. */
+export function referenceRenameResult(
+  components: readonly Pick<SchematicComponent, "id" | "label">[],
+  componentId: string,
+  proposedLabel: string,
+): ReferenceRenameResult {
+  const label = proposedLabel.trim();
+  if (!label) return { ok: true };
+  const collider = components.find((component) =>
+    component.id !== componentId
+    && component.label.trim().toLocaleLowerCase() === label.toLocaleLowerCase(),
+  );
+  if (!collider) return { ok: true };
+  return {
+    ok: false,
+    error: `Reference “${label}” is already used by ${collider.label.trim() || collider.id}. Choose a unique component ID.`,
+  };
+}
 const STORAGE_KEY = "tau.schematic.v1";
 const nextRotation = (r: Rotation): Rotation => (((r + 90) % 360) as Rotation);
 const docOf = (s: Doc): Doc => ({
@@ -366,6 +421,90 @@ const blankDoc = (): Doc => ({
   userModelLibraries: [],
 });
 
+/** Comparison intentionally ignores object identity: probe maintenance should
+ * not create an undo entry or persistence write when an already-normalized
+ * document is clicked again. */
+function probesEqual(left: readonly Probe[], right: readonly Probe[]): boolean {
+  return left.length === right.length && left.every((probe, index) => {
+    const candidate = right[index];
+    return candidate !== undefined
+      && probe.id === candidate.id
+      && probe.x === candidate.x
+      && probe.y === candidate.y
+      && probe.color === candidate.color
+      && probe.netId === candidate.netId
+      && probe.componentId === candidate.componentId;
+  });
+}
+
+/**
+ * Restore the document invariant for voltage probes:
+ *
+ * - one retained marker per electrical net (first serialized marker wins for
+ *   legacy duplicates, making migration deterministic),
+ * - every retained marker records the live net id when it is resolvable, and
+ * - each net owns a distinct palette color until the palette is exhausted.
+ *
+ * Current probes intentionally stay outside the color claim: their branch is
+ * not an electrical net, and allowing one to consume a voltage-net color
+ * would make two voltage nets collide while an unused voltage color exists.
+ */
+export function normalizeVoltageProbes(
+  probes: readonly Probe[],
+  components: readonly SchematicComponent[],
+  wires: readonly SchematicWire[],
+  netLabels: readonly NetLabel[] = [],
+  preferredProbeId?: string,
+): Probe[] {
+  const nets = extractCircuit([...components], [...wires], [...netLabels]).nets;
+  const netOf = (probe: Probe) => netAtPoint(nets, [...wires], probe)?.id ?? probe.netId;
+  const seenNets = new Set<string>();
+  const retained: Probe[] = [];
+  for (const probe of probes) {
+    if (probe.componentId) {
+      retained.push({ ...probe });
+      continue;
+    }
+    const netId = netOf(probe);
+    // A voltage probe without a resolvable net is retained for backwards
+    // compatibility; a normal click cannot create one, but a document may be
+    // edited after it was saved. It is not allowed to impersonate a known net.
+    if (netId && seenNets.has(netId)) continue;
+    if (netId) seenNets.add(netId);
+    retained.push({ ...probe, ...(netId ? { netId } : {}) });
+  }
+
+  const voltage = retained.filter((probe) => !probe.componentId);
+  const ordered = preferredProbeId
+    ? [...voltage].sort((a, b) => (a.id === preferredProbeId ? -1 : b.id === preferredProbeId ? 1 : 0))
+    : voltage;
+  const colorById = new Map<string, string>();
+  const claimed = new Set<string>();
+  for (const probe of ordered) {
+    const preferred = PROBE_COLORS.includes(probe.color as (typeof PROBE_COLORS)[number])
+      ? probe.color
+      : undefined;
+    const color = preferred && !claimed.has(preferred)
+      ? preferred
+      : PROBE_COLORS.find((candidate) => !claimed.has(candidate))
+        ?? preferred
+        ?? PROBE_COLORS[colorById.size % PROBE_COLORS.length];
+    claimed.add(color);
+    colorById.set(probe.id, color);
+  }
+  return retained.map((probe) => probe.componentId
+    ? probe
+    : { ...probe, color: colorById.get(probe.id) ?? probe.color });
+}
+
+function nextVoltageProbeColor(
+  probes: readonly Probe[],
+): string {
+  const claimed = new Set(probes.filter((probe) => !probe.componentId).map((probe) => probe.color));
+  return PROBE_COLORS.find((color) => !claimed.has(color))
+    ?? PROBE_COLORS[probes.filter((probe) => !probe.componentId).length % PROBE_COLORS.length]!;
+}
+
 /** Grid units a pasted/duplicated component is offset by so it never lands exactly
  *  on top of its source (2 grid cells, like LTspice's paste nudge). */
 const PASTE_OFFSET = 32;
@@ -376,7 +515,7 @@ const PASTE_OFFSET = 32;
  * by the same delta so the copy stays connected to wires the same way.
  */
 function placeClone(
-  counters: Record<string, number>,
+  existingComponents: readonly SchematicComponent[],
   src: SchematicComponent,
 ): { comp: SchematicComponent; prefix: string; next: number } {
   // A pasted child is a new top-level object. Keeping the source block's
@@ -384,7 +523,7 @@ function placeClone(
   // incomplete (or, worse, suppress the paste with it).
   const { ltHierarchy: _hierarchy, ...copyable } = src;
   const entry = CATALOG_BY_KIND[src.kind];
-  const next = (counters[entry.prefix] ?? 0) + 1;
+  const next = lowestAvailableReference(existingComponents, entry.prefix);
   const label = entry.prefix === "GND" ? "" : `${entry.prefix}${next}`;
   const comp: SchematicComponent = {
     ...copyable,
@@ -409,7 +548,10 @@ function clipboardFromSelection(state: SchematicState): SchematicClipboard | nul
   const labelIds = new Set(state.selectedLabelIds);
   const probeIds = new Set(state.selectedProbeIds);
   const clipboard: SchematicClipboard = {
-    components: state.components.filter((component) => componentIds.has(component.id)).map((component) => ({ ...component })),
+    components: state.components.filter((component) => componentIds.has(component.id)).map((component) => ({
+      ...component,
+      ...(component.pinOverride ? { pinOverride: component.pinOverride.map((pin) => ({ ...pin })) } : {}),
+    })),
     wires: state.wires.filter((wire) => wireIds.has(wire.id)).map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
     netLabels: state.netLabels.filter((label) => labelIds.has(label.id)).map((label) => ({ ...label })),
     probes: state.probes.filter((probe) => probeIds.has(probe.id)).map((probe) => ({ ...probe })),
@@ -422,12 +564,13 @@ function clipboardFromSelection(state: SchematicState): SchematicClipboard | nul
 function pasteClipboard(state: SchematicState, clipboard: SchematicClipboard): Partial<SchematicState> {
   const counters = { ...state.counters };
   const componentIdMap = new Map<string, string>();
-  const components = clipboard.components.map((source) => {
-    const { comp, prefix, next } = placeClone(counters, source);
-    counters[prefix] = next;
+  const components: SchematicComponent[] = [];
+  for (const source of clipboard.components) {
+    const { comp, prefix, next } = placeClone([...state.components, ...components], source);
+    counters[prefix] = Math.max(counters[prefix] ?? 0, next);
     componentIdMap.set(source.id, comp.id);
-    return comp;
-  });
+    components.push(comp);
+  }
   const wires = clipboard.wires.map((wire) => {
     const { ltHierarchy: _hierarchy, ...copyable } = wire;
     return {
@@ -474,7 +617,13 @@ function deriveCounters(components: SchematicComponent[]): Record<string, number
   const counters: Record<string, number> = {};
   for (const c of components) {
     const m = c.label.match(/^([A-Za-z]+)(\d+)$/);
-    if (m) counters[m[1]] = Math.max(counters[m[1]] ?? 0, Number(m[2]));
+    if (m) {
+      // Counters are only a placement hint/history affordance. Keep their keys
+      // canonical so a loaded `r2` cannot make the next native resistor skip
+      // the lower available `R1` or create a parallel lowercase counter.
+      const prefix = m[1].toLocaleUpperCase();
+      counters[prefix] = Math.max(counters[prefix] ?? 0, Number(m[2]));
+    }
   }
   return counters;
 }
@@ -1062,58 +1211,72 @@ export const useSchematic = create<SchematicState>()((set, get) => {
     // no probe adds one; clicking the SAME point again removes it (toggle
     // off); clicking a DIFFERENT point on a net that already has a probe
     // MOVES the probe there instead of stacking a second ring on one net.
-    // Clicking off any net (empty canvas, a component body with no pin/wire
-    // under the cursor) is a no-op - probes only attach to nets/wires/pins,
-    // so "probing an opamp" body does nothing.
+    // Every mutation also repairs imported/legacy duplicate markers and their
+    // colors before applying the click, so the invariant is not conditional on
+    // how the document was originally created. Clicking off any net (empty
+    // canvas, a component body with no pin/wire under the cursor) is a no-op -
+    // probes only attach to nets/wires/pins, so "probing an opamp" body does
+    // nothing.
     addProbe: (x, y) =>
       set((s) => {
         const nets = extractCircuit(s.components, s.wires, s.netLabels).nets;
         const clickedNet = netAtPoint(nets, s.wires, { x, y });
         if (!clickedNet) return s;
+        const normalized = normalizeVoltageProbes(s.probes, s.components, s.wires, s.netLabels);
         const netOfProbe = (p: Probe) =>
-          p.netId ?? netAtPoint(nets, s.wires, { x: p.x, y: p.y })?.id;
-        const existing = s.probes.find(
+          netAtPoint(nets, s.wires, { x: p.x, y: p.y })?.id ?? p.netId;
+        const existing = normalized.find(
           (p) => !p.componentId && netOfProbe(p) === clickedNet.id,
         );
         if (existing) {
           if (existing.x === x && existing.y === y) {
-            return { ...recordInto(s), probes: s.probes.filter((p) => p.id !== existing.id) };
+            return {
+              ...recordInto(s),
+              probes: normalized.filter((p) => p.id !== existing.id),
+            };
           }
           return {
             ...recordInto(s),
-            probes: s.probes.map((p) =>
+            probes: normalized.map((p) =>
               p.id === existing.id ? { ...p, x, y, netId: clickedNet.id } : p,
             ),
           };
         }
-        const color = PROBE_COLORS[s.probes.length % PROBE_COLORS.length];
-        const withoutDupes = s.probes.filter(
-          (p) => p.componentId || netOfProbe(p) !== clickedNet.id,
-        );
         return {
           ...recordInto(s),
-          probes: [...withoutDupes, { id: nanoid(6), x, y, color, netId: clickedNet.id }],
+          probes: [
+            ...normalized,
+            { id: nanoid(6), x, y, color: nextVoltageProbeColor(normalized), netId: clickedNet.id },
+          ],
         };
       }),
     toggleCurrentProbe: (componentId) =>
       set((s) => {
-        const existing = s.probes.find((p) => p.componentId === componentId);
-        if (existing) return { ...recordInto(s), probes: s.probes.filter((p) => p.id !== existing.id) };
+        const normalized = normalizeVoltageProbes(s.probes, s.components, s.wires, s.netLabels);
+        const existing = normalized.find((p) => p.componentId === componentId);
+        if (existing) return { ...recordInto(s), probes: normalized.filter((p) => p.id !== existing.id) };
         const target = s.components.find((c) => c.id === componentId);
         if (!target || target.kind === "ground" || !canCurrentProbe(target.kind)) return s;
-        const color = PROBE_COLORS[s.probes.length % PROBE_COLORS.length];
+        const color = PROBE_COLORS[normalized.length % PROBE_COLORS.length]!;
         return {
           ...recordInto(s),
-          probes: [...s.probes, { id: nanoid(6), x: target.x, y: target.y, color, componentId }],
+          probes: [...normalized, { id: nanoid(6), x: target.x, y: target.y, color, componentId }],
         };
       }),
     removeProbe: (id) => set((s) => ({ ...recordInto(s), probes: s.probes.filter((p) => p.id !== id) })),
     clearProbes: () => set((s) => ({ ...recordInto(s), probes: [] })),
-    setProbes: (probes) => set({ probes }),
+    setProbes: (probes) => set((s) => ({
+      probes: normalizeVoltageProbes(probes, s.components, s.wires, s.netLabels),
+    })),
     setProbeColor: (id, color) =>
-      set((s) => ({
-        probes: s.probes.map((p) => (p.id === id ? { ...p, color } : p)),
-      })),
+      set((s) => {
+        // A reader can intentionally choose an arbitrary custom trace color
+        // from the scope. Preserve that explicit override verbatim; automatic
+        // de-duplication is applied on document load and when adding/moving a
+        // voltage probe, where the store owns the color choice.
+        const probes = s.probes.map((probe) => (probe.id === id ? { ...probe, color } : probe));
+        return probesEqual(s.probes, probes) ? {} : { ...recordInto(s), probes };
+      }),
 
     startLabeling: () => set({ tool: { mode: "label" }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [], selectedIds: [] }),
 
@@ -1168,7 +1331,11 @@ export const useSchematic = create<SchematicState>()((set, get) => {
     addComponent: (kind, x, y) =>
       set((s) => {
         const entry = CATALOG_BY_KIND[kind];
-        const n = (s.counters[entry.prefix] ?? 0) + 1;
+        // The designator is an identity, not a display counter. Reuse the
+        // lowest free suffix (case-insensitively) without ever renumbering an
+        // existing part; this also repairs documents whose historical counter
+        // lagged behind a manually named component.
+        const n = lowestAvailableReference(s.components, entry.prefix);
         const label = entry.prefix === "GND" ? "" : `${entry.prefix}${n}`;
         const placeValue =
           s.tool.mode === "place" && s.tool.kind === kind && s.tool.value !== undefined
@@ -1197,7 +1364,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           ...recordInto(s),
           components: [...s.components, comp],
           wires: wiresWithInsertedComponent(s.wires, comp),
-          counters: { ...s.counters, [entry.prefix]: n },
+          counters: { ...s.counters, [entry.prefix]: Math.max(s.counters[entry.prefix] ?? 0, n) },
           selectedId: comp.id,
           selectedWireId: null,
           selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [],
@@ -1316,6 +1483,38 @@ export const useSchematic = create<SchematicState>()((set, get) => {
         };
       }),
 
+    clearSheet: () =>
+      set((s) => {
+        const alreadyBlank = s.components.length === 0
+          && s.wires.length === 0
+          && s.probes.length === 0
+          && s.netLabels.length === 0
+          && s.directives.length === 0
+          && s.textAnnotations.length === 0
+          && s.ascShapes.length === 0
+          && s.ascDataFlags.length === 0
+          && s.ascForeignSymbols.length === 0
+          && s.ascHierarchicalBlocks.length === 0
+          && s.ascSheet === null
+          && s.userModelLibraries.length === 0;
+        if (alreadyBlank) return {};
+        // This is intentionally document-only. It does not know about project
+        // tabs, file paths, save state, or the filesystem, so "Clear schematic"
+        // is safe even when the active sheet was opened from disk.
+        return {
+          ...recordInto(s),
+          ...blankDoc(),
+          clipboard: null,
+          selectedId: null,
+          selectedWireId: null,
+          selectedWireIds: [],
+          selectedLabelIds: [],
+          selectedProbeIds: [],
+          selectedIds: [],
+          tool: { mode: "select" },
+        };
+      }),
+
     clearSelection: () => set({ selectedId: null, selectedWireId: null, selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [], selectedIds: [] }),
 
     // Operating a contact is an edit to the circuit, so it goes through history
@@ -1419,10 +1618,20 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           c.id === id && c.kind === "opamp" ? withOpampModel(c, model) : c
         )),
       })),
-    setLabel: (id, label) =>
-      set((s) => ({
-        components: s.components.map((c) => (c.id === id ? { ...c, label } : c)),
-      })),
+    setLabel: (id, label) => {
+      const current = get().components.find((component) => component.id === id);
+      if (!current) return { ok: false, error: "The selected component no longer exists." };
+      const nextLabel = label.trim();
+      const result = referenceRenameResult(get().components, id, nextLabel);
+      if (!result.ok || nextLabel === current.label) return result;
+      set((s) => {
+        const components = s.components.map((component) => (
+          component.id === id ? { ...component, label: nextLabel } : component
+        ));
+        return { components, counters: deriveCounters(components) };
+      });
+      return result;
+    },
     setWireResistance: (id, resistance) =>
       set((s) => ({
         wires: s.wires.map((w) => {
@@ -1439,18 +1648,20 @@ export const useSchematic = create<SchematicState>()((set, get) => {
     loadCircuit: (doc) =>
       set(() => {
         const cloned = cloneDocument(doc);
+        const netLabels = cloned.netLabels ?? [];
+        const probes = normalizeVoltageProbes(cloned.probes ?? [], cloned.components, cloned.wires, netLabels);
         return {
           components: cloned.components,
           wires: cloned.wires,
           counters: deriveCounters(cloned.components),
-          probes: cloned.probes ?? [],
-          netLabels: cloned.netLabels ?? [],
+          probes,
+          netLabels,
           directives: cloned.directives ?? [],
           textAnnotations: cloned.textAnnotations ?? [],
           ascShapes: cloned.ascShapes ?? [],
           ascDataFlags: cloned.ascDataFlags ?? [],
           ascForeignSymbols: cloned.ascForeignSymbols ?? [],
-    ascHierarchicalBlocks: cloned.ascHierarchicalBlocks ?? [],
+          ascHierarchicalBlocks: cloned.ascHierarchicalBlocks ?? [],
           ascSheet: cloned.ascSheet ?? null,
           userModelLibraries: cloned.userModelLibraries ?? [],
           past: [],
@@ -1466,19 +1677,21 @@ export const useSchematic = create<SchematicState>()((set, get) => {
     replaceCircuit: (doc) =>
       set((s) => {
         const replacement = cloneDocument(doc);
+        const netLabels = replacement.netLabels ?? [];
+        const probes = normalizeVoltageProbes(replacement.probes ?? [], replacement.components, replacement.wires, netLabels);
         return {
           ...recordInto(s),
           components: replacement.components,
           wires: replacement.wires,
           counters: deriveCounters(replacement.components),
-          probes: replacement.probes ?? [],
-          netLabels: replacement.netLabels ?? [],
+          probes,
+          netLabels,
           directives: replacement.directives ?? [],
           textAnnotations: replacement.textAnnotations ?? [],
           ascShapes: replacement.ascShapes ?? [],
           ascDataFlags: replacement.ascDataFlags ?? [],
           ascForeignSymbols: replacement.ascForeignSymbols ?? [],
-    ascHierarchicalBlocks: replacement.ascHierarchicalBlocks ?? [],
+          ascHierarchicalBlocks: replacement.ascHierarchicalBlocks ?? [],
           ascSheet: replacement.ascSheet ?? null,
           userModelLibraries: replacement.userModelLibraries ?? [],
           selectedId: null,
@@ -1492,18 +1705,20 @@ export const useSchematic = create<SchematicState>()((set, get) => {
     restoreCircuit: (doc, history) =>
       set(() => {
         const restored = copyDocument(doc, false);
+        const netLabels = restored.netLabels ?? [];
+        const probes = normalizeVoltageProbes(restored.probes ?? [], restored.components, restored.wires, netLabels);
         return {
           components: restored.components,
           wires: restored.wires,
           counters: deriveCounters(restored.components),
-          probes: restored.probes ?? [],
-          netLabels: restored.netLabels ?? [],
+          probes,
+          netLabels,
           directives: restored.directives ?? [],
           textAnnotations: restored.textAnnotations ?? [],
           ascShapes: restored.ascShapes ?? [],
           ascDataFlags: restored.ascDataFlags ?? [],
           ascForeignSymbols: restored.ascForeignSymbols ?? [],
-    ascHierarchicalBlocks: restored.ascHierarchicalBlocks ?? [],
+          ascHierarchicalBlocks: restored.ascHierarchicalBlocks ?? [],
           ascSheet: restored.ascSheet ?? null,
           userModelLibraries: restored.userModelLibraries ?? [],
           past: history.past.map(copyHistoryEntry).slice(-HISTORY_LIMIT),
@@ -1540,6 +1755,7 @@ useSchematic.subscribe((state, prev) => {
     || state.directives !== prev.directives
     || state.textAnnotations !== prev.textAnnotations
     || state.ascShapes !== prev.ascShapes
+    || state.ascDataFlags !== prev.ascDataFlags
     || state.ascForeignSymbols !== prev.ascForeignSymbols
     || state.ascHierarchicalBlocks !== prev.ascHierarchicalBlocks
     || state.ascSheet !== prev.ascSheet
@@ -1553,6 +1769,7 @@ useSchematic.subscribe((state, prev) => {
       directives: state.directives,
       textAnnotations: state.textAnnotations,
       ascShapes: state.ascShapes,
+      ascDataFlags: state.ascDataFlags,
       ascForeignSymbols: state.ascForeignSymbols,
       ascHierarchicalBlocks: state.ascHierarchicalBlocks,
       ...(state.ascSheet ? { ascSheet: state.ascSheet } : {}),

@@ -510,6 +510,9 @@ describe("live schematic diagnostics (P3-14)", () => {
     for (const row of rows.filter((r) => r.code === "floating-pin")) {
       expect(row.message).toMatch(/^R1\.[AB] is only connected to one pin\.$/);
       expect(row.componentId).toBe("r1");
+      expect(row.reference).toBe("R1");
+      expect(row.focus).toEqual({ kind: "component", componentId: "r1", reference: "R1" });
+      expect(row.net).toMatchObject({ id: expect.any(String), x: expect.any(Number), y: expect.any(Number) });
     }
   });
 
@@ -522,6 +525,8 @@ describe("live schematic diagnostics (P3-14)", () => {
     expect(shorted.message).toContain("V1");
     expect(shorted.message).toMatch(/shorted/i);
     expect(shorted.componentId).toBe("v1");
+    expect(shorted.reference).toBe("V1");
+    expect(shorted.focus).toEqual({ kind: "component", componentId: "v1", reference: "V1" });
     expect(shorted.severity).toBe("error");
   });
 
@@ -535,6 +540,8 @@ describe("live schematic diagnostics (P3-14)", () => {
     // The second occurrence: the first is where the name legitimately came
     // from, and the collider is the part to go and rename.
     expect(duplicate.componentId).toBe("r2");
+    expect(duplicate.reference).toBe("R1");
+    expect(duplicate.focus).toEqual({ kind: "component", componentId: "r2", reference: "r1" });
   });
 
   it("flags an unparseable parameter value and an out-of-range one, naming the part", () => {
@@ -567,6 +574,8 @@ describe("live schematic diagnostics (P3-14)", () => {
     });
     const dangling = find(rows, "label-names-nothing")!;
     expect(dangling.message).toBe('Net label "endn" names nothing: it is not on a wire or a pin.');
+    expect(dangling.net).toMatchObject({ label: "endn", x: 512, y: 512 });
+    expect(dangling.focus).toMatchObject({ kind: "net", label: "endn", x: 512, y: 512 });
   });
 
   it("says it REFUSED an imported symbol with no Tau model rather than substituting one", () => {
