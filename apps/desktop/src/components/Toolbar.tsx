@@ -15,6 +15,12 @@ import {
 interface ToolbarProps {
   mode: "schematic" | "simulator";
   result: AnalysisResult | null;
+  /**
+   * The outcome of the analysis the app most recently ran. `result` remains
+   * the transient payload for its sample-count detail, while this small common
+   * shape lets header decoration represent OP/AC/DC/TF/noise/step too.
+   */
+  outcome?: ToolbarRunOutcome | null;
   runState: "idle" | "complete" | "error" | "stopped";
   isRunning: boolean;
   /**
@@ -41,6 +47,12 @@ interface ToolbarProps {
 
 type LampState = "idle" | "running" | "ok" | "error" | "warn";
 
+export interface ToolbarRunOutcome {
+  ok: boolean;
+  message?: string;
+  stats?: { sampleCount: number };
+}
+
 const ICON = { size: 13, strokeWidth: 1.6 } as const;
 const TITLEBAR_GESTURE_SURFACE = ".titlebar-drag-region";
 
@@ -51,12 +63,19 @@ export function isTitlebarControlTarget(target: EventTarget | null): boolean {
   return Boolean(element.closest("button, a, input, select, textarea, [role=button], .mode-toggle"));
 }
 
-export function Toolbar({ mode, result, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant }: ToolbarProps) {
+export function Toolbar({ mode, result, outcome = null, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant }: ToolbarProps) {
   const titlebarGestureRef = useRef<ReturnType<typeof createTitlebarGestureMachine> | null>(null);
   const titlebarGesture = titlebarGestureRef.current ?? (titlebarGestureRef.current = createTitlebarGestureMachine());
   const isSimulator = mode === "simulator";
-  const runHasError = !isRunning && (runState === "error" || result?.ok === false);
-  const runIsAcceptable = !isRunning && runState === "complete" && result?.ok === true;
+  // `analysis` is only the transient result. The active outcome is supplied by
+  // App from the last authored run, so an OP/AC/DC/TF/noise/step result cannot
+  // accidentally fall back to the idle sheen just because transient is null.
+  const activeOutcome = outcome ?? result;
+  // `runState` is retained for a stopped/no-result transport, but it is not a
+  // competing source once a concrete outcome exists. Otherwise a past transient
+  // error could paint a later successful AC/OP/etc. run red.
+  const runHasError = !isRunning && (activeOutcome ? !activeOutcome.ok : runState === "error");
+  const runIsAcceptable = !isRunning && !runHasError && activeOutcome?.ok === true;
   // The invitation is deliberately quiet and shared: when the primary Run
   // action is truly idle, Ask Bode may make the same gentle pass; once either
   // action has state, the semantic state wins and the sheen disappears.
@@ -76,11 +95,11 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
     ? "running"
     : !isSimulator
       ? "idle"
-      : result?.ok
-        ? "ok"
-        : runState === "error"
+      : runHasError
           ? "error"
-          : runState === "stopped"
+          : runIsAcceptable
+            ? "ok"
+            : runState === "stopped"
             ? "warn"
             : "idle";
 
@@ -91,9 +110,11 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
     ? "Running…"
     : !isSimulator
       ? ""
-      : result?.ok
-        ? `${result.stats.sampleCount.toLocaleString()} samples`
-        : runState === "error"
+      : runIsAcceptable
+        ? activeOutcome?.stats
+          ? `${activeOutcome.stats.sampleCount.toLocaleString()} samples`
+          : "Complete"
+        : runHasError
           ? "Error"
           : runState === "stopped"
             ? "Stopped"

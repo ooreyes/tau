@@ -49,6 +49,12 @@ import {
 } from "./simulator/SevenSegmentDisplay";
 import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
 import { probeCursor, tagCursor } from "./editor/ToolIcons";
+import {
+  TAG_CURSOR_ART,
+  TAG_CURSOR_BODY_PATH,
+  TAG_CURSOR_EYELET,
+  tagCursorPreviewGeometry,
+} from "./editor/tagCursorGeometry";
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import {
   autoNetLabelOffset,
@@ -1854,7 +1860,11 @@ export function Canvas({
     probing
       ? probeCursor()
       : labeling
-        ? tagCursor()
+        // Native CSS cursors cannot follow a grid snap that is up to 18 CSS px
+        // away from the physical pointer. Before the first snap we retain the
+        // tag cursor; once an anchor exists, the fixed-pixel SVG preview below
+        // becomes the visible cursor and its tip is exactly the commit point.
+        ? (snapHover ? "none" : tagCursor())
         : interactive && (placing || wiring)
         ? "crosshair"
       : wiperDrag.current || (!interactive && hoverOperable?.wiper)
@@ -1865,6 +1875,9 @@ export function Canvas({
 
   const previewWire = wireDraft && !pointsEqual(wireDraft.start, wireDraft.cursor)
     ? routeWireSmart(wireDraft.start, wireDraft.cursor, components, wires)
+    : null;
+  const tagPreview = labeling && snapHover
+    ? tagCursorPreviewGeometry(snapHover, view.zoom)
     : null;
   const editingComp = editingId ? components.find((c) => c.id === editingId) ?? null : null;
   const editBox = editingComp ? SYMBOL_BOX[editingComp.kind] : null;
@@ -1927,6 +1940,10 @@ export function Canvas({
               wire={wire}
               selected={wire.id === selectedWireId || selectedWireIds.includes(wire.id)}
               probeReady={!interactive && (probing || labeling)}
+              // A direct wire hit becomes the cursor owner in SVG. Give it the
+              // same cursor as the canvas while measurement/label tools are
+              // active so `.probe-ready` cannot replace a tag with crosshair.
+              cursor={probing || labeling ? canvasCursor : undefined}
               hops={wireHops.get(wire.id)}
               onPointerDown={(e) => onWirePointerDown(e, wire)}
             />
@@ -2096,6 +2113,23 @@ export function Canvas({
               <g className="symbol" transform={symbolTransform(placeRotation, placeMirror)}>
                 <ComponentSymbol kind={tool.kind} />
               </g>
+            </g>
+          )}
+
+          {tagPreview && (
+            <g
+              className="tag-cursor-preview"
+              data-testid="tag-cursor-preview"
+              data-anchor={`${snapHover!.x},${snapHover!.y}`}
+              transform={`translate(${tagPreview.x} ${tagPreview.y}) scale(${tagPreview.scale})`}
+              aria-hidden="true"
+              pointerEvents="none"
+            >
+              {/* Shared with tagCursor(): path start is TAG_CURSOR_ART.hotspot. */}
+              <path className="tag-cursor-preview-body" d={TAG_CURSOR_BODY_PATH} />
+              <circle className="tag-cursor-preview-eyelet" {...TAG_CURSOR_EYELET} />
+              {/* Keeps the shared art contract visible to future maintainers. */}
+              <title>{`Tag anchor ${TAG_CURSOR_ART.hotspot.x}, ${TAG_CURSOR_ART.hotspot.y}`}</title>
             </g>
           )}
         </g>
@@ -2503,6 +2537,7 @@ function WireView({
   wire,
   selected,
   probeReady,
+  cursor,
   hops,
   onPointerDown,
 }: {
@@ -2510,6 +2545,8 @@ function WireView({
   selected: boolean;
   /** Simulator mode: clicking probes the net, so advertise it with the probe cursor. */
   probeReady: boolean;
+  /** Explicit for probe/tag modes: an SVG child otherwise wins cursor cascade. */
+  cursor?: string;
   /** Unconnected-crossing x positions per horizontal segment index - drawn
    *  as hop-over arcs so a crossing never reads as a connection. */
   hops?: ReadonlyMap<number, readonly number[]>;
@@ -2520,6 +2557,7 @@ function WireView({
   return (
     <g
       className={`wire-group${selected ? " selected" : ""}${probeReady ? " probe-ready" : ""}`}
+      style={cursor ? { cursor } : undefined}
       onPointerDown={onPointerDown}
     >
       {/* Wide invisible stroke makes the thin wire easy to click. */}

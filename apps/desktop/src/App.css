@@ -1433,7 +1433,25 @@ body {
 
 /* Simulator mode: clicking a wire probes its net (LTspice probe-in-place). */
 .wire-group.probe-ready {
-  cursor: crosshair;
+  /* Canvas owns the exact tool cursor. A direct SVG hit target must inherit it
+     rather than replacing a probe/tag with this legacy crosshair. */
+  cursor: inherit;
+}
+
+/* P4-05: the browser cursor is hidden only after a snapped tag anchor exists;
+   this fixed-pixel SVG is then the visible cursor. It lives inside Canvas's
+   zoomed world group with an inverse scale, so its short attachment tip stays
+   on the exact snapped/committed point at every zoom. */
+.tag-cursor-preview {
+  pointer-events: none;
+}
+
+.tag-cursor-preview-body {
+  fill: var(--tool-tag-ink);
+}
+
+.tag-cursor-preview-eyelet {
+  fill: var(--tool-steel-ink);
 }
 
 /* Clamp-meter (current) probe: dashed ring distinguishes it from a net probe. */

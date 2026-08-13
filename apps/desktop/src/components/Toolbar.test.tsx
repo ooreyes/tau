@@ -261,6 +261,28 @@ describe("Toolbar Run health control", () => {
     expect(run.classList.contains("run-button--ok")).toBe(false);
   });
 
+  it("uses every non-transient analysis outcome instead of stale transient runState for header decoration", () => {
+    const kinds = ["op", "ac", "dc", "tf", "noise", "step"] as const;
+    const { rerender } = render(<Toolbar {...baseProps} mode="simulator" />);
+
+    for (const kind of kinds) {
+      // `runState` only records transient completion today. These are the
+      // concrete outcome shapes App derives from its actual OP/AC/DC/TF/noise/
+      // step result stores, so an idle transient state must not restore sheen.
+      rerender(<Toolbar {...baseProps} mode="simulator" runState="idle" outcome={{ ok: true, message: kind }} />);
+      const successful = screen.getByRole("button", { name: "Run simulation" });
+      expect(successful.classList.contains("run-button--ok"), `${kind} success`).toBe(true);
+      expect(successful.classList.contains("pdf4-action-sheen"), `${kind} success sheen`).toBe(false);
+      expect(screen.getByText("Complete")).toBeTruthy();
+
+      rerender(<Toolbar {...baseProps} mode="simulator" runState="complete" outcome={{ ok: false, message: `${kind} failed` }} />);
+      const failed = screen.getByRole("button", { name: "Run simulation" });
+      expect(failed.classList.contains("run-button--error"), `${kind} error`).toBe(true);
+      expect(failed.classList.contains("pdf4-action-sheen"), `${kind} error sheen`).toBe(false);
+      expect(screen.getByText("Error")).toBeTruthy();
+    }
+  });
+
   it("keeps Run and the one Assistant entry point in the right-aligned action group in both modes", () => {
     const onToggleAssistant = vi.fn();
     const { rerender } = render(<Toolbar {...baseProps} onToggleAssistant={onToggleAssistant} />);

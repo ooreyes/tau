@@ -2006,6 +2006,10 @@ function App() {
 
   const runStepAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
+    // A configuration refusal is still the user's most recent run gesture.
+    // Record it before validating specs so the header/outcome surfaces report
+    // this real `.step` error instead of a stale transient/other analysis.
+    beginRun("step");
     const directiveSpecs = runnableStepsFromDirectives(directives);
     const uiSpec = stepSetupToSpec(stepSetupUi);
     const specs = directiveSpecs.length > 0 ? directiveSpecs : uiSpec ? [uiSpec] : [];
@@ -2029,7 +2033,6 @@ function App() {
       userModelLibraryNames,
     };
     setAnalysisRunning(true);
-    beginRun("step");
     try {
       assertCurrentSimulationIntegrity();
 
@@ -3668,6 +3671,7 @@ function App() {
       <Toolbar
         mode={mode}
         result={analysis}
+        outcome={activeAnalysis}
         runState={runState}
         isRunning={analysisRunning}
         liveRunning={liveRunning}

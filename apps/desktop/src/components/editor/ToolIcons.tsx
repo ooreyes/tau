@@ -1,5 +1,6 @@
 import type { ComponentPropsWithoutRef } from "react";
 import { Redo2, Undo2 } from "lucide-react";
+import { TAG_CURSOR_ART, TAG_CURSOR_BODY_PATH, TAG_CURSOR_EYELET } from "./tagCursorGeometry";
 
 /**
  * Tool-object glyphs for the editor tool strip (P3-12, P3-13).
@@ -377,19 +378,19 @@ export function tagCursor(): string {
     if (!ink || !metal) return FALLBACK;
 
     /*
-     * 1:1 device-pixel art in a 32px box. The attachment point is the first
-     * path coordinate, (3,16), and the cursor declaration below repeats that
-     * exact coordinate as its hotspot. Keeping both in the same unit means the
-     * click point cannot acquire a scale-dependent offset.
+     * 1:1 device-pixel art in a shared box. The attachment point is the first
+     * path coordinate and the cursor declaration below repeats that exact
+     * coordinate as its hotspot. `TAG_CURSOR_ART` also positions Canvas's
+     * snapped preview, so browser and in-canvas representations cannot drift.
      */
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">`
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${TAG_CURSOR_ART.width}" height="${TAG_CURSOR_ART.height}" viewBox="0 0 ${TAG_CURSOR_ART.width} ${TAG_CURSOR_ART.height}" fill="none">`
       // The left point is the short attachment end and therefore the hotspot.
-      + `<path d="M3 16 L11 7 H26 A3 3 0 0 1 29 10 V22 A3 3 0 0 1 26 25 H11 Z" fill="${ink}"/>`
+      + `<path d="${TAG_CURSOR_BODY_PATH}" fill="${ink}"/>`
       // Steel eyelet confirms that this is a tag rather than a generic arrow.
-      + `<circle cx="11" cy="16" r="2.35" fill="${metal}"/>`
+      + `<circle cx="${TAG_CURSOR_EYELET.cx}" cy="${TAG_CURSOR_EYELET.cy}" r="${TAG_CURSOR_EYELET.r}" fill="${metal}"/>`
       + `</svg>`;
-    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 3 16, ${FALLBACK}`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${TAG_CURSOR_ART.hotspot.x} ${TAG_CURSOR_ART.hotspot.y}, ${FALLBACK}`;
   } catch {
     return FALLBACK;
   }

@@ -427,18 +427,53 @@ describe("Canvas - simulator mutation boundary", () => {
     expect(screen.getByRole("status").textContent).toMatch(/component or a wire/i);
   });
 
-  it("uses the fixed-pixel tag cursor for node naming in the read-only simulator canvas", () => {
+  it("keeps the tag cursor effective on an actual probe-ready wire target before it snaps", () => {
     document.documentElement.style.setProperty("--tool-tag-ink", "#e0b955");
     document.documentElement.style.setProperty("--tool-steel-ink", "#9aa3ae");
     useSchematic.setState({ tool: { mode: "label" } });
     render(<Canvas interactive={false} />);
 
-    const cursor = (document.querySelector("svg.canvas") as SVGSVGElement).style.cursor;
+    const canvas = document.querySelector<SVGSVGElement>("svg.canvas")!;
+    const wire = document.querySelector<SVGGElement>(".wire-group.probe-ready")!;
+    const cursor = canvas.style.cursor;
     expect(cursor).toMatch(/^url\("data:image\/svg\+xml,/);
     expect(cursor).toMatch(/\) 3 16, crosshair$/);
 
+    // SVG uses the element directly under the pointer as the cursor owner.
+    // This is the regression target: only checking svg.style.cursor missed
+    // `.probe-ready { cursor: crosshair }` winning over it on a valid net.
+    expect(wire.style.cursor).toBe(cursor);
+    expect(getComputedStyle(wire).cursor).toBe(cursor);
+
     document.documentElement.style.removeProperty("--tool-tag-ink");
     document.documentElement.style.removeProperty("--tool-steel-ink");
+  });
+
+  it("replaces the raw tag with a snapped in-canvas tag whose anchor is the placement point", () => {
+    useSchematic.setState({ tool: { mode: "label" } });
+    render(<Canvas interactive={false} />);
+
+    const canvas = document.querySelector<SVGSVGElement>("svg.canvas")!;
+    const wire = document.querySelector<SVGGElement>(".wire-group.probe-ready")!;
+    fireEvent.pointerMove(canvas, { clientX: 10, clientY: 20, pointerId: 91 });
+
+    // The browser cursor cannot represent the 18px snap jump, so it is hidden
+    // only while the rendered tag owns that visual contract. Direct wire hits
+    // receive the same value rather than reviving their old crosshair.
+    expect(canvas.style.cursor).toBe("none");
+    expect(wire.style.cursor).toBe("none");
+    const preview = screen.getByTestId("tag-cursor-preview");
+    expect(preview.getAttribute("data-anchor")).toBe("16,20");
+    expect(preview.getAttribute("transform")).toBe("translate(13 4) scale(1)");
+    expect(preview.getAttribute("pointer-events")).toBe("none");
+
+    // The same snapped world point is committed to the label draft. This ties
+    // the visible tag tip to the real placement path, not just a decorative
+    // preview that happens to be near a wire.
+    fireEvent.pointerDown(wire, { button: 0, clientX: 10, clientY: 20, pointerId: 91 });
+    const draft = screen.getByRole("textbox", { name: "Net label name" }) as HTMLInputElement;
+    expect(draft.style.left).toBe("16px");
+    expect(draft.style.top).toBe("30px");
   });
 
   it("adds, edits, and removes a node name inline", () => {

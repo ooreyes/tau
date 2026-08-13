@@ -21,6 +21,11 @@ import {
   translateAttachedWireEndpoints,
   wireIntersectsRect,
 } from "./Canvas.geometry";
+import {
+  TAG_CURSOR_ART,
+  tagCursorPreviewAttachmentPoint,
+  tagCursorPreviewGeometry,
+} from "./editor/tagCursorGeometry";
 import type { SchematicAscShape, SchematicComponent } from "../schematic/types";
 import { GRID } from "../schematic/symbols";
 import { getLocalPins, transformPoint } from "../schematic/pins";
@@ -906,5 +911,33 @@ describe("circuitBounds covers preserved artwork", () => {
     expect(bounds.minX).toBeLessThanOrEqual(-200);
     expect(bounds.maxX).toBeGreaterThanOrEqual(600);
     expect(bounds.maxY).toBeGreaterThanOrEqual(500);
+  });
+});
+
+describe("P4-05 snapped tag cursor geometry", () => {
+  it("keeps the visible tag tip on the committed snap anchor at every supported zoom", () => {
+    const anchor = { x: 176, y: -48 };
+    const viewOrigin = { x: 237, y: 119 };
+
+    for (const zoom of [0.25, 0.5, 1, 2, 5]) {
+      const preview = tagCursorPreviewGeometry(anchor, zoom);
+      const attachment = tagCursorPreviewAttachmentPoint(preview);
+
+      // The SVG's local point is translated/inversely scaled inside Canvas's
+      // outer world transform. The only acceptable screen position is the same
+      // position the label/probe commit path gets from the snapped world point.
+      expect(attachment).toEqual(anchor);
+      expect({
+        x: viewOrigin.x + attachment.x * zoom,
+        y: viewOrigin.y + attachment.y * zoom,
+      }).toEqual({
+        x: viewOrigin.x + anchor.x * zoom,
+        y: viewOrigin.y + anchor.y * zoom,
+      });
+
+      // It remains a 32 CSS-pixel tag, not a giant/speck at either zoom limit.
+      expect(TAG_CURSOR_ART.width * preview.scale * zoom).toBeCloseTo(TAG_CURSOR_ART.width, 8);
+      expect(TAG_CURSOR_ART.height * preview.scale * zoom).toBeCloseTo(TAG_CURSOR_ART.height, 8);
+    }
   });
 });
