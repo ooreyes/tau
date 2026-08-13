@@ -8,6 +8,21 @@ Sources:
 - `/Users/omarreyes/Downloads/Untitled document.pdf` (2 pages)
 - `/Users/omarreyes/Downloads/edits-to-fix.pdf` (7 pages)
 
+## PDF report 4 remediation - 2026-08-13
+
+The active user-directed fleet run is `pdf4-20260813-1`, building from the
+reviewed `fix/pdf3-fourteen-items` tip `5d476d1`. Its 20-item product and
+acceptance contract is `UI_UX_PDF4.md`. This section explicitly starts the
+AGENTS.md UI/UX fleet exception: the primary checkout is the orchestrator and
+only durable lineage; three Luna implementation workers use isolated local-only
+worktrees; Sol agents perform review only. `auto/ltspice-parity` remains
+untouched.
+
+The new source is `/Users/omarreyes/Downloads/Untitled document (2).pdf` (9
+pages). No item may be marked fixed from DOM presence alone: visual assertions
+need measured geometry and final packaged WKWebView evidence where native input
+or chrome matters.
+
 This is the implementation contract for the PDF-directed UI/UX fleet. The
 screenshots show reported states and may predate the current build. Reproduce
 the current packaged app before changing code. If the current app already meets

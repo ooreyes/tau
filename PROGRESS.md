@@ -1,5 +1,27 @@
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-13 (run `pdf4-20260813-1`)**
+
+Unit: **PDF report 4 remediation - 20 UI, electrical-editor, diagnostics, and
+project-hierarchy items.** Building from Omar-reviewed tag
+`pdf3-fourteen-items-reviewed` / `5d476d1` on `fix/pdf3-fourteen-items`;
+`auto/ltspice-parity` is untouched.
+
+**Contract:** `UI_UX_PDF4.md`. The primary checkout owns tracking, integration,
+full gates, packaged UI verification, screenshots, and the only push. Luna
+workers receive isolated local-only worktrees; Sol agents review code only.
+
+**Source:** `/Users/omarreyes/Downloads/Untitled document (2).pdf` (9 pages,
+20 numbered items), reviewed visually on 2026-08-13.
+
+**Next:** commit the orchestration contract, create three Luna lanes from that
+integration commit, integrate and test one lane at a time, then run Sol review
+and packaged WKWebView QA.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: REVIEW FOLLOW-UP LANDED — 2026-08-12 (branch `fix/ui-ux-followup`)**
 
 Unit: **Correcting nine UI/UX items that were checked `FIXED` against packaged
