@@ -34,7 +34,6 @@ const baseProps = {
   onModeChange: vi.fn(),
   onRun: vi.fn(),
   onToggleAssistant: vi.fn(),
-  onOpenSettings: vi.fn(),
 };
 
 describe("Toolbar Run health control", () => {
@@ -92,7 +91,8 @@ describe("Toolbar Run health control", () => {
       expect(toolbar.querySelector(selector)?.getAttribute("data-tauri-drag-region")).toBe("false");
     }
     expect(screen.getByRole("button", { name: "Run simulation" }).closest(".titlebar-drag-region")).toBeNull();
-    expect(screen.getByRole("button", { name: "Settings" }).closest(".titlebar-drag-region")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Run simulation" }).closest(".titlebar-actions")).toBeTruthy();
   });
 
   it("treats the labeled drag surface as a gesture target even though it is button-shaped for AX", () => {
@@ -214,6 +214,18 @@ describe("Toolbar Run health control", () => {
     expect(onRun).toHaveBeenCalledOnce();
   });
 
+  it("gives idle Run and Ask Bode the same restrained invitation, never a stateful run", () => {
+    const { rerender } = render(<Toolbar {...baseProps} />);
+    const run = screen.getByRole("button", { name: "Run simulation" });
+    const bode = screen.getByRole("button", { name: "Open Bode" });
+    expect(run.classList.contains("pdf4-action-sheen")).toBe(true);
+    expect(bode.classList.contains("pdf4-action-sheen")).toBe(true);
+
+    rerender(<Toolbar {...baseProps} isRunning />);
+    expect(screen.getByRole("button", { name: "Run simulation" }).classList.contains("pdf4-action-sheen")).toBe(false);
+    expect(screen.getByRole("button", { name: "Open Bode" }).classList.contains("pdf4-action-sheen")).toBe(false);
+  });
+
   it("uses the success gradient only after a completed clean run", () => {
     const complete = {
       ok: true,
@@ -249,11 +261,13 @@ describe("Toolbar Run health control", () => {
     expect(run.classList.contains("run-button--ok")).toBe(false);
   });
 
-  it("keeps the one Assistant entry point in the top-right toolbar in both modes", () => {
+  it("keeps Run and the one Assistant entry point in the right-aligned action group in both modes", () => {
     const onToggleAssistant = vi.fn();
     const { rerender } = render(<Toolbar {...baseProps} onToggleAssistant={onToggleAssistant} />);
 
     const open = screen.getByRole("button", { name: "Open Bode" });
+    expect(open.closest(".titlebar-actions")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Run simulation" }).closest(".titlebar-actions")).toBeTruthy();
     expect(open.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(open);
     expect(onToggleAssistant).toHaveBeenCalledOnce();

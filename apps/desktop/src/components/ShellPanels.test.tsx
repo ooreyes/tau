@@ -70,10 +70,10 @@ const noopToolbarProps = {
 };
 
 describe("EditorToolbar - read-only outside schematic view ", () => {
-  it("keeps transport explicit: Run and Stop only, with no opaque refine button", () => {
+  it("keeps the transport explicit: idle Run only, with no opaque refine button", () => {
     render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
     expect(screen.getByRole("button", { name: "Run simulation" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Stop simulation" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Stop simulation" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Refine transient resolution" })).toBeNull();
   });
 
@@ -84,7 +84,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     const toolbar = container.querySelector(".editor-toolbar");
     expect(toolbar).toBeTruthy();
     expect(screen.getByRole("button", { name: "Run simulation" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Stop simulation" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Stop simulation" })).toBeNull();
   });
 
   it("disables Wire, Net label, Undo, Redo, erase-selection, and delete-schematic in simulator mode", () => {

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { StatusBar } from "./StatusBar";
 import { useSchematic } from "../store/useSchematic";
@@ -57,6 +57,16 @@ describe("StatusBar simulator guidance", () => {
     expect(screen.getByText("Wiring")).toBeTruthy();
     // Still no duplicated document identity.
     expect(screen.queryByText(/\.asc/)).toBeNull();
+  });
+
+  it("puts the existing Settings utility at the lower-right without inventing idle status copy", () => {
+    const onOpenSettings = vi.fn();
+    const { container } = render(<StatusBar mode="schematic" result={null} onOpenSettings={onOpenSettings} />);
+
+    expect(container.querySelector(".statusbar-utility")).toBeTruthy();
+    expect(container.querySelector(".statusbar-context")?.textContent).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(onOpenSettings).toHaveBeenCalledOnce();
   });
 });
 

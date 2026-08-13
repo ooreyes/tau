@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AnalysisModeRail } from "../components/AnalysisModeRail";
 import { ActivityRail } from "../components/shell/NavRail";
+import { StatusBar } from "../components/StatusBar";
 import { Toolbar } from "../components/Toolbar";
 import { RunTransport, RUN_TRANSPORT_NAMES } from "../components/RunTransport";
 import { liveScopeGeometry } from "../components/LiveScopePane";
@@ -50,13 +51,13 @@ const toolbarProps = {
   onModeChange: vi.fn(),
   onRun: vi.fn(),
   onToggleAssistant: vi.fn(),
-  onOpenSettings: vi.fn(),
 };
 
 function renderSharedChrome() {
   return render(
     <>
       <Toolbar {...toolbarProps} />
+      <StatusBar mode="schematic" result={null} onOpenSettings={vi.fn()} />
       <ActivityRail
         mode="schematic"
         explorerOpen

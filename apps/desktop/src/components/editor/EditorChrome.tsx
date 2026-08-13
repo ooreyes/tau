@@ -26,13 +26,21 @@ import { EraserIcon, MultimeterIcon, RedoIcon, TagIcon, TOOL_ICON_SIZE, TrashIco
 export function EditorToolbar({
   mode,
   isRunning,
+  canStop = false,
   onRun,
   onStop,
   onClearScratchpad,
   onOpenSimulationSetup,
 }: {
   mode: "schematic" | "simulator";
+  /** A run is in flight, so a second Run must not begin over it. */
   isRunning: boolean;
+  /**
+   * The current run has a real cancellation path. This is intentionally
+   * separate from `isRunning`: an unavailable Stop is less honest than no Stop
+   * while a non-interruptible analysis settles.
+   */
+  canStop?: boolean;
   onRun: () => void;
   onStop: () => void;
   onClearScratchpad: () => void;
@@ -104,18 +112,32 @@ export function EditorToolbar({
         <SlidersHorizontal size={TOOL_ICON_SIZE} strokeWidth={1.6} />
       </IconButton>
       <div className="editor-toolbar-spacer" />
-      <div className="transport">
-        <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>
-          <Play size={14} strokeWidth={1.6} aria-hidden="true" />
-        </button>
-        <button
-          className="transport-stop"
-          title="Clear current simulation result"
-          aria-label="Stop simulation"
-          onClick={onStop}
-        >
-          <Square size={12} strokeWidth={1.6} aria-hidden="true" />
-        </button>
+      <div
+        className={`transport${canStop ? " is-cancellable" : ""}`}
+        role="group"
+        aria-label="Simulation controls"
+        data-state={canStop ? "cancellable" : isRunning ? "running" : "idle"}
+      >
+        {canStop ? (
+          <button
+            className="transport-stop"
+            title="Stop simulation"
+            aria-label="Stop simulation"
+            onClick={onStop}
+          >
+            <Square size={13} strokeWidth={1.6} aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            className="transport-play"
+            title="Run simulation"
+            aria-label="Run simulation"
+            onClick={onRun}
+            disabled={isRunning}
+          >
+            <Play size={16} strokeWidth={1.6} aria-hidden="true" />
+          </button>
+        )}
       </div>
     </div>
   );

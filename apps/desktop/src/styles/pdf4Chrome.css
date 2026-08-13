@@ -1,0 +1,143 @@
+/* PDF4 chrome remediation.
+ *
+ * This layer deliberately loads after App.css. It keeps the narrow visual
+ * adjustments owned by the PDF4 Chrome lane out of the shared token source,
+ * while still consuming only established design tokens.
+ */
+
+/* P4-03 — the Components rail is an overlay, so the stage itself does not
+ * shrink when it opens. Reserving its published inset in the empty-state grid
+ * centers Bode in the part of the canvas that is actually visible. Explorer
+ * and inspector widths already change the stage's own box, so they need no
+ * parallel calculation here. */
+.stage > .empty-state {
+  box-sizing: border-box;
+  min-width: 0;
+  padding-inline-end: var(--stage-rail-inset, 0px);
+}
+
+/* P4-04/P4-06 — one 32 px editor-tool target and one compact 4 px rhythm.
+ * This is local rather than a change to --control-hit: the app has deliberately
+ * denser instruments elsewhere, while the primary editing strip needs the
+ * larger visual and pointer target. */
+.editor-toolbar {
+  --pdf4-editor-target: 32px;
+  height: 44px;
+  gap: var(--sp-1);
+  padding-inline: var(--sp-2);
+}
+
+.editor-toolbar .editor-icon-btn,
+.editor-toolbar .transport button {
+  width: var(--pdf4-editor-target);
+  min-width: var(--pdf4-editor-target);
+  height: var(--pdf4-editor-target);
+}
+
+.editor-toolbar .editor-icon-btn svg,
+.editor-toolbar .editor-lucide {
+  width: 18px;
+  height: 18px;
+}
+
+.editor-toolbar .toolbar-divider {
+  height: 20px;
+  margin: 0;
+}
+
+.editor-toolbar .transport {
+  gap: var(--sp-1);
+  padding: 0;
+}
+
+.editor-toolbar .transport[data-state="idle"] {
+  background: transparent;
+  border-color: transparent;
+}
+
+.editor-toolbar .editor-icon-btn:focus-visible,
+.editor-toolbar .transport button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--canvas-bg), 0 0 0 4px var(--accent-line);
+}
+
+/* P4-18/P4-20 — Run and Ask Bode are one right-aligned action group. Settings
+ * is the only existing lower-right utility, so the idle footer stays otherwise
+ * empty instead of manufacturing a new feature to fill visual space. */
+.titlebar-right {
+  gap: 0;
+}
+
+.titlebar-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+.titlebar-actions .status-lamp {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.statusbar {
+  padding-inline-end: var(--sp-2);
+}
+
+.statusbar-context {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  overflow: hidden;
+}
+
+.statusbar-utility {
+  flex: none;
+  display: flex;
+  align-items: center;
+  margin-inline-start: auto;
+}
+
+/* P4-19 — a low-contrast shared phase is a small invitation, never a progress
+ * signal. Stateful Run treatments and disabled controls do not receive it.
+ * The same keyframe/duration keep Run and Ask Bode in phase. */
+.pdf4-action-sheen {
+  --pdf4-sheen-ink: var(--accent);
+  background-image: linear-gradient(
+    108deg,
+    color-mix(in srgb, var(--pdf4-sheen-ink) 8%, var(--panel-2)) 0%,
+    color-mix(in srgb, var(--pdf4-sheen-ink) 18%, var(--panel-2)) 48%,
+    color-mix(in srgb, var(--pdf4-sheen-ink) 8%, var(--panel-2)) 100%
+  ) !important;
+  background-size: 220% 100% !important;
+  animation: tau-pdf4-action-sheen 5.6s var(--ease-out) infinite;
+}
+
+.pdf4-action-sheen--bode {
+  --pdf4-sheen-ink: var(--assistant);
+}
+
+.pdf4-action-sheen:disabled {
+  animation: none;
+}
+
+@keyframes tau-pdf4-action-sheen {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf4-action-sheen {
+    animation: none;
+    background-position: 50% 50%;
+  }
+}

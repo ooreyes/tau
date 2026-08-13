@@ -356,3 +356,41 @@ export function probeCursor(): string {
     return FALLBACK;
   }
 }
+
+/**
+ * The kraft tag as a CSS `cursor` value for Canvas.tsx's label tool.
+ *
+ * The card's short pointed attachment end, not its visual centre or eyelet,
+ * is the hotspot. A label therefore starts at the point the cursor visibly
+ * touches, exactly as a probe starts at its needle tip. The art is authored in
+ * the same fixed device-pixel box as `probeCursor()`: canvas zoom transforms
+ * world geometry behind the pointer, never the cursor bitmap, so placement is
+ * stable at every supported zoom.
+ */
+export function tagCursor(): string {
+  const FALLBACK = "crosshair";
+  if (typeof document === "undefined" || !document.documentElement) return FALLBACK;
+  try {
+    const style = getComputedStyle(document.documentElement);
+    const ink = style.getPropertyValue("--tool-tag-ink").trim();
+    const metal = style.getPropertyValue("--tool-steel-ink").trim();
+    if (!ink || !metal) return FALLBACK;
+
+    /*
+     * 1:1 device-pixel art in a 32px box. The attachment point is the first
+     * path coordinate, (3,16), and the cursor declaration below repeats that
+     * exact coordinate as its hotspot. Keeping both in the same unit means the
+     * click point cannot acquire a scale-dependent offset.
+     */
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">`
+      // The left point is the short attachment end and therefore the hotspot.
+      + `<path d="M3 16 L11 7 H26 A3 3 0 0 1 29 10 V22 A3 3 0 0 1 26 25 H11 Z" fill="${ink}"/>`
+      // Steel eyelet confirms that this is a tag rather than a generic arrow.
+      + `<circle cx="11" cy="16" r="2.35" fill="${metal}"/>`
+      + `</svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 3 16, ${FALLBACK}`;
+  } catch {
+    return FALLBACK;
+  }
+}

@@ -8,6 +8,7 @@ import "./styles/liveControls.css";
 import "./styles/explorerTree.css";
 import "./styles/sourceSymbols.css";
 import "./styles/editorToolbarIcons.css";
+import "./styles/pdf4Chrome.css";
 import "./styles/diagnosticsDock.css";
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
@@ -3690,7 +3691,6 @@ function App() {
           }
           toggleAssistant();
         }}
-        onOpenSettings={openSettingsSurface}
       />
       <div
         ref={shellBodyRef}
@@ -3798,6 +3798,7 @@ function App() {
           <EditorToolbar
             mode={mode}
             isRunning={analysisRunning}
+            canStop={analysisRunning && transientAbortRef.current !== null}
             onRun={runAndShowSimulator}
             onStop={stopAnalysis}
             onClearScratchpad={() => setConfirmClearOpen(true)}
@@ -4324,7 +4325,7 @@ function App() {
           </Suspense>
         )}
       </div>
-      <StatusBar mode={mode} result={analysis} />
+      <StatusBar mode={mode} result={analysis} onOpenSettings={openSettingsSurface} />
       {shouldShowLearningPathCoach(learningPath)
         && !learningPathCoachHidden
         && learningPathTip

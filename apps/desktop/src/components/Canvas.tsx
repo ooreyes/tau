@@ -48,7 +48,7 @@ import {
   type SevenSegmentNodeVoltages,
 } from "./simulator/SevenSegmentDisplay";
 import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
-import { probeCursor } from "./editor/ToolIcons";
+import { probeCursor, tagCursor } from "./editor/ToolIcons";
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import {
   autoNetLabelOffset,
@@ -1844,17 +1844,18 @@ export function Canvas({
    * it responds to a click. Both are set from the same hit test the pointer
    * handler uses, so the cursor and the click always agree.
    */
-  /* Probe mode gets the probe itself, not the generic crosshair it used to
-   * share with placing/wiring/labeling: the tool you picked should be the thing
-   * on the end of the pointer. `probeCursor()` reads --tool-probe-ink and
-   * --tool-steel-ink off the live document and builds the data URL at call
-   * time, so the cursor follows the theme and no raw colour enters this file;
-   * every failure path (no document, unreadable tokens) returns the bare
-   * "crosshair" literal, so jsdom and any headless path keep today's value. */
+  /* Probe and label modes get the object at the end of the pointer rather than
+   * the generic crosshair shared by place/wire. The helpers read their tokens
+   * from the live document and build the data URL at call time, so the cursor
+   * follows the theme and no raw colour enters this file; every failure path
+   * (no document, unreadable tokens) returns the bare "crosshair" literal, so
+   * jsdom and any headless path keep today's value. */
   const canvasCursor =
     probing
       ? probeCursor()
-      : (interactive && (placing || wiring)) || labeling
+      : labeling
+        ? tagCursor()
+        : interactive && (placing || wiring)
         ? "crosshair"
       : wiperDrag.current || (!interactive && hoverOperable?.wiper)
         ? "ew-resize"

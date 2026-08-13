@@ -10,11 +10,15 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { EditorToolbar } from "./EditorChrome";
-import { probeCursor } from "./ToolIcons";
+import { probeCursor, tagCursor } from "./ToolIcons";
 import { useSchematic } from "../../store/useSchematic";
 
-function renderToolbar(mode: "schematic" | "simulator" = "schematic") {
+function renderToolbar(
+  mode: "schematic" | "simulator" = "schematic",
+  overrides: Partial<ComponentProps<typeof EditorToolbar>> = {},
+) {
   return render(
     <EditorToolbar
       mode={mode}
@@ -23,6 +27,7 @@ function renderToolbar(mode: "schematic" | "simulator" = "schematic") {
       onStop={vi.fn()}
       onClearScratchpad={vi.fn()}
       onOpenSimulationSetup={vi.fn()}
+      {...overrides}
     />,
   );
 }
@@ -57,7 +62,42 @@ describe("EditorToolbar accessible-name contract", () => {
       expect(screen.getByRole("button", { name: label }), `missing ${label}`).toBeTruthy();
     }
     expect(screen.getByRole("button", { name: "Run simulation" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Stop simulation" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Stop simulation" })).toBeNull();
+  });
+});
+
+describe("EditorToolbar truthful transport (P4-19)", () => {
+  it("shows an enabled Run while idle and never a dead Stop beside it", () => {
+    const onRun = vi.fn();
+    renderToolbar("schematic", { onRun });
+
+    const run = screen.getByRole("button", { name: "Run simulation" });
+    expect((run as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Stop simulation" })).toBeNull();
+    fireEvent.click(run);
+    expect(onRun).toHaveBeenCalledOnce();
+    expect(document.querySelector(".transport")?.getAttribute("data-state")).toBe("idle");
+  });
+
+  it("replaces Run with Stop only while the current run has a cancellation path", () => {
+    const onRun = vi.fn();
+    const onStop = vi.fn();
+    renderToolbar("schematic", { isRunning: true, canStop: true, onRun, onStop });
+
+    expect(screen.queryByRole("button", { name: "Run simulation" })).toBeNull();
+    const stop = screen.getByRole("button", { name: "Stop simulation" });
+    fireEvent.click(stop);
+    expect(onStop).toHaveBeenCalledOnce();
+    expect(onRun).not.toHaveBeenCalled();
+    expect(document.querySelector(".transport")?.getAttribute("data-state")).toBe("cancellable");
+  });
+
+  it("does not promise Stop for an in-flight analysis without cancellation", () => {
+    renderToolbar("schematic", { isRunning: true });
+    const run = screen.getByRole("button", { name: "Run simulation" }) as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Stop simulation" })).toBeNull();
+    expect(document.querySelector(".transport")?.getAttribute("data-state")).toBe("running");
   });
 });
 
@@ -235,6 +275,39 @@ describe("probeCursor (P3-12, canvas affordance)", () => {
     expect(svg).toContain('fill="#ea4f42"');
     expect(cursor).toMatch(/, crosshair$/);
     document.documentElement.style.removeProperty("--tool-probe-ink");
+    document.documentElement.style.removeProperty("--tool-steel-ink");
+  });
+});
+
+describe("tagCursor (P4-05, label affordance)", () => {
+  it("degrades to the existing crosshair when tag tokens are unavailable", () => {
+    expect(tagCursor()).toBe("crosshair");
+  });
+
+  it("puts the hotspot on the tag's short attachment point in an unscaled box", () => {
+    document.documentElement.style.setProperty("--tool-tag-ink", "#e0b955");
+    document.documentElement.style.setProperty("--tool-steel-ink", "#9aa3ae");
+    const cursor = tagCursor();
+    expect(cursor).toMatch(/^url\("data:image\/svg\+xml,/);
+    const svg = decodeURIComponent(cursor);
+
+    const hotspot = /\)\s+([\d.]+)\s+([\d.]+),\s*crosshair$/.exec(cursor);
+    const attachmentPoint = /<path d="M([\d.]+) ([\d.]+) L/.exec(svg);
+    expect(hotspot).not.toBeNull();
+    expect(attachmentPoint).not.toBeNull();
+    expect(Number(hotspot![1])).toBeCloseTo(Number(attachmentPoint![1]), 5);
+    expect(Number(hotspot![2])).toBeCloseTo(Number(attachmentPoint![2]), 5);
+
+    // The CSS cursor stays in device pixels while the canvas zooms world
+    // geometry. Matching width/height/viewBox keeps its hotspot 1:1 at every
+    // canvas zoom rather than scaling it with the schematic.
+    const box = /width="(\d+)" height="(\d+)" viewBox="0 0 (\d+) (\d+)"/.exec(svg);
+    expect(box).not.toBeNull();
+    expect(box![1]).toBe(box![3]);
+    expect(box![2]).toBe(box![4]);
+    expect(svg).toContain('fill="#e0b955"');
+    expect(svg).toContain('fill="#9aa3ae"');
+    document.documentElement.style.removeProperty("--tool-tag-ink");
     document.documentElement.style.removeProperty("--tool-steel-ink");
   });
 });

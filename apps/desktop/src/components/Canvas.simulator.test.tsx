@@ -427,6 +427,20 @@ describe("Canvas - simulator mutation boundary", () => {
     expect(screen.getByRole("status").textContent).toMatch(/component or a wire/i);
   });
 
+  it("uses the fixed-pixel tag cursor for node naming in the read-only simulator canvas", () => {
+    document.documentElement.style.setProperty("--tool-tag-ink", "#e0b955");
+    document.documentElement.style.setProperty("--tool-steel-ink", "#9aa3ae");
+    useSchematic.setState({ tool: { mode: "label" } });
+    render(<Canvas interactive={false} />);
+
+    const cursor = (document.querySelector("svg.canvas") as SVGSVGElement).style.cursor;
+    expect(cursor).toMatch(/^url\("data:image\/svg\+xml,/);
+    expect(cursor).toMatch(/\) 3 16, crosshair$/);
+
+    document.documentElement.style.removeProperty("--tool-tag-ink");
+    document.documentElement.style.removeProperty("--tool-steel-ink");
+  });
+
   it("adds, edits, and removes a node name inline", () => {
     useSchematic.setState({ tool: { mode: "label" } });
     render(<Canvas interactive={false} />);

@@ -1,7 +1,7 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useRef } from "react";
-import { Activity, CircuitBoard, MessageSquare, Settings } from "lucide-react";
+import { Activity, CircuitBoard, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,6 @@ interface ToolbarProps {
   onModeChange: (mode: "schematic" | "simulator") => void;
   onRun: () => void;
   onToggleAssistant: () => void;
-  onOpenSettings: () => void;
 }
 
 type LampState = "idle" | "running" | "ok" | "error" | "warn";
@@ -52,12 +51,22 @@ export function isTitlebarControlTarget(target: EventTarget | null): boolean {
   return Boolean(element.closest("button, a, input, select, textarea, [role=button], .mode-toggle"));
 }
 
-export function Toolbar({ mode, result, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
+export function Toolbar({ mode, result, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant }: ToolbarProps) {
   const titlebarGestureRef = useRef<ReturnType<typeof createTitlebarGestureMachine> | null>(null);
   const titlebarGesture = titlebarGestureRef.current ?? (titlebarGestureRef.current = createTitlebarGestureMachine());
   const isSimulator = mode === "simulator";
   const runHasError = !isRunning && (runState === "error" || result?.ok === false);
   const runIsAcceptable = !isRunning && runState === "complete" && result?.ok === true;
+  // The invitation is deliberately quiet and shared: when the primary Run
+  // action is truly idle, Ask Bode may make the same gentle pass; once either
+  // action has state, the semantic state wins and the sheen disappears.
+  const shouldInviteAction = !isRunning
+    && !liveRunning
+    && !runHasError
+    && !runIsAcceptable
+    && schematicOpen
+    && projectOpen
+    && !assistantOpen;
 
   // The status lamp is the single source of truth for run state - no cancel
   // path exists (nothing in the codebase can interrupt an in-flight ngspice
@@ -179,7 +188,7 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
       onClickCapture={handleTitlebarClickCapture}
     >
       {/*
-       * Keep this element an empty surface so Run, mode, Bode, and Settings
+       * Keep this element an empty surface so Run, mode, and Bode
        * remain ordinary interactive controls (including the traffic-light
        * inset). The explicit API call preserves the native drag contract.
        */}
@@ -229,75 +238,65 @@ export function Toolbar({ mode, result, runState, isRunning, liveRunning = false
       </div>
 
       <div className="titlebar-right" data-tauri-drag-region="false">
-        {statusText && (
-          <span className={cn("status-lamp", `status-lamp--${lampState}`)}>
-            <i className="status-lamp-dot" aria-hidden="true" />
-            <span className="status-lamp-text mono-num">{statusText}</span>
-          </span>
-        )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* The Run control is also the simulation health indicator: neutral
-                before validation, amber while running, green after a clean run,
-                and red after a failed run. */}
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isRunning || liveRunning || !schematicOpen}
-              className={cn(
-                "gap-1.5 bg-secondary hover:bg-accent",
-                runHasError && "run-button--error",
-                runIsAcceptable && "run-button--ok",
-                isRunning && "run-button--running",
-              )}
-              onClick={onRun}
-              aria-label="Run simulation"
-            >
-              <i className={cn("run-lamp-dot", isRunning && "run-lamp-dot--running")} aria-hidden="true" />
-              Run
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {isRunning
-              ? "Simulation running…"
-              : liveRunning
-                ? "A live run has this circuit energised. Stop it in the simulator first."
-                : "Run simulation and switch to simulator"}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className={cn(
-                "assistant-toolbar-button",
-                assistantOpen && "assistant-toolbar-button--active",
-              )}
-              aria-label={assistantOpen ? "Close Bode" : "Open Bode"}
-              aria-pressed={assistantOpen}
-              disabled={!projectOpen}
-              onClick={onToggleAssistant}
-            >
-              <MessageSquare size={14} strokeWidth={1.6} aria-hidden="true" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{assistantOpen ? "Close Bode" : "Ask Bode"}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className="text-muted-foreground hover:text-foreground"
-              aria-label="Settings"
-              onClick={onOpenSettings}
-            >
-              <Settings size={14} strokeWidth={1.6} aria-hidden="true" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Settings</TooltipContent>
-        </Tooltip>
+        <div className="titlebar-actions" role="group" aria-label="Circuit actions">
+          {statusText && (
+            <span className={cn("status-lamp", `status-lamp--${lampState}`)}>
+              <i className="status-lamp-dot" aria-hidden="true" />
+              <span className="status-lamp-text mono-num">{statusText}</span>
+            </span>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* The Run control is also the simulation health indicator: neutral
+                  before validation, amber while running, green after a clean run,
+                  and red after a failed run. */}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isRunning || liveRunning || !schematicOpen}
+                className={cn(
+                  "gap-1.5 bg-secondary hover:bg-accent",
+                  shouldInviteAction && "pdf4-action-sheen pdf4-action-sheen--run",
+                  runHasError && "run-button--error",
+                  runIsAcceptable && "run-button--ok",
+                  isRunning && "run-button--running",
+                )}
+                onClick={onRun}
+                aria-label="Run simulation"
+              >
+                <i className={cn("run-lamp-dot", isRunning && "run-lamp-dot--running")} aria-hidden="true" />
+                Run
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {isRunning
+                ? "Simulation running…"
+                : liveRunning
+                  ? "A live run has this circuit energised. Stop it in the simulator first."
+                  : "Run simulation and switch to simulator"}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className={cn(
+                  "assistant-toolbar-button",
+                  shouldInviteAction && "pdf4-action-sheen pdf4-action-sheen--bode",
+                  assistantOpen && "assistant-toolbar-button--active",
+                )}
+                aria-label={assistantOpen ? "Close Bode" : "Open Bode"}
+                aria-pressed={assistantOpen}
+                disabled={!projectOpen}
+                onClick={onToggleAssistant}
+              >
+                <MessageSquare size={14} strokeWidth={1.6} aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{assistantOpen ? "Close Bode" : "Ask Bode"}</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </header>
   );
