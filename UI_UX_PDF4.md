@@ -212,3 +212,26 @@ ngspice hierarchy fixture. Final evidence is light/dark at 900x600, 1280x800,
 and 1440x900 plus packaged WKWebView interaction for cursor/drag/transport.
 Screenshots and machine-readable measurements live under
 `screenshots/pdf4-verify/`.
+
+## 2026-08-13 checkpoint
+
+Commit `0ece2f7` is the pushed, green Luna-authored checkpoint. It is not the
+final reviewed tag. Evidence and exact gate results are in
+`screenshots/pdf4-verify/REPORT.md`.
+
+Final Sol closure review confirmed stable project-port persistence, recursive
+hierarchy execution/fail-closed behavior, the end-to-end child interface UI,
+named photodiode exact/refusal behavior, advanced model disclosure, corrected
+zener and placement semantics, and the staged Tau-worker hierarchy fixture.
+The following remain open before this contract can be marked complete:
+
+- P4-01: manual trace/probe recoloring can duplicate another active net color.
+- P4-15: malformed multi-token switch text is still presented as a named model;
+  named controlled switches can silently behave open in preview fallback.
+- P4-17: hierarchy diagnostics lose focus metadata after entering Simulator;
+  net focus lacks a visible selection/highlight when the target is on screen.
+- P4-14 copy: “saved” must say the interface was applied to dirty memory and
+  still needs a document save.
+
+Implementation is paused because the separate GPT-5.6 Luna coding task reached
+its weekly limit. Sol remains review-only and has not authored these changes.

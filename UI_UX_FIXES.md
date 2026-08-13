@@ -23,6 +23,15 @@ pages). No item may be marked fixed from DOM presence alone: visual assertions
 need measured geometry and final packaged WKWebView evidence where native input
 or chrome matters.
 
+Checkpoint `0ece2f7` is pushed to `origin/fix/pdf3-fourteen-items`. It contains
+the integrated Luna implementation and passes the complete desktop, web,
+design, Rust, real-engine, staged-worker, package, signature, and DMG gates
+recorded in `screenshots/pdf4-verify/REPORT.md`. Status remains **BLOCKED**, not
+FIXED: final Sol read-only review left five functional gaps in P4-01, P4-15,
+and P4-17 plus one persistence-copy correction. The next coding pass must use
+GPT-5.6 Luna; the Luna task reached the weekly limit before it could address
+those review findings.
+
 This is the implementation contract for the PDF-directed UI/UX fleet. The
 screenshots show reported states and may predate the current build. Reproduce
 the current packaged app before changing code. If the current app already meets

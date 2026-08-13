@@ -1,6 +1,6 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-13 (run `pdf4-20260813-1`)**
+**Status: BLOCKED - 2026-08-13 (run `pdf4-20260813-1`)**
 
 Unit: **PDF report 4 remediation - 20 UI, electrical-editor, diagnostics, and
 project-hierarchy items.** Building from Omar-reviewed tag
@@ -14,9 +14,25 @@ workers receive isolated local-only worktrees; Sol agents review code only.
 **Source:** `/Users/omarreyes/Downloads/Untitled document (2).pdf` (9 pages,
 20 numbered items), reviewed visually on 2026-08-13.
 
-**Next:** commit the orchestration contract, create three Luna lanes from that
-integration commit, integrate and test one lane at a time, then run Sol review
-and packaged WKWebView QA.
+**Landed checkpoint:** `0ece2f7` on `fix/pdf3-fourteen-items`, pushed to
+origin. Luna authored all product implementation; Sol performed review only.
+Independent gates at that commit: desktop typecheck; 272 files / 4,779 tests
+passed (9 skipped); web build; design-system grep; Rust fmt/clippy; 104 native
+tests plus 42/42 ignored real-engine tests; Tau staged hierarchy worker 10/10;
+fresh unsigned Tau.app/DMG build; strict codesign and DMG checksum verification.
+Responsive and packaged evidence is under `screenshots/pdf4-verify/`.
+
+**Why blocked:** the final two read-only Sol closure reviews found five product
+gaps after `0ece2f7`: simulator-mode hierarchy diagnostics lose object focus;
+net focus pans but does not visibly highlight an already-visible net; manual
+trace colors can duplicate another active net; malformed switch values are
+still presented as named models in the inspector; and a valid named controlled
+switch can become an open circuit in the flat-document preview fallback. A
+sixth copy-only issue says “saved” for a change that is only applied in dirty
+memory. These are not being patched by Sol. The separate GPT-5.6 Luna coding
+task exhausted the weekly Luna allowance and reports its next availability as
+2026-08-20 12:16 PM. Resume with Luna, close these findings, rerun the full
+gates and packaged QA, then mark the run DONE.
 
 ---
 

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "0ece2f7",
+  "viewports": [
+    { "width": 900, "height": 600, "themes": ["light", "dark"] },
+    { "width": 1280, "height": 800, "themes": ["light", "dark"] },
+    { "width": 1440, "height": 900, "themes": ["light", "dark"] }
+  ],
+  "desktopTests": { "filesPassed": 272, "filesSkipped": 2, "testsPassed": 4779, "testsSkipped": 9, "testsFailed": 0 },
+  "rustTests": { "standardPassed": 104, "realEnginePassed": 42, "failed": 0 },
+  "stagedHierarchyWorker": { "passed": 10, "failed": 0 },
+  "package": { "appBuilt": true, "dmgBuilt": true, "codesignVerified": true, "dmgChecksumValid": true },
+  "status": "blocked-final-review"
+}
