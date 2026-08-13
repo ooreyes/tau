@@ -460,6 +460,26 @@ describe("generic model-backed parameter schemas", () => {
     })).toContain("below maximum");
   });
 
+  it("keeps diode saturation current in advanced model parameters with a concise effect", () => {
+    const fields = paramFields("diode", "D");
+    const saturation = fields.find((field) => field.key === "is")!;
+    expect(saturation.advanced).toBe(true);
+    expect(saturation.description).toContain("reverse leakage");
+    expect(saturation.description!.length).toBeLessThanOrEqual(80);
+  });
+
+  it("gives generic semiconductor knobs a one-line student-facing effect", () => {
+    for (const [kind, value] of [
+      ["nmos", "NMOS W=10u L=1u"], ["npn", "NPN"], ["njf", "NJF"],
+      ["zener", "5V1"], ["led", "LED"],
+    ] as const) {
+      for (const field of paramFields(kind, value)) {
+        expect(field.description, `${kind}.${field.key}`).toBeTruthy();
+        expect(field.description!.length, `${kind}.${field.key}`).toBeLessThanOrEqual(80);
+      }
+    }
+  });
+
   it("offers engineering LED colors without serializing inferred Vf overrides", () => {
     const choices = paramFields("led", "LED").find((field) => field.key === "color")?.choices ?? [];
     expect(choices.map((choice) => choice.label)).toEqual([
@@ -488,6 +508,33 @@ describe("generic model-backed parameter schemas", () => {
     expect(encodeParams("led", custom)).toBe("LED color=custom");
     expect(encodeParams("led", { model: "LED", color: "yellow", vfwd: "2.15" }))
       .toBe("LED color=yellow Vfwd=2.15");
+  });
+});
+
+describe("electromechanical editor values", () => {
+  it("validates native contact states instead of accepting arbitrary text", () => {
+    const state = paramFields("switch", "open")[0]!;
+    const throwField = paramFields("spdt", "no")[0]!;
+    expect(paramValidationMessage(state, "ejeeje")).toContain("Open or Closed");
+    expect(paramValidationMessage(state, "closed")).toBeNull();
+    expect(paramValidationMessage(throwField, "ejeeje")).toContain("Choose");
+    expect(paramValidationMessage(throwField, "nc")).toBeNull();
+    // A named controlled switch remains visibly invalid until Chrome routes it
+    // to its model-resolution surface; its stored value is never rewritten.
+    expect(paramValidationMessage(state, "MYSW")).toContain("Open or Closed");
+  });
+
+  it("rejects malformed transformer geometry before it can reach the deck", () => {
+    const ratio = paramFields("transformer", "1:1")[0]!;
+    expect(paramValidationMessage(ratio, "ejeeje")).toContain("positive turns ratio");
+    expect(paramValidationMessage(ratio, "1:0")).toContain("positive turns ratio");
+    expect(paramValidationMessage(ratio, "1:2 L1=2m L2=8m k=0.98")).toBeNull();
+    expect(paramValidationMessage(ratio, "1:2 k=1")).toContain("below 1");
+  });
+
+  it("keeps named imported photocells out of the generic photocurrent editor", () => {
+    expect(paramFields("photodiode", "100u").map((field) => field.key)).toEqual(["iph"]);
+    expect(paramFields("photodiode", "BPW34")).toEqual([]);
   });
 });
 

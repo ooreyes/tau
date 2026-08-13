@@ -48,6 +48,12 @@ export interface SelectionInspectorProps {
   title: string;
   /** Stable selection identity; unlike the title, it changes for same-named parts. */
   selectionKey: string | null;
+  /**
+   * The selected component is being moved on the canvas. The caller owns that
+   * gesture state; hiding here keeps the surface from fighting the pointer
+   * while preserving placement for the instant the move ends.
+   */
+  suspended?: boolean;
   /** Bumping this focuses the first field: the explicit keyboard command. */
   focusSignal?: number;
   /** Escape, or the close button. The selection itself is not cleared. */
@@ -82,6 +88,7 @@ export function SelectionInspector({
   obstacles = [],
   title,
   selectionKey,
+  suspended = false,
   focusSignal = 0,
   onDismiss,
   children,
@@ -220,7 +227,7 @@ export function SelectionInspector({
     };
   }, [anchor, settled]);
 
-  if (!anchor || !settled) return null;
+  if (suspended || !anchor || !settled) return null;
   const { placement } = settled;
   const leader = placement.leader;
   const automaticPosition = {

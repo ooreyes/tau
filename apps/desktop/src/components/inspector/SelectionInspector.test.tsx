@@ -65,6 +65,41 @@ describe("selection inspector - it is not a modal", () => {
   });
 });
 
+describe("selection inspector - component drag suppression", () => {
+  it("hides for an active component drag and returns when the gesture settles", () => {
+    const { rerender } = renderInspector();
+    expect(panel()).toBeTruthy();
+
+    rerender(
+      <SelectionInspector
+        anchor={ANCHOR}
+        viewport={VIEWPORT}
+        title="R1 properties"
+        selectionKey="component:r1"
+        suspended
+        onDismiss={() => {}}
+      >
+        <input aria-label="Value" defaultValue="1k" />
+      </SelectionInspector>,
+    );
+    expect(screen.queryByRole("dialog", { name: "R1 properties" })).toBeNull();
+
+    rerender(
+      <SelectionInspector
+        anchor={ANCHOR}
+        viewport={VIEWPORT}
+        title="R1 properties"
+        selectionKey="component:r1"
+        suspended={false}
+        onDismiss={() => {}}
+      >
+        <input aria-label="Value" defaultValue="1k" />
+      </SelectionInspector>,
+    );
+    expect(panel()).toBeTruthy();
+  });
+});
+
 describe("selection inspector - focus", () => {
   it("does not steal focus when a part is selected", () => {
     // The single most likely bug in the whole redesign. If selecting a part

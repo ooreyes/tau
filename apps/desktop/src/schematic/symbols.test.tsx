@@ -625,9 +625,12 @@ describe("symbol geometry remediation: sources, capacitors, and light arrows", (
   );
 
   it.each(["red", "amber", "yellow", "green", "blue", "white", "custom"] as const)(
-    "renders the selected LED color class for %s",
+    "renders the selected LED color class on emission arrows only for %s",
     (color) => {
-      expect(renderWith("led", `LED color=${color}`)).toContain(`led-artwork led-color-${color}`);
+      const markup = renderWith("led", `LED color=${color}`);
+      expect(markup).toContain(`led-light-arrows led-color-${color}`);
+      expect(markup).toContain('data-led-body="junction"');
+      expect(markup).not.toContain(`data-led-body="junction" class="led-color-${color}`);
     },
   );
 
@@ -664,6 +667,27 @@ describe("symbol geometry remediation: sources, capacitors, and light arrows", (
       { id: "a", label: "+", x: -32, y: 0 },
       { id: "b", label: "−", x: 32, y: 0 },
     ]);
+    expect(markup).toContain('data-polarity-mark="positive"');
+  });
+
+  it.each(["diode", "led", "zener", "photodiode"] as const)(
+    "%s visibly distinguishes anode from cathode",
+    (kind) => {
+      const markup = renderWith(kind);
+      expect(markup).toContain('data-polarity-mark="anode"');
+      expect(markup).toContain('data-polarity-mark="cathode"');
+    },
+  );
+
+  it.each([
+    ["vsource", undefined],
+    ["vsource", "SINE(0 1 1k)"],
+    ["vac", undefined],
+    ["vpulse", undefined],
+  ] as const)("%s keeps positive and negative source references visible", (kind, value) => {
+    const markup = renderWith(kind, value);
+    expect(markup).toContain('data-polarity-mark="positive"');
+    expect(markup).toContain('data-polarity-mark="negative"');
   });
 });
 
@@ -1480,15 +1504,13 @@ describe("contacts draw their state (item 6)", () => {
     }
   });
 
-  it("shows the switch control pair as two open terminals, not a rectangle", () => {
+  it("gives a native SPST no phantom control targets while preserving imported ones", () => {
     const markup = renderWith("switch", "open");
-    expect(markup).toContain('data-switch-control="voltage"');
-    expect(markup).not.toContain('x1="-16" y1="16" x2="16" y2="16"');
-    expect(markup).toContain('cx="-16" cy="16" r="2.5"');
-    expect(markup).toContain('cx="16" cy="16" r="2.5"');
-    // Both control pins stay present and unshorted; the lower pair is a
-    // presentation change, not a schema or netlist change.
-    expect(conducts("switch", "open", "cp", "cn")).toBe(false);
+    expect(markup).not.toContain('data-switch-control="voltage"');
+    expect(renderWithImported("switch", "open")).toContain('data-switch-control="voltage"');
+    expect(renderWith("switch", "MYSW")).toContain('data-switch-control="voltage"');
+    // The kind-only dictionary remains the importer's voltage-controlled
+    // switch bank, while a placed part gets only its static A/B path.
     expect(getLocalPins("switch").filter((pin) => pin.id === "cp" || pin.id === "cn")).toEqual([
       { id: "cp", label: "NC+", x: -16, y: 32 },
       { id: "cn", label: "NC-", x: 16, y: 32 },
@@ -1524,5 +1546,18 @@ describe("contacts draw their state (item 6)", () => {
           .sort();
       expect(contacts(open), `${kind} contacts move`).toEqual(contacts(closed));
     }
+  });
+
+  it("draws a relay as one NO contact and one independently wired coil", () => {
+    const markup = renderWith("relay", "100");
+    expect(markup).toContain('data-relay-contact="normally-open"');
+    expect(markup).toContain('data-relay-coil="body"');
+    expect(markup).toContain('data-relay-coil="winding"');
+    expect(getLocalPins("relay").map((pin) => ({ id: pin.id, label: pin.label }))).toEqual([
+      { id: "a", label: "COM" },
+      { id: "b", label: "NO" },
+      { id: "cp", label: "COIL+" },
+      { id: "cn", label: "COIL-" },
+    ]);
   });
 });

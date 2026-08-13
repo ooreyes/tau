@@ -45,7 +45,7 @@ export const COMPONENT_DISPLAY_NAME: Record<ComponentKind, string> = {
 
   // Semiconductors
   diode: "Diode",
-  led: "LED",
+  led: "Generic LED",
   zener: "Zener diode",
   photodiode: "Photodiode",
   npn: "NPN bipolar transistor",
@@ -81,7 +81,7 @@ export const COMPONENT_DISPLAY_NAME: Record<ComponentKind, string> = {
   sampleHold: "Sample and hold",
 
   // Electromechanical
-  switch: "Switch",
+  switch: "SPST switch",
   pushButton: "Push button",
   spdt: "SPDT switch",
   relay: "Relay",

@@ -91,6 +91,11 @@ describe("Library catalog contract", () => {
     ]);
   });
 
+  it("names native semiconductor and contact defaults without pretending they are vendor parts", () => {
+    expect(CATALOG.find((entry) => entry.kind === "led")?.name).toBe("Generic LED");
+    expect(CATALOG.find((entry) => entry.kind === "switch")?.name).toBe("SPST Switch");
+  });
+
   it("gives every component visible symbol geometry, pins, and finite bounds", () => {
     for (const entry of CATALOG) {
       const markup = renderToStaticMarkup(<svg><ComponentSymbol kind={entry.kind} /></svg>);

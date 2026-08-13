@@ -8,20 +8,18 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ComponentSymbol } from "./symbols";
 
 /**
- * P3-03 — "The LED should not have a color" (in the parts list).
+ * P4-10 — an LED's selected colour belongs only on emitted-light arrows.
  *
- * The tint itself is correct: an LED's colour is a real parameter, it drives
- * `Vf`, and the canvas must keep showing it. What was wrong is the CONTEXT.
- * The palette, the command palette's part search and the placement ghost are
- * indexes of part TYPES, and a type has no colour — so a red LED row beside a
- * monochrome Diode row read as an app that had lost its mind rather than as
- * information (`screenshots/pdf3-report/img-002-002.png`).
+ * The tint itself is correct: an LED's colour is a real parameter and its
+ * arrows must keep showing it on the canvas. The diode junction must remain
+ * ordinary schematic ink, and every type index remains monochrome.
  *
  * Two mechanisms carry the fix, and this file measures both because they fail
  * independently:
  *
- *  1. `ComponentSymbol`'s `catalog` flag omits the `led-color-*` class in the
- *     surfaces this lane owns (`Palette.tsx`). Asserted as markup.
+ *  1. `ComponentSymbol` places `led-color-*` only on its emitted-arrow child
+ *     group; `catalog` omits it in the surfaces this lane owns (`Palette.tsx`).
+ *     Asserted as markup.
  *  2. `styles/sourceSymbols.css` neutralizes the tint for the two type-index
  *     surfaces this lane does NOT own (`CommandPalette.tsx`'s `.cmdk-icon`,
  *     `Canvas.tsx`'s `.ghost`), where the prop cannot be passed without a
@@ -61,12 +59,13 @@ function rulesMatching(css: string, selectorPattern: RegExp): string[] {
 
 /**
  * The cascade the LED artwork actually sits in. `.symbol` supplies the canvas
- * stroke, the seven `led-color-*` rules are the tint under test, and the
- * palette-preview / ghost rules are the two contexts with their own stroke.
+ * stroke, `sourceSymbols.css` places the seven `led-color-*` rules on arrows,
+ * and the palette-preview / ghost rules are the two contexts with their own
+ * stroke.
  */
 function cascadeUnderTest(): string {
   const symbolBase = rulesMatching(APP_CSS, /^\.symbol$/);
-  const ledColors = rulesMatching(APP_CSS, /^\.symbol \.led-artwork\.led-color-/);
+  const ledColors = rulesMatching(SOURCE_SYMBOLS_CSS, /^\.symbol \.led-light-arrows\.led-color-/);
   const previewStroke = rulesMatching(APP_CSS, /^\.symbol-preview \.symbol$/);
   const ghostStroke = rulesMatching(APP_CSS, /^\.ghost \.symbol$/);
   // Guard the extraction itself: a silently-empty stylesheet would make every
@@ -77,12 +76,11 @@ function cascadeUnderTest(): string {
   expect(ghostStroke, ".ghost .symbol").toHaveLength(1);
   return [
     ...symbolBase,
-    ...ledColors,
     ...previewStroke,
     ...ghostStroke,
     // Loaded after App.css in App.tsx, so its equal-specificity rules win on
     // order — the same cascade position the running app gives it.
-    ...rulesMatching(SOURCE_SYMBOLS_CSS, /led-artwork/),
+    ...rulesMatching(SOURCE_SYMBOLS_CSS, /led-light-arrows/),
   ].join("\n");
 }
 
@@ -98,6 +96,12 @@ const ledArtwork = (container: HTMLElement): Element => {
   const artwork = container.querySelector(".led-artwork");
   expect(artwork, "led artwork group").toBeTruthy();
   return artwork!;
+};
+
+const ledArrows = (container: HTMLElement): Element => {
+  const arrows = container.querySelector(".led-light-arrows");
+  expect(arrows, "LED light-arrow group").toBeTruthy();
+  return arrows!;
 };
 
 afterEach(() => {
@@ -117,7 +121,9 @@ describe("P3-03 the LED is tinted on the canvas and monochrome in a parts index"
     const canvasMarkup = render(
       <svg><g className="symbol"><ComponentSymbol kind="led" value="LED" /></g></svg>,
     ).container.innerHTML;
-    expect(canvasMarkup).toContain("led-artwork led-color-red");
+    expect(canvasMarkup).toContain("led-light-arrows led-color-red");
+    expect(canvasMarkup).toContain('data-led-body="junction"');
+    expect(canvasMarkup).not.toContain("data-led-body=\"junction\" class=\"led-color-");
   });
 
   it("draws the same LED artwork in a catalog glyph, minus only the tint", () => {
@@ -135,21 +141,22 @@ describe("P3-03 the LED is tinted on the canvas and monochrome in a parts index"
     const container = mountWithCascade(
       <svg className="palette-icon"><g className="symbol"><ComponentSymbol kind="led" value="LED" catalog /></g></svg>,
     );
-    expect(getComputedStyle(ledArtwork(container)).stroke).toBe("var(--comp)");
+    expect(getComputedStyle(ledArrows(container)).stroke).toBe("var(--comp)");
   });
 
   it("resolves a symbol-preview LED through the preview accent, not --led-red", () => {
     const container = mountWithCascade(
       <div className="symbol-preview"><svg><g className="symbol"><ComponentSymbol kind="led" value="LED" catalog /></g></svg></div>,
     );
-    expect(getComputedStyle(ledArtwork(container)).stroke).toBe("var(--accent)");
+    expect(getComputedStyle(ledArrows(container)).stroke).toBe("var(--accent)");
   });
 
   it("keeps a canvas LED resolving through its colour token, so Vf and the tint stay coupled", () => {
     const container = mountWithCascade(
       <svg><g className="symbol"><ComponentSymbol kind="led" value="LED color=green" /></g></svg>,
     );
-    expect(getComputedStyle(ledArtwork(container)).stroke).toBe("var(--led-green)");
+    expect(getComputedStyle(ledArrows(container)).stroke).toBe("var(--led-green)");
+    expect(getComputedStyle(ledArtwork(container)).stroke).toBe("var(--comp)");
   });
 
   it("resolves a command-palette LED through the monochrome stroke, though that surface cannot pass the flag", () => {
@@ -160,7 +167,7 @@ describe("P3-03 the LED is tinted on the canvas and monochrome in a parts index"
     const container = mountWithCascade(
       <svg className="cmdk-icon"><g className="symbol"><ComponentSymbol kind="led" /></g></svg>,
     );
-    expect(getComputedStyle(ledArtwork(container)).stroke).toBe("var(--comp)");
+    expect(getComputedStyle(ledArrows(container)).stroke).toBe("var(--comp)");
   });
 
   it("resolves a placement-ghost LED through the ghost accent, so the preview is not a red part", () => {
@@ -170,6 +177,6 @@ describe("P3-03 the LED is tinted on the canvas and monochrome in a parts index"
     const container = mountWithCascade(
       <svg><g className="ghost"><g className="symbol"><ComponentSymbol kind="led" /></g></g></svg>,
     );
-    expect(getComputedStyle(ledArtwork(container)).stroke).toBe("var(--accent)");
+    expect(getComputedStyle(ledArrows(container)).stroke).toBe("var(--accent)");
   });
 });

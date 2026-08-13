@@ -1,4 +1,5 @@
 import { GATE_INPUTS_MAX, parseDigitalGate } from "../engine/digitalGateSpec";
+import { isStaticSwitchValue } from "./kindGroups";
 import type { ComponentKind, Point, Rotation, SchematicComponent } from "./types";
 // From `symbolGeometry.ts`, not from `symbols.tsx`: the pin table is on the
 // netlist's import path and therefore on the solver worker's, and a worker
@@ -90,6 +91,20 @@ const DIGITAL_GATE_DICTIONARY: LocalPin[] = [
   { id: "qbar", label: "Q̅", x: 32, y: GATE_PAIR_Y },
   { id: "com", label: "COM", ...gateComPoint(GATE_INPUTS_MAX) },
 ];
+
+/**
+ * LTspice's voltage-controlled `sw` symbol has two switched-path terminals
+ * plus a control pair. Preserve that complete dictionary for import mapping;
+ * a Tau-placed SPST is deliberately the simpler two-terminal static contact.
+ */
+const SWITCH_DICTIONARY: LocalPin[] = [
+  { id: "a", label: "A", x: -32, y: 0 },
+  { id: "b", label: "B", x: 32, y: 0 },
+  { id: "cp", label: "NC+", x: -16, y: 32 },
+  { id: "cn", label: "NC-", x: 16, y: 32 },
+];
+
+const STATIC_SWITCH_PINS: LocalPin[] = SWITCH_DICTIONARY.slice(0, 2);
 
 const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
   resistor: TWO_TERMINAL_PINS,
@@ -348,17 +363,9 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "a", label: "A", x: -32, y: 0 },
     { id: "b", label: "B", x: 32, y: 0 },
   ],
-  // Voltage-controlled switch (LTspice sw.asy): the switched path A/B plus the
-  // NC+/NC- control pair, in SpiceOrder so an imported symbol's pins zip 1:1.
-  // The control pair is optional - a switch with it unwired holds the static
-  // open/closed state instead (engine/spiceNetlist.ts), so extractCircuit does
-  // not report those two pins as unconnected.
-  switch: [
-    { id: "a", label: "A", x: -32, y: 0 },
-    { id: "b", label: "B", x: 32, y: 0 },
-    { id: "cp", label: "NC+", x: -16, y: 32 },
-    { id: "cn", label: "NC-", x: 16, y: 32 },
-  ],
+  // Imported LTspice `sw.asy` parts keep this full bank through a pin override.
+  // `getLocalPins(kind, value)` narrows a native switch to STATIC_SWITCH_PINS.
+  switch: SWITCH_DICTIONARY,
   // SPST momentary: same electrical path as a static switch, no control pins.
   pushButton: [
     { id: "a", label: "A", x: -32, y: 0 },
@@ -370,10 +377,11 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "no", label: "NO", x: 32, y: -16 },
     { id: "nc", label: "NC", x: 32, y: 16 },
   ],
-  // Relay: contact A/B + coil COIL+/COIL-. Coil R + V-controlled SW contact.
+  // Relay: NO contact COM/NO + coil COIL+/COIL-. The stable `a`/`b` ids keep
+  // existing decks valid; labels describe the electrical roles on the canvas.
   relay: [
-    { id: "a", label: "A", x: -32, y: 0 },
-    { id: "b", label: "B", x: 32, y: 0 },
+    { id: "a", label: "COM", x: -32, y: 0 },
+    { id: "b", label: "NO", x: 32, y: 0 },
     { id: "cp", label: "COIL+", x: -16, y: 32 },
     { id: "cn", label: "COIL-", x: 16, y: 32 },
   ],
@@ -420,7 +428,8 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
  * Local (unrotated) terminals for a kind.
  *
  * Called with a `value` this is the bank **this instance** exposes — the only
- * kind that differs today is `digitalGate`, whose input count is configurable.
+ * kinds that differ today are `digitalGate`, whose input count is configurable,
+ * and the native `switch`, which is a two-terminal static contact.
  * Called with only a kind it is the full DICTIONARY of terminals the kind can
  * ever expose, which is what the LTspice importer needs: `buildPinOverride`
  * maps an `.asy`'s pin names onto Tau roles through this table, so narrowing it
@@ -432,6 +441,9 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
 export function getLocalPins(kind: ComponentKind, value?: string): LocalPin[] {
   if (kind === "digitalGate" && value !== undefined) {
     return digitalGatePins(parseDigitalGate(value).inputs);
+  }
+  if (kind === "switch" && value !== undefined) {
+    return isStaticSwitchValue(value) ? STATIC_SWITCH_PINS : SWITCH_DICTIONARY;
   }
   return LOCAL_PINS[kind];
 }

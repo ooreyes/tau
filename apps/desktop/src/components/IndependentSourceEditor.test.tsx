@@ -275,7 +275,7 @@ describe("P3-01 walking the waveform changes every surface of the part's identit
     expect(now.title).toBe("DC source");
     expect(now.value).toBe("5");
     expect(now.caption).toBe("5 V");
-    expect(now.fields).toEqual(["Waveform", "DC level", "Small-signal AC (.ac)"]);
+    expect(now.fields).toEqual(["Waveform", "DC level"]);
     expect(sourceCard(now.value)).toBe("V1 n001 0 DC 5");
     expect(ascRoundTripValue(now.value)).toBe("5");
 
@@ -288,7 +288,6 @@ describe("P3-01 walking the waveform changes every surface of the part's identit
     expect(now.caption).toBe("Sine · 1 V @ 1k Hz");
     expect(now.fields).toEqual([
       "Waveform", "Offset", "Amplitude", "Frequency", "Start delay", "Damping", "Phase", "Cycles",
-      "Small-signal AC (.ac)",
     ]);
     expect(now.fields).not.toContain("DC operating point");
     expect(sourceCard(now.value)).toBe("V1 n001 0 DC 5 SIN(5 1 1000)");
@@ -303,7 +302,7 @@ describe("P3-01 walking the waveform changes every surface of the part's identit
     expect(now.caption).toBe("Pulse · 5 V→10 V");
     expect(now.fields).toEqual([
       "Waveform", "Low level", "High level", "Start delay", "Rise time", "Fall time", "On time",
-      "Period", "Cycles", "Small-signal AC (.ac)",
+      "Period", "Cycles",
     ]);
     expect(sourceCard(now.value)).toBe("V1 n001 0 DC 5 PULSE(5 10 0 1e-9 1e-9 0.000005 0.00001)");
     expect(ascRoundTripValue(now.value)).toBe("PULSE(5 10 0 1n 1n 5u 10u)");
@@ -313,19 +312,42 @@ describe("P3-01 walking the waveform changes every surface of the part's identit
     expect(now.title).toBe("DC source");
     expect(now.value).toBe("5");
     expect(now.caption).toBe("5 V");
-    expect(now.fields).toEqual(["Waveform", "DC level", "Small-signal AC (.ac)"]);
+    expect(now.fields).toEqual(["Waveform", "DC level"]);
     expect(sourceCard(now.value)).toBe("V1 n001 0 DC 5");
   });
 
-  it("keeps small-signal AC (.ac) available on every waveform - it is a stimulus, not a waveform", () => {
+  it("keeps the AC analysis disclosure available on every waveform - it is a stimulus, not a waveform", () => {
     render(<Harness initial="5" />);
     for (const waveform of ["Sine", "Pulse", "Piecewise linear", "Exponential", "Single-frequency FM", "DC"]) {
       chooseWaveform(waveform);
       expect(
-        screen.getByLabelText("Enable small-signal AC stimulus for .ac analysis"),
+        screen.getByRole("button", { name: "Toggle AC analysis stimulus" }),
         waveform,
       ).toBeTruthy();
     }
+  });
+
+  it("keeps AC collapsed until requested, then explains and edits the .ac-only stimulus", () => {
+    const { onValueChange } = renderSource("5");
+
+    expect(screen.queryByLabelText("Enable small-signal AC stimulus for .ac analysis")).toBeNull();
+    const disclosure = screen.getByRole("button", { name: "Toggle AC analysis stimulus" });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(disclosure);
+
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Sets the small-signal excitation for .ac; it does not change this source’s time-domain waveform.")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Enable small-signal AC stimulus for .ac analysis"));
+    expect(onValueChange).toHaveBeenLastCalledWith("5 AC 1");
+  });
+
+  it("opens the AC analysis disclosure for an authored stimulus without changing its value", () => {
+    renderSource("5 AC 2 45");
+
+    expect(screen.getByRole("button", { name: "Toggle AC analysis stimulus" }).getAttribute("aria-expanded")).toBe("true");
+    expect((screen.getByRole("textbox", { name: "AC amplitude" }) as HTMLInputElement).value).toBe("2");
+    expect((screen.getByRole("textbox", { name: "AC phase (°)" }) as HTMLInputElement).value).toBe("45");
   });
 
   it("gives each waveform switch its own begin-change key, so undo steps back one waveform at a time", () => {

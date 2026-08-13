@@ -106,15 +106,17 @@ describe("an independent source is named for its waveform", () => {
     }
   });
 
-  it("leaves the one-argument answer and every non-source kind exactly as they were", () => {
-    // 27 existing call sites still pass a bare kind; none of their answers moved.
+  it("keeps bare kinds stable apart from the explicit PDF4 terminology", () => {
+    // 27 existing call sites still pass a bare kind; source identities remain
+    // stable, while LED/SPST spelling is deliberately more specific in PDF4.
     expect(componentDisplayName("vsource")).toBe("DC source");
     expect(componentDisplayName("isource")).toBe("Current source");
     expect(componentDisplayName("vac")).toBe("Sine voltage source");
     // A value on a kind that has no waveform is ignored, so callers may always
     // pass the whole component without checking what it is first.
     expect(componentDisplayName("resistor", "1k")).toBe("Resistor");
-    expect(componentDisplayName("led", "LED color=green")).toBe("LED");
+    expect(componentDisplayName("led", "LED color=green")).toBe("Generic LED");
+    expect(componentDisplayName("switch", "open")).toBe("SPST switch");
     expect(componentDisplayName("notAKind", "anything")).toBe("notAKind");
   });
 });

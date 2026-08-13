@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSchematic } from "../store/useSchematic";
 import { PALETTE_SECTIONS } from "../schematic/catalog";
 import {
+  allPaletteItems,
   matchPaletteItems,
   paletteItemsForSection,
   type PaletteItemSpec,
@@ -59,6 +60,18 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
     tool.kind === item.kind &&
     (tool.value === undefined ? item.value === undefined || item.id === item.kind : tool.value === item.value);
 
+  // A keyboard selection can make a row active without a pointer entering it.
+  // Follow that active row as well as hover/focus so the viewer always shows
+  // the currently highlighted catalog item using the exact ComponentSymbol
+  // geometry, including five-terminal CT transformers.
+  const activeItem = useMemo(
+    () => tool.mode === "place" ? allPaletteItems().find((item) => isActive(item)) ?? null : null,
+    [tool],
+  );
+  useEffect(() => {
+    if (activeItem) setPreview({ kind: activeItem.kind, name: activeItem.name, value: activeItem.value });
+  }, [activeItem]);
+
   const place = (item: PaletteItemSpec) => {
     setPreview({ kind: item.kind, name: item.name, value: item.value });
     startPlacing(item.kind, item.value);
@@ -111,6 +124,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                     item={item}
                     active={isActive(item)}
                     onPlace={() => place(item)}
+                    onPreview={() => setPreview({ kind: item.kind, name: item.name, value: item.value })}
                   />
                 ))}
               </div>
@@ -144,6 +158,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                           item={item}
                           active={isActive(item)}
                           onPlace={() => place(item)}
+                          onPreview={() => setPreview({ kind: item.kind, name: item.name, value: item.value })}
                         />
                       ))}
                     </div>
@@ -226,7 +241,12 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
       <div className="symbol-preview">
         <span>symbol</span>
         <div>
-          <svg viewBox="-44 -40 88 80">
+          <svg
+            viewBox="-44 -40 88 80"
+            role="img"
+            aria-label={`${preview.name} symbol`}
+            data-component-preview={preview.kind}
+          >
             <g className="symbol">
               {/* `catalog`: this panel previews the part TYPE under the
                   cursor, so an LED here must not wear its colour parameter.
@@ -246,9 +266,10 @@ interface PaletteItemProps {
   item: PaletteItemSpec;
   active: boolean;
   onPlace: () => void;
+  onPreview: () => void;
 }
 
-function PaletteItem({ item, active, onPlace }: PaletteItemProps) {
+function PaletteItem({ item, active, onPlace, onPreview }: PaletteItemProps) {
   return (
     <button
       className={`palette-item${active ? " active" : ""}`}
@@ -261,6 +282,8 @@ function PaletteItem({ item, active, onPlace }: PaletteItemProps) {
         onPlace();
         ev.currentTarget.blur();
       }}
+      onMouseEnter={onPreview}
+      onFocus={onPreview}
     >
       <svg className="palette-icon" viewBox="-42 -40 84 80">
         <g className="symbol">

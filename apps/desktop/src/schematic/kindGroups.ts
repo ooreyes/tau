@@ -42,6 +42,25 @@ export function isStaticContactClosed(value: string): boolean {
     || state === "1";
 }
 
+/**
+ * Tau's palette SPST values are deliberately a small static vocabulary. Any
+ * other switch value is an authored model identity (for example `MYSW`) and
+ * must retain the voltage-control terminals its deck needs; treating it as an
+ * open static contact would silently discard that authored behavior.
+ */
+export function isStaticSwitchValue(value: string): boolean {
+  const head = value.trim().toLowerCase().split(/\s+/, 1)[0] ?? "";
+  return head === ""
+    || head === "open"
+    || head === "closed"
+    || head === "pressed"
+    || head === "on"
+    || head === "off"
+    || head === "no"
+    || head === "0"
+    || head === "1";
+}
+
 /** SPDT throw toward the normally-open pole (default). NC / 2 → other pole. */
 export function isSpdtThrowToNo(value: string): boolean {
   const state = value.trim().toLowerCase();

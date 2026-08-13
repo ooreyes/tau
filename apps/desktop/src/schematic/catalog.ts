@@ -69,7 +69,7 @@ export const CATALOG: CatalogEntry[] = [
   // starter. Naming a manufacturer part instead - here or from the Simulation
   // model dropdown - is the intended way to get real device behaviour.
   { kind: "diode",         section: "Semiconductors",    name: "Diode",           hotkey: "d", prefix: "D",   defaultValue: "D",     unit: "" },
-  { kind: "led",           section: "Semiconductors",    name: "LED",             hotkey: "e", prefix: "D",   defaultValue: "LED",   unit: "" },
+  { kind: "led",           section: "Semiconductors",    name: "Generic LED",     hotkey: "e", prefix: "D",   defaultValue: "LED",   unit: "" },
   { kind: "zener",         section: "Semiconductors",    name: "Zener",           hotkey: "z", prefix: "D",   defaultValue: "5V1",   unit: "" },
   { kind: "photodiode",    section: "Semiconductors",    name: "Photodiode",      hotkey: "",  prefix: "D",   defaultValue: "100u",  unit: "A" },
   { kind: "npn",           section: "Semiconductors",    name: "NPN",             hotkey: "q", prefix: "Q",   defaultValue: "NPN",   unit: "" },
@@ -121,7 +121,7 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "sampleHold",    section: "Digital",           name: "Sample & Hold",   hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
 
   // ── Electromechanical (switches → actuators → magnetics) ─────────────────
-  { kind: "switch",        section: "Electromechanical", name: "Switch",          hotkey: "s", prefix: "S",   defaultValue: "open",  unit: "" },
+  { kind: "switch",        section: "Electromechanical", name: "SPST Switch",     hotkey: "s", prefix: "S",   defaultValue: "open",  unit: "" },
   { kind: "pushButton",    section: "Electromechanical", name: "Push Button",     hotkey: "",  prefix: "S",   defaultValue: "open",  unit: "" },
   { kind: "spdt",          section: "Electromechanical", name: "SPDT",            hotkey: "",  prefix: "S",   defaultValue: "no",    unit: "" },
   // Coil R + voltage-controlled contact (TAU_SW). Value = coil ohms.

@@ -1,7 +1,7 @@
 import { nativelyPlacedGateSpec, parseDigitalGate } from "../engine/digitalGateSpec";
 import { ledColorFromValue } from "../engine/ledSpec";
 import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
-import { isSpdtThrowToNo, isStaticContactClosed } from "./kindGroups";
+import { isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchValue } from "./kindGroups";
 import type { ComponentKind, Rotation } from "./types";
 import {
   GATE_COM_Y,
@@ -328,6 +328,17 @@ function VoltageSourceOutput() {
       <path d="M 7 -5 H 13 M 10 -8 V -2" />
       <path d="M 7 5 H 13" />
     </g>
+  );
+}
+
+/** Terminal-reference marks for every voltage-source waveform, not just DC. */
+function SourcePolarityMarks({ side = 0 }: { side?: number }) {
+  const x = side || 0;
+  return (
+    <>
+      <path data-polarity-mark="positive" d={`M ${x - 4} -7 H ${x + 4} M ${x} -11 V -3`} />
+      <path data-polarity-mark="negative" d={`M ${x - 4} 8 H ${x + 4}`} />
+    </>
   );
 }
 
@@ -861,7 +872,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   // box did not contain either, so a button's label could land on its stem.
   pushButton: { minX: -18, minY: -22, maxX: 18, maxY: 3 },
   spdt: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
-  relay: { minX: -18, minY: -20, maxX: 18, maxY: 22 },
+  relay: { minX: -18, minY: -14, maxX: 18, maxY: 28 },
   // Same artwork as the bulb — an r = 14 glass with a glyph inside it — so it
   // gets the bulb's box. It claimed ±16 while drawing ±14, and an over-declared
   // body pushes labels and hit-testing away from a part that was never that big.
@@ -921,7 +932,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   switch: { halfW: 14, halfH: 20 },
   pushButton: { halfW: 18, halfH: 22 },
   spdt: { halfW: 16, halfH: 22 },
-  relay: { halfW: 16, halfH: 22 },
+  relay: { halfW: 16, halfH: 28 },
   motor: { halfW: 16, halfH: 16 },
   transformer: { halfW: 24, halfH: 24 },
   ctTransformer: { halfW: 26, halfH: 30 },
@@ -1020,7 +1031,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <line data-cap-plate="straight" x1={-6} y1={-13} x2={-6} y2={13} strokeWidth={2.5} />
           <path data-cap-plate="curved" d="M 4 -13 C 14 -7 14 7 4 13" fill="none" />
           <line data-cap-lead="b" x1={15} y1={0} x2={32} y2={0} />
-          <path d="M -18 -8 H -12 M -15 -11 V -5" />
+          <path data-polarity-mark="positive" d="M -18 -8 H -12 M -15 -11 V -5" />
         </>
       );
 
@@ -1047,6 +1058,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
             <line x1={0} y1={-pin} x2={0} y2={-r} />
             <circle cx={0} cy={0} r={r} />
             <CenteredSineGlyph />
+            <SourcePolarityMarks side={8} />
             <line x1={0} y1={r} x2={0} y2={pin} />
           </>
         );
@@ -1056,11 +1068,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
         <>
           <line x1={0} y1={-pin} x2={0} y2={-r} />
           <circle cx={0} cy={0} r={r} />
-          {/* + */}
-          <line x1={-4} y1={-6} x2={4} y2={-6} />
-          <line x1={0} y1={-10} x2={0} y2={-2} />
-          {/* − */}
-          <line x1={-4} y1={7} x2={4} y2={7} />
+          <SourcePolarityMarks />
           <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );
@@ -1102,6 +1110,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <line x1={0} y1={-pin} x2={0} y2={-r} />
           <circle cx={0} cy={0} r={r} />
           <CenteredSineGlyph />
+          <SourcePolarityMarks side={8} />
           <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );
@@ -1125,6 +1134,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <circle cx={0} cy={0} r={r} />
           {/* pulse train: low-high-low-high */}
           <path data-pulse-glyph="" d="M -10 5 L -10 -5 L -2 -5 L -2 5 L 6 5 L 6 -5 L 10 -5" />
+          <SourcePolarityMarks side={8} />
           <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );
@@ -1148,27 +1158,39 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <line x1={10} y1={-14} x2={10} y2={14} />
           <line x1={10} y1={0} x2={32} y2={0} />
+          <g data-polarity-mark="anode" aria-hidden="true">
+            <path d="M -23 -8 H -17 M -20 -11 V -5" />
+          </g>
+          <g data-polarity-mark="cathode" aria-hidden="true">
+            <path d="M 17 -8 H 23" />
+          </g>
         </>
       );
 
     case "led":
       return (
-        // `led-artwork` alone in a catalog context: the group is still tagged
-        // (LedGlowLayer and the tests find it by that class) but carries no
-        // colour class, so the artwork simply inherits whatever stroke its
-        // surface declares. `ledColorFromValue` is deliberately not consulted
-        // there - it answers "red" for both the catalog's bare `LED` value and
-        // for no value at all, which is why every type-index surface came out
-        // red rather than only the ones that meant to.
-        <g className={catalog ? "led-artwork" : `led-artwork led-color-${ledColorFromValue(value ?? "")}`}>
-          <line x1={-32} y1={0} x2={-12} y2={0} />
-          <path d="M -12 -13 L 10 0 L -12 13 Z" />
-          <line x1={10} y1={-14} x2={10} y2={14} />
-          <line x1={10} y1={0} x2={32} y2={0} />
+        // Only emitted-light arrows carry an LED's selected colour. The diode
+        // body remains ordinary schematic ink, which preserves the polarity
+        // cue and stops a coloured body from reading as a different device.
+        <g className="led-artwork">
+          <g data-led-body="junction">
+            <line x1={-32} y1={0} x2={-12} y2={0} />
+            <path d="M -12 -13 L 10 0 L -12 13 Z" />
+            <line x1={10} y1={-14} x2={10} y2={14} />
+            <line x1={10} y1={0} x2={32} y2={0} />
+            <g data-polarity-mark="anode" aria-hidden="true">
+              <path d="M -23 -8 H -17 M -20 -11 V -5" />
+            </g>
+            <g data-polarity-mark="cathode" aria-hidden="true">
+              <path d="M 17 -8 H 23" />
+            </g>
+          </g>
           {/* Two outward arrows share a diagonal lane but keep a clear gap
               between their heads at selected stroke weight. */}
-          <path data-light-arrow="one" d="M 18 -20 L 31 -33 M 31 -33 L 29 -25 M 31 -33 L 23 -31" />
-          <path data-light-arrow="two" d="M 5 -20 L 18 -33 M 18 -33 L 16 -25 M 18 -33 L 10 -31" />
+          <g className={catalog ? "led-light-arrows" : `led-light-arrows led-color-${ledColorFromValue(value ?? "")}`}>
+            <path data-light-arrow="one" d="M 18 -20 L 31 -33 M 31 -33 L 29 -25 M 31 -33 L 23 -31" />
+            <path data-light-arrow="two" d="M 5 -20 L 18 -33 M 18 -33 L 16 -25 M 18 -33 L 10 -31" />
+          </g>
         </g>
       );
 
@@ -1179,6 +1201,12 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <path d="M 10 -14 V 14 M 10 -14 L 16 -18 M 10 14 L 4 18" />
           <line x1={10} y1={0} x2={32} y2={0} />
+          <g data-polarity-mark="anode" aria-hidden="true">
+            <path d="M -23 -8 H -17 M -20 -11 V -5" />
+          </g>
+          <g data-polarity-mark="cathode" aria-hidden="true">
+            <path d="M 17 -8 H 23" />
+          </g>
         </>
       );
 
@@ -1189,6 +1217,12 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <path d="M -12 -13 L 10 0 L -12 13 Z" />
           <line x1={10} y1={-14} x2={10} y2={14} />
           <line x1={10} y1={0} x2={32} y2={0} />
+          <g data-polarity-mark="anode" aria-hidden="true">
+            <path d="M -23 -8 H -17 M -20 -11 V -5" />
+          </g>
+          <g data-polarity-mark="cathode" aria-hidden="true">
+            <path d="M 17 -8 H 23" />
+          </g>
           {/* Incoming light arrows (opposite of LED emission arrows). */}
           <path data-light-arrow="one" d="M 31 -33 L 18 -20 M 18 -20 L 20 -28 M 18 -20 L 26 -22" />
           <path data-light-arrow="two" d="M 18 -33 L 5 -20 M 5 -20 L 7 -28 M 5 -20 L 13 -22" />
@@ -1566,16 +1600,17 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           ) : (
             <line data-contact="open" x1={-12} y1={0} x2={9} y2={-15} />
           )}
-          {/* NC+/NC− control pair (unwired → the static state above holds).
-              These are separate voltage-sense terminals, not a conductor: the
-              old joining bar made the pair look like an unrelated rectangle
-              and visually shorted the control indication. */}
-          <g data-switch-control="voltage">
-            <line x1={-16} y1={32} x2={-16} y2={16} />
-            <circle cx={-16} cy={16} r={2.5} />
-            <line x1={16} y1={32} x2={16} y2={16} />
-            <circle cx={16} cy={16} r={2.5} />
-          </g>
+          {/* A native Tau switch is SPST: A/B are its only electrical targets.
+              An imported LTspice `sw.asy` retains its real NC+/NC− override
+              bank and gets these two separate sense terminals back. */}
+          {(imported || !isStaticSwitchValue(value ?? "")) && (
+            <g data-switch-control="voltage">
+              <line x1={-16} y1={32} x2={-16} y2={16} />
+              <circle cx={-16} cy={16} r={2.5} />
+              <line x1={16} y1={32} x2={16} y2={16} />
+              <circle cx={16} cy={16} r={2.5} />
+            </g>
+          )}
         </>
       );
     }
@@ -1626,13 +1661,17 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
     case "relay":
       return (
         <>
+          {/* A normally-open relay has four real terminals: COM/NO for the
+              contact and COIL+/COIL− for the winding. The blade pivots at COM
+              and stops short of NO, so no painted dot suggests a fifth wire
+              target or a closed contact that the deck does not have. */}
           <line x1={-32} y1={0} x2={-12} y2={0} />
           <line x1={12} y1={0} x2={32} y2={0} />
           <circle cx={-12} cy={0} r={3} />
           <circle cx={12} cy={0} r={3} />
-          <line x1={-10} y1={-3} x2={11} y2={-14} />
-          <rect x={-14} y={14} width={28} height={14} rx={1} />
-          <path d="M -10 21 L -6 17 L -2 25 L 2 17 L 6 25 L 10 21" />
+          <line data-relay-contact="normally-open" x1={-12} y1={0} x2={7} y2={-12} />
+          <rect data-relay-coil="body" x={-14} y={14} width={28} height={14} rx={1} />
+          <path data-relay-coil="winding" d="M -10 21 L -6 17 L -2 25 L 2 17 L 6 25 L 10 21" />
           <line x1={-16} y1={32} x2={-16} y2={28} />
           <line x1={16} y1={32} x2={16} y2={28} />
         </>

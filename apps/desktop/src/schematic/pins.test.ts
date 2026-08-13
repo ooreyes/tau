@@ -177,6 +177,50 @@ describe("value-driven terminal banks (mission item 9)", () => {
   });
 });
 
+describe("P4-13 / P4-15 directed and electromechanical pin contracts", () => {
+  it("gives a native SPST only its switched path while preserving an imported control pair", () => {
+    const native: SchematicComponent = {
+      id: "s1", kind: "switch", label: "S1", value: "open", x: 0, y: 0, rotation: 0,
+    };
+    expect(getComponentPins(native).map((pin) => pin.id)).toEqual(["a", "b"]);
+    expect(getComponentPins({ ...native, value: "MYSW" }).map((pin) => pin.id))
+      .toEqual(["a", "b", "cp", "cn"]);
+    // The importer still sees LTspice sw.asy's full role dictionary when it
+    // builds a pin override, so no existing controlled-switch .asc is changed.
+    expect(getLocalPins("switch").map((pin) => pin.id)).toEqual(["a", "b", "cp", "cn"]);
+    expect(getComponentPins({
+      ...native,
+      pinOverride: [
+        { id: "a", label: "A", x: -32, y: 0 },
+        { id: "b", label: "B", x: 32, y: 0 },
+        { id: "cp", label: "NC+", x: -16, y: 32 },
+        { id: "cn", label: "NC-", x: 16, y: 32 },
+      ],
+    }).map((pin) => pin.id)).toEqual(["a", "b", "cp", "cn"]);
+  });
+
+  it("keeps SPDT and relay terminals unique and functionally named", () => {
+    expect(getLocalPins("spdt").map((pin) => pin.id)).toEqual(["com", "no", "nc"]);
+    expect(getLocalPins("relay").map((pin) => ({ id: pin.id, label: pin.label }))).toEqual([
+      { id: "a", label: "COM" },
+      { id: "b", label: "NO" },
+      { id: "cp", label: "COIL+" },
+      { id: "cn", label: "COIL-" },
+    ]);
+  });
+
+  it("carries a diode’s anode/cathode geometry through mirror and rotation", () => {
+    const diode: SchematicComponent = {
+      id: "d1", kind: "diode", label: "D1", value: "D", x: 100, y: 200, rotation: 90, mirrored: true,
+    };
+    const byId = Object.fromEntries(getComponentPins(diode).map((pin) => [pin.id, { x: pin.x, y: pin.y }]));
+    // Local A (-32, 0) mirrors to (+32, 0), then rotates to (0, +32); K does
+    // the opposite. The visible polarity marks ride the same canvas wrapper.
+    expect(byId.a).toEqual({ x: 100, y: 232 });
+    expect(byId.k).toEqual({ x: 100, y: 168 });
+  });
+});
+
 describe("digital terminals clear the palette preview (mission item 5)", () => {
   it("keeps every digital pin inside the ±42 × ±40 preview box", () => {
     // The flip-flops' PRE/CLR and every `com` used to sit at |y| = 48 and the

@@ -86,6 +86,12 @@ export interface ParamField {
   /** Stored identity used by the codec, never an editable generic knob. */
   internal?: boolean;
   description?: string;
+  /**
+   * Kind-specific syntax which cannot be expressed as a unit/range pair.
+   * Returning a message keeps an invalid draft in the editor and out of the
+   * stored schematic, exactly like numeric bounds do.
+   */
+  validate?: (raw: string) => string | null;
   /** Name used in the `Name=value` form. Defaults to `key`. */
   token?: string;
   /** Substituted when the stored value omits this field. */
@@ -147,6 +153,41 @@ const isKnownLedColor = (raw: string): boolean => {
   return normalized === "orange"
     || normalized === "amber/orange"
     || LED_COLOR_CHOICES.some((choice) => choice.value === normalized);
+};
+
+/**
+ * Transformer values are a compact little grammar, not arbitrary prose. The
+ * netlister has always accepted a turns ratio plus optional L1/L2/k terms; the
+ * inspector validates that same authored surface before it writes a value the
+ * deck would quietly fall back from.
+ */
+const transformerValueValidationMessage = (raw: string): string | null => {
+  const tokens = raw.trim().split(/\s+/).filter(Boolean);
+  const ratio = tokens.shift();
+  const ratioMatch = /^([+]?(?:\d+(?:\.\d*)?|\.\d+))\s*:\s*([+]?(?:\d+(?:\.\d*)?|\.\d+))$/.exec(ratio ?? "");
+  if (!ratioMatch || Number(ratioMatch[1]) <= 0 || Number(ratioMatch[2]) <= 0) {
+    return "Enter a positive turns ratio such as 1:1.";
+  }
+  const seen = new Set<string>();
+  for (const token of tokens) {
+    const match = /^(L1|L2|k)=([^\s]+)$/i.exec(token);
+    if (!match || seen.has(match[1].toLowerCase())) {
+      return "Use optional L1=, L2=, and k= terms after the turns ratio.";
+    }
+    seen.add(match[1].toLowerCase());
+    let numeric: number;
+    try {
+      numeric = parseQuantity(match[2], match[1].toLowerCase() === "k" ? "" : "H");
+    } catch {
+      return `${match[1]} must be a finite ${match[1].toLowerCase() === "k" ? "coupling" : "inductance"}.`;
+    }
+    if (!Number.isFinite(numeric) || numeric <= 0 || (match[1].toLowerCase() === "k" && numeric >= 1)) {
+      return match[1].toLowerCase() === "k"
+        ? "k must be greater than 0 and below 1."
+        : `${match[1]} must be greater than 0.`;
+    }
+  }
+  return null;
 };
 
 const CHARGE_CAPACITOR: ParamSpec = {
@@ -234,10 +275,14 @@ const MOSFET = (model: string): ParamSpec => ({
   // `MODEL W=<w> L=<l> KP=<kp> VTO=<vto>`; omitted keys keep netlist defaults.
   fields: [
     { key: "model", label: "Model", unit: "", bare: true, fallback: model, internal: true },
-    { key: "w", label: "Width (W)", unit: "m", kind: "number", token: "W", min: 1e-12, max: 1 },
-    { key: "l", label: "Length (L)", unit: "m", kind: "number", token: "L", min: 1e-12, max: 1 },
-    { key: "kp", label: "KP", unit: "A/V²", kind: "number", token: "KP", min: 0, max: 1e3 },
-    { key: "vto", label: "Vt (VTO)", unit: "V", kind: "number", token: "VTO", min: -100, max: 100 },
+    { key: "w", label: "Width (W)", unit: "m", kind: "number", token: "W", min: 1e-12, max: 1,
+      description: "Channel width; larger W increases drive strength." },
+    { key: "l", label: "Length (L)", unit: "m", kind: "number", token: "L", min: 1e-12, max: 1,
+      description: "Channel length; larger L reduces drive strength." },
+    { key: "kp", label: "KP", unit: "A/V²", kind: "number", token: "KP", min: 0, max: 1e3,
+      description: "Process transconductance; larger values increase drain current." },
+    { key: "vto", label: "Vt (VTO)", unit: "V", kind: "number", token: "VTO", min: -100, max: 100,
+      description: "Threshold voltage where the channel begins to conduct." },
   ],
 });
 
@@ -245,8 +290,10 @@ const GENERIC_DIODE: ParamSpec = {
   when: /^(?:d|diode)(?:\s|$)/i,
   fields: [
     { key: "model", label: "Model", unit: "", bare: true, fallback: "D", internal: true },
-    { key: "is", label: "Saturation current", unit: "A", kind: "number", token: "Is", fallback: "1e-14", min: 0, max: 1, omitWhenFallback: true },
-    { key: "n", label: "Emission coefficient", unit: "", kind: "number", token: "N", fallback: "1", min: 0.1, max: 10, omitWhenFallback: true },
+    { key: "is", label: "Saturation current", unit: "A", kind: "number", token: "Is", fallback: "1e-14", min: 0, max: 1, omitWhenFallback: true, advanced: true,
+      description: "Sets reverse leakage and shifts the forward current curve." },
+    { key: "n", label: "Emission coefficient", unit: "", kind: "number", token: "N", fallback: "1", min: 0.1, max: 10, omitWhenFallback: true,
+      description: "Shapes how sharply forward current rises with voltage." },
   ],
 };
 
@@ -262,10 +309,11 @@ const GENERIC_LED: ParamSpec = {
       fallback: "red",
       omitWhenFallback: true,
       choices: LED_COLOR_CHOICES,
+      description: "Each color starts with a typical forward voltage.",
     },
     {
       key: "vfwd",
-      label: "Typical Vf (default)",
+      label: "Forward voltage",
       unit: "V",
       kind: "number",
       token: "Vfwd",
@@ -273,6 +321,7 @@ const GENERIC_LED: ParamSpec = {
       min: 0.1,
       max: 20,
       omitWhenFallback: true,
+      description: "Uses the selected color’s default until you enter an override for this LED.",
     },
   ],
   codec: {
@@ -344,8 +393,10 @@ const GENERIC_ZENER: ParamSpec = {
   when: /^(?:zener|\d{1,3}(?:\.\d{1,2})?v(?:\d{1,2})?)(?:\s|$)/i,
   fields: [
     { key: "model", label: "Model", unit: "", bare: true, fallback: "5V1", internal: true },
-    { key: "breakdown", label: "Breakdown voltage", unit: "V", kind: "number", fallback: "5.1", min: 0.1, max: 400 },
-    { key: "vfwd", label: "Forward voltage", unit: "V", kind: "number", token: "Vfwd", fallback: "0.7", min: 0.1, max: 20, omitWhenFallback: true },
+    { key: "breakdown", label: "Breakdown voltage", unit: "V", kind: "number", fallback: "5.1", min: 0.1, max: 400,
+      description: "Reverse voltage where the zener begins to conduct." },
+    { key: "vfwd", label: "Forward voltage", unit: "V", kind: "number", token: "Vfwd", fallback: "0.7", min: 0.1, max: 20, omitWhenFallback: true,
+      description: "Forward-direction voltage drop." },
   ],
   codec: {
     form: "custom",
@@ -384,8 +435,10 @@ const GENERIC_BJT = (model: string): ParamSpec => ({
   when: new RegExp(`^${model}(?:\\s|$)`, "i"),
   fields: [
     { key: "model", label: "Model", unit: "", bare: true, fallback: model, internal: true },
-    { key: "beta", label: "Forward gain (β)", unit: "", kind: "number", token: "Bf", fallback: "100", min: 0.1, max: 1e6, omitWhenFallback: true },
-    { key: "vaf", label: "Early voltage", unit: "V", kind: "number", token: "Vaf", fallback: "100", min: 0.1, max: 1e6, omitWhenFallback: true },
+    { key: "beta", label: "Forward gain (β)", unit: "", kind: "number", token: "Bf", fallback: "100", min: 0.1, max: 1e6, omitWhenFallback: true,
+      description: "DC current gain: collector current per base current." },
+    { key: "vaf", label: "Early voltage", unit: "V", kind: "number", token: "Vaf", fallback: "100", min: 0.1, max: 1e6, omitWhenFallback: true,
+      description: "Models collector current’s change with output voltage." },
   ],
 });
 
@@ -393,8 +446,10 @@ const GENERIC_JFET = (model: string, defaultVto: string): ParamSpec => ({
   when: new RegExp(`^${model}(?:\\s|$)`, "i"),
   fields: [
     { key: "model", label: "Model", unit: "", bare: true, fallback: model, internal: true },
-    { key: "vto", label: "Pinch-off voltage", unit: "V", kind: "number", token: "Vto", fallback: defaultVto, min: -100, max: 100, omitWhenFallback: true },
-    { key: "beta", label: "Beta", unit: "A/V²", kind: "number", token: "Beta", fallback: "1m", min: 1e-12, max: 1e3, omitWhenFallback: true },
+    { key: "vto", label: "Pinch-off voltage", unit: "V", kind: "number", token: "Vto", fallback: defaultVto, min: -100, max: 100, omitWhenFallback: true,
+      description: "Gate-to-source voltage where the channel pinches off." },
+    { key: "beta", label: "Beta", unit: "A/V²", kind: "number", token: "Beta", fallback: "1m", min: 1e-12, max: 1e3, omitWhenFallback: true,
+      description: "Sets channel current versus gate voltage." },
   ],
 });
 
@@ -402,9 +457,12 @@ const GENERIC_OPAMP: ParamSpec = {
   when: /^(?:ideal|(?:gain|avol|vmin|vmax|min|max)\s*=)/i,
   fields: [
     { key: "model", label: "Model", unit: "", kind: "text", bare: true, fallback: "ideal", internal: true },
-    { key: "gain", label: "Open-loop gain", unit: "V/V", kind: "number", token: "Gain", fallback: "1Meg", min: 1, max: 1e12 },
-    { key: "vmin", label: "Minimum output", unit: "V", kind: "number", token: "Vmin", fallback: "-15", min: -1e3, max: 1e3 },
-    { key: "vmax", label: "Maximum output", unit: "V", kind: "number", token: "Vmax", fallback: "15", min: -1e3, max: 1e3 },
+    { key: "gain", label: "Open-loop gain", unit: "V/V", kind: "number", token: "Gain", fallback: "1Meg", min: 1, max: 1e12,
+      description: "Unloaded differential gain before the output reaches its limits." },
+    { key: "vmin", label: "Minimum output", unit: "V", kind: "number", token: "Vmin", fallback: "-15", min: -1e3, max: 1e3,
+      description: "Lowest output voltage this behavioral op-amp can produce." },
+    { key: "vmax", label: "Maximum output", unit: "V", kind: "number", token: "Vmax", fallback: "15", min: -1e3, max: 1e3,
+      description: "Highest output voltage this behavioral op-amp can produce." },
   ],
   codec: {
     form: "custom",
@@ -518,7 +576,18 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
   // Semiconductor symbols use Tau's generic built-in models. Arbitrary vendor
   // names stay unavailable until a parsed library-to-symbol mapping can affect
   // the generated deck instead of being silently ignored.
-  switch: { fields: [{ key: "state", label: "State (open/closed)", unit: "" }] },
+  switch: [{
+    fields: [{
+      key: "state",
+      label: "State",
+      unit: "",
+      kind: "text",
+      validate: (raw) => /^\s*(?:open|closed|pressed|on|off|no|0|1)\s*$/i.test(raw)
+        ? null
+        : "Use Open or Closed for a native SPST contact.",
+      description: "A static SPST contact connects A to B only while closed.",
+    }],
+  }],
   // `state` stays the leading bare token because the solver reads the raw value
   // with `isStaticContactClosed`, which tests the string's first word. Moving it
   // behind a `state=` key would make every closed button read as open.
@@ -545,18 +614,40 @@ const SCHEMA: Partial<Record<ComponentKind, ParamSpec | ParamSpec[]>> = {
         ] },
     ],
   },
-  spdt: { fields: [{ key: "throw", label: "Throw (no/nc)", unit: "" }] },
-  photodiode: { fields: [{ key: "iph", label: "Photocurrent", unit: "A", kind: "number" }] },
-  relay: { fields: [{ key: "coil", label: "Coil resistance", unit: "Ω", kind: "number" }] },
+  spdt: {
+    fields: [{
+      key: "throw",
+      label: "Selected throw",
+      unit: "",
+      kind: "choice",
+      choices: [{ value: "no", label: "Normally open" }, { value: "nc", label: "Normally closed" }],
+      description: "COM connects to the selected throw; it never joins both poles.",
+    }],
+  },
+  photodiode: [{
+    when: /^\s*[+\-]?(?:\d|\.\d)/,
+    fields: [{ key: "iph", label: "Photocurrent", unit: "A", kind: "number", min: 0,
+      description: "Light-generated current; a larger value produces more reverse current." }],
+  }, {
+    // Preserve an imported model token exactly rather than coercing it into a
+    // generic photocurrent setting just because it is not a number.
+    fields: [],
+  }],
+  relay: { fields: [{ key: "coil", label: "Coil resistance", unit: "Ω", kind: "number", min: 0.001,
+    description: "Coil resistance; lower values draw more current to close the contact." }] },
   motor: {
     fields: [
-      { key: "r", label: "Armature R", unit: "Ω", kind: "number", token: "R", fallback: "10" },
-      { key: "l", label: "Armature L", unit: "H", kind: "number", token: "L", fallback: "1m" },
+      { key: "r", label: "Armature R", unit: "Ω", kind: "number", token: "R", fallback: "10", min: 0.001,
+        description: "Winding resistance; larger R reduces armature current." },
+      { key: "l", label: "Armature L", unit: "H", kind: "number", token: "L", fallback: "1m", min: 0,
+        description: "Winding inductance; larger L slows current changes." },
     ],
     codec: { form: "positional", acceptKeyed: true, asciiMicro: true },
   },
-  transformer: { fields: [{ key: "ratio", label: "Turns ratio", unit: "" }] },
-  ctTransformer: { fields: [{ key: "ratio", label: "Turns ratio", unit: "" }] },
+  transformer: { fields: [{ key: "ratio", label: "Turns ratio", unit: "", kind: "text", validate: transformerValueValidationMessage,
+    description: "Primary:secondary turns; optional L1, L2, and k refine the coupled windings." }] },
+  ctTransformer: { fields: [{ key: "ratio", label: "Turns ratio", unit: "", kind: "text", validate: transformerValueValidationMessage,
+    description: "Primary:secondary turns; the secondary center tap is a separate terminal." }] },
   tline: {
     fields: [
       {
@@ -746,6 +837,8 @@ export function paramValidationMessage(field: ParamField, raw: string): string |
   // whether an omitted value gets a model fallback; validation must not turn a
   // half-typed or intentionally blank draft into a document mutation.
   if (!text) return null;
+  const syntaxMessage = field.validate?.(text);
+  if (syntaxMessage) return syntaxMessage;
   if (field.kind === "choice") {
     return field.choices?.some((choice) => choice.value.toLowerCase() === text.toLowerCase())
       ? null

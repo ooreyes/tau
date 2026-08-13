@@ -244,6 +244,14 @@ export function IndependentSourceEditor({
   onIdentityChange?: (kind: "vsource" | "isource", value: string) => void;
 }) {
   const source = decodeIndependentSourceValue(value, unit, legacyKind);
+  // AC is a small-signal analysis stimulus, not a second waveform. Keep its
+  // controls out of the everyday source surface until the reader asks for it;
+  // an already-authored stimulus opens itself so importing a real .asc never
+  // makes a live setting look as though it vanished.
+  const [acStimulusOpen, setAcStimulusOpen] = useState(Boolean(source.acMagnitude));
+  useEffect(() => {
+    if (source.acMagnitude) setAcStimulusOpen(true);
+  }, [source.acMagnitude]);
   const commit = (key: string, next: IndependentSourceValue) => {
     onBeginChange(key);
     onValueChange(encodeIndependentSourceValue(next));
@@ -446,43 +454,61 @@ export function IndependentSourceEditor({
         </>
       )}
 
-      <label className="property-field source-ac-toggle">
-        <span title="Small-signal AC magnitude for .ac analysis (LTspice Vac on a DC source). For a large-signal sine, place AC Voltage from the palette.">
-          Small-signal AC (.ac)
-        </span>
-        <input
-          type="checkbox"
-          aria-label="Enable small-signal AC stimulus for .ac analysis"
-          checked={Boolean(source.acMagnitude)}
-          onChange={(event) => commit(
-            "ac-enabled",
-            {
-              ...source,
-              acMagnitude: event.currentTarget.checked ? (source.acMagnitude || "1") : "",
-              acPhase: event.currentTarget.checked ? source.acPhase : "",
-            },
-          )}
-        />
-      </label>
-      {source.acMagnitude && (
-        <>
-          <SourceField
-            label="AC amplitude (.ac)"
-            value={source.acMagnitude}
-            unit={unit}
-            fieldKey="acMagnitude"
-            onBeginChange={() => onBeginChange("acMagnitude")}
-            onValueChange={(nextValue) => update("acMagnitude", nextValue)}
-          />
-          <SourceField
-            label="AC phase (°)"
-            value={source.acPhase}
-            fieldKey="acPhase"
-            onBeginChange={() => onBeginChange("acPhase")}
-            onValueChange={(nextValue) => update("acPhase", nextValue)}
-          />
-        </>
-      )}
+      <div className="advanced-settings source-ac-stimulus">
+        <button
+          type="button"
+          className="disclosure-header"
+          aria-expanded={acStimulusOpen}
+          aria-label="Toggle AC analysis stimulus"
+          onClick={() => setAcStimulusOpen((open) => !open)}
+        >
+          <span className="disclosure-label">AC analysis stimulus</span>
+          <span className="disclosure-rule" aria-hidden="true" />
+          <span className={`disclosure-chevron${acStimulusOpen ? " open" : ""}`} aria-hidden="true">›</span>
+        </button>
+        {acStimulusOpen && (
+          <div className="advanced-body">
+            <p className="property-hint">
+              Sets the small-signal excitation for .ac; it does not change this source’s time-domain waveform.
+            </p>
+            <label className="property-field source-ac-toggle">
+              <span>Enable AC stimulus</span>
+              <input
+                type="checkbox"
+                aria-label="Enable small-signal AC stimulus for .ac analysis"
+                checked={Boolean(source.acMagnitude)}
+                onChange={(event) => commit(
+                  "ac-enabled",
+                  {
+                    ...source,
+                    acMagnitude: event.currentTarget.checked ? (source.acMagnitude || "1") : "",
+                    acPhase: event.currentTarget.checked ? source.acPhase : "",
+                  },
+                )}
+              />
+            </label>
+            {source.acMagnitude && (
+              <>
+                <SourceField
+                  label="AC amplitude"
+                  value={source.acMagnitude}
+                  unit={unit}
+                  fieldKey="acMagnitude"
+                  onBeginChange={() => onBeginChange("acMagnitude")}
+                  onValueChange={(nextValue) => update("acMagnitude", nextValue)}
+                />
+                <SourceField
+                  label="AC phase (°)"
+                  value={source.acPhase}
+                  fieldKey="acPhase"
+                  onBeginChange={() => onBeginChange("acPhase")}
+                  onValueChange={(nextValue) => update("acPhase", nextValue)}
+                />
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
