@@ -1673,6 +1673,23 @@ describe("P4 probe document invariants", () => {
     useSchematic.getState().loadCircuit(currentDocument());
     expect(useSchematic.getState().probes.map((probe) => probe.color)).toEqual(colors);
   });
+
+  it("preserves a valid custom probe color through normalization and tab-style restore", () => {
+    const document = {
+      components: [],
+      wires: [{ id: "custom-net", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }],
+      probes: [{ id: "custom", x: 16, y: 0, color: "#ff00aa" }],
+    };
+    useSchematic.getState().loadCircuit(document);
+    expect(useSchematic.getState().probes[0]?.color).toBe("#ff00aa");
+
+    const snapshot = useSchematic.getState();
+    useSchematic.getState().restoreCircuit(
+      { components: snapshot.components, wires: snapshot.wires, probes: snapshot.probes, netLabels: snapshot.netLabels },
+      { past: [], future: [] },
+    );
+    expect(useSchematic.getState().probes[0]?.color).toBe("#ff00aa");
+  });
 });
 
 describe("P4 reference designator invariants", () => {

@@ -26,6 +26,7 @@ import type {
 import { canonicalWindowJustification } from "./types";
 import type { SchematicDocument, SchematicModelLibrary } from "../store/useSchematic";
 import {
+  asciiFold,
   MAX_PROJECT_SUBCIRCUIT_PORTS,
   projectSheetPortsValidation,
   projectSubcircuitLinkValidation,
@@ -97,6 +98,10 @@ const PROBE_COLORS = new Set([
   "var(--trace-amber)",
   "var(--trace-cream)",
 ]);
+// SimulationPanel's native color well emits six-digit hex. Keep the accepted
+// custom form deliberately narrow so persisted probe colors cannot become CSS
+// injection or arbitrary style expressions.
+const CUSTOM_PROBE_COLOR = /^#[0-9a-f]{6}$/i;
 
 function fail(message: string): never {
   throw new Error(`Invalid Tau schematic: ${message}`);
@@ -296,7 +301,7 @@ function wire(value: unknown, index: number, remainingPoints: { value: number })
 function probe(value: unknown, index: number): Probe {
   const source = record(value, `probes[${index}]`);
   const color = text(source.color, `probes[${index}].color`, 40);
-  if (!PROBE_COLORS.has(color)) fail(`probes[${index}].color is not supported.`);
+  if (!PROBE_COLORS.has(color) && !CUSTOM_PROBE_COLOR.test(color)) fail(`probes[${index}].color is not supported.`);
   const result: Probe = {
     id: text(source.id, `probes[${index}].id`, MAX_ID_LENGTH),
     x: coordinate(source.x, `probes[${index}].x`),
@@ -766,7 +771,7 @@ export function duplicateReferenceDesignators(
   for (const item of components) {
     const display = item.label.trim();
     if (!display) continue;
-    const key = display.toLocaleLowerCase();
+    const key = asciiFold(display);
     const previous = byKey.get(key);
     if (previous) {
       previous.count += 1;

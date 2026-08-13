@@ -55,18 +55,20 @@ describe("BottomPanel diagnostics focus seam (P4-17)", () => {
     expect(onFocusDiagnostic).toHaveBeenCalledWith(netIssue.focus);
   });
 
-  it("keeps the engine wording once when it duplicates a live document row", () => {
+  it("keeps the structured focus action when engine wording duplicates a live row", () => {
     const message = "R1 is only connected to one pin.";
+    const onFocusDiagnostic = vi.fn();
     render(
       <BottomPanel
         result={{ ok: true, title: "Operating point", warnings: [message] } as never}
         issues={[{ ...componentIssue(), id: "floating-pin:r1:0", code: "floating-pin", severity: "warning", message }]}
-        onFocusDiagnostic={vi.fn()}
+        onFocusDiagnostic={onFocusDiagnostic}
       />,
     );
 
     expect(screen.getAllByText(message)).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /Focus R1/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: `Focus R1: ${message}` }));
+    expect(onFocusDiagnostic).toHaveBeenCalledWith({ kind: "component", componentId: "r1", reference: "R1" });
   });
 
   it("normalizes whitespace and case for engine/live deduplication", () => {

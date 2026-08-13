@@ -72,7 +72,7 @@ import {
 } from "./components/ShellPanels";
 import { EditorTabs, EditorToolbar } from "./components/editor/EditorChrome";
 import { ActivityRail } from "./components/shell/NavRail";
-import { BottomPanel } from "./components/drawer/DiagnosticsTab";
+import { BottomPanel, mergeDiagnostics } from "./components/drawer/DiagnosticsTab";
 import { ResultsDrawer, type DrawerCover } from "./components/drawer/ResultsDrawer";
 import { SelectionInspector } from "./components/inspector/SelectionInspector";
 import { ConfirmDialog, UnsavedChangesDialog } from "./components/ui/confirm";
@@ -144,6 +144,12 @@ import {
 } from "./engine/nativeSpice";
 import { canUseNativeStepPath, stepAnalysisDomain } from "./simulation/nativeStepFamily";
 import { useProject } from "./store/useProject";
+import { loadProjectHierarchySheets, type OpenProjectDocument } from "./schematic/projectHierarchyRuntime";
+import {
+  buildProjectHierarchyDeck,
+  ProjectHierarchyError,
+  type ProjectHierarchySheet,
+} from "./schematic/projectHierarchy";
 import { readInstalledLtspiceModel } from "./project/installedLtspiceLibrary";
 import {
   ascRewriteRisks,
@@ -183,6 +189,7 @@ import { LiveScopePane } from "./components/LiveScopePane";
 import { useLiveRun, type LiveChannelRequest } from "./components/useLiveRun";
 import { formatSeconds, type LiveRunStatus } from "./simulation/liveRun";
 import { buildSpiceDeck, unresolvedSubcktMessage } from "./engine/spiceNetlist";
+import type { NativeDeckBuilder } from "./engine/nativeSpice";
 import { isActuable, isDraggableWiper } from "./schematic/actuation";
 import type { SchematicComponent } from "./schematic/types";
 
@@ -442,7 +449,8 @@ function schematicDocumentIsEmpty(doc: SchematicDocument): boolean {
     && (doc.ascDataFlags?.length ?? 0) === 0
     && (doc.ascForeignSymbols?.length ?? 0) === 0
     && (doc.ascHierarchicalBlocks?.length ?? 0) === 0
-    && (doc.userModelLibraries?.length ?? 0) === 0;
+    && (doc.userModelLibraries?.length ?? 0) === 0
+    && (doc.projectPorts?.length ?? 0) === 0;
 }
 
 /** Does the project tree still list this path? Recursive because a native
@@ -477,6 +485,7 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
     ascHierarchicalBlocks: doc.ascHierarchicalBlocks ?? [],
     ascSheet: doc.ascSheet ?? null,
     userModelLibraries: doc.userModelLibraries ?? [],
+    projectPorts: doc.projectPorts ?? [],
   });
 }
 
@@ -515,6 +524,7 @@ export interface RunOutcome {
 function App() {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
+  const projectPorts = useSchematic((s) => s.projectPorts);
   const toolMode = useSchematic((s) => s.tool.mode);
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedCount = useSchematic((s) => (s.selectedId ? 1 : s.selectedIds.length));
@@ -529,7 +539,7 @@ function App() {
   const loadCircuit = useSchematic((s) => s.loadCircuit);
   const replaceCircuit = useSchematic((s) => s.replaceCircuit);
   const restoreCircuit = useSchematic((s) => s.restoreCircuit);
-  const newCircuit = useSchematic((s) => s.newCircuit);
+  const clearSheet = useSchematic((s) => s.clearSheet);
   const probes = useSchematic((s) => s.probes);
   const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
@@ -810,6 +820,7 @@ function App() {
 
   const writeSim = useProject((s) => s.writeSim);
   const projectRootPath = useProject((s) => s.rootPath);
+  const projectTree = useProject((s) => s.tree);
   const projectRootName = useProject((s) => s.rootName);
   const projectCapability = useProject((s) => s.capability);
   const openProjectFolder = useProject((s) => s.openFolder);
@@ -880,7 +891,8 @@ function App() {
     ascHierarchicalBlocks,
     ...(ascSheet ? { ascSheet } : {}),
     ...(userModelLibraries.length > 0 ? { userModelLibraries } : {}),
-  }), [ascDataFlags, ascForeignSymbols, ascHierarchicalBlocks, ascSheet, ascShapes, components, directives, netLabels, probes, textAnnotations, userModelLibraries, wires]);
+    ...(projectPorts.length > 0 ? { projectPorts } : {}),
+  }), [ascDataFlags, ascForeignSymbols, ascHierarchicalBlocks, ascSheet, ascShapes, components, directives, netLabels, probes, projectPorts, textAnnotations, userModelLibraries, wires]);
   // Native runs take the raw vendor text (LTspice-only cleanup happens in the
   // deck builder); the store keeps names alongside for the attachment UI.
   const userModelLibraryTexts = useMemo(
@@ -893,6 +905,104 @@ function App() {
     () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => library.name),
     [installedLtspiceModelLibraries, userModelLibraries],
   );
+
+  const projectHierarchyActive = components.some((component) => component.projectSubcircuit !== undefined);
+  const openProjectDocuments = useMemo<OpenProjectDocument[]>(() => {
+    const documents: OpenProjectDocument[] = [];
+    for (const tab of tabs) {
+      if (!tab.filePath) continue;
+      const document = tab.id === activeId ? currentDocument : tab.doc;
+      if (document) documents.push({ path: tab.filePath, document });
+    }
+    return documents;
+  }, [activeId, currentDocument, tabs]);
+  const [projectHierarchyContext, setProjectHierarchyContext] = useState<{
+    rootPath: string;
+    sheets: ProjectHierarchySheet[];
+  } | null>(null);
+  const [projectHierarchyLoadError, setProjectHierarchyLoadError] = useState<unknown>(null);
+
+  // Project-linked sheets are a separate compile input, not a hint for the
+  // ordinary root emitter. Refresh the complete candidate set whenever the
+  // project, active file, open-tab snapshots, or link contract changes. A
+  // missing/stale context deliberately produces a refusal until this load
+  // finishes; no flat-deck fallback is allowed.
+  useEffect(() => {
+    let cancelled = false;
+    setProjectHierarchyContext(null);
+    setProjectHierarchyLoadError(null);
+    if (!projectHierarchyActive) return () => { cancelled = true; };
+    if (!projectRootPath || !activeFilePath) {
+      setProjectHierarchyLoadError(new ProjectHierarchyError(
+        "invalid-path",
+        "Project-linked sheets must be saved inside an open project before they can run.",
+      ));
+      return () => { cancelled = true; };
+    }
+    void loadProjectHierarchySheets({
+      projectRoot: projectRootPath,
+      rootSheetPath: activeFilePath,
+      tree: projectTree,
+      readText: readProjectText,
+      openDocuments: openProjectDocuments,
+    }).then((context) => {
+      if (cancelled) return;
+      setProjectHierarchyContext(context);
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      setProjectHierarchyLoadError(error);
+    });
+    return () => { cancelled = true; };
+  }, [activeFilePath, openProjectDocuments, projectHierarchyActive, projectRootPath, projectTree]);
+
+  const makeProjectDeckBuilder = useCallback((
+    root: SchematicDocument,
+    rootParams: ParamScope,
+    rootDirectives: readonly string[] = root.directives ?? [],
+  ): NativeDeckBuilder => (analysis, deckOptions = {}) => {
+    if (!projectHierarchyActive) {
+      return buildSpiceDeck({
+        components: root.components,
+        wires: root.wires,
+        netLabels: root.netLabels,
+        params: rootParams,
+        directives: [...rootDirectives],
+        ascForeignSymbols: root.ascForeignSymbols,
+        userModelLibraries: userModelLibraryTexts,
+        userModelLibraryNames,
+      }, analysis, deckOptions);
+    }
+    if (!projectHierarchyContext) {
+      const detail = projectHierarchyLoadError instanceof Error
+        ? projectHierarchyLoadError.message
+        : "linked project sheets are still loading";
+      throw new ProjectHierarchyError("missing-sheet", `Project hierarchy is unavailable: ${detail}`, activeFilePath ?? undefined);
+    }
+    return buildProjectHierarchyDeck({
+      rootPath: projectHierarchyContext.rootPath,
+      root,
+      sheets: projectHierarchyContext.sheets,
+      analysis,
+      rootDeck: {
+        params: rootParams,
+        directives: rootDirectives,
+        userModelLibraries: userModelLibraryTexts,
+        userModelLibraryNames,
+        ascForeignSymbols: root.ascForeignSymbols,
+      },
+      deckOptions,
+    }).deck;
+  }, [activeFilePath, projectHierarchyActive, projectHierarchyContext, projectHierarchyLoadError, userModelLibraryNames, userModelLibraryTexts]);
+
+  const assertProjectHierarchyCanRun = useCallback(() => {
+    if (projectHierarchyActive && !isNativeSpiceRuntime()) {
+      throw new ProjectHierarchyError(
+        "unsupported-child",
+        "Project-linked hierarchy requires Tau's packaged ngspice engine; the preview solver will not flatten or approximate it.",
+        activeFilePath ?? undefined,
+      );
+    }
+  }, [activeFilePath, projectHierarchyActive]);
   const currentSignature = useMemo(
     () => schematicDocumentSignature(currentDocument),
     [currentDocument],
@@ -1193,6 +1303,17 @@ function App() {
     }
   }, [directives]);
 
+  const nativeSchematic = useMemo(() => ({
+    components,
+    wires,
+    netLabels,
+    params,
+    directives,
+    userModelLibraries: userModelLibraryTexts,
+    userModelLibraryNames,
+    ...(projectHierarchyActive ? { buildDeck: makeProjectDeckBuilder(currentDocument, params) } : {}),
+  }), [components, currentDocument, directives, makeProjectDeckBuilder, netLabels, params, projectHierarchyActive, userModelLibraryNames, userModelLibraryTexts, wires]);
+
   // Parse the document's `K` mutual-inductance directives once so the interim TS
   // transient/AC solvers couple transformer windings (the native deck already
   // carries `K` lines verbatim). Empty when there are no coupling directives.
@@ -1447,28 +1568,22 @@ function App() {
     ...(components.length <= LIVE_DECK_PROBE_MAX_COMPONENTS
       ? {
         probeDeck: () => {
-          buildSpiceDeck(
-            {
-              components,
-              wires,
-              netLabels,
-              params,
-              directives,
-              ascForeignSymbols,
-              userModelLibraries: userModelLibraryTexts,
-              userModelLibraryNames,
-            },
-            // A plain operating point: the cheapest card that still forces the
-            // whole deck — every device model, every `.param`, every directive
-            // — to be emitted and therefore validated.
-            { kind: "op" },
-          );
+          // A plain operating point: the cheapest card that still forces the
+          // whole deck — every device model, every `.param`, every directive
+          // — to be emitted and therefore validated. Linked sheets go through
+          // the same recursive compiler as Run; they never fall back to the
+          // flat root emitter when a sibling is missing or still loading.
+          if (projectHierarchyActive) {
+            nativeSchematic.buildDeck?.({ kind: "op" });
+            return;
+          }
+          buildSpiceDeck(nativeSchematic, { kind: "op" });
         },
       }
       : {}),
   })), [
     mode, components, wires, netLabels, ascForeignSymbols, params, directives,
-    userModelLibraryTexts, userModelLibraryNames,
+    userModelLibraryTexts, userModelLibraryNames, nativeSchematic, projectHierarchyActive,
   ]);
 
   /**
@@ -1511,36 +1626,21 @@ function App() {
    * `role="alert"` and the failure's own ordering; the live copy is redundant
    * on a document the run has already judged.
    */
-  const dockIssues = useMemo(() => {
-    if (liveDiagnostics.length === 0) return liveDiagnostics;
+  const diagnosticMerge = useMemo(() => {
     const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
-    const spoken = new Set<string>([
-      ...(activeAnalysis && !activeAnalysis.ok && activeAnalysis.message ? [activeAnalysis.message] : []),
-      ...(activeAnalysis?.warnings ?? []),
-      ...notices,
-    ]);
-    if (spoken.size === 0) return liveDiagnostics;
-    return liveDiagnostics.filter((issue) => !spoken.has(issue.message));
-  }, [liveDiagnostics, activeAnalysis, activeFilePath, importWarningsByPath]);
+    return mergeDiagnostics(activeAnalysis, notices, liveDiagnostics, analysisRunning);
+  }, [activeAnalysis, activeFilePath, analysisRunning, importWarningsByPath, liveDiagnostics]);
+  const dockIssues = diagnosticMerge.liveIssues;
 
   const diagnosticsBadge = useMemo(() => {
     if (analysisRunning) return null;
-    const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
-    const failed = Boolean(activeAnalysis && !activeAnalysis.ok);
-    // The live rows are counted here too, because the report's done-when is
-    // that the badge equals the row count — and BottomPanel now renders both
-    // lists. The two arithmetics have to stay the same expression; see the
-    // note above about why this count is hoisted rather than reported upward.
-    // It counts `dockIssues`, not `liveDiagnostics`, for the same reason the
-    // dock renders them: a row removed as a duplicate is a row not there.
-    const count = (failed ? 1 : 0) + (activeAnalysis?.warnings?.length ?? 0) + notices.length
-      + dockIssues.length;
+    const count = diagnosticMerge.count;
     if (count === 0) return null;
-    const tone = failed || dockIssues.some((issue) => issue.severity === "error")
+    const tone = diagnosticMerge.hasError
       ? ("error" as const)
       : ("warning" as const);
     return { text: String(count), tone };
-  }, [activeAnalysis, analysisRunning, activeFilePath, importWarningsByPath, dockIssues]);
+  }, [analysisRunning, diagnosticMerge]);
 
   /**
    * Which part of the badge is worth raising a peeked drawer for.
@@ -1618,7 +1718,8 @@ function App() {
     };
     try {
       assertCurrentSimulationIntegrity();
-      const nativeResult = await runNativeTransient({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }, options);
+      assertProjectHierarchyCanRun();
+      const nativeResult = await runNativeTransient(nativeSchematic, options);
       if (nativeResult) {
         // Stop marks this request stale even if the worker happened to finish
         // during cancellation, so a late native result can never overwrite UI.
@@ -1667,7 +1768,7 @@ function App() {
       // run that's actually still abortable.
       if (transientAbortRef.current === controller) transientAbortRef.current = null;
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
 
   // Pre-run guard (Fix 3): a step count big enough to genuinely stall the UI
   // for a while gets a confirmation instead of launching silently. Native is
@@ -1744,19 +1845,10 @@ function App() {
     let deck: ReturnType<typeof buildSpiceDeck>;
     try {
       assertCurrentSimulationIntegrity();
-      deck = buildSpiceDeck(
-        {
-          components,
-          wires,
-          netLabels,
-          params,
-          directives,
-          ascForeignSymbols,
-          userModelLibraries: userModelLibraryTexts,
-          userModelLibraryNames,
-        },
-        { kind: "tran", stopTime: liveHorizonSeconds, steps: LIVE_HORIZON_OUTPUT_STEPS },
-      );
+      assertProjectHierarchyCanRun();
+      deck = projectHierarchyActive
+        ? nativeSchematic.buildDeck!({ kind: "tran", stopTime: liveHorizonSeconds, steps: LIVE_HORIZON_OUTPUT_STEPS })
+        : buildSpiceDeck(nativeSchematic, { kind: "tran", stopTime: liveHorizonSeconds, steps: LIVE_HORIZON_OUTPUT_STEPS });
     } catch (error) {
       showNotice(userFacingErrorMessage(error, "Tau could not build a deck for this circuit."));
       return;
@@ -1800,6 +1892,9 @@ function App() {
     ascForeignSymbols,
     userModelLibraryTexts,
     userModelLibraryNames,
+    nativeSchematic,
+    projectHierarchyActive,
+    assertProjectHierarchyCanRun,
     probes,
     effectiveAnalysisOptions,
     liveHorizonSeconds,
@@ -1816,8 +1911,9 @@ function App() {
     beginRun("op");
     try {
       assertCurrentSimulationIntegrity();
+      assertProjectHierarchyCanRun();
       const result = resolveEngineResult(
-        await runNativeOperatingPoint({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }),
+        await runNativeOperatingPoint(nativeSchematic),
         () => runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true }),
       );
       if (analysisRequestRef.current !== requestId) return;
@@ -1828,7 +1924,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
 
   const runAcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -1836,20 +1932,12 @@ function App() {
     beginRun("ac");
     try {
       assertCurrentSimulationIntegrity();
+      assertProjectHierarchyCanRun();
       // An imported LTspice .ac directive is the user's analysis definition.
       // Suggest a useful range only when the document does not provide one.
       const acSweep = analysesFromDirectives(directives).ac ?? suggestAcSweep(components);
-      const schematic = {
-        components,
-        wires,
-        netLabels,
-        params,
-        directives,
-        userModelLibraries: userModelLibraryTexts,
-        userModelLibraryNames,
-      };
       const result = resolveEngineResult(
-        await runNativeAcSweep(schematic, acSweep),
+        await runNativeAcSweep(nativeSchematic, acSweep),
         () => runAcSweep({ components, wires, netLabels, params, couplings }, acSweep),
       );
       if (analysisRequestRef.current !== requestId) return;
@@ -1860,7 +1948,7 @@ function App() {
       if (specs.length === 0) {
         setAcStepFamily(null);
       } else if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
-        const nativeFamily = await runNativeSteppedAcSweep(schematic, acSweep, specs);
+        const nativeFamily = await runNativeSteppedAcSweep(nativeSchematic, acSweep, specs);
         if (analysisRequestRef.current !== requestId) return;
         // The TS family is now awaited (its members run across the worker
         // pool), so the staleness check has to be repeated after it settles -
@@ -1891,7 +1979,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, couplings, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, couplings, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
 
   useEffect(() => {
     setDcSetup((d) => defaultDcSetup(components, d));
@@ -1909,19 +1997,11 @@ function App() {
     beginRun("dc");
     try {
       assertCurrentSimulationIntegrity();
-      const schematic = {
-        components,
-        wires,
-        netLabels,
-        params,
-        directives,
-        userModelLibraries: userModelLibraryTexts,
-        userModelLibraryNames,
-      };
+      assertProjectHierarchyCanRun();
       // ngspice first: the TS solver has no semiconductor stamps, so it cannot
       // sweep a transistor at all.
       const result = resolveEngineResult(
-        await runNativeDcSweep(schematic, dc),
+        await runNativeDcSweep(nativeSchematic, dc),
         () => runDcSweep({ components, wires, netLabels, params }, dc),
       );
       if (analysisRequestRef.current !== requestId) return;
@@ -1931,7 +2011,7 @@ function App() {
       if (specs.length === 0) {
         setDcStepFamily(null);
       } else if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
-        const nativeFamily = await runNativeSteppedDcSweep(schematic, dc, specs);
+        const nativeFamily = await runNativeSteppedDcSweep(nativeSchematic, dc, specs);
         if (analysisRequestRef.current !== requestId) return;
         const family = nativeFamily
           ?? await runDcStepFamily(specs, params, { components, wires, netLabels }, dc);
@@ -1949,7 +2029,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
 
   const runTfAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -1958,13 +2038,11 @@ function App() {
     beginRun("tf");
     try {
       assertCurrentSimulationIntegrity();
+      assertProjectHierarchyCanRun();
       // ngspice first, for the same reason as the DC sweep: the TS solver has
       // no semiconductor stamps, so it cannot take an amplifier's gain at all.
       const result = resolveEngineResult(
-        await runNativeTransferFunction(
-          { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
-          tf,
-        ),
+        await runNativeTransferFunction(nativeSchematic, tf),
         () => runTransferFunction({ components, wires, netLabels, params }, tf),
       );
       if (analysisRequestRef.current !== requestId) return;
@@ -1975,7 +2053,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, tfSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, tfSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
 
   const runNoiseAnalysis_ = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -1984,14 +2062,12 @@ function App() {
     beginRun("noise");
     try {
       assertCurrentSimulationIntegrity();
+      assertProjectHierarchyCanRun();
       // ngspice first: the TS solver has only resistor thermal noise and
       // refuses any circuit with a semiconductor in it, so it cannot report a
       // real amplifier's noise at all.
       const result = resolveEngineResult(
-        await runNativeNoise(
-          { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
-          noise,
-        ),
+        await runNativeNoise(nativeSchematic, noise),
         () => runNoiseAnalysis({ components, wires, netLabels, params }, noise),
       );
       if (analysisRequestRef.current !== requestId) return;
@@ -2002,7 +2078,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, noiseSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, noiseSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic]);
 
   const runStepAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -2023,18 +2099,11 @@ function App() {
       return;
     }
     const domain = stepAnalysisDomain(pickAutoRunAnalysis(directives)?.kind);
-    const schematic = {
-      components,
-      wires,
-      netLabels,
-      params,
-      directives,
-      userModelLibraries: userModelLibraryTexts,
-      userModelLibraryNames,
-    };
+    const schematic = nativeSchematic;
     setAnalysisRunning(true);
     try {
       assertCurrentSimulationIntegrity();
+      assertProjectHierarchyCanRun();
 
       // AC/DC STEP domains: same native single-deck path as TRAN; TS re-run
       // stays exclusive (never emitNativeStep under that loop).
@@ -2140,7 +2209,24 @@ function App() {
         // resistors via applyTemperature). Never forward the document's `.step`
         // cards here — that would double-step under this re-run loop.
         const stepDirectives = ctx.temperature !== undefined ? [`.temp ${ctx.temperature}`] : undefined;
-        const native = await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }, effectiveAnalysisOptions);
+        const stepDocument: SchematicDocument = {
+          ...currentDocument,
+          components: ctx.components,
+          wires,
+          netLabels,
+          directives: stepDirectives,
+        };
+        const stepSchematic = {
+          components: ctx.components,
+          wires,
+          netLabels,
+          params: ctx.params,
+          directives: stepDirectives,
+          userModelLibraries: userModelLibraryTexts,
+          userModelLibraryNames,
+          ...(projectHierarchyActive ? { buildDeck: makeProjectDeckBuilder(stepDocument, ctx.params, stepDirectives) } : {}),
+        };
+        const native = await runNativeTransient(stepSchematic, effectiveAnalysisOptions);
         const result = native
           ? withEngine(native, "ngspice")
           : withEngine(await runTransientAnalysisOffThread({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions), "preview");
@@ -2160,7 +2246,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi, dcSetup, couplings, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi, dcSetup, couplings, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, currentDocument, makeProjectDeckBuilder, projectHierarchyActive]);
 
   /**
    * The analysis rail's seven run gestures, each holding the engine-lease
@@ -2322,6 +2408,8 @@ function App() {
               ascForeignSymbols,
               ascHierarchicalBlocks,
               ...(ascSheet ? { ascSheet } : {}),
+              ...(userModelLibraries.length > 0 ? { userModelLibraries } : {}),
+              ...(projectPorts.length > 0 ? { projectPorts } : {}),
             },
             history: { past, future },
             dirty: Boolean(tab.savedSignature && tab.savedSignature !== schematicDocumentSignature({
@@ -2336,10 +2424,12 @@ function App() {
               ascForeignSymbols,
               ascHierarchicalBlocks,
               ...(ascSheet ? { ascSheet } : {}),
+              ...(userModelLibraries.length > 0 ? { userModelLibraries } : {}),
+              ...(projectPorts.length > 0 ? { projectPorts } : {}),
             })),
           }
         : tab)),
-    [activeId, ascDataFlags, ascForeignSymbols, ascHierarchicalBlocks, ascSheet, ascShapes, components, wires, probes, netLabels, directives, textAnnotations, past, future],
+    [activeId, ascDataFlags, ascForeignSymbols, ascHierarchicalBlocks, ascSheet, ascShapes, components, wires, probes, netLabels, directives, projectPorts, textAnnotations, userModelLibraries, past, future],
   );
 
   // Adopt an imported circuit's own `.tran` settings (stop time / sample count)
@@ -2668,6 +2758,14 @@ function App() {
       probes: next.probes,
       netLabels: next.netLabels,
       directives: next.directives,
+      textAnnotations: next.textAnnotations,
+      ascShapes: next.ascShapes,
+      ascDataFlags: next.ascDataFlags,
+      ascForeignSymbols: next.ascForeignSymbols,
+      ascHierarchicalBlocks: next.ascHierarchicalBlocks,
+      ...(next.ascSheet ? { ascSheet: next.ascSheet } : {}),
+      ...(next.userModelLibraries.length > 0 ? { userModelLibraries: next.userModelLibraries } : {}),
+      ...(next.projectPorts.length > 0 ? { projectPorts: next.projectPorts } : {}),
     };
     const appliedHistory: SchematicHistory = { past: next.past, future: next.future };
     setTabs((openTabs) => openTabs.map((tab) => (
@@ -3090,25 +3188,33 @@ function App() {
 
   const clearScratchpad = useCallback(() => {
     documentNavigationRef.current += 1;
-    newCircuit();
+    // Clear is a document edit, not navigation. The store records one undoable
+    // blank-document snapshot and leaves the tab's file identity, disk
+    // fingerprint, and ASC rewrite policy alone.
+    clearSheet();
+    const cleared = useSchematic.getState();
+    const clearedDocument: SchematicDocument = {
+      components: cleared.components,
+      wires: cleared.wires,
+      probes: cleared.probes,
+      netLabels: cleared.netLabels,
+      directives: cleared.directives,
+      textAnnotations: cleared.textAnnotations,
+      ascShapes: cleared.ascShapes,
+      ascDataFlags: cleared.ascDataFlags,
+      ascForeignSymbols: cleared.ascForeignSymbols,
+      ascHierarchicalBlocks: cleared.ascHierarchicalBlocks,
+      ...(cleared.ascSheet ? { ascSheet: cleared.ascSheet } : {}),
+      ...(cleared.userModelLibraries.length > 0 ? { userModelLibraries: cleared.userModelLibraries } : {}),
+      ...(cleared.projectPorts.length > 0 ? { projectPorts: cleared.projectPorts } : {}),
+    };
     setTabs((prev) => prev.map((tab) => (
       tab.id === activeId
         ? {
             ...tab,
-            // Clearing a disk-backed import starts a new document. Keeping the
-            // old path/risk list made a hand-built replacement inherit stale
-            // directives and then refuse Save because of records belonging to
-            // the original file. Detaching also protects that source file from
-            // an accidental empty overwrite.
-            title: tab.filePath ? "untitled.asc" : tab.title,
-            filePath: null,
-            detached: Boolean(tab.filePath) || tab.detached,
-            dirty: false,
-            savedSignature: schematicDocumentSignature(blankDocument()),
-            diskFingerprint: undefined,
-            ascRewriteRisks: [],
-            doc: blankDocument(),
-            history: emptyHistory(),
+            dirty: Boolean(tab.savedSignature && tab.savedSignature !== schematicDocumentSignature(clearedDocument)),
+            doc: clearedDocument,
+            history: { past: cleared.past, future: cleared.future },
           }
         : tab
     )));
@@ -3120,7 +3226,7 @@ function App() {
     // counter is not, and it lifted an empty "No analysis yet" drawer over
     // the blank canvas of a schematic that had not been run.
     showNotice("Schematic cleared.");
-  }, [activeId, newCircuit, invalidateAnalysis, leaveSimulator, showNotice]);
+  }, [activeId, clearSheet, invalidateAnalysis, leaveSimulator, showNotice]);
 
   /**
    * Re-solve after a contact was operated, instead of blanking the plot.
@@ -4402,9 +4508,9 @@ function App() {
       </Sheet>
       {confirmClearOpen && (
         <ConfirmDialog
-          title="Delete schematic?"
-          body="Your saved file is NOT deleted - it stays on disk exactly as it is. This empties the sheet in front of you and starts a new untitled schematic: components, wires, labels, directives, probes, and the current analysis all go."
-          confirmLabel="Delete schematic"
+          title="Clear schematic?"
+          body="This clears the current sheet in one undoable step. The tab, saved file path, and file history stay in place; the file on disk is not changed until you save."
+          confirmLabel="Clear schematic"
           onConfirm={clearScratchpad}
           onCancel={() => setConfirmClearOpen(false)}
         />

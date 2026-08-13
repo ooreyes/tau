@@ -51,7 +51,7 @@ const TOOL_LABELS = [
   "Undo",
   "Redo",
   "Erase selection (Delete)",
-  "Delete schematic",
+  "Clear schematic",
   "Simulation setup",
 ];
 
@@ -131,7 +131,7 @@ describe("EditorToolbar destructive scope (review swap)", () => {
     });
 
     const eraser = screen.getByRole("button", { name: "Erase selection (Delete)" });
-    const bin = screen.getByRole("button", { name: "Delete schematic" });
+    const bin = screen.getByRole("button", { name: "Clear schematic" });
     expect(eraser.getAttribute("data-tone")).toBe("eraser");
     expect(bin.getAttribute("data-tone")).toBe("trash");
 
@@ -150,7 +150,7 @@ describe("EditorToolbar destructive scope (review swap)", () => {
     renderToolbar();
     expect((screen.getByRole("button", { name: "Erase selection (Delete)" }) as HTMLButtonElement).disabled).toBe(true);
     // An empty sheet is still a sheet you may want to reset, so the bin stays on.
-    expect((screen.getByRole("button", { name: "Delete schematic" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Clear schematic" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
 

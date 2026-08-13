@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { buildSpiceDeck, unresolvedSubcktMessage, type DeviceCurrent, type SpiceAnalysis } from "./spiceNetlist";
+import {
+  buildSpiceDeck,
+  unresolvedSubcktMessage,
+  type BuildSpiceDeckOptions,
+  type DeviceCurrent,
+  type SpiceAnalysis,
+  type SpiceDeck,
+} from "./spiceNetlist";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 import { parseAcSpec } from "./acSpec";
@@ -53,7 +60,18 @@ interface NativeSpiceResult {
   libraryPath: string;
 }
 
-type Schematic = { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope; directives?: string[]; userModelLibraries?: readonly string[]; userModelLibraryNames?: readonly string[] };
+export type NativeDeckBuilder = (analysis: SpiceAnalysis, options?: BuildSpiceDeckOptions) => SpiceDeck;
+type Schematic = {
+  components: SchematicComponent[];
+  wires: SchematicWire[];
+  netLabels?: NetLabel[];
+  params?: ParamScope;
+  directives?: string[];
+  userModelLibraries?: readonly string[];
+  userModelLibraryNames?: readonly string[];
+  /** Project-linked documents supply the hierarchy compiler here. */
+  buildDeck?: NativeDeckBuilder;
+};
 type NativeExecution = { result: NativeSpiceResult; deck: ReturnType<typeof buildSpiceDeck> };
 
 /**
@@ -916,7 +934,7 @@ export async function runNativeTransferFunction(
     }
     output = { kind: "current", device };
   } else {
-    const nets = buildSpiceDeck(schematic, { kind: "op" }).circuit.nets;
+    const nets = buildNativeDeck(schematic, { kind: "op" }).circuit.nets;
     const node = deckNodeFor(nets, spec.output.pos);
     if (node === undefined) {
       return {
@@ -1029,7 +1047,7 @@ export async function runNativeNoise(
 
   // Node names in the deck are net ids; resolve the user's names against a
   // throwaway `.op` deck, whose net extraction does not depend on the analysis.
-  const nets = buildSpiceDeck(schematic, { kind: "op" }).circuit.nets;
+  const nets = buildNativeDeck(schematic, { kind: "op" }).circuit.nets;
   const node = deckNodeFor(nets, spec.output.pos);
   if (node === undefined) {
     return {
@@ -1110,10 +1128,10 @@ function deckNodeFor(
 async function executeNative(
   schematic: Schematic,
   analysis: SpiceAnalysis,
-  deckOptions: Parameters<typeof buildSpiceDeck>[2] = {},
+  deckOptions: BuildSpiceDeckOptions = {},
 ): Promise<NativeExecution | null> {
   if (!isNativeSpiceRuntime()) return null;
-  const deck = buildSpiceDeck(schematic, analysis, deckOptions);
+  const deck = buildNativeDeck(schematic, analysis, deckOptions);
   // A subcircuit reference with no resolvable definition would make ngspice
   // reject the deck with a cryptic native error. We know the exact missing
   // name(s) here, so fail fast with actionable copy instead of paying a native
@@ -1123,6 +1141,15 @@ async function executeNative(
   }
   const result = await invoke<NativeSpiceResult>("simulate_spice", { request: { netlist: deck.netlist } });
   return { result, deck };
+}
+
+function buildNativeDeck(
+  schematic: Schematic,
+  analysis: SpiceAnalysis,
+  deckOptions: BuildSpiceDeckOptions = {},
+): SpiceDeck {
+  return schematic.buildDeck?.(analysis, deckOptions)
+    ?? buildSpiceDeck(schematic, analysis, deckOptions);
 }
 
 function vector(result: NativeSpiceResult, name: string): NativeVector | undefined {

@@ -18,6 +18,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbo
 import { isCapacitorKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps, relayCoilOhms } from "../schematic/kindGroups";
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
+import { asciiFold } from "../schematic/projectSubcircuit";
 import { decodeIndependentSourceValue, type IndependentSourceLegacyKind } from "../schematic/sourceValue";
 import { parseSourceFunction, MalformedPwlError, type SourceUnit, type SourceSpec } from "./sourceFunction";
 import { stripAcSpec, acSpecDeckText, stripSourceModifiers, stripLtspiceInlineComment } from "./acSpec";
@@ -2581,7 +2582,7 @@ function componentSpicePrefix(component: SchematicComponent): string {
 function requestedInstanceName(component: SchematicComponent): string | null {
   const requested = safeName(component.label);
   const p = componentSpicePrefix(component);
-  return requested.slice(0, p.length).toLocaleLowerCase() === p.toLocaleLowerCase() ? requested : null;
+  return asciiFold(requested.slice(0, p.length)) === asciiFold(p) ? requested : null;
 }
 
 /** Every component's deck instance name, resolved up front so the two naming
@@ -2605,7 +2606,7 @@ function resolveInstanceNames(components: readonly ExtractedComponent[]): Map<nu
     if (!named(component)) return;
     const name = requestedInstanceName(component);
     if (name === null) return;
-    const key = name.toLocaleLowerCase();
+    const key = asciiFold(name);
     const previous = used.get(key);
     if (previous) {
       throw new Error(`Duplicate SPICE instance name "${name}" after sanitizing ${previous} and ${component.label || component.kind}.`);
@@ -2619,8 +2620,8 @@ function resolveInstanceNames(components: readonly ExtractedComponent[]): Map<nu
     const p = componentSpicePrefix(component);
     const base = requested ? `${p}${requested}` : `${p}${index + 1}`;
     let name = base;
-    for (let n = 2; used.has(name.toLocaleLowerCase()); n += 1) name = `${base}_${n}`;
-    used.set(name.toLocaleLowerCase(), component.label || component.kind);
+    for (let n = 2; used.has(asciiFold(name)); n += 1) name = `${base}_${n}`;
+    used.set(asciiFold(name), component.label || component.kind);
     resolved.set(index, name);
   });
   return resolved;

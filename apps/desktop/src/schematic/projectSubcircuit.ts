@@ -14,6 +14,17 @@ export const PROJECT_SPICE_TOKEN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 const PORT_DIRECTIONS = new Set<SchematicPortDirection>(["In", "Out", "BiDir"]);
 
+/**
+ * SPICE names and project-link keys deliberately have an ASCII-only case
+ * contract. `toLocaleLowerCase()` made the persistent key depend on the
+ * machine's UI locale (notably Turkish I/i), which is unacceptable for a
+ * project file that can move between Macs. Project links only permit ASCII
+ * port/model tokens; paths retain non-ASCII spelling but only fold A-Z.
+ */
+export function asciiFold(value: string): string {
+  return value.replace(/[A-Z]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) + 32));
+}
+
 function issueForToken(value: unknown, role: string): string | null {
   if (typeof value !== "string" || !value || value.length > MAX_PROJECT_SUBCIRCUIT_NAME_LENGTH || !PROJECT_SPICE_TOKEN.test(value)) {
     return `${role} must be a SPICE-safe name starting with a letter or underscore.`;
@@ -30,12 +41,45 @@ function issueForToken(value: unknown, role: string): string | null {
 export function canonicalProjectSheetPath(value: string): string | null {
   if (typeof value !== "string" || value.length === 0 || value.length > MAX_PROJECT_SHEET_PATH_LENGTH) return null;
   if (/[\u0000-\u001f\u007f]/.test(value)) return null;
+  // A persisted link is never an OS path or URI. In particular `C:\\foo.sim`
+  // used to become the apparently-relative `C:/foo.sim`, and `web://…` / a
+  // custom scheme could escape the active project's resolver entirely.
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value.trim())) return null;
   const normalized = value.trim().replace(/\\/g, "/").replace(/\/+/g, "/");
   if (!normalized || normalized.startsWith("/")) return null;
   const segments = normalized.split("/");
   if (segments.some((segment) => !segment || segment === "." || segment === "..")) return null;
   if (!/\.(?:sim|tau\.json)$/i.test(normalized)) return null;
   return normalized;
+}
+
+/**
+ * Turn a project-owned absolute/virtual path into the one spelling a persisted
+ * project link may carry. This is a containment seam, not a general path
+ * normalizer: callers must provide the open project root, and a sibling that
+ * merely shares a string prefix (`/proj-old` vs `/proj`) is refused.
+ *
+ * `web://` roots are intentionally supported here because they are an
+ * in-memory project address used by Tau's browser workspace. They are never
+ * accepted by {@link canonicalProjectSheetPath}; only the resulting relative
+ * path is persisted.
+ */
+export function projectRelativeSheetPath(projectRoot: string, candidatePath: string): string | null {
+  if (typeof projectRoot !== "string" || typeof candidatePath !== "string") return null;
+  if (!projectRoot || !candidatePath) return null;
+  if (/[\u0000-\u001f\u007f]/.test(projectRoot) || /[\u0000-\u001f\u007f]/.test(candidatePath)) return null;
+  const normalize = (path: string) => path.trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/+$/, "");
+  const root = normalize(projectRoot);
+  const candidate = normalize(candidatePath);
+  if (!root || !candidate) return null;
+
+  // Filesystem paths are case-insensitive on the supported macOS default and
+  // Windows project stores. The fold is deliberately ASCII-only, as above.
+  const rootKey = asciiFold(root);
+  const candidateKey = asciiFold(candidate);
+  if (!candidateKey.startsWith(`${rootKey}/`)) return null;
+  const relative = candidate.slice(root.length + 1);
+  return canonicalProjectSheetPath(relative);
 }
 
 /** Validation result suitable for an inspector/store without throwing. */
@@ -62,7 +106,7 @@ export function projectSubcircuitLinkValidation(
   for (const port of link.ports) {
     const portIssue = issueForToken(port, "Linked port name");
     if (portIssue) return { ok: false, error: portIssue };
-    const key = port.toLocaleLowerCase();
+    const key = asciiFold(port);
     if (names.has(key)) return { ok: false, error: `Linked port name "${port}" is duplicated.` };
     names.add(key);
   }
@@ -89,8 +133,8 @@ export function projectSheetPortsValidation(
     if (!PORT_DIRECTIONS.has(port.direction)) {
       return { ok: false, error: "Sheet port direction must be In, Out, or BiDir." };
     }
-    const nameKey = port.name.toLocaleLowerCase();
-    const labelKey = port.labelId.toLocaleLowerCase();
+    const nameKey = asciiFold(port.name);
+    const labelKey = asciiFold(port.labelId);
     if (names.has(nameKey)) return { ok: false, error: `Sheet port name "${port.name}" is duplicated.` };
     if (labels.has(labelKey)) return { ok: false, error: "A net label can define only one sheet port." };
     names.add(nameKey);
@@ -105,5 +149,5 @@ export function hasMatchingOrderedProjectPorts(
   sheetPorts: readonly Pick<ProjectSheetPort, "name">[],
 ): boolean {
   return linkPorts.length === sheetPorts.length && linkPorts.every((port, index) =>
-    port.toLocaleLowerCase() === sheetPorts[index]?.name.toLocaleLowerCase());
+    asciiFold(port) === asciiFold(sheetPorts[index]?.name ?? ""));
 }

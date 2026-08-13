@@ -105,7 +105,7 @@ export function EditorToolbar({
       <IconButton title="Erase selection (Delete)" tone="eraser" disabled={!hasSelection || readOnly} onClick={deleteSelected}>
         <EraserIcon />
       </IconButton>
-      <IconButton title="Delete schematic" tone="trash" disabled={readOnly} onClick={onClearScratchpad}>
+      <IconButton title="Clear schematic" tone="trash" disabled={readOnly} onClick={onClearScratchpad}>
         <TrashIcon />
       </IconButton>
       <IconButton title="Simulation setup" disabled={readOnly} onClick={onOpenSimulationSetup}>

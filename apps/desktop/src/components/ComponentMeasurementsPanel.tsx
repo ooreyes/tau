@@ -387,10 +387,10 @@ export function ComponentMeasurementsPanel({
 }: ComponentMeasurementsPanelProps) {
   const filterId = useId();
   const [query, setQuery] = useState("");
-  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const normalizedQuery = query.trim().toLowerCase();
   const visibleRows = useMemo(
     () => normalizedQuery
-      ? rows.filter((row) => `${row.ref} ${row.kind}`.toLocaleLowerCase().includes(normalizedQuery))
+      ? rows.filter((row) => `${row.ref} ${row.kind}`.toLowerCase().includes(normalizedQuery))
       : rows,
     [normalizedQuery, rows],
   );

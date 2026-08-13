@@ -592,9 +592,8 @@ describe("App schematic workspace tools", () => {
     expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
   });
 
-  it("clears an imported lossy ASC into a new safe file without overwriting the source", async () => {
+  it("clears an imported lossy ASC in place, preserving its tab identity and undo history", async () => {
     const originalPath = `${DEFAULT_WORKSPACE_ID}/vendor-power-stage.asc`;
-    const replacementPath = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
     const originalContents = [
       "Version 4",
       "SHEET 1 880 680",
@@ -642,29 +641,24 @@ describe("App schematic workspace tools", () => {
     expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);
     fireEvent.click(screen.getByRole("button", { name: "Schematic" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete schematic" }));
-    const dialog = await screen.findByRole("alertdialog", { name: "Delete schematic?" });
-    expect(within(dialog).getByText(/starts a new untitled schematic/i)).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete schematic" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear schematic" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Clear schematic?" });
+    expect(within(dialog).getByText(/tab, saved file path, and file history stay in place/i)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear schematic" }));
 
-    expect(await screen.findByRole("tab", { name: /untitled\.asc/ })).toBeTruthy();
+    expect(await screen.findByRole("tab", { name: /vendor-power-stage\.asc/ })).toBeTruthy();
+    expect(document.querySelector(".brand-file")?.textContent).toMatch(/^vendor-power-stage\.asc/);
     expect(useSchematic.getState().components).toEqual([]);
     expect(useSchematic.getState().directives).toEqual([]);
     expect(useSchematic.getState().ascDataFlags).toEqual([]);
     expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);
 
-    act(() => useSchematic.getState().addComponent("resistor", 256, 192));
-    fireEvent.keyDown(document.body, { key: "s", metaKey: true });
-
-    await waitFor(() => {
-      const saved = useProject.getState().workspaceFiles[replacementPath]?.contents;
-      expect(saved).toContain("SYMBOL res");
-      expect(saved).not.toContain("WINDOW 0 32 32");
-      expect(saved).not.toContain(".tran 10m");
-      expect(saved).not.toContain("DATAFLAG");
-    });
+    // The file is still disk-backed, so the source is untouched until an
+    // explicit save. An in-place clear can be undone before that save.
+    act(() => useSchematic.getState().undo());
+    expect(useSchematic.getState().directives).toEqual([".tran 10m"]);
+    expect(useSchematic.getState().ascDataFlags).toEqual([{ x: 32, y: 96, expr: "\"V(out)\"" }]);
     expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);
-    expect(screen.queryByText(/Save blocked/)).toBeNull();
   });
 
   it("renames an open tab on disk and saves later edits only to the renamed path", async () => {

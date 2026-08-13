@@ -26,6 +26,7 @@ import { getComponentPins, rotatePoint, transformPoint } from "../schematic/pins
 import { withOpampModel } from "../engine/opampModel";
 import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
 import {
+  asciiFold,
   canonicalProjectSheetPath,
   projectSheetPortsValidation,
   projectSubcircuitLinkValidation,
@@ -348,6 +349,7 @@ export const PROBE_COLORS = [
   "var(--trace-amber)",
   "var(--trace-cream)",
 ] as const;
+const CUSTOM_PROBE_COLOR = /^#[0-9a-f]{6}$/i;
 
 export interface ReferenceRenameResult {
   ok: boolean;
@@ -371,11 +373,11 @@ export function lowestAvailableReference(
   components: readonly Pick<SchematicComponent, "label">[],
   prefix: string,
 ): number {
-  const key = prefix.trim().toLocaleLowerCase();
+  const key = asciiFold(prefix.trim());
   const used = new Set<number>();
   for (const component of components) {
     const match = /^([A-Za-z]+)([1-9]\d*)$/.exec(component.label.trim());
-    if (!match || match[1].toLocaleLowerCase() !== key) continue;
+    if (!match || asciiFold(match[1]) !== key) continue;
     const suffix = Number(match[2]);
     if (Number.isSafeInteger(suffix) && suffix > 0) used.add(suffix);
   }
@@ -395,7 +397,7 @@ export function referenceRenameResult(
   if (!label) return { ok: true };
   const collider = components.find((component) =>
     component.id !== componentId
-    && component.label.trim().toLocaleLowerCase() === label.toLocaleLowerCase(),
+    && asciiFold(component.label.trim()) === asciiFold(label),
   );
   if (!collider) return { ok: true };
   return {
@@ -521,9 +523,16 @@ export function normalizeVoltageProbes(
   const colorById = new Map<string, string>();
   const claimed = new Set<string>();
   for (const probe of ordered) {
-    const preferred = PROBE_COLORS.includes(probe.color as (typeof PROBE_COLORS)[number])
+    const preferred = PROBE_COLORS.includes(probe.color as (typeof PROBE_COLORS)[number]) || CUSTOM_PROBE_COLOR.test(probe.color)
       ? probe.color
       : undefined;
+    // Explicit custom colors belong to the author, so preserve them even when
+    // they are not part of Tau's automatic palette. They do not consume one of
+    // the deterministic palette slots used by newly added probes.
+    if (preferred && CUSTOM_PROBE_COLOR.test(preferred)) {
+      colorById.set(probe.id, preferred);
+      continue;
+    }
     const color = preferred && !claimed.has(preferred)
       ? preferred
       : PROBE_COLORS.find((candidate) => !claimed.has(candidate))

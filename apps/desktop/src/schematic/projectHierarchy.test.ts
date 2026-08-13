@@ -10,6 +10,8 @@ import {
   type ProjectHierarchyBuildInput,
   type ProjectHierarchySheet,
 } from "./projectHierarchy";
+import { loadProjectHierarchySheets } from "./projectHierarchyRuntime";
+import { canonicalProjectSheetPath, projectRelativeSheetPath } from "./projectSubcircuit";
 import type { ProjectSheetPort, SchematicComponent } from "./types";
 import type { SchematicDocument } from "../store/useSchematic";
 
@@ -156,15 +158,18 @@ describe("Tau project-linked hierarchy compiler", () => {
     expect(result.deck.netlist).toMatch(/X1\s+\S+\s+\S+\s+\S+\s+TauBuck/);
   });
 
-  it("runs the two-sheet buck-style fixture with native ngspice when available", () => {
-    const ngspice = "/opt/homebrew/bin/ngspice";
-    if (!existsSync(ngspice)) return;
+  it("runs the two-sheet fixture through Tau's native ngspice fixture without losing port order", () => {
+    const ngspice = process.env.TAU_NGSPICE_BIN ?? "/opt/homebrew/bin/ngspice";
+    expect(existsSync(ngspice), `Tau native ngspice fixture is required at ${ngspice}; set TAU_NGSPICE_BIN for the staged binary.`).toBe(true);
     const instance = linkedInstance("x1", "X1", 100, 0, "power/buck-cell.sim", "TauBuck", ["VIN", "VOUT", "GND"]);
     const root = simpleRoot(instance);
     const gndPin = instance.pinOverride![2]!;
     root.netLabels!.push(label("gnd-x", gndPin.x, gndPin.y, "GND"));
     const { deck } = buildProjectHierarchyDeck({
-      rootPath: "top.sim", root, sheets: [buckSheet()], analysis: { kind: "op" },
+      rootPath: "top.sim",
+      root: { ...root, directives: [".print op v(VOUT) i(V1)"] },
+      sheets: [buckSheet()],
+      analysis: { kind: "op" },
     });
     const directory = mkdtempSync(join(tmpdir(), "tau-project-hierarchy-"));
     const deckPath = join(directory, "buck.cir");
@@ -173,6 +178,12 @@ describe("Tau project-linked hierarchy compiler", () => {
       const native = spawnSync(ngspice, ["-b", deckPath], { encoding: "utf8" });
       expect(native.status, `${native.stdout}\n${native.stderr}`).toBe(0);
       expect(`${native.stdout}\n${native.stderr}`).not.toMatch(/\berror\b/i);
+      // The child is intentionally asymmetric: 1 kΩ from VIN to VOUT and a
+      // 10 Ω root load. Both the voltage and source current prove that the
+      // ordered VIN/VOUT/GND contract reached the native deck.
+      const output = `${native.stdout}\n${native.stderr}`;
+      expect(output).toMatch(/9\.999000e\+00/);
+      expect(output).toMatch(/-9\.99900e-01/);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -270,5 +281,109 @@ describe("Tau project-linked hierarchy compiler", () => {
     expect(result.blocks).toEqual([]);
     expect(result.deck.netlist).toContain(".subckt Legacy VIN VOUT");
     expect(result.deck.netlist).toMatch(/X1\s+\S+\s+\S+\s+Legacy/);
+  });
+
+  it("refuses a non-ideal child wire instead of silently dropping its resistance", () => {
+    const sheet = rcSheet("wire.sim");
+    sheet.document.wires = [{
+      id: "rwire",
+      points: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+      resistance: "1",
+    }];
+    const error = hierarchyError({
+      rootPath: "top.sim",
+      root: simpleRoot(linkedInstance("x1", "X1", 100, 0, "wire.sim", "WireCell", ["VIN", "VOUT"])),
+      sheets: [sheet],
+      analysis: { kind: "op" },
+    });
+    expect(error.code).toBe("unsupported-child");
+    expect(error.message).toMatch(/wire resistance.*not emitted/i);
+  });
+
+  it("reserves case-folded public ports before allocating generated internal nodes", () => {
+    const sheet = rcSheet("reserved.sim");
+    sheet.document.netLabels = [
+      label("in", 0, 0, "VIN", "In"),
+      label("out", 128, 0, "__tau_CELL_n1", "Out"),
+    ];
+    sheet.document.projectPorts = [
+      { name: "VIN", labelId: "in", direction: "In" },
+      { name: "__tau_CELL_n1", labelId: "out", direction: "Out" },
+    ];
+    const result = buildProjectHierarchyDeck({
+      rootPath: "top.sim",
+      root: simpleRoot(linkedInstance("x1", "X1", 100, 0, "reserved.sim", "Cell", ["VIN", "__tau_CELL_n1"])),
+      sheets: [sheet],
+      analysis: { kind: "op" },
+    });
+    expect(result.blocks[0]?.text).toContain("__tau_cell_n2");
+    expect(result.blocks[0]?.text).not.toContain("__tau_cell_n1 __tau_cell_n1");
+  });
+
+  it("preserves root params/functions/options and refuses generated collisions with ordinary X instances", () => {
+    const linked = linkedInstance("x1", "X1", 100, 0, "filters/rc.sim", "TauFilter", ["VIN", "VOUT"]);
+    const root = simpleRoot(linked);
+    root.components.find((component) => component.label === "Rload")!.value = "{twice(5)}";
+    const result = buildProjectHierarchyDeck({
+      rootPath: "top.sim",
+      root,
+      sheets: [rcSheet()],
+      analysis: { kind: "op" },
+      rootDeck: {
+        params: { scope: { gain: 2 }, funcs: { twice: { params: ["x"], body: "2*x" } } },
+        directives: [".param gain=2", ".func twice(x) {2*x}", ".options reltol=1e-5", ".step param gain 1 2 1"],
+      },
+      deckOptions: { emitNativeStep: true },
+    });
+    expect(result.deck.netlist).toMatch(/\.options.*reltol=1e-5/);
+    expect(result.deck.netlist).toContain(".step param gain 1 2 1");
+    expect(result.deck.netlist).toMatch(/\.param\s+gain\s*=\s*2/i);
+    expect(result.deck.netlist).toMatch(/Rload\s+\S+\s+\S+\s+10(?:\.0+)?/);
+
+    const ordinary: SchematicComponent = {
+      id: "legacy", kind: "subckt", x: 300, y: 0, rotation: 0, value: "TauFilter", label: "Xlegacy",
+      pinOverride: buildSubcircuitPinOverride({
+        x: 300, y: 0, rotation: 0,
+      }, ["VIN", "VOUT"]),
+    };
+    const collision = hierarchyError({
+      rootPath: "top.sim",
+      root: { ...root, components: [...root.components, ordinary] },
+      sheets: [rcSheet()],
+      analysis: { kind: "op" },
+    });
+    expect(collision.code).toBe("duplicate-definition");
+    expect(collision.message).toMatch(/ordinary root X instance/i);
+  });
+
+  it("rejects drive, scheme, and prefix-containment paths with deterministic ASCII folding", () => {
+    expect(canonicalProjectSheetPath("C:\\project\\child.sim")).toBeNull();
+    expect(canonicalProjectSheetPath("web://project/child.sim")).toBeNull();
+    expect(projectRelativeSheetPath("/tmp/Project", "/tmp/Project-old/child.sim")).toBeNull();
+    expect(projectRelativeSheetPath("/tmp/Project", "/tmp/project/Child.sim")).toBe("Child.sim");
+    expect(canonicalProjectSheetPath("İ.sim")).toBe("İ.sim");
+  });
+
+  it("loads every in-root Tau candidate and refuses an out-of-root candidate", async () => {
+    const child = rcSheet("child.sim").document;
+    const tree = [
+      { name: "top.sim", path: "/project/top.sim", kind: "file" as const },
+      { name: "child.sim", path: "/project/child.sim", kind: "file" as const },
+    ];
+    const loaded = await loadProjectHierarchySheets({
+      projectRoot: "/project",
+      rootSheetPath: "/project/top.sim",
+      tree,
+      readText: async () => JSON.stringify(child),
+    });
+    expect(loaded.rootPath).toBe("top.sim");
+    expect(loaded.sheets.map((sheet) => sheet.path)).toEqual(["child.sim"]);
+
+    await expect(loadProjectHierarchySheets({
+      projectRoot: "/project",
+      rootSheetPath: "/project/top.sim",
+      tree: [...tree, { name: "evil.sim", path: "/project-old/evil.sim", kind: "file" as const }],
+      readText: async () => JSON.stringify(child),
+    })).rejects.toMatchObject({ code: "invalid-path" });
   });
 });

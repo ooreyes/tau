@@ -94,7 +94,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     useSchematic.setState({ past: [emptyDoc], future: [emptyDoc] });
     render(<EditorToolbar mode="simulator" {...noopToolbarProps} />);
 
-    for (const name of ["Wire", "Net label (F4)", "Undo", "Redo", "Erase selection (Delete)", "Delete schematic"]) {
+    for (const name of ["Wire", "Net label (F4)", "Undo", "Redo", "Erase selection (Delete)", "Clear schematic"]) {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
     }
   });
@@ -120,7 +120,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
   it("does not open the clear-schematic confirmation when clicked in simulator mode", () => {
     const onClearScratchpad = vi.fn();
     render(<EditorToolbar mode="simulator" {...noopToolbarProps} onClearScratchpad={onClearScratchpad} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delete schematic" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear schematic" }));
     expect(onClearScratchpad).not.toHaveBeenCalled();
   });
 
@@ -141,7 +141,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     useSchematic.setState({ past: [{ components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], textAnnotations: [], ascShapes: [], ascDataFlags: [], ascForeignSymbols: [], ascHierarchicalBlocks: [], ascSheet: null, userModelLibraries: [] }] });
     render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
 
-    for (const name of ["Wire", "Net label (F4)", "Undo", "Delete schematic"]) {
+    for (const name of ["Wire", "Net label (F4)", "Undo", "Clear schematic"]) {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(false);
     }
   });

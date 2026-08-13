@@ -19,7 +19,92 @@ import type { DiagnosticFocusTarget, LiveDiagnostic } from "../../schematic/docu
  * the one suppressed when the two say the same thing. Exported for shells
  * that maintain their own badge count alongside this panel. */
 export function diagnosticMessageKey(message: string): string {
-  return message.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  return message.trim().replace(/\s+/g, " ").replace(/[A-Z]/g, (letter) =>
+    String.fromCharCode(letter.charCodeAt(0) + 32));
+}
+
+export interface MergedDiagnostics {
+  /** Engine/import messages that do not have a structured live counterpart. */
+  messages: string[];
+  /** One live row per normalized diagnosis, retaining its focus metadata. */
+  liveIssues: LiveDiagnostic[];
+  /** Live rows whose underlying engine result was a hard failure. */
+  liveErrorKeys: Set<string>;
+  count: number;
+  hasError: boolean;
+}
+
+/**
+ * Merge engine/import strings with structured document diagnostics once. The
+ * live row wins on a duplicate because it carries component/net focus; the
+ * engine failure still marks that row as an error through `liveErrorKeys`.
+ * App's badge and BottomPanel both consume this exact result so their counts
+ * cannot drift.
+ */
+export function mergeDiagnostics(
+  result: RunOutcome | null,
+  notices: readonly string[] = [],
+  issues: readonly LiveDiagnostic[] = [],
+  isRunning = false,
+): MergedDiagnostics {
+  if (isRunning) {
+    return { messages: [], liveIssues: [], liveErrorKeys: new Set(), count: 0, hasError: false };
+  }
+  const rawMessages = [
+    ...(result && !result.ok && result.message ? [result.message] : []),
+    ...(result?.warnings ?? []),
+    ...notices,
+  ];
+  const messages: string[] = [];
+  const messageKeys = new Set<string>();
+  for (const message of rawMessages) {
+    const key = diagnosticMessageKey(message);
+    if (!key || messageKeys.has(key)) continue;
+    messageKeys.add(key);
+    messages.push(message);
+  }
+
+  const liveIssues: LiveDiagnostic[] = [];
+  const liveByKey = new Map<string, LiveDiagnostic>();
+  for (const issue of issues) {
+    const key = diagnosticMessageKey(issue.message);
+    if (!key) continue;
+    const previous = liveByKey.get(key);
+    if (previous) {
+      // Keep the first stable row/id, but do not throw away a richer focus
+      // target when another producer supplied it.
+      const merged = {
+        ...previous,
+        ...(previous.componentId || !issue.componentId ? {} : { componentId: issue.componentId }),
+        ...(previous.reference || !issue.reference ? {} : { reference: issue.reference }),
+        ...(previous.net || !issue.net ? {} : { net: issue.net }),
+        ...(previous.focus || !issue.focus ? {} : { focus: issue.focus }),
+      };
+      liveByKey.set(key, merged);
+      const rowIndex = liveIssues.findIndex((candidate) => diagnosticMessageKey(candidate.message) === key);
+      if (rowIndex >= 0) liveIssues[rowIndex] = merged;
+      continue;
+    }
+    liveByKey.set(key, issue);
+    liveIssues.push(issue);
+  }
+  const liveKeys = new Set(liveByKey.keys());
+  const visibleMessages = messages.filter((message) => !liveKeys.has(diagnosticMessageKey(message)));
+  const liveErrorKeys = new Set<string>();
+  if (result && !result.ok && result.message) {
+    const failureKey = diagnosticMessageKey(result.message);
+    if (liveKeys.has(failureKey)) liveErrorKeys.add(failureKey);
+  }
+  for (const issue of liveIssues) {
+    if (issue.severity === "error") liveErrorKeys.add(diagnosticMessageKey(issue.message));
+  }
+  return {
+    messages: visibleMessages,
+    liveIssues,
+    liveErrorKeys,
+    count: visibleMessages.length + liveIssues.length,
+    hasError: Boolean(result && !result.ok) || liveErrorKeys.size > 0,
+  };
 }
 
 function focusTargetFor(issue: LiveDiagnostic): DiagnosticFocusTarget | undefined {
@@ -90,23 +175,10 @@ export function BottomPanel({
    * fallback while callers migrate. */
   onFocusDiagnostic?: (target: DiagnosticFocusTarget) => void;
 }) {
-  // A live run supersedes the previous result's diagnostics. Keeping stale
-  // success/error classes during a rerun would contradict the amber Run state.
-  const messages = isRunning ? [] : [
-    ...(result && !result.ok && result.message ? [result.message] : []),
-    ...(result?.warnings ?? []),
-    ...notices,
-  ];
-  // Live rows are withheld mid-run for the same reason the run's own are: the
-  // document may already have moved on from the circuit being solved.
-  const liveIssues = isRunning
-    ? []
-    : issues.filter((issue) => !messages.some((message) => (
-      diagnosticMessageKey(message) === diagnosticMessageKey(issue.message)
-    )));
-  const hasIssues = messages.length + liveIssues.length > 0;
-  const hasError = !isRunning
-    && (Boolean(result && !result.ok) || liveIssues.some((issue) => issue.severity === "error"));
+  const merged = mergeDiagnostics(result, notices, issues, isRunning);
+  const { messages, liveIssues, liveErrorKeys } = merged;
+  const hasIssues = merged.count > 0;
+  const hasError = merged.hasError;
   // Import notices must surface even before the first run - "idle" only when
   // there is genuinely nothing to show.
   const isIdle = !isRunning && result === null && !hasIssues;
@@ -167,13 +239,14 @@ export function BottomPanel({
             className={`bottom-panel-count${hasError ? "" : " warnings-only"}`}
             aria-live="polite"
           >
-            {messages.length + liveIssues.length}
+            {merged.count}
           </span>
         </button>
       )}
       {panelExpanded && <div className="bottom-errors">
         {messages.map((message, index) => {
-          const isErrorMessage = Boolean(result && !result.ok && index === 0);
+          const isErrorMessage = Boolean(result && !result.ok && result.message
+            && diagnosticMessageKey(result.message) === diagnosticMessageKey(message));
           return (
             <div
               key={`${message}-${index}`}
@@ -197,10 +270,11 @@ export function BottomPanel({
             `index === 0` naming the same row as before and leaves exactly one
             `role="alert"` on the surface. */}
         {liveIssues.map((issue) => {
+          const issueIsError = issue.severity === "error" || liveErrorKeys.has(diagnosticMessageKey(issue.message));
           const glyph = (
             <span className="bottom-error-glyph" aria-hidden="true">
               <svg viewBox="0 0 12 12">
-                {issue.severity === "error" ? (
+                {issueIsError ? (
                   <path d="m4.2 4.2 3.6 3.6m0-3.6L4.2 7.8" />
                 ) : (
                   <path d="M6 1.8 10.4 10H1.6L6 1.8Zm0 2.9v2.5M6 8.7v.1" />
@@ -230,7 +304,7 @@ export function BottomPanel({
             <button
               key={issue.id}
               type="button"
-              className={`${issue.severity} bottom-error-row bottom-error-row--actionable`}
+              className={`${issueIsError ? "error" : "warning"} bottom-error-row bottom-error-row--actionable`}
               aria-label={`${actionLabel}: ${issue.message}`}
               title={actionLabel}
               onClick={onClick}
@@ -238,7 +312,7 @@ export function BottomPanel({
               {body}
             </button>
           ) : (
-            <div key={issue.id} className={`${issue.severity} bottom-error-row`}>{body}</div>
+            <div key={issue.id} className={`${issueIsError ? "error" : "warning"} bottom-error-row`}>{body}</div>
           );
         })}
       </div>}

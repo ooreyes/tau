@@ -1,6 +1,7 @@
 import type { NetLabel, Point, SchematicComponent, SchematicWire } from "./types";
 import { getComponentPins, type ComponentPin } from "./pins";
 import { isEngineeringMantissa, splitEngineeringValue } from "./engineering";
+import { asciiFold } from "./projectSubcircuit";
 
 /** Net-label texts that denote the global ground / reference node (case-insensitive). */
 const GROUND_LABELS = new Set(["0", "gnd"]);
@@ -280,7 +281,7 @@ export function extractCircuit(
     // ngspice node identity is case-insensitive and Tau emits sanitized node
     // names. Merge by that exact lowered identity here so diagnostics/probes
     // can never see two nets that the simulation deck silently shorts.
-    const key = sanitizeNetName(label.text).toLocaleLowerCase();
+    const key = asciiFold(sanitizeNetName(label.text));
     if (key === "") continue;
     pushBucket(labelsByName, key, { x: label.x, y: label.y });
   }
@@ -529,8 +530,8 @@ export function extractCircuit(
       continue;
     }
     const labelName = rootToLabelName.get(root);
-    if (labelName && !usedNames.has(labelName.toLocaleLowerCase())) {
-      usedNames.add(labelName.toLocaleLowerCase());
+    if (labelName && !usedNames.has(asciiFold(labelName))) {
+      usedNames.add(asciiFold(labelName));
       rootToNetId.set(root, labelName);
     } else {
       rootToNetId.set(root, `N${String(nextNet++).padStart(3, "0")}`);

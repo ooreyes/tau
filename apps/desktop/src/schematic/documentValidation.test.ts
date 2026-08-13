@@ -262,6 +262,10 @@ describe("schematic document validation", () => {
     const unsafeColor = validDocument();
     unsafeColor.probes[0].color = "url(javascript:alert(1))";
     expect(() => validateSchematicDocument(unsafeColor)).toThrow(/color is not supported/i);
+
+    const custom = validDocument();
+    custom.probes[0].color = "#ff00aa";
+    expect(validateSchematicDocument(custom).probes?.[0]?.color).toBe("#ff00aa");
   });
 
   it("rejects null / undefined / non-object inputs", () => {

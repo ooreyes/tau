@@ -1,18 +1,30 @@
-import { buildSpiceDeck, type SpiceAnalysis, type SpiceDeck } from "../engine/spiceNetlist";
+import {
+  buildSpiceDeck,
+  type BuildSpiceDeckOptions,
+  type SpiceAnalysis,
+  type SpiceDeck,
+} from "../engine/spiceNetlist";
 import { definedSubcktNames } from "../engine/modelDirectives";
 import { bundledSubcircuitBlock, sanitizeSubcktName } from "../engine/bundledSubcircuits";
 import { parseUserModelLibraries } from "../engine/userModelLibrary";
 import { parseQuantity } from "../simulation/quantity";
-import { extractCircuit, netAtPoint, type ExtractedCircuit } from "./netlist";
+import { extractCircuit, isResistiveWire, netAtPoint, type ExtractedCircuit } from "./netlist";
 import { getComponentPins } from "./pins";
 import {
   canonicalProjectSheetPath,
+  asciiFold,
   hasMatchingOrderedProjectPorts,
   projectSheetPortsValidation,
   projectSubcircuitLinkValidation,
 } from "./projectSubcircuit";
-import type { ProjectSheetPort, ProjectSubcircuitLink, SchematicComponent } from "./types";
+import type {
+  ProjectSheetPort,
+  ProjectSubcircuitLink,
+  SchematicComponent,
+  SchematicForeignSymbol,
+} from "./types";
 import type { SchematicDocument } from "../store/useSchematic";
+import type { ParamScope } from "../simulation/paramScope";
 
 /** Every refusal is structured so the shell can turn it into one diagnostic. */
 export type ProjectHierarchyErrorCode =
@@ -50,6 +62,21 @@ export interface ProjectHierarchyBuildInput {
   root: SchematicDocument;
   sheets: readonly ProjectHierarchySheet[];
   analysis: SpiceAnalysis;
+  /**
+   * The App's ordinary root-deck context. Keeping this separate from child
+   * sheets is intentional: root directives/functions/options and installed
+   * model attachments continue to behave exactly as they do without a project
+   * link, while child sheets remain a small, explicit safe subset.
+   */
+  rootDeck?: {
+    params?: ParamScope;
+    directives?: readonly string[];
+    userModelLibraries?: readonly string[];
+    userModelLibraryNames?: readonly string[];
+    ascForeignSymbols?: readonly SchematicForeignSymbol[];
+  };
+  /** Native step/Laplace packaging knobs from the normal root deck path. */
+  deckOptions?: BuildSpiceDeckOptions;
 }
 
 export interface ProjectHierarchyBlock {
@@ -81,7 +108,7 @@ interface SheetInterface {
   ports: readonly ResolvedPort[];
 }
 
-const keyFor = (value: string): string => value.toLocaleLowerCase();
+const keyFor = (value: string): string => asciiFold(value);
 
 function compareStable(left: string, right: string): number {
   const a = keyFor(left);
@@ -227,6 +254,14 @@ function compileChildBlock(
   model: string,
   childLinks: ReadonlyMap<string, ProjectSubcircuitLink>,
 ): string {
+  const nonIdealWire = sheet.document.wires.find(isResistiveWire);
+  if (nonIdealWire) {
+    throw new ProjectHierarchyError(
+      "unsupported-child",
+      `Linked sheet "${sheet.path}" has non-ideal wire "${nonIdealWire.id}". Project-sheet wire resistance is not emitted yet, so Tau refused to change its electrical meaning.`,
+      sheet.path,
+    );
+  }
   const unsupportedDocumentState = [
     ...(sheet.document.directives ?? []).filter((line) => line.trim() !== ""),
     ...(sheet.document.userModelLibraries ?? []).map((library) => library.name),
@@ -242,6 +277,13 @@ function compileChildBlock(
   }
   const interfaceSpec = sheetInterface(sheet);
   const portNodes = new Map(interfaceSpec.ports.map(({ port, netId }) => [netId, port.name]));
+  // A child author can legally name a public port `__tau_Foo_n1`. Do not turn
+  // an unrelated internal net into that port merely because the generated
+  // node allocator happened to pick the same case-insensitive SPICE token.
+  const reservedNodeNames = new Set([
+    "0",
+    ...interfaceSpec.ports.map(({ port }) => keyFor(port.name)),
+  ]);
   const internalNodes = new Map<string, string>();
   let internalIndex = 0;
   const node = (netId: string): string => {
@@ -251,8 +293,11 @@ function compileChildBlock(
     if (net?.isGround) return "0";
     let internal = internalNodes.get(netId);
     if (!internal) {
-      internalIndex += 1;
-      internal = `__tau_${model.toLocaleLowerCase()}_n${internalIndex}`;
+      do {
+        internalIndex += 1;
+        internal = `__tau_${asciiFold(model)}_n${internalIndex}`;
+      } while (reservedNodeNames.has(keyFor(internal)));
+      reservedNodeNames.add(keyFor(internal));
       internalNodes.set(netId, internal);
     }
     return internal;
@@ -301,15 +346,20 @@ function compileChildBlock(
   ].join("\n");
 }
 
-function rootDeckInput(document: SchematicDocument, directives: readonly string[]) {
+function rootDeckInput(
+  document: SchematicDocument,
+  directives: readonly string[],
+  rootDeck: ProjectHierarchyBuildInput["rootDeck"],
+) {
   return {
     components: document.components,
     wires: document.wires,
     netLabels: document.netLabels ?? [],
     directives: [...directives],
-    ascForeignSymbols: document.ascForeignSymbols,
-    userModelLibraries: document.userModelLibraries?.map((library) => library.text),
-    userModelLibraryNames: document.userModelLibraries?.map((library) => library.name),
+    ...(rootDeck?.params ? { params: rootDeck.params } : {}),
+    ascForeignSymbols: rootDeck?.ascForeignSymbols ?? document.ascForeignSymbols,
+    userModelLibraries: rootDeck?.userModelLibraries ?? document.userModelLibraries?.map((library) => library.text),
+    userModelLibraryNames: rootDeck?.userModelLibraryNames ?? document.userModelLibraries?.map((library) => library.name),
   };
 }
 
@@ -331,16 +381,30 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
     sheets.set(key, { path, key, document: candidate.document });
   }
 
+  const rootDirectives = input.rootDeck?.directives ?? input.root.directives ?? [];
+  const rootLibraryTexts = input.rootDeck?.userModelLibraries
+    ?? input.root.userModelLibraries?.map((library) => library.text)
+    ?? [];
   const reservedDefinitions = new Set<string>();
-  for (const name of definedSubcktNames(input.root.directives ?? [])) {
+  for (const name of definedSubcktNames(rootDirectives)) {
     reservedDefinitions.add(keyFor(name));
     reservedDefinitions.add(keyFor(sanitizeSubcktName(name)));
   }
-  for (const name of parseUserModelLibraries(input.root.userModelLibraries?.map((library) => library.text) ?? []).subckts.keys()) {
+  for (const name of parseUserModelLibraries(rootLibraryTexts).subckts.keys()) {
     reservedDefinitions.add(keyFor(name));
   }
   const generatedByModel = new Map<string, { sheetKey: string; model: string }>();
   const modelBySheet = new Map<string, string>();
+  // A root-level ordinary X instance is deliberately NOT a project link. If a
+  // generated block used its model name, that ordinary X would start resolving
+  // against a different implementation without the author ever linking it.
+  const ordinaryRootXModels = new Map<string, SchematicComponent>();
+  for (const component of input.root.components) {
+    if (component.kind !== "subckt" || component.projectSubcircuit) continue;
+    const raw = component.value.trim().split(/\s+/)[0] ?? "";
+    if (!raw) continue;
+    ordinaryRootXModels.set(keyFor(sanitizeSubcktName(raw)), component);
+  }
   const compiling: string[] = [root.key];
   const compiled = new Set<string>();
   const blocks: ProjectHierarchyBlock[] = [];
@@ -359,6 +423,14 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
       );
     }
     const modelKey = keyFor(link.model);
+    const ordinaryRootX = ordinaryRootXModels.get(modelKey);
+    if (ordinaryRootX) {
+      throw new ProjectHierarchyError(
+        "duplicate-definition",
+        `Project model "${link.model}" collides with ordinary root X instance "${displayInstance(ordinaryRootX)}". Link that instance explicitly or choose a different project model name.`,
+        ownerPath,
+      );
+    }
     const existingModel = generatedByModel.get(modelKey);
     if (existingModel && existingModel.sheetKey !== target.key) {
       throw new ProjectHierarchyError(
@@ -425,8 +497,13 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
   for (const { link } of rootLinks) visit(link, root.path);
 
   const deck = buildSpiceDeck(
-    rootDeckInput(input.root, [...(input.root.directives ?? []), ...blocks.map((block) => block.text)]),
+    rootDeckInput(
+      input.root,
+      [...rootDirectives, ...blocks.map((block) => block.text)],
+      input.rootDeck,
+    ),
     input.analysis,
+    input.deckOptions,
   );
   return { deck, blocks };
 }
