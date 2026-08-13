@@ -76,6 +76,7 @@ function resetStore() {
     ascHierarchicalBlocks: [],
     ascSheet: null,
     userModelLibraries: [],
+    projectPorts: [],
     past: [],
     future: [],
   });
@@ -402,6 +403,92 @@ describe("schematic document store", () => {
 
     useSchematic.getState().undo();
     expect(useSchematic.getState().components[0]).toMatchObject({ value: "old", ltSymbolType: "Vendor\\old" });
+  });
+
+  it("stores a project-linked subcircuit as one undoable ordered contract", () => {
+    useSchematic.setState({
+      components: [{ id: "x1", kind: "subckt", x: 0, y: 0, rotation: 0, value: "legacy", label: "X1" }],
+      netLabels: [
+        { id: "in", x: -48, y: -16, text: "IN" },
+        { id: "out", x: 48, y: 16, text: "OUT" },
+      ],
+    });
+
+    const link = useSchematic.getState().setProjectSubcircuitLink("x1", {
+      sheetPath: "power/filter.sim",
+      model: "TauFilter",
+      ports: ["IN", "OUT"],
+    });
+    expect(link).toEqual({ ok: true });
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      value: "TauFilter",
+      projectSubcircuit: { sheetPath: "power/filter.sim", model: "TauFilter", ports: ["IN", "OUT"] },
+      pinOverride: [
+        { id: "p1", label: "IN" },
+        { id: "p2", label: "OUT" },
+      ],
+    });
+    expect(useSchematic.getState().past).toHaveLength(1);
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0]).toMatchObject({ value: "legacy" });
+    expect(useSchematic.getState().components[0].projectSubcircuit).toBeUndefined();
+    useSchematic.getState().redo();
+    expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
+      sheetPath: "power/filter.sim", model: "TauFilter", ports: ["IN", "OUT"],
+    });
+
+    // Switching back to a generic imported/local model cannot leave a stale
+    // project resolver identity behind.
+    useSchematic.getState().setSubcircuitModel("x1", "vendor_model", ["A", "B"]);
+    expect(useSchematic.getState().components[0].projectSubcircuit).toBeUndefined();
+  });
+
+  it("persists ordered project sheet ports with their label markers through undo and load", () => {
+    useSchematic.setState({
+      netLabels: [
+        { id: "input", x: 0, y: 0, text: "IN" },
+        { id: "output", x: 64, y: 0, text: "OUT" },
+      ],
+    });
+    const setPorts = useSchematic.getState().setProjectSheetPorts([
+      { name: "IN", labelId: "input", direction: "In" },
+      { name: "OUT", labelId: "output", direction: "Out" },
+    ]);
+    expect(setPorts).toEqual({ ok: true });
+    expect(useSchematic.getState().projectPorts).toEqual([
+      { name: "IN", labelId: "input", direction: "In" },
+      { name: "OUT", labelId: "output", direction: "Out" },
+    ]);
+    expect(useSchematic.getState().netLabels.map(({ id, port }) => ({ id, port }))).toEqual([
+      { id: "input", port: "In" }, { id: "output", port: "Out" },
+    ]);
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().projectPorts).toEqual([]);
+    expect(useSchematic.getState().netLabels.every((label) => label.port === undefined)).toBe(true);
+    useSchematic.getState().redo();
+
+    const snapshot = {
+      components: useSchematic.getState().components,
+      wires: useSchematic.getState().wires,
+      netLabels: useSchematic.getState().netLabels,
+      projectPorts: useSchematic.getState().projectPorts,
+    };
+    useSchematic.getState().loadCircuit(snapshot);
+    const restored = useSchematic.getState();
+    expect(restored.projectPorts).toHaveLength(2);
+    expect(restored.projectPorts.every((port) => restored.netLabels.some((label) => label.id === port.labelId))).toBe(true);
+    expect(restored.netLabels.map((label) => label.port)).toEqual(["In", "Out"]);
+
+    // A marquee delete cannot leave a persisted interface pointing at a label
+    // the same operation removed. Undo restores both halves together.
+    const inputLabel = restored.projectPorts[0]!.labelId;
+    restored.selectMixed({ componentIds: [], wireIds: [], labelIds: [inputLabel], probeIds: [] });
+    restored.deleteSelected();
+    expect(useSchematic.getState().projectPorts.map((port) => port.name)).toEqual(["OUT"]);
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().projectPorts.map((port) => port.name)).toEqual(["IN", "OUT"]);
   });
 
   it("starts each fresh document without residual probes or labels", () => {

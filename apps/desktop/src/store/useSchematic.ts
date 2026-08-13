@@ -15,6 +15,8 @@ import type {
   SchematicForeignSymbol,
   SchematicHierarchicalBlock,
   SchematicSheet,
+  ProjectSheetPort,
+  ProjectSubcircuitLink,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { actuatedValue, wiperValue, type ActuationPhase } from "../schematic/actuation";
@@ -23,6 +25,11 @@ import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { getComponentPins, rotatePoint, transformPoint } from "../schematic/pins";
 import { withOpampModel } from "../engine/opampModel";
 import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
+import {
+  canonicalProjectSheetPath,
+  projectSheetPortsValidation,
+  projectSubcircuitLinkValidation,
+} from "../schematic/projectSubcircuit";
 
 /** Move a component while preserving the invariant that imported LTspice pin
  * overrides are absolute world coordinates attached to that component. */
@@ -77,6 +84,8 @@ interface Doc {
   ascSheet: SchematicSheet | null;
   /** Vendor model files attached to the document (see {@link SchematicModelLibrary}). */
   userModelLibraries: SchematicModelLibrary[];
+  /** Explicit ordered public ports when this sheet is linked by another Tau sheet. */
+  projectPorts?: ProjectSheetPort[];
 }
 
 interface SchematicClipboard {
@@ -120,6 +129,8 @@ export interface SchematicDocument {
    * absent for legacy/v1 files and for documents with no attachments.
    */
   userModelLibraries?: SchematicModelLibrary[];
+  /** Ordered Tau-native sheet interface. Absent on legacy/imported documents. */
+  projectPorts?: ProjectSheetPort[];
 }
 
 export interface SchematicHistory {
@@ -283,6 +294,8 @@ interface SchematicState extends Doc {
   setWiper: (id: string, fraction: number) => boolean;
   /** Select a `.subckt` contract and rebuild its exact p1..pN terminal bank. */
   setSubcircuitModel: (id: string, model: string, ports: readonly string[]) => void;
+  /** Attach/detach a Tau project sheet as this X instance's real source. */
+  setProjectSubcircuitLink: (id: string, link: ProjectSubcircuitLink | null) => ProjectSubcircuitResult;
   /** Select a real op-amp subcircuit while preserving imported Value/Value2 slots. */
   setOpampModel: (id: string, model: string) => void;
   /** Rename a component's reference designator (canvas label). */
@@ -308,6 +321,10 @@ interface SchematicState extends Doc {
 
   /** Vendor model files attached to the document, inlined into the native deck when referenced. */
   userModelLibraries: SchematicModelLibrary[];
+  /** Explicit ordered public ports for this document's project-linked interface. */
+  projectPorts: ProjectSheetPort[];
+  /** Set the sheet interface and matching label direction markers atomically. */
+  setProjectSheetPorts: (ports: readonly ProjectSheetPort[]) => ProjectSubcircuitResult;
   /** Attach a model file; a same-named attachment is replaced so re-attaching updates in place. */
   attachModelLibrary: (library: SchematicModelLibrary) => void;
   /** Remove the attachment with the given name (no-op if absent). */
@@ -335,6 +352,12 @@ export const PROBE_COLORS = [
 export interface ReferenceRenameResult {
   ok: boolean;
   /** Present when the proposed name would collide case-insensitively. */
+  error?: string;
+}
+
+/** Result of a project hierarchy edit that may be refused without mutating. */
+export interface ProjectSubcircuitResult {
+  ok: boolean;
   error?: string;
 }
 
@@ -380,6 +403,21 @@ export function referenceRenameResult(
     error: `Reference “${label}” is already used by ${collider.label.trim() || collider.id}. Choose a unique component ID.`,
   };
 }
+
+/** Normalize inspector input once, then store exactly the canonical contract. */
+function normalizedProjectSubcircuitLink(
+  link: ProjectSubcircuitLink,
+): { link?: ProjectSubcircuitLink; error?: string } {
+  const sheetPath = canonicalProjectSheetPath(link.sheetPath);
+  if (!sheetPath) return { error: "Linked sheet must be inside the open project." };
+  const candidate: ProjectSubcircuitLink = {
+    sheetPath,
+    model: link.model.trim(),
+    ports: link.ports.map((port) => port.trim()),
+  };
+  const validation = projectSubcircuitLinkValidation(candidate);
+  return validation.ok ? { link: candidate } : { error: validation.error };
+}
 const STORAGE_KEY = "tau.schematic.v1";
 const nextRotation = (r: Rotation): Rotation => (((r + 90) % 360) as Rotation);
 const docOf = (s: Doc): Doc => ({
@@ -396,6 +434,7 @@ const docOf = (s: Doc): Doc => ({
   ascHierarchicalBlocks: s.ascHierarchicalBlocks,
   ascSheet: s.ascSheet,
   userModelLibraries: s.userModelLibraries,
+  projectPorts: s.projectPorts,
 });
 
 /**
@@ -419,6 +458,7 @@ const blankDoc = (): Doc => ({
   ascHierarchicalBlocks: [],
   ascSheet: null,
   userModelLibraries: [],
+  projectPorts: [],
 });
 
 /** Comparison intentionally ignores object identity: probe maintenance should
@@ -509,6 +549,12 @@ function nextVoltageProbeColor(
  *  on top of its source (2 grid cells, like LTspice's paste nudge). */
 const PASTE_OFFSET = 32;
 
+function copyProjectSubcircuitLink(
+  link: ProjectSubcircuitLink | undefined,
+): ProjectSubcircuitLink | undefined {
+  return link ? { ...link, ports: [...link.ports] } : undefined;
+}
+
 /**
  * Produce a placed clone of `src`: a fresh id, the next ref-des for its kind, and
  * a small diagonal offset. `pinOverride` (imported, pin-accurate parts) is offset
@@ -534,6 +580,7 @@ function placeClone(
     ...(src.pinOverride
       ? { pinOverride: src.pinOverride.map((p) => ({ ...p, x: p.x + PASTE_OFFSET, y: p.y + PASTE_OFFSET })) }
       : {}),
+    ...(src.projectSubcircuit ? { projectSubcircuit: copyProjectSubcircuitLink(src.projectSubcircuit)! } : {}),
   };
   return { comp, prefix: entry.prefix, next };
 }
@@ -551,6 +598,9 @@ function clipboardFromSelection(state: SchematicState): SchematicClipboard | nul
     components: state.components.filter((component) => componentIds.has(component.id)).map((component) => ({
       ...component,
       ...(component.pinOverride ? { pinOverride: component.pinOverride.map((pin) => ({ ...pin })) } : {}),
+      ...(component.projectSubcircuit
+        ? { projectSubcircuit: copyProjectSubcircuitLink(component.projectSubcircuit)! }
+        : {}),
     })),
     wires: state.wires.filter((wire) => wireIds.has(wire.id)).map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
     netLabels: state.netLabels.filter((label) => labelIds.has(label.id)).map((label) => ({ ...label })),
@@ -631,6 +681,7 @@ function deriveCounters(components: SchematicComponent[]): Record<string, number
 /** Clone an incoming document with fresh ids so examples/files never alias live state. */
 function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocument {
   const componentIds = new Map<string, string>();
+  const labelIds = new Map<string, string>();
   const components = doc.components.map((component) => {
     const id = freshIds ? nanoid(6) : component.id;
     componentIds.set(component.id, id);
@@ -640,7 +691,15 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
       ...(component.pinOverride
         ? { pinOverride: component.pinOverride.map((pin) => ({ ...pin })) }
         : {}),
+      ...(component.projectSubcircuit
+        ? { projectSubcircuit: copyProjectSubcircuitLink(component.projectSubcircuit)! }
+        : {}),
     };
+  });
+  const netLabels = (doc.netLabels ?? []).map((label) => {
+    const id = freshIds ? nanoid(6) : label.id;
+    labelIds.set(label.id, id);
+    return { ...label, id };
   });
   return {
     components,
@@ -657,7 +716,7 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
         ? { componentId: componentIds.get(probe.componentId) }
         : {}),
     })),
-    netLabels: (doc.netLabels ?? []).map((label) => ({ ...label, id: freshIds ? nanoid(6) : label.id })),
+    netLabels,
     directives: [...(doc.directives ?? [])],
     textAnnotations: (doc.textAnnotations ?? []).map((annotation) => ({ ...annotation })),
     ascShapes: (doc.ascShapes ?? []).map((shape) => ({ ...shape, coords: [...shape.coords] })),
@@ -677,6 +736,10 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
     // Attachments are immutable, so a shallow copy shares the (possibly large)
     // text without duplicating it - fresh ids never apply to library files.
     userModelLibraries: [...(doc.userModelLibraries ?? [])],
+    projectPorts: (doc.projectPorts ?? []).map((port) => ({
+      ...port,
+      labelId: freshIds ? labelIds.get(port.labelId) ?? port.labelId : port.labelId,
+    })),
   };
 }
 
@@ -700,6 +763,7 @@ function copyHistoryEntry(entry: Doc): Doc {
     ascHierarchicalBlocks: document.ascHierarchicalBlocks ?? [],
     ascSheet: document.ascSheet ?? null,
     userModelLibraries: document.userModelLibraries ?? [],
+    projectPorts: document.projectPorts ?? [],
   };
 }
 
@@ -977,12 +1041,49 @@ export const useSchematic = create<SchematicState>()((set, get) => {
     ascHierarchicalBlocks: initialDoc?.ascHierarchicalBlocks ?? [],
     ascSheet: initialDoc?.ascSheet ?? null,
     userModelLibraries: initialDoc?.userModelLibraries ?? [],
+    projectPorts: initialDoc?.projectPorts ?? [],
     past: [],
     future: [],
 
     beginChange: () => set((s) => recordInto(s)),
 
     setDirectives: (directives) => set((s) => ({ ...recordInto(s), directives: [...directives] })),
+
+    setProjectSheetPorts: (ports) => {
+      const nextPorts = ports.map((port) => ({
+        name: port.name.trim(),
+        labelId: port.labelId.trim(),
+        direction: port.direction,
+      }));
+      const validation = projectSheetPortsValidation(nextPorts);
+      if (!validation.ok) return { ok: false, error: validation.error };
+      const snapshot = get();
+      const labelsById = new Map(snapshot.netLabels.map((label) => [label.id, label]));
+      for (const port of nextPorts) {
+        const label = labelsById.get(port.labelId);
+        if (!label) return { ok: false, error: `Port "${port.name}" needs an existing net label.` };
+        if (label.text !== port.name) {
+          return { ok: false, error: `Port "${port.name}" must exactly match its net label text.` };
+        }
+      }
+      set((s) => {
+        const previousIds = new Set(s.projectPorts.map((port) => port.labelId));
+        const byId = new Map(nextPorts.map((port) => [port.labelId, port]));
+        const netLabels = s.netLabels.map((label) => {
+          const port = byId.get(label.id);
+          if (port) return { ...label, port: port.direction };
+          if (!previousIds.has(label.id)) return label;
+          const { port: _port, ...withoutPort } = label;
+          return withoutPort;
+        });
+        return {
+          ...recordInto(s),
+          projectPorts: nextPorts.map((port) => ({ ...port })),
+          netLabels,
+        };
+      });
+      return { ok: true };
+    },
 
     attachModelLibrary: (library) =>
       set((s) => ({
@@ -1008,6 +1109,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
         const previous = s.past[s.past.length - 1];
         return {
           ...previous,
+          projectPorts: previous.projectPorts ?? [],
           past: s.past.slice(0, -1),
           future: [docOf(s), ...s.future].slice(0, HISTORY_LIMIT),
           selectedId: null,
@@ -1023,6 +1125,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
         const next = s.future[0];
         return {
           ...next,
+          projectPorts: next.projectPorts ?? [],
           past: [...s.past, docOf(s)].slice(-HISTORY_LIMIT),
           future: s.future.slice(1),
           selectedId: null,
@@ -1299,12 +1402,28 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           ? s.netLabels.find((l) => nodeOf(l) === clickedNet.id)
           : s.netLabels.find((l) => l.x === x && l.y === y);
         if (!trimmed && !existing) return s; // nothing to add or remove - no history entry
-        if (!trimmed) return { ...recordInto(s), netLabels: s.netLabels.filter((l) => l.id !== existing!.id) };
-        if (existing?.text === trimmed && existing.x === x && existing.y === y) return s; // unchanged
-        if (existing) {
+        if (!trimmed) {
           return {
             ...recordInto(s),
-            netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, x, y, text: trimmed } : l)),
+            netLabels: s.netLabels.filter((l) => l.id !== existing!.id),
+            projectPorts: s.projectPorts.filter((port) => port.labelId !== existing!.id),
+          };
+        }
+        if (existing?.text === trimmed && existing.x === x && existing.y === y) return s; // unchanged
+        if (existing) {
+          const wasProjectPort = s.projectPorts.some((port) => port.labelId === existing.id);
+          return {
+            ...recordInto(s),
+            netLabels: s.netLabels.map((l) => {
+              if (l.id !== existing.id) return l;
+              if (!wasProjectPort) return { ...l, x, y, text: trimmed };
+              // Renaming a normal label is allowed, but a project interface
+              // must be edited atomically via setProjectSheetPorts. Dropping
+              // this one contract entry prevents an orphaned label/name pair.
+              const { port: _port, ...withoutPort } = l;
+              return { ...withoutPort, x, y, text: trimmed };
+            }),
+            ...(wasProjectPort ? { projectPorts: s.projectPorts.filter((port) => port.labelId !== existing.id) } : {}),
           };
         }
         return { ...recordInto(s), netLabels: [...s.netLabels, { id: nanoid(6), x, y, text: trimmed }] };
@@ -1318,8 +1437,24 @@ export const useSchematic = create<SchematicState>()((set, get) => {
         const existing = clickedNet
           ? s.netLabels.find((l) => nodeOf(l) === clickedNet.id)
           : s.netLabels.find((l) => l.x === x && l.y === y);
-        if (!text) return existing ? { netLabels: s.netLabels.filter((l) => l.id !== existing.id) } : {};
-        if (existing) return { netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, x, y, text } : l)) };
+        if (!text) {
+          return existing ? {
+            netLabels: s.netLabels.filter((l) => l.id !== existing.id),
+            projectPorts: s.projectPorts.filter((port) => port.labelId !== existing.id),
+          } : {};
+        }
+        if (existing) {
+          const wasProjectPort = s.projectPorts.some((port) => port.labelId === existing.id);
+          return {
+            netLabels: s.netLabels.map((l) => {
+              if (l.id !== existing.id) return l;
+              if (!wasProjectPort) return { ...l, x, y, text };
+              const { port: _port, ...withoutPort } = l;
+              return { ...withoutPort, x, y, text };
+            }),
+            ...(wasProjectPort ? { projectPorts: s.projectPorts.filter((port) => port.labelId !== existing.id) } : {}),
+          };
+        }
         return { netLabels: [...s.netLabels, { id: nanoid(6), x, y, text }] };
       }),
 
@@ -1473,6 +1608,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           components: compIds.size > 0 ? s.components.filter((c) => !compIds.has(c.id)) : s.components,
           wires: wireIds.size > 0 ? s.wires.filter((w) => !wireIds.has(w.id)) : s.wires,
           netLabels: labelIds.size > 0 ? s.netLabels.filter((l) => !labelIds.has(l.id)) : s.netLabels,
+          projectPorts: labelIds.size > 0 ? s.projectPorts.filter((port) => !labelIds.has(port.labelId)) : s.projectPorts,
           probes: (probeIds.size > 0 || compIds.size > 0)
             ? s.probes.filter((p) => !probeIds.has(p.id) && (!p.componentId || !compIds.has(p.componentId)))
             : s.probes,
@@ -1496,7 +1632,8 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           && s.ascForeignSymbols.length === 0
           && s.ascHierarchicalBlocks.length === 0
           && s.ascSheet === null
-          && s.userModelLibraries.length === 0;
+          && s.userModelLibraries.length === 0
+          && s.projectPorts.length === 0;
         if (alreadyBlank) return {};
         // This is intentionally document-only. It does not know about project
         // tabs, file paths, save state, or the filesystem, so "Clear schematic"
@@ -1597,6 +1734,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           delete next.ltExtraAttrs;
           delete next.ltModelName;
           delete next.ltModelFile;
+          delete next.projectSubcircuit;
           return next;
         });
         const after = components.filter((component) => component.id === id);
@@ -1612,6 +1750,61 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           probes: s.probes.map((probe) => probe.componentId ? probe : relocateAnchoredPoint(probe, relocations, stationaryPinKeys)),
         };
       }),
+    setProjectSubcircuitLink: (id, link) => {
+      const current = get().components.find((component) => component.id === id);
+      if (!current || current.kind !== "subckt") {
+        return { ok: false, error: "Select a subcircuit instance before linking a project sheet." };
+      }
+      if (link === null) {
+        if (!current.projectSubcircuit) return { ok: true };
+        set((s) => ({
+          ...recordInto(s),
+          components: s.components.map((component) => {
+            if (component.id !== id) return component;
+            const { projectSubcircuit: _link, ...unlinked } = component;
+            return unlinked;
+          }),
+        }));
+        return { ok: true };
+      }
+      const normalized = normalizedProjectSubcircuitLink(link);
+      if (!normalized.link) return { ok: false, error: normalized.error };
+      set((s) => {
+        const before = s.components.filter((component) => component.id === id);
+        if (before.length !== 1 || before[0].kind !== "subckt") return {};
+        const components = s.components.map((component) => {
+          if (component.id !== id || component.kind !== "subckt") return component;
+          const next: SchematicComponent = {
+            ...component,
+            value: normalized.link!.model,
+            pinOverride: buildSubcircuitPinOverride(component, normalized.link!.ports),
+            projectSubcircuit: copyProjectSubcircuitLink(normalized.link!)!,
+          };
+          // A project link owns its contract. Imported `.asy` metadata is a
+          // separate file-backed behavior and must never masquerade as it.
+          delete next.ltSymbolType;
+          delete next.ltWindows;
+          delete next.ltExtraAttrs;
+          delete next.ltModelName;
+          delete next.ltModelFile;
+          return next;
+        });
+        const after = components.filter((component) => component.id === id);
+        const relocations = endpointRelocations(before, after);
+        const stationaryPinKeys = new Set(s.components
+          .filter((component) => component.id !== id)
+          .flatMap((component) => getComponentPins(component))
+          .map(pointKey));
+        return {
+          ...recordInto(s),
+          components,
+          wires: relocateAttachedEndpoints(s.wires, relocations, stationaryPinKeys),
+          netLabels: s.netLabels.map((label) => relocateAnchoredPoint(label, relocations, stationaryPinKeys)),
+          probes: s.probes.map((probe) => probe.componentId ? probe : relocateAnchoredPoint(probe, relocations, stationaryPinKeys)),
+        };
+      });
+      return { ok: true };
+    },
     setOpampModel: (id, model) =>
       set((s) => ({
         components: s.components.map((c) => (
@@ -1664,6 +1857,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           ascHierarchicalBlocks: cloned.ascHierarchicalBlocks ?? [],
           ascSheet: cloned.ascSheet ?? null,
           userModelLibraries: cloned.userModelLibraries ?? [],
+          projectPorts: cloned.projectPorts ?? [],
           past: [],
           future: [],
           selectedId: null,
@@ -1694,6 +1888,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           ascHierarchicalBlocks: replacement.ascHierarchicalBlocks ?? [],
           ascSheet: replacement.ascSheet ?? null,
           userModelLibraries: replacement.userModelLibraries ?? [],
+          projectPorts: replacement.projectPorts ?? [],
           selectedId: null,
           selectedWireId: null,
           selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [],
@@ -1721,6 +1916,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           ascHierarchicalBlocks: restored.ascHierarchicalBlocks ?? [],
           ascSheet: restored.ascSheet ?? null,
           userModelLibraries: restored.userModelLibraries ?? [],
+          projectPorts: restored.projectPorts ?? [],
           past: history.past.map(copyHistoryEntry).slice(-HISTORY_LIMIT),
           future: history.future.map(copyHistoryEntry).slice(0, HISTORY_LIMIT),
           selectedId: null,
@@ -1760,6 +1956,7 @@ useSchematic.subscribe((state, prev) => {
     || state.ascHierarchicalBlocks !== prev.ascHierarchicalBlocks
     || state.ascSheet !== prev.ascSheet
     || state.userModelLibraries !== prev.userModelLibraries
+    || state.projectPorts !== prev.projectPorts
   ) {
     persist({
       components: state.components,
@@ -1774,6 +1971,7 @@ useSchematic.subscribe((state, prev) => {
       ascHierarchicalBlocks: state.ascHierarchicalBlocks,
       ...(state.ascSheet ? { ascSheet: state.ascSheet } : {}),
       ...(state.userModelLibraries.length > 0 ? { userModelLibraries: state.userModelLibraries } : {}),
+      ...(state.projectPorts.length > 0 ? { projectPorts: state.projectPorts } : {}),
     });
   }
 });

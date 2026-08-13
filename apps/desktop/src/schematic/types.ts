@@ -93,6 +93,24 @@ export interface PinOverride {
   y: number;
 }
 
+/**
+ * A Tau-native link from an `X` symbol to another sheet in the open project.
+ *
+ * This is deliberately separate from `ltSymbolType` / `ltModelFile`: those
+ * fields preserve imported LTspice file-backed symbols, whereas this contract
+ * is resolved only against the open Tau project by `projectHierarchy.ts`.
+ * The ordered port list is part of the electrical interface; it is never
+ * inferred from screen position or object iteration order.
+ */
+export interface ProjectSubcircuitLink {
+  /** Canonical project-relative `.sim` / `.tau.json` sheet path. */
+  sheetPath: string;
+  /** Safe SPICE subcircuit name emitted for the linked sheet. */
+  model: string;
+  /** Exact parent-instance terminal order, e.g. `IN`, `SW`, `GND`, `OUT`. */
+  ports: string[];
+}
+
 /** A placed component. Coordinates are world units and grid-snapped. */
 export interface SchematicComponent {
   id: string;
@@ -116,6 +134,8 @@ export interface SchematicComponent {
    * parts placed in the editor (which use rotated kind geometry).
    */
   pinOverride?: PinOverride[];
+  /** Tau-native linked-sheet hierarchy metadata. Imported X devices omit it. */
+  projectSubcircuit?: ProjectSubcircuitLink;
   /**
    * The exact LTspice symbol name this part was imported from (e.g. "nmos",
    * "Opamps\\AD823"). Set alongside {@link pinOverride}. When the symbol's
@@ -240,6 +260,16 @@ export interface SchematicSheet {
 /** LTspice hierarchy-port direction, carried by an `IOPIN` record. Marks which
  *  nets become a sheet's ports when it is used as a subcircuit symbol. */
 export type SchematicPortDirection = "In" | "Out" | "BiDir";
+
+/** One explicit, ordered public terminal of a Tau project sheet. */
+export interface ProjectSheetPort {
+  /** Human/Spice name, also rendered on a linked-sheet instance. */
+  name: string;
+  /** The document's authoritative net-label identity for this terminal. */
+  labelId: string;
+  /** Intent copied from the label's explicit port marker. */
+  direction: SchematicPortDirection;
+}
 
 export interface SchematicAscShape {
   kind: "LINE" | "RECTANGLE" | "CIRCLE" | "ARC";

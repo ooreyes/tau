@@ -75,6 +75,52 @@ describe("schematic document validation", () => {
     expect(validateSchematicDocument(document)).toEqual(document);
   });
 
+  it("accepts only explicit ordered Tau project-sheet port contracts", () => {
+    const document = {
+      components: [{
+        id: "x1", kind: "subckt", x: 0, y: 0, rotation: 0, value: "TauFilter", label: "X1",
+        pinOverride: [
+          { id: "p1", label: "IN", x: -48, y: -16 },
+          { id: "p2", label: "OUT", x: 48, y: 16 },
+        ],
+        projectSubcircuit: { sheetPath: "filters/rc.sim", model: "TauFilter", ports: ["IN", "OUT"] },
+      }],
+      wires: [], probes: [], directives: [],
+      netLabels: [
+        { id: "in", x: -48, y: -16, text: "IN", port: "In" },
+        { id: "out", x: 48, y: 16, text: "OUT", port: "Out" },
+      ],
+      projectPorts: [
+        { name: "IN", labelId: "in", direction: "In" },
+        { name: "OUT", labelId: "out", direction: "Out" },
+      ],
+    };
+
+    expect(validateSchematicDocument(document)).toEqual(document);
+    expect(() => validateSchematicDocument({
+      ...document,
+      projectPorts: [
+        document.projectPorts[0],
+        { name: "in", labelId: "out", direction: "Out" },
+      ],
+    })).toThrow(/duplicated/i);
+    expect(() => validateSchematicDocument({
+      ...document,
+      components: [{
+        ...document.components[0],
+        projectSubcircuit: { ...document.components[0].projectSubcircuit, model: "Different" },
+      }],
+    })).toThrow(/exactly match the subcircuit value/i);
+    expect(() => validateSchematicDocument({
+      ...document,
+      components: [{ ...document.components[0], ltSymbolType: "Misc\\varistor" }],
+    })).toThrow(/file-backed symbol metadata/i);
+    expect(() => validateSchematicDocument({
+      ...document,
+      projectPorts: [{ name: "IN", labelId: "missing", direction: "In" }],
+    })).toThrow(/does not exist/i);
+  });
+
   it("preserves vendor-model metadata but rejects injected names and paths", () => {
     const base = validDocument();
     const component = {

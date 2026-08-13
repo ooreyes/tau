@@ -259,6 +259,12 @@ export function serializeSchematicFile(
   savedAt = new Date().toISOString(),
 ): SerializedSchematicFile {
   if (isAscFile(path)) {
+    // `.asc` has no Tau project-file identity. Writing a native linked-sheet
+    // instance as a bare LTspice X would discard both its resolver path and
+    // its ordered contract, so surface a blocking warning to the existing
+    // save guard rather than pretending the ASC is equivalent.
+    const carriesProjectHierarchy = document.components.some((component) => component.projectSubcircuit !== undefined)
+      || (document.projectPorts?.length ?? 0) > 0;
     const result = schematicToAsc({
       components: document.components,
       wires: document.wires,
@@ -291,6 +297,9 @@ export function serializeSchematicFile(
       contents: result.text,
       warnings: [
         ...result.warnings,
+        ...(carriesProjectHierarchy
+          ? ["Project-linked sheets require a Tau .sim or .tau.json file; ASC save was not written."]
+          : []),
         ...(topologyChanged ? ["ASC round-trip changed terminal connectivity; save was not written."] : []),
       ],
     };
@@ -333,6 +342,9 @@ export function serializeSchematicFile(
         // files, so legacy `.sim` output is byte-for-byte unchanged.
         ...(document.userModelLibraries && document.userModelLibraries.length > 0
           ? { userModelLibraries: document.userModelLibraries }
+          : {}),
+        ...(document.projectPorts && document.projectPorts.length > 0
+          ? { projectPorts: document.projectPorts }
           : {}),
       },
       null,

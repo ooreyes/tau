@@ -143,6 +143,36 @@ describe("project schematic file formats", () => {
     expect(Object.prototype.hasOwnProperty.call(JSON.parse(saved.contents), "userModelLibraries")).toBe(false);
   });
 
+  it("persists Tau project-linked sheet contracts in .sim and refuses lossy ASC saves", () => {
+    const document = {
+      components: [{
+        id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const, value: "TauFilter", label: "X1",
+        pinOverride: [
+          { id: "p1", label: "IN", x: -48, y: -16 },
+          { id: "p2", label: "OUT", x: 48, y: 16 },
+        ],
+        projectSubcircuit: { sheetPath: "filters/rc.sim", model: "TauFilter", ports: ["IN", "OUT"] },
+      }],
+      wires: [], probes: [], directives: [],
+      netLabels: [
+        { id: "in", x: -48, y: -16, text: "IN", port: "In" as const },
+        { id: "out", x: 48, y: 16, text: "OUT", port: "Out" as const },
+      ],
+      projectPorts: [
+        { name: "IN", labelId: "in", direction: "In" as const },
+        { name: "OUT", labelId: "out", direction: "Out" as const },
+      ],
+    };
+    const saved = serializeSchematicFile("/Schematics/linked.sim", document);
+    const reopened = validateSchematicDocument(JSON.parse(saved.contents));
+    expect(reopened.components[0].projectSubcircuit).toEqual(document.components[0].projectSubcircuit);
+    expect(reopened.projectPorts).toEqual(document.projectPorts);
+
+    const asc = serializeSchematicFile("/Schematics/linked.asc", document);
+    expect(asc.warnings).toContain("Project-linked sheets require a Tau .sim or .tau.json file; ASC save was not written.");
+    expect(ascSaveBlockReason([], 0, asc.warnings)).toMatch(/Project-linked sheets/i);
+  });
+
   it("blocks rewrites when the source contains records Tau cannot preserve", () => {
     expect(ascRewriteRisks(ASC_SOURCE)).toEqual([]);
 

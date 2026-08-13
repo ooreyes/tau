@@ -20,9 +20,16 @@ import type {
   SchematicSheet,
   SchematicTextAnnotation,
   SchematicWire,
+  ProjectSheetPort,
+  ProjectSubcircuitLink,
 } from "./types";
 import { canonicalWindowJustification } from "./types";
 import type { SchematicDocument, SchematicModelLibrary } from "../store/useSchematic";
+import {
+  MAX_PROJECT_SUBCIRCUIT_PORTS,
+  projectSheetPortsValidation,
+  projectSubcircuitLinkValidation,
+} from "./projectSubcircuit";
 
 export const MAX_SCHEMATIC_FILE_BYTES = 5 * 1024 * 1024;
 // Exported so other import paths (the `.asc` importer's early count gate, in
@@ -140,6 +147,41 @@ function point(value: unknown, name: string): Point {
   return { x: coordinate(source.x, `${name}.x`), y: coordinate(source.y, `${name}.y`) };
 }
 
+function projectSubcircuitLink(value: unknown, index: number): ProjectSubcircuitLink {
+  const source = record(value, `components[${index}].projectSubcircuit`);
+  if (!Array.isArray(source.ports)) {
+    fail(`components[${index}].projectSubcircuit.ports must be an array.`);
+  }
+  if (source.ports.length === 0 || source.ports.length > MAX_PROJECT_SUBCIRCUIT_PORTS) {
+    fail(`components[${index}].projectSubcircuit.ports must contain 1 to ${MAX_PROJECT_SUBCIRCUIT_PORTS} ports.`);
+  }
+  const link: ProjectSubcircuitLink = {
+    sheetPath: singleLineText(source.sheetPath, `components[${index}].projectSubcircuit.sheetPath`, 1_024),
+    model: singleLineText(source.model, `components[${index}].projectSubcircuit.model`, 80),
+    ports: source.ports.map((port, portIndex) => singleLineText(
+      port,
+      `components[${index}].projectSubcircuit.ports[${portIndex}]`,
+      80,
+    )),
+  };
+  const validation = projectSubcircuitLinkValidation(link);
+  if (!validation.ok) fail(`components[${index}].projectSubcircuit ${validation.error}`);
+  return link;
+}
+
+function projectSheetPort(value: unknown, index: number): ProjectSheetPort {
+  const source = record(value, `projectPorts[${index}]`);
+  const direction = text(source.direction, `projectPorts[${index}].direction`, 8);
+  if (direction !== "In" && direction !== "Out" && direction !== "BiDir") {
+    fail(`projectPorts[${index}].direction must be "In", "Out", or "BiDir".`);
+  }
+  return {
+    name: singleLineText(source.name, `projectPorts[${index}].name`, 80),
+    labelId: text(source.labelId, `projectPorts[${index}].labelId`, MAX_ID_LENGTH),
+    direction: direction as SchematicPortDirection,
+  };
+}
+
 function component(value: unknown, index: number): SchematicComponent | null {
   const source = record(value, `components[${index}]`);
   const kind = text(source.kind, `components[${index}].kind`) as ComponentKind;
@@ -207,6 +249,22 @@ function component(value: unknown, index: number): SchematicComponent | null {
   }
   if (source.ltHierarchy !== undefined) {
     result.ltHierarchy = hierarchyMemberProvenance(source.ltHierarchy, `components[${index}].ltHierarchy`);
+  }
+  if (source.projectSubcircuit !== undefined) {
+    if (kind !== "subckt") fail(`components[${index}].projectSubcircuit is only valid on a subcircuit instance.`);
+    if (result.ltSymbolType || result.ltModelName || result.ltModelFile || result.ltWindows || result.ltExtraAttrs) {
+      fail(`components[${index}].projectSubcircuit cannot be combined with imported file-backed symbol metadata.`);
+    }
+    const link = projectSubcircuitLink(source.projectSubcircuit, index);
+    if (result.value !== link.model) {
+      fail(`components[${index}].projectSubcircuit.model must exactly match the subcircuit value.`);
+    }
+    const pins = result.pinOverride ?? [];
+    if (pins.length !== link.ports.length || pins.some((pin, pinIndex) =>
+      pin.id !== `p${pinIndex + 1}` || pin.label !== link.ports[pinIndex])) {
+      fail(`components[${index}].projectSubcircuit needs an exact ordered p1…pN terminal bank.`);
+    }
+    result.projectSubcircuit = link;
   }
   return result;
 }
@@ -539,6 +597,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const ascHierarchicalBlocks = source.ascHierarchicalBlocks === undefined ? [] : source.ascHierarchicalBlocks;
   const ascSheet = source.ascSheet;
   const userModelLibraries = source.userModelLibraries === undefined ? [] : source.userModelLibraries;
+  const projectPorts = source.projectPorts === undefined ? [] : source.projectPorts;
   if (!Array.isArray(probes) || probes.length > MAX_COMPONENTS) fail("probes must be a bounded array.");
   if (!Array.isArray(netLabels) || netLabels.length > MAX_COMPONENTS) fail("netLabels must be a bounded array.");
   if (!Array.isArray(directives) || directives.length > MAX_DIRECTIVES) fail("directives must be a bounded array.");
@@ -560,6 +619,9 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   if (!Array.isArray(userModelLibraries) || userModelLibraries.length > MAX_MODEL_LIBRARIES) {
     fail(`userModelLibraries must be an array of at most ${MAX_MODEL_LIBRARIES} items.`);
   }
+  if (!Array.isArray(projectPorts) || projectPorts.length > MAX_PROJECT_SUBCIRCUIT_PORTS) {
+    fail(`projectPorts must be an array of at most ${MAX_PROJECT_SUBCIRCUIT_PORTS} items.`);
+  }
 
   const remainingPoints = { value: MAX_WIRE_POINTS };
   const validatedComponents = source.components
@@ -568,6 +630,20 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const validatedWires = source.wires.map((candidate, index) => wire(candidate, index, remainingPoints));
   const validatedProbes = probes.map(probe);
   const validatedLabels = netLabels.map(netLabel);
+  const validatedProjectPorts = projectPorts.map(projectSheetPort);
+  const projectPortsValidation = projectSheetPortsValidation(validatedProjectPorts);
+  if (!projectPortsValidation.ok) fail(`projectPorts ${projectPortsValidation.error}`);
+  const labelsById = new Map(validatedLabels.map((label) => [label.id, label]));
+  for (const port of validatedProjectPorts) {
+    const label = labelsById.get(port.labelId);
+    if (!label) fail(`projectPorts label "${port.labelId}" does not exist.`);
+    if (label.text !== port.name) {
+      fail(`projectPorts port "${port.name}" must exactly match its net label text.`);
+    }
+    if (label.port !== port.direction) {
+      fail(`projectPorts port "${port.name}" must match its net label direction.`);
+    }
+  }
   const validatedHierarchicalBlocks = ascHierarchicalBlocks.map(
     (candidate: unknown, index: number) => hierarchicalBlock(candidate, index),
   );
@@ -640,6 +716,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
       ? { ascHierarchicalBlocks: validatedHierarchicalBlocks }
       : {}),
     ...(ascSheet !== undefined ? { ascSheet: schematicSheet(ascSheet) } : {}),
+    ...(validatedProjectPorts.length > 0 ? { projectPorts: validatedProjectPorts } : {}),
     // Additive: only emit the key when attachments exist so legacy/empty
     // documents keep their exact prior serialized shape.
     ...(validatedLibraries.length > 0 ? { userModelLibraries: validatedLibraries } : {}),
