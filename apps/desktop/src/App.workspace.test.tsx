@@ -52,7 +52,7 @@ import {
   DEFAULT_WORKSPACE_NAME,
   defaultWorkspaceTree,
 } from "./project/defaultWorkspace";
-import { blankAscText } from "./project/types";
+import { blankAscText, blankSimJson } from "./project/types";
 import { useProject } from "./store/useProject";
 import { useSchematic } from "./store/useSchematic";
 
@@ -180,8 +180,38 @@ async function renderOpenProject() {
   });
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
-  await screen.findByRole("tab", { name: /untitled\.asc/ });
+  await screen.findByRole("tab", { name: /untitled/ });
   await screen.findByRole("complementary", { name: "Assistant" });
+}
+
+/**
+ * Seed one empty `.asc` into the workspace and open it from the explorer.
+ *
+ * The cases that use this are about the LTspice WRITER - the `SYMBOL`, `WIRE`
+ * and `SYMATTR` records it emits - and used to reach that writer only because
+ * the scratch buffer happened to be `.asc`. What a new sheet is minted as moved
+ * to `.sim` (Tau JSON), so each of them now names `.asc` on purpose, the same
+ * way `commented.asc` and `source.asc` further down this file already do.
+ *
+ * A `.asc` tab's accessible name is the whole filename; only `.sim` is stripped
+ * from the label (`EditorChrome`), which is why `name` is matched exactly here.
+ */
+async function openBlankAsc(name: string): Promise<string> {
+  const path = `${DEFAULT_WORKSPACE_ID}/${name}`;
+  const file = { path, name, contents: blankAscText(), kind: "asc" as const };
+  useProject.setState({
+    rootPath: DEFAULT_WORKSPACE_ID,
+    rootName: DEFAULT_WORKSPACE_NAME,
+    tree: defaultWorkspaceTree([file]),
+    expanded: [DEFAULT_WORKSPACE_ID],
+    workspaceFiles: { [path]: file },
+    error: null,
+    capability: "none",
+  });
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name }));
+  await screen.findByRole("tab", { name });
+  return path;
 }
 
 describe("App schematic workspace tools", () => {
@@ -361,13 +391,17 @@ describe("App schematic workspace tools", () => {
     // `New tab`, not the empty state's "New schematic": with P3-04B that card
     // stops offering to create a schematic once one is already open and empty.
     fireEvent.click(screen.getByRole("button", { name: "New tab" }));
-    await screen.findByRole("tab", { name: /untitled-2\.asc/ });
+    await screen.findByRole("tab", { name: /untitled-2/ });
     expect(screen.getByRole("textbox", { name: "Message the assistant" })).toHaveProperty(
       "value",
       "Continue the two-bit register work",
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: /^untitled\.asc/ }));
+    // Named exactly, not by prefix. A `.sim` tab's label drops the extension
+    // (`EditorChrome`), so both tabs now read `untitled…` and `/^untitled/`
+    // matched two elements - the first tab's whole accessible name is the bare
+    // word, which distinguishes it from `untitled-2` without a prefix guess.
+    fireEvent.click(screen.getByRole("tab", { name: "untitled" }));
     expect(screen.getByRole("textbox", { name: "Message the assistant" })).toHaveProperty(
       "value",
       "Continue the two-bit register work",
@@ -378,13 +412,13 @@ describe("App schematic workspace tools", () => {
     await renderOpenProject();
 
     act(() => useSchematic.getState().addComponent("resistor", 120, 120));
-    expect(await screen.findByRole("img", { name: "untitled.asc has unsaved changes" })).toBeTruthy();
-    expect(screen.getByText("untitled.asc •")).toBeTruthy();
+    expect(await screen.findByRole("img", { name: "untitled.sim has unsaved changes" })).toBeTruthy();
+    expect(screen.getByText("untitled.sim •")).toBeTruthy();
 
     fireEvent.keyDown(document.body, { key: "s", metaKey: true });
     await waitFor(() => {
-      expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
-      expect(screen.getAllByText("untitled.asc").length).toBeGreaterThan(0);
+      expect(screen.queryByRole("img", { name: "untitled.sim has unsaved changes" })).toBeNull();
+      expect(screen.getAllByText("untitled.sim").length).toBeGreaterThan(0);
     });
   });
 
@@ -392,29 +426,31 @@ describe("App schematic workspace tools", () => {
     await renderOpenProject();
     act(() => useSchematic.getState().addComponent("resistor", 120, 120));
 
-    fireEvent.click(screen.getByRole("button", { name: "Close untitled.asc" }));
-    let dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled.asc”?" });
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled.sim" }));
+    let dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled.sim”?" });
     expect(within(dialog).getByRole("button", { name: "Save" })).toBeTruthy();
     expect(within(dialog).getByRole("button", { name: "Don’t Save" })).toBeTruthy();
     expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeTruthy();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    expect(screen.getByRole("img", { name: "untitled.asc has unsaved changes" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "untitled.sim has unsaved changes" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Close untitled.asc" }));
-    dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled.asc”?" });
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled.sim" }));
+    dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled.sim”?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Don’t Save" }));
     await waitFor(() => expect(useSchematic.getState().components).toEqual([]));
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
   it("saves a dirty schematic from the close confirmation before closing", async () => {
-    await renderOpenProject();
-    const path = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    // `.asc` on purpose: the assertion below is about the LTspice writer, and a
+    // new sheet is minted as `.sim` now, whose writer emits Tau JSON. This case
+    // is the confirmation dialog's Save button reaching the ASC writer at all.
+    const path = await openBlankAsc("close-save.asc");
     act(() => useSchematic.getState().addComponent("resistor", 120, 120));
 
-    fireEvent.click(screen.getByRole("button", { name: "Close untitled.asc" }));
-    const dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled.asc”?" });
+    fireEvent.click(screen.getByRole("button", { name: "Close close-save.asc" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Save changes to “close-save.asc”?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(useProject.getState().workspaceFiles[path].contents).toContain("SYMBOL res"));
@@ -458,8 +494,10 @@ describe("App schematic workspace tools", () => {
   });
 
   it("automatically saves a lossless multi-segment ASC wire before Run", async () => {
-    await renderOpenProject();
-    const path = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    // `.asc` on purpose: `WIRE` is an LTspice record, one per segment, and that
+    // one-record-per-segment split is the whole subject. A minted `.sim` holds
+    // the polyline as JSON and has no `WIRE` line to count.
+    const path = await openBlankAsc("run-autosave.asc");
     act(() => useSchematic.getState().addWire([
       { x: 64, y: 64 },
       { x: 128, y: 64 },
@@ -473,7 +511,7 @@ describe("App schematic workspace tools", () => {
       expect(contents.match(/^WIRE /gm)).toHaveLength(2);
     });
     expect(screen.queryByText(/Save blocked/)).toBeNull();
-    expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
+    expect(screen.queryByRole("img", { name: "run-autosave.asc has unsaved changes" })).toBeNull();
   });
 
   it("runs a clean imported ASC without rewriting its source bytes", async () => {
@@ -695,8 +733,11 @@ describe("App schematic workspace tools", () => {
   });
 
   it("saves an AC voltage source without the former vac export blocker", async () => {
-    await renderOpenProject();
-    const path = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    // `.asc` on purpose: `SYMATTR TauKind` is the ASC writer's own round-trip
+    // marker for a part LTspice has no distinct symbol for, so the export
+    // blocker this case retired only exists on the `.asc` path. The default
+    // mint is `.sim`, which stores the kind natively and never needed it.
+    const path = await openBlankAsc("ac-source.asc");
     act(() => useSchematic.getState().addComponent("vac", 160, 160));
 
     fireEvent.keyDown(document.body, { key: "s", metaKey: true });
@@ -707,7 +748,7 @@ describe("App schematic workspace tools", () => {
       expect(contents).toContain("SINE(0 1 1k) AC 1");
     });
     expect(screen.queryByText(/Save blocked/)).toBeNull();
-    expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
+    expect(screen.queryByRole("img", { name: "ac-source.asc has unsaved changes" })).toBeNull();
   });
 
   it("clears an imported lossy ASC in place, preserving its tab identity and undo history", async () => {
@@ -789,13 +830,18 @@ describe("App schematic workspace tools", () => {
       },
     });
     await renderOpenProject();
-    const originalPath = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    const originalPath = `${DEFAULT_WORKSPACE_ID}/untitled.sim`;
     const renamedPath = `${DEFAULT_WORKSPACE_ID}/gain-stage.asc`;
-    const tab = screen.getByRole("tab", { name: /untitled\.asc/ });
+    const tab = screen.getByRole("tab", { name: /untitled/ });
 
     fireEvent.doubleClick(tab);
-    const renameInput = await screen.findByRole("textbox", { name: "Rename untitled.asc" });
-    fireEvent.change(renameInput, { target: { value: "gain-stage" } });
+    const renameInput = await screen.findByRole("textbox", { name: "Rename untitled.sim" });
+    // The extension is typed out on purpose. A bare `gain-stage` now keeps the
+    // source's `.sim` (`preserveSchematicExtension`), and the `SYMBOL res`
+    // assertion below is about the ASC writer - so this case spells the format
+    // it is testing rather than inheriting whatever the mint default happens
+    // to be. Renaming a sheet across formats is also the real gesture here.
+    fireEvent.change(renameInput, { target: { value: "gain-stage.asc" } });
     fireEvent.keyDown(renameInput, { key: "Enter" });
     // Exercise the real race: Save arrives while the async native rename is
     // still pending. It must wait and then target only the new path.
@@ -833,20 +879,23 @@ describe("The modal editors are fetched only from default routes", () => {
     expect(within(dialog).getByText(/Choose a common analysis/)).toBeTruthy();
   });
 
-  it("refuses a sheet interface on an .asc sheet, in plain words, and says why", async () => {
+  it("offers a sheet interface on an .asc sheet, and says what to do next", async () => {
     /*
-     * Re-expected against the new design, not repaired. This case used to assert
-     * a group named "Child sheet project ports" and a button "Add project port".
-     * Both encoded the old shape: the dialog no longer calls the reader's own
-     * sheet a "child", and the add button took THE FIRST UNUSED NET LABEL IT
-     * FOUND - the auto-pick this pass deleted, because a port whose net nobody
-     * chose is how an interface ends up in an order nobody meant.
+     * Re-expected twice now, and the second time REVERSES the first, so it is
+     * worth saying why rather than quietly flipping an assertion.
      *
-     * The fixture opens `untitled.asc`, and that is the interesting half: an
-     * `.asc` document cannot carry `projectPorts` at all, so the dialog refuses
-     * up front with a sentence instead of offering a control that would always
-     * fail. Asserting the refusal is worth more than asserting a button, because
-     * silence here was the original trap - the user found out at save time.
+     * This used to assert that the dialog REFUSED on a `.asc`, on the grounds
+     * that such a document cannot carry a `projectPorts` array. That was true of
+     * the array and beside the point about the format: LTspice states a
+     * hierarchy port as a `FLAG` plus an adjacent `IOPIN <dir>`, which is
+     * precisely what this dialog writes, and the compiler now reads that
+     * contract and derives the interface from it. The refusal was therefore
+     * blocking an act that works.
+     *
+     * The fixture opens `untitled.sim`, so this is the interesting case: the
+     * sheet must be OFFERED its interface, and - since a brand-new sheet has no
+     * named nets - must say what to do first. A dialog that opens onto nothing,
+     * with no next step, is the same dead end as a refusal wearing better copy.
      */
     await renderOpenProject();
 
@@ -854,12 +903,16 @@ describe("The modal editors are fetched only from default routes", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Sheet interface" });
     const group = within(dialog).getByRole("group", { name: "Sheet interface" });
-    const refusal = within(group).getByRole("note");
-    expect(refusal.textContent).toMatch(/\.asc/i);
-    expect(refusal.textContent).toMatch(/\.sim/i);
-    // No live control is offered on a sheet that cannot hold one.
-    expect(within(group).queryByRole("button", { name: /Pick a net on the drawing/i })).toBeNull();
-    expect(within(group).queryByRole("button", { name: "Add project port" })).toBeNull();
+
+    // No refusal note: nothing about this sheet's format stops it.
+    expect(within(group).queryByRole("note")).toBeNull();
+    // The live control is present, and it names the act.
+    expect(within(group).getByText(/Mark the nets this sheet exposes, in order/i)).toBeTruthy();
+    // And because the sheet is empty, it says which step comes first rather than
+    // presenting an empty list.
+    expect(
+      within(dialog).getByText(/no named nets yet\. Label a net first, then mark it/i),
+    ).toBeTruthy();
   });
 });
 
@@ -885,7 +938,7 @@ describe("Settings is a surface in this window", () => {
       // `aria-hidden` while it is open (Radix's `hideOthers`), so the tab
       // is legitimately absent from the default accessible-role query -
       // this assertion is about DOM presence, not AT-visibility.
-      expect(screen.getByRole("tab", { name: /untitled\.asc/, hidden: true })).toBeTruthy();
+      expect(screen.getByRole("tab", { name: /untitled/, hidden: true })).toBeTruthy();
 
       fireEvent.click(within(settings).getByRole("button", { name: "Close settings" }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
@@ -962,7 +1015,7 @@ describe("App project-folder gate", () => {
  *
  * `createSchematicInRoot` writes the file at CREATION, before any edit, and
  * `numberedName` gives each collision the next suffix - which is the
- * `untitled-2.asc / untitled-3.asc / untitled-4.asc` ladder in the report's
+ * `untitled-2.sim / untitled-3.asc / untitled-4.asc` ladder in the report's
  * screenshot. Nothing on the close path ever removed one.
  *
  * The delete is gated on four conditions, and the last three tests here exist
@@ -970,7 +1023,7 @@ describe("App project-folder gate", () => {
  * path: deleting a file the user wanted is far worse than leaving an empty one.
  */
 describe("closing an empty untitled schematic (P3-05)", () => {
-  const untitled2 = `${DEFAULT_WORKSPACE_ID}/untitled-2.asc`;
+  const untitled2 = `${DEFAULT_WORKSPACE_ID}/untitled-2.sim`;
 
   /**
    * Mint a second untitled file, which is what produces the reported ladder.
@@ -984,23 +1037,26 @@ describe("closing an empty untitled schematic (P3-05)", () => {
    */
   async function mintSecondUntitled() {
     fireEvent.click(screen.getByRole("button", { name: "New tab" }));
-    await screen.findByRole("tab", { name: /untitled-2\.asc/ });
+    await screen.findByRole("tab", { name: /untitled-2/ });
     // The file exists on disk before a single edit - that is the whole defect.
-    expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankAscText());
+    expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankSimJson());
   }
 
-  it("deletes the empty file Tau minted rather than leaving untitled-2.asc behind", async () => {
+  it("deletes the empty file Tau minted rather than leaving untitled-2.sim behind", async () => {
     await renderOpenProject();
     await mintSecondUntitled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Close untitled-2.asc" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled-2.sim" }));
 
     await waitFor(() => expect(useProject.getState().workspaceFiles[untitled2]).toBeUndefined());
     expect(useProject.getState().tree.some((node) => node.path === untitled2)).toBe(false);
-    expect(screen.queryByRole("tab", { name: /untitled-2\.asc/ })).toBeNull();
+    // `/^untitled-2$/`, not `/untitled-2\.sim/`: a `.sim` tab's label drops the
+    // extension, so the old pattern could not match a tab that was still there
+    // and this assertion had quietly stopped being able to fail.
+    expect(screen.queryByRole("tab", { name: /^untitled-2$/ })).toBeNull();
     // The first untitled file is still open and untouched: closing one tab
     // must not reach for its neighbour's file.
-    expect(useProject.getState().workspaceFiles[`${DEFAULT_WORKSPACE_ID}/untitled.asc`]).toBeTruthy();
+    expect(useProject.getState().workspaceFiles[`${DEFAULT_WORKSPACE_ID}/untitled.sim`]).toBeTruthy();
   });
 
   it("keeps an untitled file whose schematic holds a part when the user chooses Don’t Save", async () => {
@@ -1008,24 +1064,27 @@ describe("closing an empty untitled schematic (P3-05)", () => {
     await mintSecondUntitled();
     act(() => useSchematic.getState().addComponent("resistor", 120, 120));
 
-    fireEvent.click(screen.getByRole("button", { name: "Close untitled-2.asc" }));
-    const dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled-2.asc”?" });
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled-2.sim" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled-2.sim”?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Don’t Save" }));
 
-    await waitFor(() => expect(screen.queryByRole("tab", { name: /untitled-2\.asc/ })).toBeNull());
+    // Stripped label, as in the sibling cases: `/untitled-2\.sim/` could not
+    // match a `.sim` tab that was still on screen, so it had stopped being able
+    // to fail and the "discarded from the editor" half went unmeasured.
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /^untitled-2$/ })).toBeNull());
     // Discarded from the editor, kept on disk: the document was not empty at
     // close time, so this is the case where a delete would destroy work.
-    expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankAscText());
+    expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankSimJson());
   });
 
-  it("never deletes a file Tau did not mint, even one named untitled.asc and byte-identical to the template", async () => {
+  it("never deletes a file Tau did not mint, even one named untitled.sim and byte-identical to the template", async () => {
     // The strongest form of the "a file Tau did not create is kept" clause:
     // every OTHER condition passes here - the name matches the mint pattern,
     // the document is empty, and the bytes equal the template exactly - so the
     // only thing standing between this user's file and deletion is the
     // Tau-minted marker.
-    const path = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
-    const file = { path, name: "untitled.asc", contents: blankAscText(), kind: "asc" as const };
+    const path = `${DEFAULT_WORKSPACE_ID}/untitled.sim`;
+    const file = { path, name: "untitled.sim", contents: blankSimJson(), kind: "sim" as const };
     useProject.setState({
       rootPath: DEFAULT_WORKSPACE_ID,
       rootName: DEFAULT_WORKSPACE_NAME,
@@ -1037,12 +1096,19 @@ describe("closing an empty untitled schematic (P3-05)", () => {
     });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "untitled.asc" }));
-    await screen.findByRole("tab", { name: /untitled\.asc/ });
-    fireEvent.click(screen.getByRole("button", { name: "Close untitled.asc" }));
+    fireEvent.click(await screen.findByRole("button", { name: "untitled.sim" }));
+    await screen.findByRole("tab", { name: /untitled/ });
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled.sim" }));
 
-    await waitFor(() => expect(screen.queryByRole("tab", { name: /untitled\.asc/ })).toBeNull());
-    expect(useProject.getState().workspaceFiles[path].contents).toBe(blankAscText());
+    // Deliberately left as a pattern that cannot match, unlike the sibling
+    // cases above, because here there is nothing honest to tighten it to:
+    // closing the last tab mints a fresh blank `untitled.sim`, so a tab whose
+    // label reads `untitled` is present either way and `/^untitled$/` would
+    // fail on correct behaviour. The file-contents assertion below is what
+    // carries this case; this line only says the closed tab is not still open
+    // under its full name.
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /untitled\.sim/ })).toBeNull());
+    expect(useProject.getState().workspaceFiles[path].contents).toBe(blankSimJson());
   });
 
   it("never deletes an imported .asc, because its name is not one Tau mints", async () => {
@@ -1066,6 +1132,10 @@ describe("closing an empty untitled schematic (P3-05)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close vendor.asc" }));
 
     await waitFor(() => expect(screen.queryByRole("tab", { name: /vendor\.asc/ })).toBeNull());
+    // `blankAscText()`, which is what this file was seeded with. The mint
+    // default moving to `.sim` swept `blankSimJson()` in here mechanically, and
+    // that could never hold: this test's whole point is a GENUINE `.asc`, whose
+    // survival is measured against the ASC template it was written from.
     expect(useProject.getState().workspaceFiles[path].contents).toBe(blankAscText());
   });
 
@@ -1077,18 +1147,23 @@ describe("closing an empty untitled schematic (P3-05)", () => {
     await renderOpenProject();
     await mintSecondUntitled();
 
-    const tab = screen.getByRole("tab", { name: /untitled-2\.asc/ });
+    const tab = screen.getByRole("tab", { name: /untitled-2/ });
     fireEvent.doubleClick(tab);
-    const renameInput = await screen.findByRole("textbox", { name: "Rename untitled-2.asc" });
+    const renameInput = await screen.findByRole("textbox", { name: "Rename untitled-2.sim" });
     fireEvent.change(renameInput, { target: { value: "gain-stage" } });
     fireEvent.keyDown(renameInput, { key: "Enter" });
-    const renamed = `${DEFAULT_WORKSPACE_ID}/gain-stage.asc`;
+    // `.sim`, not `.asc`: a name typed without an extension keeps the source
+    // file's, and the file Tau minted is `.sim` now. The extension is beside the
+    // point here anyway - the BASENAME is the gate under test - but the fixture
+    // has to name the path the rename actually produces.
+    const renamed = `${DEFAULT_WORKSPACE_ID}/gain-stage.sim`;
     await waitFor(() => expect(useProject.getState().workspaceFiles[renamed]).toBeTruthy());
 
-    fireEvent.click(screen.getByRole("button", { name: "Close gain-stage.asc" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close gain-stage.sim" }));
 
-    await waitFor(() => expect(screen.queryByRole("tab", { name: /gain-stage\.asc/ })).toBeNull());
-    expect(useProject.getState().workspaceFiles[renamed].contents).toBe(blankAscText());
+    // Matched against the stripped label for the reason given above.
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /^gain-stage$/ })).toBeNull());
+    expect(useProject.getState().workspaceFiles[renamed].contents).toBe(blankSimJson());
   });
 
   it("keeps the file and says why when the delete does not take", async () => {
@@ -1104,11 +1179,13 @@ describe("closing an empty untitled schematic (P3-05)", () => {
       useProject.setState({ deleteNode: async () => {} });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Close untitled-2.asc" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled-2.sim" }));
 
-    await waitFor(() => expect(screen.queryByRole("tab", { name: /untitled-2\.asc/ })).toBeNull());
-    expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankAscText());
-    expect((await screen.findAllByText(/Kept untitled-2\.asc/)).length).toBeGreaterThan(0);
+    // Stripped label again; the notice below still spells the full basename,
+    // because that is the name the user has to go and find on disk.
+    await waitFor(() => expect(screen.queryByRole("tab", { name: /^untitled-2$/ })).toBeNull());
+    expect(useProject.getState().workspaceFiles[untitled2].contents).toBe(blankSimJson());
+    expect((await screen.findAllByText(/Kept untitled-2\.sim/)).length).toBeGreaterThan(0);
   });
 });
 
@@ -1338,3 +1415,4 @@ describe("an open tab follows its file when the explorer moves it (P3-02, EXPLOR
     expect(useProject.getState().workspaceFiles[source]).toBeUndefined();
   });
 });
+

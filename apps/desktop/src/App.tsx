@@ -11,6 +11,11 @@ import "./styles/editorToolbarIcons.css";
 import "./styles/pdf4Chrome.css";
 import "./styles/diagnosticsDock.css";
 import "./styles/resultsDrawerResize.css";
+// The sheet-block surfaces. Kept out of App.css deliberately: that file is over
+// ten thousand lines and shared by every lane, and roughly thirty of this
+// feature's class names had no rule at all - including the one that positions
+// the on-drawing port picker, which is why that control was invisible.
+import "./styles/sheetBlocks.css";
 import {
   canonicalProjectSheetPath,
   projectRelativeSheetPath as relativeSheetPath,
@@ -165,6 +170,7 @@ import {
   ascSaveBlockReason,
   basename,
   blankAscText,
+  blankSimJson,
   isAscFile,
   isSimFile,
   joinPath,
@@ -430,16 +436,22 @@ interface OpenTab {
 
 /**
  * The names `createSchematicInRoot` can mint for an unnamed schematic:
- * `untitled.asc` plus the `-2`/`-3`/… ladder `numberedName` appends on a
+ * `untitled.sim` plus the `-2`/`-3`/… ladder `numberedName` appends on a
  * collision (`store/useProject.ts`). That ladder is exactly what the report's
  * screenshot shows accumulating.
  *
- * Anchored at both ends on purpose: `untitled-2.backup.asc` and a user's own
- * `my-untitled.asc` must not match, and a rename off this shape is one of the
+ * `.asc` stays in the pattern even though nothing mints it any more. A session
+ * that predates the `.sim` default, or a project carrying an `untitled.asc` a
+ * previous version created, must still recognise its own scratch buffer -
+ * otherwise those tabs stop being replaceable and start accumulating, which is
+ * the exact symptom this pattern exists to prevent.
+ *
+ * Anchored at both ends on purpose: `untitled-2.backup.sim` and a user's own
+ * `my-untitled.sim` must not match, and a rename off this shape is one of the
  * four things that has to keep the file — `renameProjectNode` rewrites the
  * tab's `title`/`filePath` from the new basename, so a renamed tab fails here.
  */
-const UNTITLED_MINT_NAME = /^untitled(-\d+)?\.asc$/i;
+const UNTITLED_MINT_NAME = /^untitled(-\d+)?\.(?:sim|asc)$/i;
 
 /**
  * Nothing in this document is worth a file on disk.
@@ -727,7 +739,7 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
   const modeRef = useRef(mode);
-  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "untitled.asc", doc: null, history: emptyHistory() }]);
+  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "untitled.sim", doc: null, history: emptyHistory() }]);
   const tabsRef = useRef(tabs);
   const projectRenameInFlightRef = useRef<Promise<string | null> | null>(null);
   const [activeId, setActiveId] = useState("tab-0");
@@ -935,7 +947,7 @@ function App() {
     tabsRef.current = tabs;
   }, [tabs]);
 
-  const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.asc";
+  const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.sim";
   const activeFilePath = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.filePath ?? null;
   const currentDocument = useMemo<SchematicDocument>(() => ({
     components,
@@ -1276,22 +1288,42 @@ function App() {
     return result;
   }, []);
 
-  /** An `.asc` sheet cannot carry a project link at all - say so early. */
+  /**
+   * Why this sheet cannot be given an interface, or null when it can.
+   *
+   * `.asc` used to be refused here, and no longer is: an LTspice sheet states
+   * its ports as a `FLAG` plus an adjacent `IOPIN <dir>`, the compiler reads
+   * that contract, and the save path keeps it. The refusal outlived its reason
+   * the moment the engine learned to read those markers, and leaving it in place
+   * would have made the whole `.asc` half of the feature unreachable from the
+   * UI - the same "built but not wired" failure this pass exists to remove.
+   *
+   * The one thing a `.asc` still cannot do is OWN a block, which is a different
+   * question asked in a different place (`canonicalProjectOwnerPath`).
+   */
   const sheetInterfaceDisabledReason = useMemo(() => {
     const path = activeFilePath;
     if (!path) return "Save this sheet into the project before giving it an interface.";
-    if (isAscFile(path)) {
-      return "An .asc sheet cannot define a reusable interface. Save it as a Tau .sim sheet first.";
-    }
     return null;
   }, [activeFilePath]);
 
-  /** Which sheets instantiate the sheet in front of us, for the child's dialog. */
+  /**
+   * Which sheets instantiate the sheet in front of us, for the child's dialog.
+   *
+   * This can only see OPEN TABS, so a parent that is saved but closed is
+   * invisible to it. That makes an empty result ambiguous, and the two readings
+   * are not equally safe: "no sheet uses this" invites the user to change an
+   * interface freely, while "I don't know" does not. So an empty result returns
+   * `undefined`, which is the prop's own spelling for "not told" and makes the
+   * dialog withhold the claim instead of asserting a falsehood. A NON-empty
+   * result is still reported, because finding a user among open tabs is a true
+   * positive regardless of what is closed.
+   */
   const sheetUsedBy = useMemo(() => {
-    if (!projectRootPath || !activeFilePath) return [];
+    if (!projectRootPath || !activeFilePath) return undefined;
     const relative = relativeSheetPath(projectRootPath, activeFilePath);
     const me = relative ? canonicalProjectSheetPath(relative) : null;
-    if (!me) return [];
+    if (!me) return undefined;
     const rows: { sheetPath: string; reference: string }[] = [];
     for (const tab of tabsRef.current) {
       const doc = tab.id === activeId ? currentDocument : tab.doc;
@@ -1305,7 +1337,7 @@ function App() {
         }
       }
     }
-    return rows;
+    return rows.length > 0 ? rows : undefined;
   }, [projectRootPath, activeFilePath, activeId, currentDocument]);
 
   // The default shell never exposes a model-file browser. An unresolved
@@ -3520,7 +3552,14 @@ function App() {
     } catch {
       return;
     }
-    if (onDisk !== blankAscText()) return;
+    // Which blank template counts depends on the extension, exactly as
+    // `newFileContents` decides it when minting. Comparing against the ASC
+    // template unconditionally was a live regression the moment new sheets
+    // became `.sim`: a minted `untitled.sim` holds Tau JSON, never matched, so
+    // the delete silently stopped firing and the `untitled-2 / untitled-3 / …`
+    // ladder this whole path exists to prevent came straight back.
+    const template = isAscFile(path) ? blankAscText() : blankSimJson();
+    if (onDisk !== template) return;
     await deleteProjectNode(path);
     // `useProject.deleteNode` swallows its errors and, on the in-memory
     // workspace branch, never sets `error` at all — and nothing clears a stale
@@ -3556,7 +3595,7 @@ function App() {
     documentNavigationRef.current += 1;
     const remaining = snap.filter((tab) => tab.id !== id);
     if (remaining.length === 0) {
-      const blank: OpenTab = { id: newTabId(), title: "untitled.asc", doc: blankDocument(), history: emptyHistory() };
+      const blank: OpenTab = { id: newTabId(), title: "untitled.sim", doc: blankDocument(), history: emptyHistory() };
       setTabs([blank]);
       setActiveId(blank.id);
       // Replace both the document and its history explicitly. This is the

@@ -226,7 +226,7 @@ async function openSimulator(
   });
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
-  await screen.findByRole("tab", { name: /untitled\.asc/ });
+  await screen.findByRole("tab", { name: /untitled/ });
   act(() => useSchematic.setState({
     components: circuit.components,
     wires: circuit.wires,
@@ -521,7 +521,11 @@ describe("App - the live trace does not outlive its document", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Schematic" })[0]);
     fireEvent.click(await screen.findByRole("button", { name: "New tab" }));
-    await waitFor(() => expect(screen.getAllByRole("tab", { name: /\.asc/ }).length).toBe(2));
+    // Two schematic tabs open, which is all this step is arranging - the
+    // extension was never the point. It has to be matched on the stem now:
+    // minted sheets are `.sim`, and a tab's label drops a `.sim` suffix, so
+    // these read "untitled" and "untitled-2".
+    await waitFor(() => expect(screen.getAllByRole("tab", { name: /^untitled/ }).length).toBe(2));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Simulator" })[0]);
     await screen.findByRole("group", { name: "Run transport" });

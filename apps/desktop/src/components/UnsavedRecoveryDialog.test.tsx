@@ -55,12 +55,12 @@ describe("UnsavedRecoveryDialog", () => {
   it("labels untitled scratchpads without a path", () => {
     render(
       <UnsavedRecoveryDialog
-        snapshot={snapshot({ filePath: null, title: "untitled.asc" })}
+        snapshot={snapshot({ filePath: null, title: "untitled.sim" })}
         onRestore={vi.fn()}
         onDiscard={vi.fn()}
       />,
     );
-    expect(screen.getByText(/unsaved schematic “untitled\.asc”/)).toBeTruthy();
+    expect(screen.getByText(/unsaved schematic “untitled\.sim”/)).toBeTruthy();
   });
 
   it("does not discard or close the recovery copy when Escape is pressed", () => {

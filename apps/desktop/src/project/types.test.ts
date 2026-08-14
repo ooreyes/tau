@@ -168,9 +168,46 @@ describe("project schematic file formats", () => {
     expect(reopened.components[0].projectSubcircuit).toEqual(document.components[0].projectSubcircuit);
     expect(reopened.projectPorts).toEqual(document.projectPorts);
 
+    // A sheet that HOLDS a block still cannot be written as `.asc`: the format
+    // has nowhere to record which sheet the block points at, or in what pin
+    // order. Re-worded, not re-scoped - the sentence now names the act and the
+    // reason instead of the internal term "project-linked".
     const asc = serializeSchematicFile("/Schematics/linked.asc", document);
-    expect(asc.warnings).toContain("Project-linked sheets require a Tau .sim or .tau.json file; ASC save was not written.");
-    expect(ascSaveBlockReason([], 0, asc.warnings)).toMatch(/Project-linked sheets/i);
+    expect(asc.warnings).toContain(
+      "A sheet that holds a sheet block must be saved as a Tau .sim or .tau.json file, because .asc cannot record which sheet the block points at. This .asc was not written.",
+    );
+    expect(ascSaveBlockReason([], 0, asc.warnings)).toMatch(/holds a sheet block/i);
+  });
+
+  it("writes a .asc sheet that only declares its OWN interface", () => {
+    /*
+     * The other side of the rule above, and the one that used to be wrong.
+     *
+     * `projectPorts` was treated as unsaveable loss for a `.asc`, which meant a
+     * sheet could be GIVEN an interface and then not saved - the worst of both
+     * options. But an interface IS expressible in this format: each port is a
+     * `FLAG` plus an adjacent `IOPIN <dir>`, which is exactly what the exporter
+     * writes and the importer reads. The array's `labelId`s are rebuilt from the
+     * labels on load, and port ORDER was never the child's to hold - it lives on
+     * the parent's pin bank. So nothing is lost, and the save goes through.
+     */
+    const child = {
+      components: [{ id: "r1", kind: "resistor" as const, x: 0, y: 0, rotation: 0 as const, value: "1k", label: "R1" }],
+      wires: [], probes: [], directives: [],
+      netLabels: [
+        { id: "in", x: -32, y: 0, text: "IN", port: "In" as const },
+        { id: "out", x: 32, y: 0, text: "OUT", port: "Out" as const },
+      ],
+      projectPorts: [
+        { name: "IN", labelId: "in", direction: "In" as const },
+        { name: "OUT", labelId: "out", direction: "Out" as const },
+      ],
+    };
+    const asc = serializeSchematicFile("/Schematics/child.asc", child);
+    expect(ascSaveBlockReason([], 0, asc.warnings), "the save is not blocked").toBeNull();
+    // And the ports really are in the bytes, with their directions.
+    expect(asc.contents).toContain("IOPIN -32 0 In");
+    expect(asc.contents).toContain("IOPIN 32 0 Out");
   });
 
   it("blocks rewrites when the source contains records Tau cannot preserve", () => {

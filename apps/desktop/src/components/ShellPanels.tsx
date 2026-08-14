@@ -95,7 +95,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { referenceRenameResult, useSchematic } from "../store/useSchematic";
 import { useProject } from "../store/useProject";
-import { basename, isAscFile, isSimFile, type ProjectNode } from "../project/types";
+import { basename, isAscFile, isProjectFile, type ProjectNode } from "../project/types";
 import { projectRelativeSheetPath } from "../schematic/projectSubcircuit";
 import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
@@ -369,7 +369,20 @@ interface ProjectSheetChoice {
   label: string;
 }
 
-/** Flatten only project-owned Tau sheets; ASC files are not valid hierarchy children. */
+/**
+ * Flatten the project sheets a block may point at.
+ *
+ * Every sheet the project lists, `.asc` included. An LTspice sheet is a legal
+ * TARGET - it states its ports as a `FLAG` plus an adjacent `IOPIN <dir>`, and
+ * the compiler derives the interface from those markers - so withholding it here
+ * left that whole half of the feature unreachable: the engine would compile a
+ * `.asc` child the picker refused to offer.
+ *
+ * The asymmetry with {@link ProjectSubcircuitLinkEditor}'s refusal is deliberate
+ * and is not a contradiction: a `.asc` may be pointed AT, but may not be the
+ * sheet doing the pointing, because it can record neither the link nor the pin
+ * order. That second question is asked by `canonicalProjectOwnerPath`.
+ */
 function projectSheetChoices(
   nodes: readonly ProjectNode[],
   projectRoot: string | null,
@@ -384,7 +397,17 @@ function projectSheetChoices(
         visit(node.children ?? []);
         continue;
       }
-      if (!isSimFile(node.name)) continue;
+      // `.asc` included: an LTspice sheet is a legal TARGET for a block, since
+      // it states its ports as a `FLAG` plus an adjacent `IOPIN <dir>` and the
+      // compiler derives the interface from those markers. Filtering to `.sim`
+      // here left that whole half of the feature unreachable - the engine would
+      // happily compile a `.asc` child that the picker refused to offer.
+      //
+      // The asymmetry is deliberate and is NOT a bug: a `.asc` may be pointed
+      // AT, but may not be the sheet doing the pointing, because the format can
+      // record neither the link nor the port order. That second question is
+      // asked elsewhere, by `canonicalProjectOwnerPath`.
+      if (!isProjectFile(node.name)) continue;
       const relative = projectRelativeSheetPath(projectRoot, node.path);
       if (!relative || relative === currentRelative) continue;
       choices.push({ path: relative, label: node.name });
@@ -713,7 +736,10 @@ export function ExplorerPanel({
   const startNewSchematic = () => {
     if (!rootPath) return;
     if (!expanded.includes(rootPath)) toggleExpanded(rootPath);
-    setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.asc" });
+    // `.sim`, not `.asc`: LTspice's format can persist neither a sheet block's
+    // link nor its port order (see canonicalProjectOwnerPath), so seeding `.asc`
+    // handed the reader a brand-new sheet that could never own a block.
+    setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.sim" });
   };
 
   const startNewFolder = () => {
@@ -1048,7 +1074,8 @@ export function ExplorerPanel({
               setCreateDraft({ kind: "folder", parentPath: parent, name: "New Folder" });
             }}
             onNewFile={async (parent) => {
-              setCreateDraft({ kind: "file", parentPath: parent, name: "untitled.asc" });
+              // Same `.sim` default as the header's New schematic file action.
+              setCreateDraft({ kind: "file", parentPath: parent, name: "untitled.sim" });
             }}
             onDelete={async (path, name) => {
               if (!window.confirm(`Delete “${name}”?`)) return;
@@ -2084,7 +2111,7 @@ function ProjectInterfaceReviewDialog({
  * The parent half of "a sheet is a block" (PDF5 item 14).
  *
  * What changed and why: this used to make you TYPE the interface into a
- * free-text "Ordered project ports" box, read off the child sheet from memory,
+ * free-text "Ordered block ports" box, read off the child sheet from memory,
  * in the right order, with Run refusing order-sensitively afterwards. That is
  * PDF5 reason 1. Now the pinout ARRIVES from the chosen sheet - names, order
  * and directions - and linking is one button and zero keystrokes.
@@ -2116,7 +2143,11 @@ function ProjectSubcircuitLinkEditor({
   choices: readonly ProjectSheetChoice[];
   /** Advisory authoring index, supplied by App; empty means "not checked". */
   sheetInterfaces?: readonly ProjectSheetInterfaceEntry[];
-  /** Current tab path: an `.asc` sheet cannot hold a project link at all. */
+  /**
+   * Current tab path. An `.asc` may be a link TARGET but never a link OWNER, so
+   * this panel is a single explanatory row on one - see
+   * `canonicalProjectOwnerPath`.
+   */
   projectFilePath?: string | null;
   /** Which copy of a child the index read, so the drift review can say so. */
   comparedSource?: "open-tab" | "disk";
@@ -2232,7 +2263,7 @@ function ProjectSubcircuitLinkEditor({
       directions ? { directions } : undefined,
     );
     if (!result.ok) {
-      setError(result.error ?? "Could not save the project-sheet link.");
+      setError(result.error ?? "Could not save this sheet block.");
       setSaved(false);
       return;
     }
@@ -2255,17 +2286,39 @@ function ProjectSubcircuitLinkEditor({
   };
 
   // The `.asc` trap, refused where the decision is made instead of at save
-  // time. An `.asc` document has no place to persist a project link, so no
-  // control here is enabled and the one row says why and what to do.
+  // time - but only HALF of it is a trap, and the old sentence said the wrong
+  // half. `canonicalProjectSheetPath` accepts `.asc` as a link TARGET (a `FLAG`
+  // plus `IOPIN` states each port and its direction), while
+  // `canonicalProjectOwnerPath` still refuses it as an OWNER, because LTspice's
+  // format cannot persist `projectSubcircuit` - the link naming the sheet and
+  // its pin order. (It CAN persist `projectPorts`: those round-trip as the same
+  // FLAG/IOPIN records, which is why `serializeSchematicFile` no longer treats
+  // them as loss.) So the copy has to distinguish being a block from holding one.
+  //
+  // The button is rendered only when a caller actually supplied the handler. It
+  // used to render always, `disabled` whenever the prop was absent - which is
+  // every caller in the app - so the one offered way out was a control that
+  // could not be pressed and did not say why.
   if (projectFilePath && isAscFile(projectFilePath)) {
     return (
-      <div className="property-advanced project-sheet-link" role="group" aria-label="Project sheet link">
+      <div className="property-advanced project-sheet-link" role="group" aria-label="Sheet block">
+        {/*
+          The remedy has to be one the reader can actually carry out. "Save this
+          sheet as .sim" was not: no Save-As in the app changes an extension, and
+          renaming the file to `.sim` in the Explorer keeps the LTspice bytes, so
+          the result would not reopen. Making a new .sim sheet works today, so
+          that is what this says.
+        */}
         <p className="property-hint" role="status">
-          An .asc sheet cannot hold a project link. Save this sheet as .sim first.
+          This .asc sheet can be used as a sheet block on a .sim parent, but it cannot hold one:
+          LTspice’s format has nowhere to store the link or its port order. To place blocks, put
+          them on a Tau .sim sheet — a new sheet is one by default.
         </p>
-        <Button type="button" variant="outline" size="sm" disabled={!onSaveSheetAsSim} onClick={() => onSaveSheetAsSim?.()}>
-          Save as .sim
-        </Button>
+        {onSaveSheetAsSim && (
+          <Button type="button" variant="outline" size="sm" onClick={() => onSaveSheetAsSim()}>
+            Save as .sim
+          </Button>
+        )}
       </div>
     );
   }
@@ -2277,7 +2330,7 @@ function ProjectSubcircuitLinkEditor({
       && manualContract.every((port, index) => asciiFold(port) === asciiFold(proposedNames[index] ?? "")));
 
   return (
-    <div className="property-advanced project-sheet-link" role="group" aria-label="Project sheet link">
+    <div className="property-advanced project-sheet-link" role="group" aria-label="Sheet block">
       <div className="project-sheet-link-head">
         <p className="property-hint">
           Choose a sibling Tau sheet; its ports arrive in order. Run checks that contract against the child sheet; it never infers ports.
@@ -2296,17 +2349,17 @@ function ProjectSubcircuitLinkEditor({
       {link && (
         <p className="property-hint" role="status">
           {linkedSheetPresent
-            ? `Linked project sheet · ${link.sheetPath} is present in this project; Run checks its exact ordered port contract.`
-            : `Linked project sheet · ${link.sheetPath} is not present in the open project; Run is refused until that sheet is available.`}
+            ? `Sheet block · ${link.sheetPath} is present in this project; Run checks its exact ordered port contract.`
+            : `Sheet block · ${link.sheetPath} is not present in the open project; Run is refused until that sheet is available.`}
         </p>
       )}
       <label className="property-field">
-        <span>Project sheet</span>
+        <span>Sheet interface</span>
         {/* Controlled for its whole lifetime - "" is "nothing chosen yet", which
             is now the starting state, and flipping between undefined and a
             string makes React warn on every link. */}
         <Select value={sheetPath} onValueChange={(next) => { setSheetPath(next); setManualModel(null); setSaved(false); }}>
-          <SelectTrigger size="sm" className="property-select mono-num w-full max-w-[168px]" aria-label="Project sheet">
+          <SelectTrigger size="sm" className="property-select mono-num w-full max-w-[168px]" aria-label="Sheet interface">
             <SelectValue placeholder="Choose a Tau sheet" />
           </SelectTrigger>
           <SelectContent>
@@ -2330,11 +2383,11 @@ function ProjectSubcircuitLinkEditor({
       {selectedEntry?.status === "ok" && (
         <>
           <label className="property-field">
-            <span>Project model name</span>
+            <span>Sheet block name</span>
             <input
               className="mono-num property-text"
               value={modelValue}
-              aria-label="Project model name"
+              aria-label="Sheet block name"
               spellCheck={false}
               onChange={(event) => { setManualModel(event.currentTarget.value); setSaved(false); }}
             />
@@ -2408,7 +2461,7 @@ function ProjectSubcircuitLinkEditor({
       {drift && drift.kind === "missing-sheet" && link && (
         <div className="project-sheet-drift is-missing">
           <p className="property-validation-error" role="alert">
-            {`${link.sheetPath} is missing from this project. This block keeps its contract and its pins exactly as they are; Run refuses until that sheet is back. Point this block at another sheet in “Project sheet” above, or unlink it.`}
+            {`${link.sheetPath} is missing from this project. This block keeps its contract and its pins exactly as they are; Run refuses until that sheet is back. Point this block at another sheet in “Sheet interface” above, or unlink it.`}
           </p>
           {/* A "Choose another sheet" button stood here and opened the MANUAL
               CONTRACT editor - a different thing than its own label, two rows
@@ -2465,21 +2518,21 @@ function ProjectSubcircuitLinkEditor({
       {advancedOpen && (
         <div className="project-sheet-advanced">
           <label className="property-field">
-            <span>Project model name</span>
+            <span>Sheet block name</span>
             <input
               className="mono-num property-text"
               value={modelValue}
-              aria-label="Manual project model name"
+              aria-label="Manual sheet block name"
               spellCheck={false}
               onChange={(event) => { setManualModel(event.currentTarget.value); setSaved(false); }}
             />
           </label>
           <label className="property-field">
-            <span>Ordered project ports</span>
+            <span>Ordered block ports</span>
             <input
               className="mono-num property-text"
               value={manualPorts}
-              aria-label="Ordered project ports"
+              aria-label="Ordered block ports"
               placeholder="IN, OUT, GND"
               spellCheck={false}
               onChange={(event) => { setManualPorts(event.currentTarget.value); setSaved(false); }}
@@ -2497,7 +2550,7 @@ function ProjectSubcircuitLinkEditor({
             disabled={!sheetPath}
             onClick={() => commit(manualContract, modelValue.trim())}
           >
-            {link ? "Update project sheet link" : "Link project sheet"}
+            {link ? "Update sheet block" : "Link sheet block"}
           </Button>
         </div>
       )}
@@ -2512,7 +2565,7 @@ function ProjectSubcircuitLinkEditor({
           {`Linked · this block’s ${link.ports.length} ${link.ports.length === 1 ? "port" : "ports"} match ${linkedFileName} in order, so Run will compile it.`}
         </p>
       )}
-      {saved && drift?.kind !== "in-sync" && <p className="property-hint" role="status">Project sheet contract saved; Run will refuse until the child’s public ports match in order.</p>}
+      {saved && drift?.kind !== "in-sync" && <p className="property-hint" role="status">Sheet block contract saved; Run will refuse until the child’s public ports match in order.</p>}
     </div>
   );
 }
@@ -2949,10 +3002,14 @@ function ComponentPropertyGroup({
               {selected.projectSubcircuit ? (
                 <>
                   <div className="property-field">
-                    <span>Linked project model</span>
+                    {/* Deliberately not "Sheet block name": the editable field
+                        of that name sits a few rows up, and two identical
+                        labels in one panel is how a reader edits the wrong
+                        one. This row is the saved value, read-only. */}
+                    <span>Linked sheet block</span>
                     <span className="mono-num property-readonly">{selected.projectSubcircuit.model}</span>
                   </div>
-                  <ol className="port-list" aria-label="Linked project port order">
+                  <ol className="port-list" aria-label="Sheet block port order">
                     {selected.projectSubcircuit.ports.map((port, index) => (
                       <li key={`${index}-${port}`}>
                         <span className="port-index mono-num">{index + 1}</span>
@@ -3357,7 +3414,11 @@ export function ComponentInspector({
   comparedSource?: "open-tab" | "disk";
   /** Open a project sheet in a tab (parent -> child navigation). */
   onOpenSheet?: (sheetPath: string) => void;
-  /** Offer Save-as-.sim when the current tab is an .asc that cannot hold a link. */
+  /**
+   * Save the current `.asc` tab as a `.sim`, so it can own sheet blocks. OMIT it
+   * and no such button is drawn: App does not implement this yet, and a control
+   * that is only ever disabled tells the reader nothing.
+   */
   onSaveSheetAsSim?: () => void;
 }) {
   const parts: readonly SchematicComponent[] = !selected

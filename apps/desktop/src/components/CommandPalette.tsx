@@ -19,12 +19,21 @@ interface Entry {
   name: string;
   section: string;
   hotkey: string;
+  /** Words the search matches but never renders. Carried through from the
+   *  catalog so a part named for the act stays reachable by the jargon. */
+  searchTerms?: readonly string[];
 }
 
 const ENTRIES: Entry[] = [
   ...CATALOG
     .filter((entry) => entry.paletteVisible !== false)
-    .map((entry) => ({ kind: entry.kind, name: entry.name, section: entry.section, hotkey: entry.hotkey })),
+    .map((entry) => ({
+      kind: entry.kind,
+      name: entry.name,
+      section: entry.section,
+      hotkey: entry.hotkey,
+      ...(entry.searchTerms ? { searchTerms: entry.searchTerms } : {}),
+    })),
   { kind: "__wire__", name: "Wire", section: "Tools", hotkey: "w" },
   { kind: "__probe__", name: "Probe", section: "Tools", hotkey: "" },
   { kind: "__label__", name: "Net label", section: "Tools", hotkey: "f4" },
@@ -49,11 +58,15 @@ export function CommandPalette({
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return ENTRIES;
+    // Two filters run in series here: this one, and cmdk's own matching against
+    // each item's `value`. Both have to know about `searchTerms`, or this one
+    // drops the row before cmdk ever gets a chance to match it.
     return ENTRIES.filter(
       (e) =>
         e.name.toLowerCase().includes(q) ||
         e.section.toLowerCase().includes(q) ||
-        e.kind.toLowerCase().includes(q),
+        e.kind.toLowerCase().includes(q) ||
+        (e.searchTerms?.some((term) => term.toLowerCase().includes(q)) ?? false),
     );
   }, [query]);
 
@@ -103,7 +116,15 @@ export function CommandPalette({
             {entries.map((entry) => (
               <CommandItem
                 key={entry.kind}
-                value={`${entry.name} ${entry.section} ${entry.kind}`}
+                // `searchTerms` is part of the match string, not decoration. A
+                // part whose NAME is deliberately the act rather than the jargon
+                // ("Sheet block", not "Subcircuit (X)") still has to be findable
+                // by the jargon - otherwise renaming it for clarity silently
+                // removes it from Cmd-K for everyone who knows the old word,
+                // which is a discoverability regression dressed as an
+                // improvement. `kind` alone does not cover it: it spells the
+                // abbreviated "subckt" and never "subcircuit".
+                value={[entry.name, entry.section, entry.kind, ...(entry.searchTerms ?? [])].join(" ")}
                 className="cmdk-item"
                 onSelect={() => choose(entry)}
               >

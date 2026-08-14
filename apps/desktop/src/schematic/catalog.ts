@@ -15,6 +15,13 @@ export interface CatalogEntry {
   defaultValue: string;
   /** Unit hint shown in the palette. */
   unit: string;
+  /** Optional subtitle for the palette row. The rail's description column
+   *  ellipsises at roughly fifteen characters, so this is a phrase and not a
+   *  sentence; the long form belongs in the inspector, which has the room. */
+  desc?: string;
+  /** Words the palette search matches but never renders. A part whose NAME is
+   *  deliberately not the jargon still has to be findable by the jargon. */
+  searchTerms?: readonly string[];
 }
 
 /**
@@ -94,11 +101,34 @@ export const CATALOG: CatalogEntry[] = [
   // bare placement oscillating at 1kHz even with the FM input unwired (FM=0V
   // selects the `space` frequency; 1V selects `mark`).
   { kind: "modulator",     section: "Analog",            name: "Modulator (VCO)", hotkey: "",  prefix: "A",   defaultValue: "mark=1K space=1K", unit: "" },
-  // Generic subcircuit instance (SPICE X device): the value's first token is
-  // the .subckt name (bundled library or document-defined), the rest instance
-  // params. Imported LTspice-library symbols (TowTom2, capmeter, ISO16750-2,
-  // ISO7637-2) land on this kind with their own .asy pin geometry.
-  { kind: "subckt",        section: "Analog",            name: "Subcircuit (X)",  hotkey: "",  prefix: "X",   defaultValue: "tau_passthrough", unit: "" },
+  // The SPICE X device, and the one door into the sheet flow. Two things about
+  // this row are load-bearing.
+  //
+  // The NAME is the act, not the letter: a Sheet block is an instance on THIS
+  // sheet that points at another sheet in the project. "Subcircuit (X)" named
+  // the netlist device, which is not what someone looking to reuse a schematic
+  // they already drew is looking for, and it is one of the six spellings this
+  // one feature had accumulated.
+  //
+  // The DEFAULT VALUE is empty on purpose. It used to be `tau_passthrough`,
+  // which is a real bundled block (a 1 mΩ series resistor), so every placement
+  // arrived already bound to a library part nobody chose: it simulated as a
+  // piece of wire and the inspector said "Ready" while the reader was nowhere
+  // near the sheet picker. An empty value cannot resolve to anything, so
+  // nothing is decided behind the reader's back - the inspector reports the
+  // block as needing a definition and Run refuses it by designator.
+  //
+  // Nothing about the generic capability changes: this is still the same X
+  // device, so binding it to a bundled or document-defined `.subckt` from the
+  // inspector's model list (or an attached .lib/.sub) works exactly as before,
+  // and `searchTerms` keeps that reader able to reach this row by the SPICE
+  // words the name no longer spells. Imported LTspice-library symbols
+  // (TowTom2, capmeter, ISO16750-2, ISO7637-2) still land on this kind with
+  // their own .asy pin geometry; only what a NEW placement starts as changed.
+  {
+    kind: "subckt", section: "Analog", name: "Sheet block", hotkey: "", prefix: "X", defaultValue: "", unit: "",
+    desc: "another sheet", searchTerms: ["subcircuit", "subckt", "x device", "hierarchy", "hierarchical"],
+  },
 
   // ── Digital ──────────────────────────────────────────────────────────────
   { kind: "logicConstant", section: "Digital",           name: "Logic Constant",  hotkey: "",  prefix: "V",   defaultValue: "1",     unit: "V" },

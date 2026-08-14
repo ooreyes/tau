@@ -259,12 +259,19 @@ export function serializeSchematicFile(
   savedAt = new Date().toISOString(),
 ): SerializedSchematicFile {
   if (isAscFile(path)) {
-    // `.asc` has no Tau project-file identity. Writing a native linked-sheet
-    // instance as a bare LTspice X would discard both its resolver path and
-    // its ordered contract, so surface a blocking warning to the existing
-    // save guard rather than pretending the ASC is equivalent.
-    const carriesProjectHierarchy = document.components.some((component) => component.projectSubcircuit !== undefined)
-      || (document.projectPorts?.length ?? 0) > 0;
+    // A `.asc` cannot OWN a sheet block: writing a linked instance as a bare
+    // LTspice X would discard both its resolver path and its ordered contract,
+    // so that stays a blocking warning rather than a silent downgrade.
+    //
+    // `projectPorts` is deliberately NOT blocking, though it used to be. A
+    // sheet's own interface IS expressible in this format - each port is a
+    // `FLAG` plus an adjacent `IOPIN <dir>`, which `schematicToAsc` writes
+    // below and `importAsc` reads back - so nothing is lost by saving it. The
+    // array's `labelId`s are rebuilt from the labels on reload, and port ORDER
+    // was never the child's to hold; it lives on the parent's pin bank. Treating
+    // it as loss meant a `.asc` sheet could be GIVEN an interface but then not
+    // saved, which is a worse outcome than either allowing or refusing outright.
+    const carriesProjectHierarchy = document.components.some((component) => component.projectSubcircuit !== undefined);
     const result = schematicToAsc({
       components: document.components,
       wires: document.wires,
@@ -298,7 +305,7 @@ export function serializeSchematicFile(
       warnings: [
         ...result.warnings,
         ...(carriesProjectHierarchy
-          ? ["Project-linked sheets require a Tau .sim or .tau.json file; ASC save was not written."]
+          ? ["A sheet that holds a sheet block must be saved as a Tau .sim or .tau.json file, because .asc cannot record which sheet the block points at. This .asc was not written."]
           : []),
         ...(topologyChanged ? ["ASC round-trip changed terminal connectivity; save was not written."] : []),
       ],

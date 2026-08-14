@@ -136,7 +136,7 @@ async function openSimulator() {
   });
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
-  await screen.findByRole("tab", { name: /untitled\.asc/ });
+  await screen.findByRole("tab", { name: /untitled/ });
   useSchematic.setState({
     components: DIVIDER,
     wires: DIVIDER_WIRES,

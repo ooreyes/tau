@@ -215,18 +215,39 @@ describe("ExplorerPanel action row", () => {
     }
   });
 
-  it("creates and opens an ASC schematic from the New File control", async () => {
-    const { onOpenAscText } = renderExplorer();
+  it("creates and opens a Tau schematic from the New File control", async () => {
+    /*
+     * Re-expected, not repaired. A name typed without an extension used to
+     * become `.asc`, and that decided something the reader could not see: an
+     * `.asc` can persist neither a sheet interface nor a sheet block's link, so
+     * a brand-new sheet was born unable to take part in a hierarchy and only
+     * found out much later, at save or Run. It now becomes `.sim`, which keeps
+     * every route open. The `.asc` route is still reachable by spelling it, and
+     * the case below covers that.
+     */
+    const { onOpenSimFile } = renderExplorer();
     fireEvent.click(screen.getByRole("button", { name: "New schematic file" }));
     const input = screen.getByRole("textbox", { name: "New schematic name" });
     fireEvent.change(input, { target: { value: "gain-stage" } });
     fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.getByText("gain-stage.sim")).toBeTruthy());
+    await waitFor(() => expect(onOpenSimFile).toHaveBeenCalled());
+    expect(String(onOpenSimFile.mock.calls[0]?.[0] ?? "")).toMatch(/gain-stage\.sim$/);
+  });
+
+  it("still creates a .asc when the name spells one", async () => {
+    // The extension remains the reader's to choose; only the DEFAULT moved. An
+    // `.asc` also has to keep getting LTspice's own template, not Tau JSON.
+    const { onOpenAscText } = renderExplorer();
+    fireEvent.click(screen.getByRole("button", { name: "New schematic file" }));
+    const input = screen.getByRole("textbox", { name: "New schematic name" });
+    fireEvent.change(input, { target: { value: "from-ltspice.asc" } });
+    fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(onOpenAscText).toHaveBeenCalledWith(
-      expect.stringMatching(/gain-stage\.asc$/),
-      "gain-stage.asc",
+      expect.stringMatching(/from-ltspice\.asc$/),
+      "from-ltspice.asc",
       "Version 4\nSHEET 1 880 680\n",
     ));
-    expect(screen.getByText("gain-stage.asc")).toBeTruthy();
   });
 
   it("creates a visible folder from the New Folder control", async () => {

@@ -181,7 +181,7 @@ async function openProject() {
   });
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
-  await screen.findByRole("tab", { name: /untitled\.asc/ });
+  await screen.findByRole("tab", { name: /untitled/ });
 }
 
 describe("shell inventory by app state", () => {

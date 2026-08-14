@@ -2332,7 +2332,15 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       const tokens = component.value.trim().split(/\s+/).filter(Boolean);
       const subName = tokens[0] ?? "";
       if (!subName) {
-        throw new Error(`${component.label || "subcircuit"} needs a subcircuit name (the value's first token).`);
+        // This is the exact message a reader meets after placing a Sheet block
+        // and pressing Run before linking it, which is now the common way to
+        // arrive here (a new placement starts with no value at all, so that
+        // nothing is bound behind their back). So it names the next action
+        // rather than the field: "the value's first token" described where the
+        // name is stored, which is not a thing anyone can act on.
+        throw new Error(
+          `${component.label || "The block"} is not pointing at anything yet. Select it and choose a sheet, or name a subcircuit, in the inspector.`,
+        );
       }
       const params = tokens.slice(1).join(" ").replace(/µ/g, "u");
       const nodes = Object.keys(entry.pins)

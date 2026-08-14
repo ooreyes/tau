@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { Canvas } from "./Canvas";
@@ -1065,13 +1065,29 @@ describe("Canvas - every painted mark declares its own ink (no black-blob defaul
   const styledClasses = (): Set<string> => {
     // vitest runs with cwd = apps/desktop; `import.meta.url` is not a file URL
     // under the jsdom environment, so resolve off the package root instead.
-    const css = readFileSync(resolve(process.cwd(), "src/App.css"), "utf8");
+    //
+    // EVERY stylesheet the app imports counts, not just App.css. Scanning only
+    // App.css made this gate answer a different question than it asks: a mark
+    // styled in one of the `styles/*.css` files was still reported as an
+    // unstyled black blob, so the only way to satisfy the gate was to put the
+    // rule in App.css - a 10,000-line file every change has to share. That
+    // pressure is backwards, and it is why the per-surface stylesheets exist.
+    const styleDir = resolve(process.cwd(), "src/styles");
+    const sources = [
+      resolve(process.cwd(), "src/App.css"),
+      ...(existsSync(styleDir)
+        ? readdirSync(styleDir).filter((name) => name.endsWith(".css")).map((name) => resolve(styleDir, name))
+        : []),
+    ];
     // Only selector text, never declaration values, or `var(--x)` names and
     // `color-mix` arguments would masquerade as styled class names.
     const set = new Set<string>();
-    for (const block of css.split("}")) {
-      const selector = block.slice(block.lastIndexOf("{") >= 0 ? 0 : 0, block.indexOf("{"));
-      for (const match of selector.matchAll(/\.([A-Za-z_][\w-]*)/g)) set.add(match[1]);
+    for (const source of sources) {
+      const css = readFileSync(source, "utf8");
+      for (const block of css.split("}")) {
+        const selector = block.slice(0, block.indexOf("{"));
+        for (const match of selector.matchAll(/\.([A-Za-z_][\w-]*)/g)) set.add(match[1]);
+      }
     }
     return set;
   };
@@ -1134,5 +1150,43 @@ describe("Canvas - every painted mark declares its own ink (no black-blob defaul
     // case would be vacuous, so prove it is there before judging its ink.
     expect(container.querySelector(".net-pick-puck")).not.toBeNull();
     expect(unstyledMarks(container)).toEqual([]);
+  });
+});
+
+/*
+ * The net-label authoring stack is three opaque popovers anchored to one world
+ * point: the name input, the port-direction row, and the error line. Their
+ * offsets are SCREEN pixels, so the gaps between them must not change with the
+ * canvas zoom. They used to be added to the world y before the zoom multiply, so
+ * at anything below 1.0 the direction row climbed over the input it belongs to -
+ * and the direction row is the whole on-drawing authoring gesture.
+ */
+describe("Canvas - the net-label authoring stack keeps its spacing at every zoom", () => {
+  /*
+   * Asserted as source shape rather than as rendered geometry, deliberately.
+   * The property is about WHERE the arithmetic happens - the offsets must be
+   * added after the zoom multiply, not before it - and that is exactly what a
+   * regression would change. Driving it through the DOM needs the label draft
+   * armed and the internal view scaled, which pins the test to interaction
+   * details that have nothing to do with the property. Same technique this file
+   * already uses to hold App.css facts.
+   */
+  const canvasSource = (): string => readFileSync(resolve(process.cwd(), "src/components/Canvas.tsx"), "utf8");
+
+  it("offsets the popover stack in screen pixels, outside the zoom multiply", () => {
+    const source = canvasSource();
+    // The three popovers of the stack: name input, direction row, error line.
+    for (const constant of ["LABEL_DRAFT_INPUT_DY", "LABEL_DRAFT_DIRECTION_DY", "LABEL_DRAFT_ERROR_DY"]) {
+      expect(source, `${constant} exists`).toContain(`const ${constant} =`);
+    }
+    // Every `top` in that stack anchors with `y * view.zoom + view.y` and THEN
+    // adds a pixel offset. The old form multiplied the offset too.
+    expect(source, "no offset is folded into the world y before scaling").not.toMatch(
+      /top:\s*\(labelDraft\.y \+/,
+    );
+    expect(
+      (source.match(/top: labelDraft\.y \* view\.zoom \+ view\.y/g) ?? []).length,
+      "all three popovers anchor the same way",
+    ).toBe(3);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { bundledSubcircuitBlock } from "../engine/bundledSubcircuits";
 import { CATALOG, PALETTE_SECTIONS, catalogSectionEntries, type CatalogSection } from "./catalog";
 import { getLocalPins } from "./pins";
 import { CENTERED_SINE_PATH, ComponentSymbol, SYMBOL_BODY, SYMBOL_BOX } from "./symbols";
@@ -94,6 +95,29 @@ describe("Library catalog contract", () => {
   it("names native semiconductor and contact defaults without pretending they are vendor parts", () => {
     expect(CATALOG.find((entry) => entry.kind === "led")?.name).toBe("Generic LED");
     expect(CATALOG.find((entry) => entry.kind === "switch")?.name).toBe("SPST Switch");
+  });
+
+  it("offers the X device as a Sheet block, placed bound to nothing", () => {
+    const sheetBlock = CATALOG.find((entry) => entry.kind === "subckt");
+    // The row names the act. It used to be "Subcircuit (X)", which named the
+    // netlist letter — the one thing a reader looking to reuse a schematic they
+    // already drew would never search for.
+    expect(sheetBlock?.name).toBe("Sheet block");
+    expect(sheetBlock?.desc).toBeTruthy();
+    // And it arrives bound to nothing. `tau_passthrough` was a real bundled 1 mΩ
+    // block, so the old default made every placement a library part nobody
+    // chose, which then simulated as a piece of wire.
+    expect(sheetBlock?.defaultValue).toBe("");
+    expect(sheetBlock?.searchTerms).toContain("subcircuit");
+  });
+
+  it("never places a part pre-bound to a bundled library subcircuit", () => {
+    // Stated against the real bundle rather than a hard-coded name, so adding a
+    // bundled block that collides with some kind's default value fails here
+    // instead of silently deciding what a fresh placement simulates as.
+    for (const entry of CATALOG) {
+      expect(bundledSubcircuitBlock(entry.defaultValue), `${entry.kind} default`).toBeNull();
+    }
   });
 
   it("gives every component visible symbol geometry, pins, and finite bounds", () => {

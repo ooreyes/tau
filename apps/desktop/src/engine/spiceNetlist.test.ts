@@ -9,6 +9,7 @@ import {
   unresolvedSubcktMessage,
   clampedLoadSourceWarning,
 } from "./spiceNetlist";
+import type { ComponentKind } from "../schematic/types";
 import { LaplaceAnalysisRefusal, LAPLACE_DYNAMIC_TRANSFER_REFUSAL_CODE } from "./laplace";
 import { buildParamScope } from "../simulation/paramScope";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
@@ -26,8 +27,25 @@ const component = (
 const wire = (id: string, points: { x: number; y: number }[]): SchematicWire => ({ id, points });
 
 describe("buildSpiceDeck", () => {
+  /**
+   * One catalog entry deliberately does NOT build on placement, and it is
+   * excluded here rather than the rule being loosened for everybody.
+   *
+   * A Sheet block starts with no value at all. It used to default to
+   * `tau_passthrough`, a real bundled block that simulates as a 1 mΩ series
+   * resistor - so every placement arrived already bound to a library part
+   * nobody chose, and the sheet ran as though a piece of wire were what the
+   * reader meant. An empty value cannot resolve to anything, which is the
+   * point: nothing is decided behind the reader's back.
+   *
+   * The exclusion is paid for by the test below it, which asserts the refusal
+   * is the actionable one. Deleting that test would make this exclusion a hole.
+   */
+  const PLACES_UNBOUND = new Set<ComponentKind>(["subckt"]);
+
   it("builds a finite simulation deck for every default Library component", () => {
     for (const [index, entry] of CATALOG.entries()) {
+      if (PLACES_UNBOUND.has(entry.kind)) continue;
       const placed = component(
         entry.kind,
         entry.kind === "ground" ? "" : `${entry.prefix}${index + 1}`,
@@ -40,6 +58,18 @@ describe("buildSpiceDeck", () => {
       expect(deck.netlist, entry.kind).toContain(".op");
       expect(deck.netlist, entry.kind).not.toMatch(/\b(?:NaN|undefined|Infinity)\b/);
     }
+  });
+
+  it("refuses a freshly placed Sheet block by name, and says what to do", () => {
+    // The other half of PLACES_UNBOUND: an unbuildable default is only
+    // acceptable while the refusal tells the reader their next move.
+    const entry = CATALOG.find((candidate) => candidate.kind === "subckt");
+    expect(entry, "the catalog still has a subckt row").toBeDefined();
+    expect(entry!.defaultValue, "a new Sheet block starts unbound").toBe("");
+    const grounded = component("ground", "", "", 0, 0);
+    const placed = component("subckt", "X1", entry!.defaultValue, 128, 128);
+    expect(() => buildSpiceDeck({ components: [grounded, placed], wires: [] }, { kind: "op" }))
+      .toThrow(/^X1 is not pointing at anything yet\. Select it and choose a sheet/);
   });
 
   it("raises the node shunt for a high-impedance sheet, and leaves ordinary ones alone", () => {

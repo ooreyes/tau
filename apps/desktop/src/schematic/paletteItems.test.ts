@@ -37,6 +37,40 @@ describe("EveryCircuit palette presets", () => {
     expect(allPaletteItems().length).toBeGreaterThan(CATALOG_BY_KIND.digitalGate ? 40 : 0);
   });
 
+  it("gives the Sheet block row a subtitle through the preset-less path", () => {
+    const [sheetBlock, ...extra] = expandCatalogEntry(CATALOG_BY_KIND.subckt);
+    expect(extra).toEqual([]);
+    expect(sheetBlock.name).toBe("Sheet block");
+    // The subtitle is the point of the row: the part points at another sheet.
+    // It only reaches the rail because the preset-less branch carries `desc`.
+    expect(sheetBlock.desc).toBe("another sheet");
+    // Placed unbound — never pre-bound to a bundled library subcircuit.
+    expect(sheetBlock.value).toBe("");
+  });
+
+  it("still finds the Sheet block row by the SPICE words its name dropped", () => {
+    const isSheetBlock = (item: { kind: string }) => item.kind === "subckt";
+    expect(matchPaletteItems("sheet block").some(isSheetBlock)).toBe(true);
+    expect(matchPaletteItems("another sheet").some(isSheetBlock)).toBe(true);
+    // An engineer who wants a plain X instance against a bundled or
+    // document-defined .subckt types the jargon; `kind` only spells "subckt".
+    expect(matchPaletteItems("subcircuit").some(isSheetBlock)).toBe(true);
+    expect(matchPaletteItems("subckt").some(isSheetBlock)).toBe(true);
+    expect(matchPaletteItems("hierarch").some(isSheetBlock)).toBe(true);
+  });
+
+  it("spells the sheet feature with the two agreed nouns and nothing else", () => {
+    // Six names for one feature is how it became unfindable. Anything a user can
+    // read says "Sheet block" (the instance) or "Sheet interface" (the ports).
+    const retired = [/subcircuit\s*\(x\)/i, /project sheet link/i, /project model/i, /child sheet interface/i];
+    for (const item of allPaletteItems()) {
+      for (const pattern of retired) {
+        expect(pattern.test(item.name), `${item.id} name`).toBe(false);
+        expect(pattern.test(item.desc ?? ""), `${item.id} desc`).toBe(false);
+      }
+    }
+  });
+
   it("emits NAND with inverted primary Q levels", () => {
     const spec = parseDigitalGate("nand");
     expect(spec.fn).toBe("and");

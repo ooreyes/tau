@@ -6,6 +6,7 @@ import {
   defaultWorkspaceFiles,
 } from "../project/defaultWorkspace";
 import * as fs from "../project/fsBridge";
+import { blankSimJson } from "../project/types";
 import { flattenTree, useProject } from "./useProject";
 
 const ASC_SOURCE = "Version 4\nSHEET 1 880 680\nFLAG 80 80 0\n";
@@ -45,21 +46,40 @@ describe("ASC-native project workspace", () => {
     expect(useProject.getState().tree).toEqual([]);
   });
 
-  it("creates and reads a valid .asc by default", async () => {
+  /**
+   * A name typed without an extension is a NEW, Tau-authored sheet, and only
+   * Tau's own format can hold a sheet BLOCK - the link recording which sheet the
+   * block points at, and in what pin order. (A `.asc` states its own interface
+   * fine, as `FLAG` + `IOPIN`, so it makes a good child; it just cannot be the
+   * sheet doing the pointing.) Defaulting to `.asc` therefore dead-ended half of
+   * what a new sheet can become, at a moment nothing on screen described.
+   */
+  it("creates and reads a valid .sim by default", async () => {
     useProject.getState().ensureDefaultWorkspace();
     const root = useProject.getState().rootPath!;
     const path = await useProject.getState().createSchematicFile(root, "filter");
 
-    expect(path).toBe(`${DEFAULT_WORKSPACE_ID}/filter.asc`);
-    expect(flattenTree(useProject.getState().tree).map((node) => node.name)).toEqual(["filter.asc"]);
-    await expect(useProject.getState().readSim(path!)).resolves.toBe("Version 4\nSHEET 1 880 680\n");
+    expect(path).toBe(`${DEFAULT_WORKSPACE_ID}/filter.sim`);
+    expect(flattenTree(useProject.getState().tree).map((node) => node.name)).toEqual(["filter.sim"]);
+    expect(JSON.parse(await useProject.getState().readSim(path!)))
+      .toEqual(expect.objectContaining({ app: "Tau", version: 1 }));
   });
 
-  it("preserves explicit legacy .sim creation", async () => {
+  it("preserves explicit .sim creation", async () => {
     useProject.getState().ensureDefaultWorkspace();
     const path = await useProject.getState().createSchematicFile(DEFAULT_WORKSPACE_ID, "legacy.sim");
     const contents = await useProject.getState().readSim(path!);
     expect(JSON.parse(contents)).toEqual(expect.objectContaining({ app: "Tau", version: 1 }));
+  });
+
+  /** The default moved, but an explicitly named `.asc` still gets real ASC text. */
+  it("still creates a valid blank .asc when the name asks for one", async () => {
+    useProject.getState().ensureDefaultWorkspace();
+    const path = await useProject.getState().createSchematicFile(DEFAULT_WORKSPACE_ID, "ltspice.asc");
+
+    expect(path).toBe(`${DEFAULT_WORKSPACE_ID}/ltspice.asc`);
+    expect(useProject.getState().workspaceFiles[path!]?.kind).toBe("asc");
+    await expect(useProject.getState().readSim(path!)).resolves.toBe("Version 4\nSHEET 1 880 680\n");
   });
 
   it("imports the original ASC text under its real filename", async () => {
@@ -109,11 +129,11 @@ describe("ASC-native project workspace", () => {
       useProject.getState().createSchematicInRoot(),
     ]);
 
-    expect(first).toBe(`${DEFAULT_WORKSPACE_ID}/untitled.asc`);
-    expect(second).toBe(`${DEFAULT_WORKSPACE_ID}/untitled-2.asc`);
+    expect(first).toBe(`${DEFAULT_WORKSPACE_ID}/untitled.sim`);
+    expect(second).toBe(`${DEFAULT_WORKSPACE_ID}/untitled-2.sim`);
     expect(flattenTree(useProject.getState().tree).map((node) => node.name)).toEqual([
-      "untitled-2.asc",
-      "untitled.asc",
+      "untitled-2.sim",
+      "untitled.sim",
     ]);
   });
 
@@ -175,20 +195,22 @@ describe("ASC-native project workspace", () => {
       error: "Could not create schematic.",
     });
 
-    await expect(useProject.getState().createSchematicFile(root, "filter")).resolves.toBe(`${root}/filter.asc`);
+    // Spelled `.asc` on purpose: an extensionless name is a `.sim` now, and this
+    // case is specifically about the native bridge writing real LTspice bytes.
+    await expect(useProject.getState().createSchematicFile(root, "filter.asc")).resolves.toBe(`${root}/filter.asc`);
     expect(reserve).toHaveBeenCalledWith(root, root, "filter.asc", "Version 4\nSHEET 1 880 680\n");
     expect(useProject.getState().error).toBeNull();
   });
 
-  it("creates editor-tab schematics in the open project root", async () => {
+  it("creates editor-tab schematics in the open project root as .sim", async () => {
     const root = "/Users/test/Tau_Design";
     const reserve = vi.spyOn(fs, "reserveProjectTextFile").mockResolvedValue({
       status: "created",
-      path: `${root}/untitled.asc`,
+      path: `${root}/untitled.sim`,
       atomic: true,
     });
     vi.spyOn(fs, "readProjectTree").mockResolvedValue([
-      { name: "untitled.asc", path: `${root}/untitled.asc`, kind: "file" },
+      { name: "untitled.sim", path: `${root}/untitled.sim`, kind: "file" },
     ]);
     useProject.setState({
       capability: "tauri",
@@ -197,8 +219,8 @@ describe("ASC-native project workspace", () => {
       expanded: [root],
     });
 
-    await expect(useProject.getState().createSchematicInRoot()).resolves.toBe(`${root}/untitled.asc`);
-    expect(reserve).toHaveBeenCalledWith(root, root, "untitled.asc", "Version 4\nSHEET 1 880 680\n");
+    await expect(useProject.getState().createSchematicInRoot()).resolves.toBe(`${root}/untitled.sim`);
+    expect(reserve).toHaveBeenCalledWith(root, root, "untitled.sim", blankSimJson());
     expect(useProject.getState().error).toBeNull();
   });
 
@@ -307,7 +329,7 @@ describe("ASC-native project workspace", () => {
     ]);
     useProject.setState({ capability: "web", rootPath: root, rootName: "Tau_Design", expanded: [root] });
 
-    await expect(useProject.getState().createSchematicFile(root, "browser")).resolves.toBe(`${root}/browser.asc`);
+    await expect(useProject.getState().createSchematicFile(root, "browser.asc")).resolves.toBe(`${root}/browser.asc`);
     expect(reserve).toHaveBeenCalledWith(root, root, "browser.asc", "Version 4\nSHEET 1 880 680\n");
     expect(useProject.getState().error).toBeNull();
   });
@@ -458,6 +480,25 @@ describe("project node renames", () => {
     expect(useProject.getState().workspaceFiles[`${root}/Filters/filter.asc`]).toBeTruthy();
     expect(flattenTree(useProject.getState().tree).map((node) => node.path))
       .toContain(`${root}/Filters/filter.asc`);
+  });
+
+  /**
+   * The new-sheet default moved to `.sim`, but a rename is not a conversion: an
+   * LTspice file the user opened has to stay an LTspice file, or Tau would
+   * silently change the format of someone else's data behind a name edit.
+   */
+  it("keeps each file's own extension when the new name omits one", async () => {
+    useProject.getState().ensureDefaultWorkspace();
+    const root = useProject.getState().rootPath!;
+    const ascFile = await useProject.getState().createSchematicFile(root, "ltspice.asc");
+    const simFile = await useProject.getState().createSchematicFile(root, "tau-sheet");
+
+    await expect(useProject.getState().renameNode(ascFile!, "gain-stage")).resolves.toBe(`${root}/gain-stage.asc`);
+    await expect(useProject.getState().renameNode(simFile!, "buck")).resolves.toBe(`${root}/buck.sim`);
+    // The `.asc` also keeps its LTspice text, not just its name.
+    expect(useProject.getState().workspaceFiles[`${root}/gain-stage.asc`]?.kind).toBe("asc");
+    await expect(useProject.getState().readSim(`${root}/gain-stage.asc`))
+      .resolves.toBe("Version 4\nSHEET 1 880 680\n");
   });
 
   it("adds the schematic extension and performs a native disk rename", async () => {

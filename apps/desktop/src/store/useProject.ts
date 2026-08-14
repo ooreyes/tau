@@ -48,10 +48,28 @@ interface ProjectStore extends ProjectState {
   writeSim: (path: string, contents: string) => Promise<void>;
 }
 
+/**
+ * A name typed without an extension becomes a `.sim`, not a `.asc`.
+ *
+ * `.asc` is LTspice's format, and the two halves of a hierarchy are NOT equally
+ * expressible in it. A `.asc` sheet can state its own interface perfectly well -
+ * each port is a `FLAG` plus an adjacent `IOPIN <dir>`, which Tau reads and
+ * writes - so it makes a perfectly good CHILD. What it cannot record is a sheet
+ * block's link: which sheet the block points at, and in what pin order. So a
+ * sheet born `.asc` can be pointed AT but can never be the sheet doing the
+ * pointing, and `serializeSchematicFile` refuses that save rather than dropping
+ * the link silently.
+ *
+ * That refusal arrives long after the moment the extension was chosen, and the
+ * moment is invisible: nothing on screen says a new sheet has just been made
+ * unable to hold a block. Defaulting to Tau's own format keeps both roles open.
+ * A name the user spells `.asc` still gets `.asc`, and opened or imported `.asc`
+ * files are untouched by this.
+ */
 function ensureSchematicExtension(name: string): string {
   const trimmed = name.trim();
   if (/\.(asc|sim|tau\.json)$/i.test(trimmed)) return trimmed;
-  return `${trimmed || "untitled"}.asc`;
+  return `${trimmed || "untitled"}.sim`;
 }
 
 function preserveSchematicExtension(name: string, originalName: string): string {
@@ -135,7 +153,7 @@ async function availableFilePath(parentPath: string, desiredName: string): Promi
 }
 
 // Filename selection is a check-then-create transaction. Serialize it so two
-// rapid `+`/Cmd-S actions cannot both reserve the same `untitled.asc` before
+// rapid `+`/Cmd-S actions cannot both reserve the same `untitled.sim` before
 // either write becomes visible to the filesystem or temporary workspace.
 let schematicCreationQueue: Promise<void> = Promise.resolve();
 
@@ -330,7 +348,10 @@ export const useProject = create<ProjectStore>((set, get) => ({
     }
   }),
 
-  createSchematicInRoot: async (name = "untitled.asc") => {
+  // Unnamed sheets default to `.sim` for the reason `ensureSchematicExtension`
+  // gives: a `.asc` can be a child but never the sheet that holds a block, and
+  // an unnamed sheet is the one most likely to become either.
+  createSchematicInRoot: async (name = "untitled.sim") => {
     const { rootPath } = get();
     if (!rootPath) {
       set({ error: "Open a Schematics folder before creating a circuit." });

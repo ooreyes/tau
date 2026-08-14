@@ -565,7 +565,7 @@ describe("AssistantPanel", () => {
 
     expect(screen.getByRole("alert").textContent).toContain("12,000 characters");
     expect(streams).toHaveLength(0);
-    expect(listConversations("untitled.asc")).toHaveLength(0);
+    expect(listConversations("untitled.sim")).toHaveLength(0);
   });
   it("bounds recurring provider history without losing the newest user request", () => {
     const history = Array.from({ length: 30 }, (_, index) => ({

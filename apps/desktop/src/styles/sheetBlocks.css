@@ -1,0 +1,491 @@
+/*
+ * Sheet blocks - the surfaces of project hierarchy authoring.
+ *
+ * Two nouns, and they name two different things: a sheet gets an INTERFACE (the
+ * ports it exposes), and you then place it on a parent sheet as a BLOCK. This
+ * file styles both halves plus the drift review that reconciles them.
+ *
+ * It exists as its own layer rather than as another thousand lines in App.css
+ * because roughly thirty of this feature's class names had no rule anywhere in
+ * the repo, so its surfaces were rendering with browser defaults - bulleted
+ * data columns, ungapped stacks, and one control that was positioned entirely
+ * by inline coordinates that could never apply. Loaded after App.css (App.tsx),
+ * so an override of a shared `.property-*` rule wins at equal specificity.
+ *
+ * Colour is tokens only, so both themes follow for free, and nothing here is
+ * tinted to carry meaning it does not have (DESIGN_SYSTEM.md section 0).
+ */
+
+/* ── The on-drawing port picker ─────────────────────────────────────────────── */
+
+/*
+ * THE load-bearing rule in this file. Canvas.tsx positions this row entirely
+ * with inline `left`/`top` computed from the canvas transform, and with no rule
+ * declaring it positioned it resolved to `position: static` - so those
+ * coordinates did nothing, the row landed wherever the flow put it, and the
+ * feature's primary authoring gesture (click a net, name it, pick Input, done)
+ * was unusable. Everything else about that flow already worked.
+ *
+ * Geometry is coupled to Canvas.tsx: the name input sits at the net's y + 10,
+ * this row at y + 28, and the refusal message at y + 62. That leaves 34px, so
+ * 2px padding + 1px borders + a --control-hit segment is the exact budget - and
+ * the segments cannot be shortened below --control-hit without reopening the
+ * 28px target this row was built to clear.
+ */
+.net-port-direction {
+  position: absolute;
+  /* Centred on the net, matching `.value-edit-input`'s own translate: the
+     input and this row are one popover and must share an axis. */
+  transform: translateX(-50%);
+  /* Canvas-local stratum, not a --z-* app stratum: this belongs to the same
+     little family as the label input (8) and its error (22) and has to sit
+     between them, so it takes a plain integer like they do. */
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: 2px;
+  background: var(--panel-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  /* --elev-pop, not --elev-float: the label input and its error popup beside it
+     already use it, and a third material in one gesture reads as three
+     unrelated things rather than one control. */
+  box-shadow: var(--elev-pop);
+  /* The canvas hands down a crosshair; a floating control must not wear it. */
+  cursor: default;
+}
+
+/* Why the non-Internal segments are dead on this sheet. A note, not an alert -
+   an ordinary net label is still perfectly legal here - so it stays muted. */
+.net-port-direction-reason {
+  margin: 0;
+  padding: 0 var(--sp-1);
+  max-width: 30ch;
+  color: var(--muted);
+  font: 400 var(--fs-caption)/1.35 var(--font-ui);
+}
+
+/* A recessed track with hairline gaps, so four buttons read as one segmented
+   control and the chosen one reads as a position rather than as a click. */
+.net-port-direction-segments {
+  display: flex;
+  gap: 1px;
+  background: var(--border-subtle);
+  border-radius: var(--r-xs);
+  overflow: hidden;
+}
+
+.net-port-direction-segment {
+  /* WCAG 2.2 SC 2.5.8 with room to spare: a real 28px target, not a padded
+     hairline with an invisible hit area. */
+  min-height: var(--control-hit);
+  padding: 0 var(--sp-2);
+  border: 0;
+  background: var(--panel-2);
+  color: var(--muted);
+  font: 550 var(--fs-label) var(--font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.net-port-direction-segment:hover:not(:disabled) {
+  background: var(--overlay-hover-faint);
+  color: var(--text);
+}
+
+/*
+ * Selection, in accent - which section 0 sanctions for exactly this ("a control
+ * may use the accent for focus and selection"). Deliberately NOT the settings
+ * segmented control's idiom (`.tau-segmented-btn.active` fills with --panel-4):
+ * --panel-4 is this popover's own fill, so that treatment would be invisible
+ * here. The declaration this row cannot do without is the ring; the tint alone
+ * is too quiet for the one control that decides a port's electrical direction.
+ */
+.net-port-direction-segment.active {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.net-port-direction-segment:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+/* A roving-tabindex radiogroup makes only the checked segment tabbable, so
+   without this the group can hold focus with nothing on screen saying so. */
+.net-port-direction-segment:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The drift lamp on a placed block. Its paint is inline in Canvas.tsx (it is
+   SVG, and a 28px hit rect that is `transparent` rather than `none` has to say
+   so in SVG terms), so all that is wanted here is the affordance and a focus
+   ring - an SVG <g> with tabIndex=0 gets no reliable UA outline. */
+.subckt-drift-lamp {
+  cursor: pointer;
+}
+
+.subckt-drift-lamp:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Sheet interface: the child-side editor ─────────────────────────────────── */
+
+/*
+ * `.property-validation-error` is written for the inspector's two-column
+ * property grid (`grid-column: 2; max-width: 168px`). This editor is a 700px
+ * dialog, not that grid, so inherited geometry squeezes full sentences - the
+ * refusals here are whole sentences by design - into a 168px ribbon. Released
+ * once, for every error this editor shows.
+ */
+.project-sheet-ports-editor .property-validation-error {
+  grid-column: auto;
+  max-width: none;
+  line-height: 1.4;
+}
+
+/* The .asc refusal is the entire body of the editor in that state, so it gets
+   the diagnostic hairline treatment (hairline + text, never a filled banner). */
+.project-sheet-port-disabled {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--diagnostic-error-line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-body);
+}
+
+/* The name cell of a port row. `.project-sheet-port-row` is a fixed-track grid,
+   so this wrapper has to be allowed to shrink or the input overflows the row. */
+.project-sheet-port-name {
+  display: block;
+  min-width: 0;
+}
+
+/* ── Sheet interface: the candidate-net column ──────────────────────────────── */
+
+/* Every named net on the drawing, in document order, nothing ranked or
+   filtered. Separated from the ordered port list above by a hairline because it
+   answers a different question: not "what is the interface" but "what could
+   join it". */
+.project-sheet-port-candidates {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.project-sheet-port-candidate-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  /* A data column, not prose: a UA bullet here is a defect, not a decoration. */
+  list-style: none;
+}
+
+/* Net name, then the one fact that matters about it, then the gesture. The
+   middle track collapses to nothing when the net is fine, which is why the
+   note and the actions are separate tracks rather than one flow. */
+.project-sheet-port-candidate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--sp-2);
+  min-height: var(--control-hit);
+  padding: 0 2px;
+  font-size: var(--fs-body);
+  color: var(--text);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.project-sheet-port-candidate:last-child {
+  border-bottom: 0;
+}
+
+/* "not on a component net" sits in the row, so it must not carry
+   `.property-hint`'s top margin off the shared baseline. */
+.project-sheet-port-candidate > .property-hint {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.project-sheet-port-candidate-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+
+/* Already part of the interface. This is a state, not a control, so it reads as
+   a caption and never competes with the three buttons in the rows around it. */
+.project-sheet-port-candidate-mark {
+  justify-self: end;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+
+/* ── Sheet interface: the verdict ───────────────────────────────────────────── */
+
+/* The two refusals Run would give, said here instead. */
+.project-sheet-port-problems {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  list-style: none;
+  border: 1px solid var(--diagnostic-error-line);
+  border-radius: var(--r-md);
+}
+
+/* The other half of the verdict. `.property-hint` is right for a hint and wrong
+   for a conclusion, so this keeps the caption size and takes back full ink:
+   the reader has to be able to tell the "Ready" sentence from the two lines of
+   guidance above it without reading either. */
+.project-sheet-port-ready {
+  color: var(--text);
+}
+
+/* ── Sheet interface: who uses this sheet ───────────────────────────────────── */
+
+.project-sheet-port-usedby {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.project-sheet-port-usedby-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+
+/* ── Sheet block: the inspector panel ──────────────────────────────────────── */
+
+/*
+ * `.property-grid` is an ungapped flex column whose rows each own their height,
+ * so a group dropped into it with no rule of its own collapses into one
+ * undifferentiated stack. This is a group - a chooser, a pinout and a verdict
+ * about one linked sheet - so it gets the gap and the hairline that says where
+ * it starts.
+ */
+.project-sheet-link {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  padding: var(--sp-2) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Buttons size to their verb; only the full-width rows stretch. */
+.project-sheet-link > button,
+.project-sheet-drift > button,
+.project-sheet-advanced > button {
+  align-self: flex-start;
+}
+
+/* The explanatory line and "Open <child>" share a row, and the button drops
+   below it on a narrow rail rather than crushing the sentence. */
+.project-sheet-link-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+}
+
+.project-sheet-link-head > .property-hint {
+  margin: 0;
+  flex: 1 1 12ch;
+}
+
+/*
+ * The proposed pinout. `.port-list li` is a three-track grid
+ * (index / name / side) and this table renders FOUR cells - ordinal, name,
+ * direction, side - so the fourth wrapped onto a second grid row and the
+ * pinout read as eight rows for four pins.
+ */
+.project-sheet-pin-table li {
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+}
+
+/* The direction word. `.port-list` styles `.port-name` and `.port-side` but
+   never had a rule for this one, so it inherited the row's body size and
+   out-shouted the name it qualifies. */
+.project-sheet-pin-table .port-direction {
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── Sheet block: drift ────────────────────────────────────────────────────── */
+
+/* A hairline and text (section 4: never a saturated fill behind a paragraph).
+   Warning for a contract that has drifted - Run still netlists exactly what
+   this block says - and error for a child sheet that is simply gone. */
+.project-sheet-drift {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  margin: var(--sp-1) 0;
+  padding: var(--sp-2);
+  border: 1px solid var(--diagnostic-warning-line);
+  border-radius: var(--r-md);
+}
+
+.project-sheet-drift.is-missing {
+  border-color: var(--diagnostic-error-line);
+}
+
+.project-sheet-drift-summary {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}
+
+/* The manual-contract disclosure. Same rhythm as the group above it, minus the
+   hairline: it is already inside one. */
+.project-sheet-advanced {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  padding-top: var(--sp-1);
+}
+
+/* ── Drift review dialog ───────────────────────────────────────────────────── */
+
+/*
+ * `DialogContent` is 420px wide and has no height bound, and this one carries a
+ * four-column diff plus a consequence sentence per changed row. The width is
+ * for the table; the height bound is because a `fixed top-1/2 -translate-y-1/2`
+ * dialog with nothing scrollable puts "Keep current contract" off-screen once
+ * the child sheet has enough ports. Both beat Tailwind's `max-w-[420px]`
+ * without `!important` because utilities live in a cascade layer and this file
+ * does not.
+ */
+.sheet-drift-dialog {
+  max-width: min(640px, calc(100vw - var(--sp-8)));
+  max-height: min(80vh, 34rem);
+  overflow-y: auto;
+}
+
+.sheet-drift-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-body);
+}
+
+/* Section 4: a header row is muted uppercase caption over a hairline, with no
+   filled block behind it - a filled header reads as a selected row. */
+.sheet-drift-table th {
+  padding: 0 var(--sp-2) var(--sp-1) 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font: 600 var(--fs-caption)/1.3 var(--font-ui);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sheet-drift-table td {
+  padding: var(--sp-1) var(--sp-2) var(--sp-1) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+  line-height: 1.35;
+  vertical-align: baseline;
+}
+
+.sheet-drift-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* The ordinal column. The contract is positional, so the number is the row's
+   key - narrow, right-aligned and quiet, like every other pin ordinal here. */
+.sheet-drift-table th:first-child,
+.sheet-drift-table td:first-child {
+  width: 3ch;
+  text-align: right;
+  color: var(--muted);
+}
+
+/* The change verb is a label for the row, not a fourth value in it. */
+.sheet-drift-table td:last-child {
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+/*
+ * Unchanged rows recede and changed ones do not. The differences are the whole
+ * reason this dialog opened, and they are told apart by ink weight rather than
+ * by a hue per change kind: six colours across "renamed / moved / added /
+ * removed / direction" would spend the trace palette on chrome, which is the
+ * one thing section 0 forbids outright.
+ */
+.sheet-drift-row.is-same td {
+  color: var(--muted);
+}
+
+.sheet-drift-row:not(.is-same) td:last-child {
+  color: var(--text);
+}
+
+/* One sentence per changed row, saying what that change does to this parent.
+   Not styled as a hint: it is the consequence, and it is why the reader is
+   being asked. */
+.sheet-drift-consequence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.sheet-drift-consequence p {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  line-height: 1.4;
+}
+
+/* Which copy of the child was read. A provenance footnote, so it sits at the
+   bottom of the ink hierarchy - but it is present, because a diff that cannot
+   say what it compared against gets ignored the first time it surprises
+   someone. */
+.sheet-drift-source {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}

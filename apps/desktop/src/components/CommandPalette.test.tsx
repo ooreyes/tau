@@ -71,4 +71,23 @@ describe("CommandPalette ui/command", () => {
     expect(await screen.findByText("No matching parts")).toBeTruthy();
     expect(screen.queryByText("Model libraries...")).toBeNull();
   });
+
+  /*
+   * Renaming a part for clarity must not remove it from search for everyone who
+   * knows the old word. The palette row for a hierarchy instance is called
+   * "Sheet block" because that names the act; it used to be "Subcircuit (X)",
+   * which named the netlist device. Without the catalog's `searchTerms` reaching
+   * BOTH filters here (this component's own, and cmdk's match against `value`),
+   * typing the single most likely word returned "No matching parts" - a
+   * discoverability regression produced by a discoverability fix.
+   */
+  it("finds the Sheet block row by the jargon it is no longer named after", async () => {
+    for (const term of ["subcircuit", "subckt", "hierarchy"]) {
+      const { unmount } = render(<CommandPalette open onClose={vi.fn()} />);
+      const input = screen.getByPlaceholderText(/Search parts/);
+      fireEvent.change(input, { target: { value: term } });
+      expect(await screen.findByText("Sheet block"), `"${term}" finds the row`).toBeTruthy();
+      unmount();
+    }
+  });
 });

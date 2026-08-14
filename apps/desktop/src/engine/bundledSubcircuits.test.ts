@@ -288,7 +288,13 @@ describe("deck integration - subckt instances", () => {
   it("throws a clear error when the value has no subcircuit name", () => {
     const comps = [sub("", "U1", [["p1", "+", 0, 0], ["p2", "-", 0, 80]])];
     const netLabels = [lbl(0, 80, "0")];
+    // Re-expected, not repaired. A newly placed Sheet block now starts with NO
+    // value (it used to arrive bound to `tau_passthrough`, a real bundled block
+    // that simulated as a piece of wire nobody chose), so this is the message a
+    // reader actually meets - and it has to name the next action instead of the
+    // field the name is stored in. The designator still leads, so the sentence
+    // still says WHICH part.
     expect(() => buildSpiceDeck({ components: comps, wires: [], netLabels }, { kind: "op" }))
-      .toThrow(/needs a subcircuit name/);
+      .toThrow(/^U1 is not pointing at anything yet\. Select it and choose a sheet/);
   });
 });

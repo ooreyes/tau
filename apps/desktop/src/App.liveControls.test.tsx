@@ -112,7 +112,7 @@ async function openSimulator(
   });
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
-  await screen.findByRole("tab", { name: /untitled\.asc/ });
+  await screen.findByRole("tab", { name: /untitled/ });
   act(() => useSchematic.setState({ components, wires, directives, past: [], future: [] }));
   fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
 }

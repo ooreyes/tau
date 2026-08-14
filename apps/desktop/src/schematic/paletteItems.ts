@@ -16,6 +16,8 @@ export interface PaletteItemSpec {
   value?: string;
   /** Optional short subtitle under the name. */
   desc?: string;
+  /** Matched by {@link matchPaletteItems}, never rendered: see CatalogEntry. */
+  searchTerms?: readonly string[];
 }
 
 /** Expand a catalog entry into one or more EveryCircuit-like browse rows. */
@@ -42,6 +44,9 @@ export function expandCatalogEntry(entry: CatalogEntry): PaletteItemSpec[] {
         { id: "vpulse", kind: "vpulse", name: "Clock / Pulse", hotkey: entry.hotkey, value: entry.defaultValue, desc: "square" },
       ];
     default:
+      // A kind with no presets is one row, and it keeps the catalog's own
+      // subtitle and search words. Dropping them here is why a part could not
+      // explain itself in the rail without inventing a second case below.
       return [
         {
           id: entry.kind,
@@ -49,6 +54,8 @@ export function expandCatalogEntry(entry: CatalogEntry): PaletteItemSpec[] {
           name: entry.name,
           hotkey: entry.hotkey,
           value: entry.defaultValue,
+          ...(entry.desc ? { desc: entry.desc } : {}),
+          ...(entry.searchTerms ? { searchTerms: entry.searchTerms } : {}),
         },
       ];
   }
@@ -72,6 +79,9 @@ export function matchPaletteItems(query: string): PaletteItemSpec[] {
       item.kind.toLowerCase().includes(q) ||
       (item.desc?.toLowerCase().includes(q) ?? false) ||
       (item.value?.toLowerCase().includes(q) ?? false) ||
+      // "subcircuit" has to keep finding the Sheet block row: the name is the
+      // act now, and `kind` only spells the abbreviated "subckt".
+      (item.searchTerms?.some((term) => term.toLowerCase().includes(q)) ?? false) ||
       item.hotkey.toLowerCase() === q,
   );
 }

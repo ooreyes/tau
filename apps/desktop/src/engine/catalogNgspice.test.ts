@@ -20,6 +20,14 @@ describe.skipIf(!haveNgspice)("Library catalog - real ngspice smoke", () => {
     const dir = mkdtempSync(join(tmpdir(), "tau-catalog-ngspice-"));
     try {
       for (const [catalogIndex, entry] of CATALOG.entries()) {
+        // A Sheet block starts with NO value, deliberately: binding a fresh
+        // placement to a bundled block (it used to default to
+        // `tau_passthrough`, a 1 mΩ series resistor) meant the sheet ran as a
+        // piece of wire nobody chose. There is therefore nothing for ngspice to
+        // accept until the reader points it at a sheet, and the refusal is
+        // asserted in spiceNetlist.test.ts's "refuses a freshly placed Sheet
+        // block by name" rather than being silently tolerated here.
+        if (entry.kind === "subckt") continue;
         const dut: SchematicComponent = {
           id: `dut-${entry.kind}`,
           kind: entry.kind,

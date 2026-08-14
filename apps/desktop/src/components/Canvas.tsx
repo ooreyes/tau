@@ -272,6 +272,23 @@ export interface SubcircuitDriftAnnotation {
 
 /** The child's whole authoring vocabulary, in the order the row reads.
  *  `null` is an ordinary internal net - the default, and today's behaviour. */
+/*
+ * Vertical offsets for the net-label authoring stack: the name input, the port
+ * direction row under it, and the error line under that. All three are anchored
+ * to the same world point and then pushed down by these amounts.
+ *
+ * SCREEN pixels, not world units, and that distinction is the whole reason they
+ * are named. The offsets used to be added to the world y BEFORE multiplying by
+ * `view.zoom`, so the gaps between three opaque popovers shrank with the zoom -
+ * at anything below about 1.0 the direction row climbed over the input it
+ * belongs to, and at 0.5 it covered it. These are chrome, not circuit: their
+ * spacing has to be the same at every zoom, which means the multiply happens
+ * only on the anchor.
+ */
+const LABEL_DRAFT_INPUT_DY = 10;
+const LABEL_DRAFT_DIRECTION_DY = 28;
+const LABEL_DRAFT_ERROR_DY = 62;
+
 const DIRECTION_SEGMENTS = [
   [null, "Internal"],
   ["In", "Input"],
@@ -2516,7 +2533,7 @@ export function Canvas({
           aria-label="Net label name"
           style={{
             left: labelDraft.x * view.zoom + view.x,
-            top: (labelDraft.y + 10) * view.zoom + view.y,
+            top: labelDraft.y * view.zoom + view.y + LABEL_DRAFT_INPUT_DY,
           }}
           aria-invalid={labelDraft.error ? "true" : undefined}
           aria-describedby={labelDraft.error ? "net-label-input-error" : undefined}
@@ -2564,7 +2581,7 @@ export function Canvas({
           aria-label="Sheet interface role for this net"
           style={{
             left: labelDraft.x * view.zoom + view.x,
-            top: (labelDraft.y + 28) * view.zoom + view.y,
+            top: labelDraft.y * view.zoom + view.y + LABEL_DRAFT_DIRECTION_DY,
           }}
         >
           {sheetInterfaceDisabledReason && (
@@ -2595,9 +2612,13 @@ export function Canvas({
                   tabIndex={active ? 0 : -1}
                   data-direction-segment={index}
                   className={`net-port-direction-segment${active ? " active" : ""}`}
-                  // An .asc sheet cannot carry a Tau sheet interface, and
-                  // saying so HERE - at the gesture - is the whole point.
+                  // When a sheet cannot take an interface yet - today that means
+                  // it has not been saved into the project - say so HERE, at the
+                  // gesture, rather than letting the user find out at Run.
                   // "Internal" stays live: an ordinary net label is still fine.
+                  // (This used to also refuse `.asc` sheets. It no longer does:
+                  // an LTspice sheet states its ports as FLAG + IOPIN, which the
+                  // compiler reads and the save path keeps.)
                   disabled={blocked(index)}
                   // Keep focus on the name input, or its onBlur would commit
                   // the draft out from under the click that is still choosing.
@@ -2639,7 +2660,8 @@ export function Canvas({
           role="alert"
           style={{
             left: labelDraft.x * view.zoom + view.x,
-            top: (labelDraft.y + (onCommitNetLabelPort ? 62 : 28)) * view.zoom + view.y,
+            top: labelDraft.y * view.zoom + view.y
+              + (onCommitNetLabelPort ? LABEL_DRAFT_ERROR_DY : LABEL_DRAFT_DIRECTION_DY),
           }}
         >
           {labelDraft.error}

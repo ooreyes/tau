@@ -211,8 +211,15 @@ export function ProjectSheetPortsEditor({
     commit(next);
   };
 
-  // An .asc document cannot hold projectPorts at all, so no live control is
-  // offered: an enabled control that always refuses is worse than a sentence.
+  // When the sheet cannot take an interface, offer no live control: an enabled
+  // control that always refuses is worse than a sentence saying why.
+  //
+  // This used to fire for every `.asc`, on the grounds that such a document
+  // cannot hold a `projectPorts` array. That was true and beside the point - the
+  // format states each port as a `FLAG` plus an adjacent `IOPIN <dir>`, which is
+  // exactly what this dialog writes, and the compiler now reads that contract.
+  // The remaining reason is the honest one: a sheet that has never been saved
+  // into the project has no path for a parent to point at.
   if (interfaceDisabledReason) {
     return (
       <div className="project-sheet-ports-editor" role="group" aria-label="Sheet interface">

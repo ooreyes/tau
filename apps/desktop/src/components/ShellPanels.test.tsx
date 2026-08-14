@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
-import { ComponentInspector, ComponentsRail } from "./ShellPanels";
+import { ComponentInspector, ComponentsRail, ExplorerPanel } from "./ShellPanels";
 import { EditorToolbar } from "./editor/EditorChrome";
 // Moved to drawer/ in redesign stage 2; it becomes the results drawer's Errors
 // tab in stage 4. Imported from its new home rather than re-exported, so this
@@ -659,12 +659,12 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    const sheet = screen.getByRole("combobox", { name: "Project sheet" });
+    const sheet = screen.getByRole("combobox", { name: "Sheet interface" });
     fireEvent.pointerDown(sheet, { button: 0, pointerId: 5, pointerType: "mouse" });
     fireEvent.click(await screen.findByRole("option", { name: /child\.sim · 3 ports: IN, OUT, GND/ }));
 
     // The model name is derived from the file stem, already in the field.
-    expect((screen.getByRole("textbox", { name: "Project model name" }) as HTMLInputElement).value)
+    expect((screen.getByRole("textbox", { name: "Sheet block name" }) as HTMLInputElement).value)
       .toBe("Child");
     // The pinout is shown, in order, with the side each direction implies.
     const proposed = screen.getByRole("list", { name: "Proposed pin order" });
@@ -722,39 +722,42 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    expect(screen.queryByRole("textbox", { name: "Ordered project ports" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Ordered block ports" })).toBeNull();
 
     // The sheet is chosen by the reader, never pre-selected for them.
-    const eeSheet = screen.getByRole("combobox", { name: "Project sheet" });
+    const eeSheet = screen.getByRole("combobox", { name: "Sheet interface" });
     expect(eeSheet.textContent).toBe("Choose a Tau sheet");
     fireEvent.pointerDown(eeSheet, { button: 0, pointerId: 5, pointerType: "mouse" });
     fireEvent.click(screen.getByRole("option", { name: /child\.sim/ }));
 
     fireEvent.click(screen.getByRole("button", { name: "Edit contract manually" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Manual project model name" }), { target: { value: "ChildModel" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Ordered project ports" }), { target: { value: "GND, IN, OUT" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Manual sheet block name" }), { target: { value: "ChildModel" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ordered block ports" }), { target: { value: "GND, IN, OUT" } });
 
     // A deliberate difference is framed as one, not as an error.
     expect(screen.getByText(/Your contract, deliberately different/)).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Link project sheet" }));
+    fireEvent.click(screen.getByRole("button", { name: "Link sheet block" }));
     expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
       sheetPath: "child.sim",
       model: "ChildModel",
       ports: ["GND", "IN", "OUT"],
     });
-    expect(within(screen.getByRole("group", { name: "Project sheet link" })).getAllByRole("status")
+    expect(within(screen.getByRole("group", { name: "Sheet block" })).getAllByRole("status")
       .map((row) => row.textContent).join(" | "))
       .toContain("child’s public ports match in order");
   });
 
-  it("refuses a project link on an .asc sheet in plain words, with a way out", () => {
+  // An `.asc` is a legal link TARGET and an illegal link OWNER
+  // (canonicalProjectSheetPath vs canonicalProjectOwnerPath), so the panel has to
+  // say which half of that it is refusing. It used to claim the whole feature was
+  // shut, which is now false.
+  const ascInspector = (onSaveSheetAsSim?: () => void) => {
     const selected = {
       id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
       value: "tau_passthrough", label: "X1",
     };
-    const saveAs = vi.fn();
     useProject.setState({
       rootPath: "/project",
       tree: [
@@ -768,15 +771,33 @@ describe("ComponentInspector - native subcircuit chooser", () => {
         selected={selected}
         projectFilePath="/project/legacy.asc"
         sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["OUT", "Out"]])]}
-        onSaveSheetAsSim={saveAs}
+        onSaveSheetAsSim={onSaveSheetAsSim}
       />,
     );
+    return screen.getByRole("group", { name: "Sheet block" });
+  };
 
-    const group = screen.getByRole("group", { name: "Project sheet link" });
+  it("tells an .asc sheet it can BE a block but cannot hold one, and offers no dead button", () => {
+    const group = ascInspector();
+
     expect(within(group).getByRole("status").textContent)
-      .toBe("An .asc sheet cannot hold a project link. Save this sheet as .sim first.");
+      // The remedy has to be performable. "Save this sheet as .sim" was not:
+      // no Save-As in the app changes an extension, and an Explorer rename to
+      // `.sim` keeps the LTspice bytes, so the file would not reopen.
+      .toBe("This .asc sheet can be used as a sheet block on a .sim parent, but it cannot hold one:"
+        + " LTspice’s format has nowhere to store the link or its port order."
+        + " To place blocks, put them on a Tau .sim sheet — a new sheet is one by default.");
     expect(screen.queryByRole("button", { name: "Link this sheet" })).toBeNull();
-    expect(screen.queryByRole("combobox", { name: "Project sheet" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Sheet interface" })).toBeNull();
+    // No caller in the app supplies the handler, so the row must not show a
+    // button at all. The old panel always drew one and always disabled it.
+    expect(within(group).queryByRole("button")).toBeNull();
+  });
+
+  it("shows the Save-as-.sim button only when a caller can actually perform it", () => {
+    const saveAs = vi.fn();
+    const group = ascInspector(saveAs);
+
     fireEvent.click(within(group).getByRole("button", { name: "Save as .sim" }));
     expect(saveAs).toHaveBeenCalledOnce();
   });
@@ -811,7 +832,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    const sheet = screen.getByRole("combobox", { name: "Project sheet" });
+    const sheet = screen.getByRole("combobox", { name: "Sheet interface" });
     fireEvent.pointerDown(sheet, { button: 0, pointerId: 5, pointerType: "mouse" });
     const unreadable = await screen.findByRole("option", { name: /broken\.sim · unreadable/ });
     expect(unreadable.getAttribute("data-disabled")).not.toBeNull();
@@ -855,7 +876,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    const group = screen.getByRole("group", { name: "Project sheet link" });
+    const group = screen.getByRole("group", { name: "Sheet block" });
     expect(within(group).getByText(/reordered its connections: IN, OUT, GND -> IN, GND, OUT/)).toBeTruthy();
 
     fireEvent.click(within(group).getByRole("button", { name: "Review interface change…" }));
@@ -920,7 +941,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    const group = screen.getByRole("group", { name: "Project sheet link" });
+    const group = screen.getByRole("group", { name: "Sheet block" });
     expect(within(group).getByText(/Nothing electrical changes\./)).toBeTruthy();
     fireEvent.click(within(group).getByRole("button", { name: "Review interface change…" }));
     const dialog = screen.getByRole("dialog");
@@ -955,7 +976,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    const group = screen.getByRole("group", { name: "Project sheet link" });
+    const group = screen.getByRole("group", { name: "Sheet block" });
     expect(within(group).getByText(/child\.sim is missing from this project/)).toBeTruthy();
     expect(JSON.stringify(useSchematic.getState().components[0])).toBe(before);
 
@@ -996,11 +1017,11 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    const group = screen.getByRole("group", { name: "Project sheet link" });
-    expect(within(group).getByRole("alert").textContent).toContain("“Project sheet” above");
+    const group = screen.getByRole("group", { name: "Sheet block" });
+    expect(within(group).getByRole("alert").textContent).toContain("“Sheet interface” above");
     expect(within(group).queryByRole("button", { name: "Choose another sheet" })).toBeNull();
 
-    fireEvent.pointerDown(screen.getByRole("combobox", { name: "Project sheet" }), { button: 0, pointerId: 5, pointerType: "mouse" });
+    fireEvent.pointerDown(screen.getByRole("combobox", { name: "Sheet interface" }), { button: 0, pointerId: 5, pointerType: "mouse" });
     fireEvent.click(await screen.findByRole("option", { name: /rescue\.sim · 3 ports/ }));
     fireEvent.click(screen.getByRole("button", { name: "Relink this sheet" }));
 
@@ -1036,11 +1057,11 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    const collisionSheet = screen.getByRole("combobox", { name: "Project sheet" });
+    const collisionSheet = screen.getByRole("combobox", { name: "Sheet interface" });
     fireEvent.pointerDown(collisionSheet, { button: 0, pointerId: 5, pointerType: "mouse" });
     fireEvent.click(screen.getByRole("option", { name: /child\.sim/ }));
 
-    expect((screen.getByRole("textbox", { name: "Project model name" }) as HTMLInputElement).value)
+    expect((screen.getByRole("textbox", { name: "Sheet block name" }) as HTMLInputElement).value)
       .toBe("Child2");
     fireEvent.click(screen.getByRole("button", { name: "Link this sheet" }));
     expect(useSchematic.getState().components[0].projectSubcircuit?.model).toBe("Child2");
@@ -1077,7 +1098,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     );
 
     // Nothing is chosen, so nothing is proposed and nothing can be committed.
-    expect(screen.getByRole("combobox", { name: "Project sheet" }).textContent)
+    expect(screen.getByRole("combobox", { name: "Sheet interface" }).textContent)
       .toBe("Choose a Tau sheet");
     expect(screen.queryByRole("list", { name: "Proposed pin order" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Link this sheet" })).toBeNull();
@@ -1112,7 +1133,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByRole("combobox", { name: "Project sheet" }), { button: 0, pointerId: 5, pointerType: "mouse" });
+    fireEvent.pointerDown(screen.getByRole("combobox", { name: "Sheet interface" }), { button: 0, pointerId: 5, pointerType: "mouse" });
     const option = await screen.findByRole("option", { name: /child\.sim/ });
     const label = option.textContent ?? "";
     fireEvent.click(option);
@@ -1163,7 +1184,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
 
-    const group = screen.getByRole("group", { name: "Project sheet link" });
+    const group = screen.getByRole("group", { name: "Sheet block" });
     expect(group.textContent).not.toContain("changed its interface");
     // What IS true is said instead: the picture, not the contract, is old.
     expect(within(group).getByText(/older side layout/)).toBeTruthy();
@@ -1182,7 +1203,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
         sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["VOUT", "Out"], ["GND", "BiDir"]])]}
       />,
     );
-    expect(screen.getByRole("group", { name: "Project sheet link" }).textContent)
+    expect(screen.getByRole("group", { name: "Sheet block" }).textContent)
       .toContain("changed its interface");
   });
 
@@ -1217,19 +1238,19 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     };
     render(<Host />);
 
-    const sheet = screen.getByRole("combobox", { name: "Project sheet" });
+    const sheet = screen.getByRole("combobox", { name: "Sheet interface" });
     fireEvent.pointerDown(sheet, { button: 0, pointerId: 5, pointerType: "mouse" });
     fireEvent.click(screen.getByRole("option", { name: /child\.sim · 3 ports/ }));
     fireEvent.click(screen.getByRole("button", { name: "Link this sheet" }));
 
-    const group = screen.getByRole("group", { name: "Project sheet link" });
+    const group = screen.getByRole("group", { name: "Sheet block" });
     expect(within(group).getAllByRole("status").map((row) => row.textContent).join(" | "))
       .toMatch(/3 ports match child\.sim in order/);
     // And it is a verdict, not a toast: it is still there on the next render.
     act(() => {
       useSchematic.setState((state) => ({ components: state.components.map((part) => ({ ...part })) }));
     });
-    expect(screen.getByRole("group", { name: "Project sheet link" }).textContent)
+    expect(screen.getByRole("group", { name: "Sheet block" }).textContent)
       .toMatch(/3 ports match child\.sim in order/);
   });
 
@@ -1270,7 +1291,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
         sheetInterfaces={[okEntry("child.sim", [["VIN", "In"], ["VOUT", "Out"], ["GND", "BiDir"]])]}
       />,
     );
-    const sheet = screen.getByRole("combobox", { name: "Project sheet" });
+    const sheet = screen.getByRole("combobox", { name: "Sheet interface" });
     fireEvent.pointerDown(sheet, { button: 0, pointerId: 5, pointerType: "mouse" });
     fireEvent.click(await screen.findByRole("option", { name: /child\.sim/ }));
     fireEvent.click(screen.getByRole("button", { name: "Link this sheet" }));
@@ -1361,12 +1382,12 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
     render(<ComponentInspector selected={selected} projectFilePath="/project/root.sim" onAttachModelFile={openLibraries} />);
 
-    const linkGroup = screen.getByRole("group", { name: "Project sheet link" });
+    const linkGroup = screen.getByRole("group", { name: "Sheet block" });
     // Two honest status rows now: presence, and "not checked yet" for an index
     // App has not supplied here. Neither may be dropped for the other's sake.
     expect(within(linkGroup).getAllByRole("status").map((row) => row.textContent).join(" | "))
       .toMatch(/child\.sim is present/i);
-    expect(screen.getByText("Linked project model")).toBeTruthy();
+    expect(screen.getByText("Linked sheet block")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
     expect(screen.queryByText(/Needs definition/)).toBeNull();
 
@@ -1376,7 +1397,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       tree: [{ name: "root.sim", path: "/project/root.sim", kind: "file" }],
     });
     render(<ComponentInspector selected={selected} projectFilePath="/project/root.sim" onAttachModelFile={openLibraries} />);
-    expect(screen.getByRole("group", { name: "Project sheet link" }).textContent).toMatch(/child\.sim is not present/i);
+    expect(screen.getByRole("group", { name: "Sheet block" }).textContent).toMatch(/child\.sim is not present/i);
     expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
     expect(screen.queryByText(/Needs definition/)).toBeNull();
   });
@@ -2652,3 +2673,46 @@ describe("ComponentInspector - parts with no parameters", () => {
   });
 });
 
+
+/**
+ * The Explorer's own New-file affordance seeds the name the reader is about to
+ * accept, so the extension it seeds decides what kind of sheet a new document
+ * is. `.asc` can be a sheet block but can never own one (LTspice's format has
+ * nowhere to put the link or the port order), so seeding `.asc` handed every
+ * new sheet a ceiling nobody asked for.
+ */
+describe("ExplorerPanel - a new sheet is a .sim", () => {
+  afterEach(() => cleanup());
+
+  const openExplorer = () => {
+    useProject.setState({
+      rootPath: "/project",
+      rootName: "project",
+      tree: [{ name: "root.sim", path: "/project/root.sim", kind: "file" }],
+      expanded: ["/project"],
+    });
+    render(
+      <ExplorerPanel
+        activeFilePath={null}
+        onOpenSimFile={() => {}}
+        onOpenAscText={() => {}}
+        onNotice={() => {}}
+      />,
+    );
+  };
+
+  it("seeds the header's New schematic file draft with untitled.sim", () => {
+    openExplorer();
+    fireEvent.click(screen.getByRole("button", { name: "New schematic file" }));
+    expect((screen.getByRole("textbox", { name: "New schematic name" }) as HTMLInputElement).value)
+      .toBe("untitled.sim");
+  });
+
+  // The second seed lives on a folder's context menu, which needs a real Radix
+  // context-menu open in jsdom to reach; the fact under test is only which
+  // extension is seeded, so it is asserted against the source instead. This also
+  // catches a third seed being added later with the old extension.
+  it("leaves no .asc seed anywhere in the panel", () => {
+    expect(readFileSync(join(__dirname, "ShellPanels.tsx"), "utf8")).not.toContain("untitled.asc");
+  });
+});
