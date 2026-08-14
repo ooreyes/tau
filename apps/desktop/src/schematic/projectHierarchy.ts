@@ -174,11 +174,59 @@ function exactLinkForComponent(component: SchematicComponent, ownerPath: string)
   return link;
 }
 
-function sheetInterface(sheet: ResolvedSheet): SheetInterface {
-  const ports = sheet.document.projectPorts ?? [];
+/**
+ * The ports a sheet declares on its net labels, which is the only way a `.asc`
+ * file can state an interface: LTspice writes a hierarchy port as a `FLAG` plus
+ * an adjacent `IOPIN <dir>`, and Tau's importer carries that direction on the
+ * label itself.
+ *
+ * `preferredOrder` is the parent link's ordered port names, and derived ports
+ * come back in THAT order. This is the whole reason the derivation is safe. An
+ * `.asc` cannot record port order - flag order is an artifact of how the file
+ * was edited, not a statement of intent - so order stays where it is already
+ * pinned: the parent's `p1…pN` bank. Ordering to match also keeps the existing
+ * order-sensitive check honest rather than defeating it: any port the parent did
+ * not name is appended, so a set mismatch still leaves a slot unmatched and
+ * `hasMatchingOrderedProjectPorts` reports it in its own words.
+ */
+function labelDeclaredPorts(
+  sheet: ResolvedSheet,
+  preferredOrder: readonly string[] | undefined,
+): ProjectSheetPort[] {
+  const declared: ProjectSheetPort[] = (sheet.document.netLabels ?? [])
+    .filter((label) => label.port !== undefined)
+    .map((label) => ({ name: label.text, labelId: label.id, direction: label.port! }));
+  if (declared.length === 0 || preferredOrder === undefined) return declared;
+  const remaining = new Map(declared.map((port) => [keyFor(port.name), port]));
+  const ordered: ProjectSheetPort[] = [];
+  for (const name of preferredOrder) {
+    const hit = remaining.get(keyFor(name));
+    if (hit) {
+      ordered.push(hit);
+      remaining.delete(keyFor(name));
+    }
+  }
+  return [...ordered, ...remaining.values()];
+}
+
+/**
+ * Resolve a linked sheet's public interface to real electrical nets.
+ *
+ * A Tau `.sim`/`.tau.json` sheet states its interface explicitly in
+ * `projectPorts` and that stays authoritative and unchanged. A `.asc` sheet has
+ * nowhere to store that array, so its interface is derived from the port
+ * markers it does carry - see {@link labelDeclaredPorts}. Explicit always wins:
+ * derivation is a fallback for a format that cannot hold the explicit form, not
+ * a second source of truth competing with it.
+ */
+function sheetInterface(sheet: ResolvedSheet, preferredOrder?: readonly string[]): SheetInterface {
+  const explicit = sheet.document.projectPorts ?? [];
+  const ports = explicit.length > 0 ? explicit : labelDeclaredPorts(sheet, preferredOrder);
   const portValidation = projectSheetPortsValidation(ports);
   if (!portValidation.ok || ports.length === 0) {
-    const detail = portValidation.ok ? "at least one explicit port is required" : portValidation.error;
+    const detail = portValidation.ok
+      ? "at least one port is required - mark a net label as an In/Out/BiDir port"
+      : portValidation.error;
     throw new ProjectHierarchyError("invalid-contract", `Linked sheet "${sheet.path}" has an invalid port contract: ${detail}.`, sheet.path);
   }
   const circuit = extractCircuit(sheet.document.components, sheet.document.wires, sheet.document.netLabels ?? []);
@@ -258,6 +306,14 @@ function compileChildBlock(
   sheet: ResolvedSheet,
   model: string,
   childLinks: ReadonlyMap<string, ProjectSubcircuitLink>,
+  /**
+   * The already-resolved interface, passed in rather than recomputed. The
+   * `.subckt` header this emits must list ports in exactly the order the
+   * parent's `X` line passes nodes, and the caller is what knows that order -
+   * recomputing here would let the two drift apart for a sheet whose ports were
+   * derived from labels. It also saves a second `extractCircuit` over the sheet.
+   */
+  interfaceSpec: SheetInterface,
 ): string {
   const nonIdealWire = sheet.document.wires.find(isResistiveWire);
   if (nonIdealWire) {
@@ -280,7 +336,6 @@ function compileChildBlock(
       sheet.path,
     );
   }
-  const interfaceSpec = sheetInterface(sheet);
   const portNodes = new Map(interfaceSpec.ports.map(({ port, netId }) => [netId, port.name]));
   // A child author can legally name a public port `__tau_Foo_n1`. Do not turn
   // an unrelated internal net into that port merely because the generated
@@ -422,7 +477,10 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
     if (!target) {
       throw new ProjectHierarchyError("missing-sheet", `Linked sheet "${link.sheetPath}" used by ${ownerComponent ? `instance "${displayInstance(ownerComponent)}" in ` : ""}"${ownerPath}" is missing from the open project.`, ownerPath, componentFocus);
     }
-    const targetInterface = sheetInterface(target);
+    // The link's own order is offered to the resolver so a label-declared
+    // (`.asc`) interface can be read in the order the parent already fixed.
+    // An explicit `projectPorts` array ignores it and stays authoritative.
+    const targetInterface = sheetInterface(target, link.ports);
     if (!hasMatchingOrderedProjectPorts(link.ports, targetInterface.ports.map(({ port }) => port))) {
       throw new ProjectHierarchyError(
         "invalid-contract",
@@ -492,7 +550,7 @@ export function buildProjectHierarchyDeck(input: ProjectHierarchyBuildInput): Pr
         childLinks.set(dependency.component.id, dependency.link);
         visit(dependency.link, target.path, dependency.component);
       }
-      const text = compileChildBlock(target, link.model, childLinks);
+      const text = compileChildBlock(target, link.model, childLinks, targetInterface);
       blocks.push({ model: link.model, sheetPath: target.path, text });
       compiled.add(target.key);
     } finally {

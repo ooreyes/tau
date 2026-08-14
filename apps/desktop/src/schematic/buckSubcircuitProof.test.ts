@@ -274,6 +274,94 @@ describe("buck converter as a project-linked child sheet", () => {
 });
 
 /**
+ * The `.asc` half of the feature, proven on a passive child so it stands on its
+ * own regardless of which devices the child compiler accepts.
+ *
+ * The child here is an RC divider that declares VIN/VOUT/GND using ONLY the
+ * mechanism a `.asc` file has - net labels carrying an `IOPIN` direction - with
+ * no `projectPorts` array anywhere. Its labels are deliberately declared in a
+ * different order from the parent's pin bank, because that is the case which
+ * decides whether the design is sound: an `.asc` cannot record port order, so
+ * the order must come from the parent, and a compiler that trusted flag order
+ * would silently wire this block's pins to the wrong nets.
+ */
+describe("a .asc child sheet declares its interface with IOPIN markers alone", () => {
+  /** Passive RC child, ports declared out of order on purpose. */
+  const rcChild = () => ({
+    components: [
+      part("r1", "resistor", 256, 128, "1k", "R1"),
+      part("c1", "capacitor", 384, 192, "100n", "C1", 90),
+      part("g1", "ground", 384, 288, "", ""),
+    ],
+    wires: [
+      wire("w-in", [192, 128], [224, 128]),
+      wire("w-mid", [288, 128], [384, 128]),
+      wire("w-c-top", [384, 128], [384, 160]),
+      wire("w-c-gnd", [384, 224], [384, 288]),
+    ],
+    // Reverse of the parent's declared order (VIN, VOUT), to prove flag order
+    // is not what fixes the contract.
+    netLabels: [
+      { id: "n-vout", x: 384, y: 128, text: "VOUT", port: "Out" },
+      { id: "n-vin", x: 192, y: 128, text: "VIN", port: "In" },
+    ] as NetLabel[],
+  });
+
+  const rcParent = (ports: string[]) => ({
+    components: [
+      part("v1", "vsource", 128, 208, "5", "V1"),
+      part("gv", "ground", 128, 288, "", ""),
+      {
+        ...part("x1", "subckt", 320, 176, "TauRC", "X1"),
+        pinOverride: ports.map((name, index) => ({
+          id: `p${index + 1}`,
+          label: name,
+          x: index === 0 ? 272 : 368,
+          y: 176,
+        })),
+        projectSubcircuit: { sheetPath: "rc.asc", model: "TauRC", ports },
+      } as SchematicComponent,
+    ],
+    wires: [wire("t-in", [128, 176], [272, 176]), wire("t-gnd", [128, 240], [128, 288])],
+    netLabels: [] as NetLabel[],
+    directives: [".tran 1m"],
+  });
+
+  const compile = (ports: string[]) =>
+    buildProjectHierarchyDeck({
+      rootPath: "top.asc",
+      root: rcParent(ports) as never,
+      sheets: [{ path: "rc.asc", document: rcChild() as never }],
+      analysis: { kind: "tran", stopTime: 1e-3, steps: 500 } as never,
+    });
+
+  it("compiles a .asc child with no projectPorts array at all", () => {
+    const built = compile(["VIN", "VOUT"]);
+    expect(built.blocks).toHaveLength(1);
+    expect(built.blocks[0].sheetPath).toBe("rc.asc");
+  });
+
+  it("orders the .subckt header by the parent's bank, not by flag order", () => {
+    // The child lists VOUT before VIN. The header must still follow the parent.
+    expect(compile(["VIN", "VOUT"]).blocks[0].text.split("\n")[0]).toBe(".subckt TauRC VIN VOUT");
+    // And when the parent genuinely declares the other order, the header follows
+    // that instead - so this is really reading the parent, not sorting by luck.
+    expect(compile(["VOUT", "VIN"]).blocks[0].text.split("\n")[0]).toBe(".subckt TauRC VOUT VIN");
+  });
+
+  it("still refuses when the parent names a port the child never declared", () => {
+    let code = "";
+    try {
+      compile(["VIN", "VBIAS"]);
+    } catch (error) {
+      code = (error as ProjectHierarchyError).code;
+    }
+    // Derivation must not paper over a real disagreement.
+    expect(code).toBe("invalid-contract");
+  });
+});
+
+/**
  * Documents today's refusals so the widening is provably a change in behaviour
  * rather than a change in wording, and records the ORDER they fire in - which
  * is itself a finding. Running the two sheets above against the code as it
@@ -316,15 +404,9 @@ describe("baseline: what the linked-sheet compiler refuses before the widening",
     throw new Error("expected a refusal, but the build succeeded");
   };
 
-  it("refuses a .asc sheet at the path gate, before looking at any device", () => {
-    expect(codeOf(buildPair("top.asc", "Buck25to5.asc"))).toBe("invalid-path");
-  });
-
-  it("ignores the sheet's own IOPIN port markers, needing projectPorts instead", () => {
-    // Same two sheets, renamed to the currently-accepted extension so the path
-    // gate is out of the way. The child still declares VIN/VOUT the only way a
-    // `.asc` can - net labels carrying a port direction - and that is not read.
-    expect(codeOf(buildPair("top.sim", "Buck25to5.sim"))).toBe("invalid-contract");
+  it("no longer refuses a .asc sheet at the path gate", () => {
+    // Whatever is left to complain about, it must not be the extension.
+    expect(codeOf(buildPair("top.asc", "Buck25to5.asc"))).not.toBe("invalid-path");
   });
 
   it("refuses the buck's active devices once a port contract is present", () => {

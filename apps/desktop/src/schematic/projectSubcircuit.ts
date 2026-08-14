@@ -49,7 +49,15 @@ export function canonicalProjectSheetPath(value: string): string | null {
   if (!normalized || normalized.startsWith("/")) return null;
   const segments = normalized.split("/");
   if (segments.some((segment) => !segment || segment === "." || segment === "..")) return null;
-  if (!/\.(?:sim|tau\.json)$/i.test(normalized)) return null;
+  // `.asc` is a first-class linked sheet, not a second-class one. LTspice's
+  // format already carries everything a child sheet needs: components, wires,
+  // and - via a `FLAG` with an adjacent `IOPIN` - the public ports WITH their
+  // directions. The one thing it cannot record is Tau's `projectPorts` array,
+  // and that array only ever added port ORDER, which belongs on the parent
+  // anyway (see `sheetInterface` in projectHierarchy.ts). Refusing `.asc` here
+  // meant a file that plainly declares its own interface was rejected before a
+  // single device was examined.
+  if (!/\.(?:sim|asc|tau\.json)$/i.test(normalized)) return null;
   return normalized;
 }
 
