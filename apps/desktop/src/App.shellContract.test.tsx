@@ -455,6 +455,36 @@ describe("placement assertions a grep cannot make", () => {
     for (const label of [SHELL_CONTROLS.railExplorer]) {
       expect(rail.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
     }
-    expect(rail.querySelector("button[aria-label=\"Settings\"]")).toBeNull();
+    /*
+     * Settings now lives HERE, and this assertion is inverted from what it used
+     * to say. It previously required the rail to have no Settings button,
+     * because the gear sat in the status strip's lower-right utility cluster.
+     * That turned out to be a hiding place: `StatusBar` returns null in a
+     * resting schematic, which is precisely the state the review screenshot was
+     * taken in - so the control was not in the wrong corner, it was absent from
+     * the window entirely.
+     *
+     * Checked by POSITION, not presence: the ask was specifically "bottom left
+     * in the section above the horizontal line", so presence alone would pass a
+     * gear dropped at the top of the rail.
+     */
+    const settings = rail.querySelector<HTMLElement>('button[aria-label="Settings"]');
+    expect(settings, "Settings must be reachable from the rail").not.toBeNull();
+    const foot = rail.querySelector(".rail-foot");
+    expect(foot, "the rail needs a foot group to hold it").not.toBeNull();
+    expect(foot!.contains(settings!)).toBe(true);
+    // Last in the tab order, and after every destination button.
+    const railButtons = [...rail.querySelectorAll("button")];
+    expect(railButtons[railButtons.length - 1]).toBe(settings);
+    /*
+     * The "horizontal line" from the request is the FOOT's terminating rule, not
+     * the rail's first separator - the rail has two, and querySelector returns
+     * the one between Search and Components, which of course precedes Settings.
+     * Scope to the foot and require the line to come after the gear, which is
+     * what "in the section above the horizontal line" means.
+     */
+    const footRule = foot!.querySelector(".rail-separator");
+    expect(footRule, "the foot needs its terminating rule").not.toBeNull();
+    expect(settings!.compareDocumentPosition(footRule!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

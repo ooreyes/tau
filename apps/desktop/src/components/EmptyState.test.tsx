@@ -194,6 +194,62 @@ describe("EmptyState inside an open, empty schematic (P3-04B)", () => {
     stage.remove();
   });
 
+
+  it("does not tell a reader to place their first component when their file's only part was skipped (DIAG)", () => {
+    // The card's render gate is components === 0 && wires === 0, which an
+    // import whose every part was unmappable satisfies - so this copy fired on
+    // a sheet that was empty BECAUSE something was thrown away, next to a dock
+    // refusing a run over that same part.
+    render(
+      <EmptyState
+        projectOpen
+        schematicOpen
+        unimportedParts={["A1 (dflop)"]}
+        onShowParts={vi.fn()}
+        onAskBode={vi.fn()}
+      />,
+    );
+    const heading = screen.getByRole("heading", { level: 1 }).textContent ?? "";
+    expect(heading).not.toBe("Place your first component");
+    const card = screen.getByRole("region", { name: "Empty schematic" });
+    // Names the part, so the sentence is actionable rather than just apologetic.
+    expect(card.textContent).toContain("A1 (dflop)");
+    // And says the record survives a save, which is the fact that reconciles
+    // this card with the dock's refusal row.
+    expect(card.textContent).toMatch(/keeps|kept/i);
+  });
+
+  /**
+   * The card knows about parts and nothing else, so its claim has to stop there.
+   *
+   * Its render gate is components === 0 && wires === 0 - which a file's
+   * directives, comments and text annotations all pass through untouched
+   * (ascImport.test.ts, "still imports directives and on-canvas annotations from
+   * a file whose only part was skipped"). A text annotation is drawn on the
+   * canvas UNDER this card, so "nothing in the file could be imported" is
+   * contradicted by the sheet the reader is looking at - the same
+   * surfaces-disagree defect one layer down.
+   */
+  it("scopes its claim to parts, not to the whole file (DIAG)", () => {
+    render(
+      <EmptyState
+        projectOpen
+        schematicOpen
+        unimportedParts={["A1 (dflop)"]}
+        onShowParts={vi.fn()}
+        onAskBode={vi.fn()}
+      />,
+    );
+    const card = screen.getByRole("region", { name: "Empty schematic" });
+    expect(card.textContent).not.toMatch(/nothing in (the|this) file/i);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/part/i);
+  });
+
+  it("keeps 'Place your first component' for a genuinely fresh sheet (DIAG)", () => {
+    render(<EmptyState projectOpen schematicOpen onShowParts={vi.fn()} onAskBode={vi.fn()} />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Place your first component");
+  });
+
   it("leaves the no-project variant alone - 'Open a project folder' is still correct there", () => {
     render(<EmptyState projectOpen={false} onOpenFolder={vi.fn()} />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Open a project folder");

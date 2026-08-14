@@ -20,10 +20,32 @@
  *   Escape has to keep meaning "cancel the current tool", and a document-level
  *   listener that does not check silently takes that over.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ResultsDrawer, RESULTS_DRAWER_NAME } from "./ResultsDrawer";
 
+// This jsdom build has localStorage disabled (typeof localStorage ===
+// "undefined", the guard panelResize relies on). Install an in-memory Storage
+// so the drawer's persisted drag height is actually exercised rather than
+// silently skipped - same shim as panelResize.test.tsx.
+const storageBacking = new Map<string, string>();
+Object.defineProperty(globalThis, "localStorage", {
+  configurable: true,
+  value: {
+    getItem: (key: string) => storageBacking.get(key) ?? null,
+    setItem: (key: string, value: string) => void storageBacking.set(key, String(value)),
+    removeItem: (key: string) => void storageBacking.delete(key),
+    clear: () => storageBacking.clear(),
+    key: (index: number) => [...storageBacking.keys()][index] ?? null,
+    get length() {
+      return storageBacking.size;
+    },
+  } as Storage,
+});
+
+beforeEach(() => localStorage.clear());
 afterEach(() => cleanup());
 
 function renderDrawer(overrides: Partial<Parameters<typeof ResultsDrawer>[0]> = {}) {
@@ -478,5 +500,291 @@ describe("results drawer - docked right", () => {
     renderDrawer({ orientation: "right" });
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Measurements" }), { button: 0 });
     expect(shownBody()).toBe("Measurement rows");
+  });
+});
+
+/**
+ * The top edge is draggable (DRAWER lane).
+ *
+ * The reported defect: "the error window is not resizable, I should be able to
+ * drag up or down". The drawer's only height control was the button that cycles
+ * peek/half/full, so the three heights the stylesheet knows were the ONLY
+ * heights reachable - a user who wants 260px of errors and the rest of the
+ * circuit had no way to ask for it.
+ *
+ * These assertions go through the measured/inline geometry rather than a class
+ * name on purpose: the discrete heights are percentages the stylesheet owns
+ * (`height: 46%`), so the only honest evidence that a drag did something is the
+ * pixel height the component put on the element.
+ */
+describe("results drawer - the top edge drags", () => {
+  const handle = () => screen.getByRole("separator", { name: /resize results drawer/i });
+  const px = () => Number.parseFloat(drawer().style.height || "0");
+
+  /** Make the drawer measurable: jsdom rects are all zero, and the drag has to
+   *  start from the height that is currently on screen. */
+  const stubHeight = (height: number) => {
+    const el = drawer();
+    el.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, top: 0, left: 0, right: 900, bottom: 600, width: 900, height, toJSON: () => ({}) }) as DOMRect;
+  };
+
+  /** Tell the drawer how tall its host column is, the way a window resize does. */
+  const stubHost = (height: number) => {
+    const host = drawer().parentElement as HTMLElement;
+    Object.defineProperty(host, "clientHeight", { configurable: true, value: height });
+    fireEvent(window, new Event("resize"));
+    return host;
+  };
+
+  it("has a separator on its top edge with a name and the splitter ARIA", () => {
+    renderDrawer({ preferredHeight: "half" });
+    expect(handle().getAttribute("aria-orientation")).toBe("horizontal");
+    // A separator that reports no range is not a splitter, it is a line.
+    expect(Number(handle().getAttribute("aria-valuemin"))).toBeGreaterThan(0);
+    expect(Number(handle().getAttribute("aria-valuemax"))).toBeGreaterThan(
+      Number(handle().getAttribute("aria-valuemin")),
+    );
+  });
+
+  it("grows when dragged up and shrinks when dragged down", () => {
+    renderDrawer({ preferredHeight: "half" });
+    stubHeight(300);
+    stubHost(900);
+
+    fireEvent.pointerDown(handle(), { button: 0, clientY: 600, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientY: 520, pointerId: 1 }); // 80px up
+    expect(px()).toBe(380);
+    fireEvent.pointerMove(window, { clientY: 660, pointerId: 1 }); // 60px below the start
+    expect(px()).toBe(240);
+    fireEvent.pointerUp(window, { pointerId: 1 });
+  });
+
+  it("never drags off-screen: the head stays whole and the canvas stays usable", () => {
+    renderDrawer({ preferredHeight: "half" });
+    stubHeight(300);
+    const host = stubHost(700);
+
+    fireEvent.pointerDown(handle(), { button: 0, clientY: 600, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientY: -4000, pointerId: 1 });
+    const atMax = px();
+    // Derived from the host, not from the component's own constant: whatever
+    // the maximum is, it has to leave a band of circuit worth looking at.
+    expect(host.clientHeight - atMax).toBeGreaterThanOrEqual(180);
+    expect(atMax).toBeGreaterThan(300); // the drag did move it
+    fireEvent.pointerMove(window, { clientY: -8000, pointerId: 1 });
+    expect(px()).toBe(atMax); // clamped, not creeping
+
+    fireEvent.pointerMove(window, { clientY: 9000, pointerId: 1 });
+    const atMin = px();
+    // The floor keeps the head row - lamp, tabs, size control - fully visible.
+    expect(atMin).toBeGreaterThanOrEqual(drawer().querySelector<HTMLElement>(".results-drawer-head")!.offsetHeight);
+    expect(atMin).toBeGreaterThanOrEqual(24);
+    expect(atMin).toBeLessThan(300);
+    fireEvent.pointerUp(window, { pointerId: 1 });
+  });
+
+  it("resizes from the keyboard, both directions", () => {
+    renderDrawer({ preferredHeight: "half" });
+    stubHeight(300);
+    stubHost(900);
+
+    fireEvent.keyDown(handle(), { key: "ArrowLeft" }); // wrong axis
+    expect(drawer().style.height).toBe("");
+
+    fireEvent.keyDown(handle(), { key: "ArrowUp" });
+    const taller = px();
+    expect(taller).toBeGreaterThan(300);
+    fireEvent.keyDown(handle(), { key: "ArrowDown" });
+    expect(px()).toBeLessThan(taller);
+  });
+
+  it("keeps a dragged height across a reload", () => {
+    const first = renderDrawer({ preferredHeight: "half" });
+    stubHeight(300);
+    stubHost(900);
+    fireEvent.pointerDown(handle(), { button: 0, clientY: 600, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientY: 555, pointerId: 1 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    const dragged = px();
+    expect(dragged).toBe(345);
+    first.unmount();
+
+    renderDrawer({ preferredHeight: "half" });
+    expect(px()).toBe(dragged);
+  });
+
+  it("hands the height back to the cycle button when it is clicked", () => {
+    renderDrawer({ preferredHeight: "half" });
+    stubHeight(300);
+    stubHost(900);
+    fireEvent.pointerDown(handle(), { button: 0, clientY: 600, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientY: 500, pointerId: 1 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    expect(px()).toBe(400);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Resize results/ }));
+    // Last gesture wins. The override has to go, or the button - and Escape,
+    // and the run-finished raise - become controls that silently do nothing.
+    expect(drawer().style.height).toBe("");
+    expect(drawer().className).toContain("results-drawer--full");
+    // ...and the cleared choice must not come back on the next reload.
+    cleanup();
+    renderDrawer({ preferredHeight: "half" });
+    expect(drawer().style.height).toBe("");
+  });
+
+  it("collapses on Escape even when a drag set the height", () => {
+    renderDrawer({ preferredHeight: "half" });
+    stubHeight(300);
+    stubHost(900);
+    fireEvent.pointerDown(handle(), { button: 0, clientY: 600, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientY: 500, pointerId: 1 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+
+    screen.getByRole("button", { name: "Waveform control" }).focus();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(drawer().style.height).toBe("");
+    expect(shownBody()).toBe("");
+  });
+
+  it("keeps the body reachable while a drag overrides a peeked height", () => {
+    renderDrawer({ preferredHeight: "peek" });
+    stubHeight(34);
+    stubHost(900);
+    fireEvent.pointerDown(handle(), { button: 0, clientY: 600, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientY: 400, pointerId: 1 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+
+    // Dragging a peeked drawer open is the whole gesture; leaving `collapsed`
+    // keyed on the stale discrete word would have grown a 234px empty box.
+    expect(px()).toBeGreaterThan(200);
+    expect(shownBody()).toBe("Waveform control");
+  });
+
+  it("offers no height handle docked right, where height is not negotiable", () => {
+    renderDrawer({ orientation: "right" });
+    expect(screen.queryByRole("separator", { name: /resize results drawer/i })).toBeNull();
+  });
+});
+
+describe("results drawer resize handle - hit target", () => {
+  it("gives the top-edge handle a hit area at or above the 24px floor", () => {
+    // WCAG 2.2 SC 2.5.8's floor, read out of the stylesheet rather than
+    // asserted as a literal: the handle asks for a token, so resolve the token
+    // from App.css and check the number that actually lands on screen.
+    const css = readFileSync(join(__dirname, "../../styles/resultsDrawerResize.css"), "utf8");
+    const appCss = readFileSync(join(__dirname, "../../App.css"), "utf8");
+    const rule = css.slice(css.indexOf(".results-drawer--dock-bottom > .panel-resize-handle--top"));
+    const height = /height:\s*([^;]+);/.exec(rule)?.[1]?.trim();
+    expect(height, "the top-edge handle must set its own hit height").toBeTruthy();
+    const token = /var\((--[a-z-]+)\)/.exec(height!)?.[1];
+    expect(token, `handle height must come from a token, got ${height}`).toBeTruthy();
+    const resolved = new RegExp(`\\${token}:\\s*(\\d+)px`).exec(appCss)?.[1];
+    expect(Number(resolved)).toBeGreaterThanOrEqual(24);
+  });
+});
+
+describe("results drawer - a persisted height cannot outlive the room for it", () => {
+  it("re-clamps a stored height when the window shrinks under it", () => {
+    // The regression this forbids: a height dragged on a large display is
+    // restored verbatim on a small one, covering the circuit entirely with no
+    // visible edge left to drag back.
+    localStorage.setItem("tau.resultsDrawer.height", "520");
+    render(
+      <ResultsDrawer
+        status="complete"
+        waveforms={<button type="button">Waveform control</button>}
+        errors={<div>Diagnostics</div>}
+      />,
+    );
+    const el = screen.getByRole("complementary", { name: RESULTS_DRAWER_NAME });
+    const host = el.parentElement as HTMLElement;
+    Object.defineProperty(host, "clientHeight", { configurable: true, value: 300 });
+    fireEvent(window, new Event("resize"));
+
+    const height = Number.parseFloat(el.style.height);
+    expect(height).toBeGreaterThan(0);
+    expect(host.clientHeight - height).toBeGreaterThanOrEqual(180);
+  });
+});
+
+/**
+ * VERIFY pass over the draggable top edge: the cases the drag itself does not
+ * cover. Each of these failed before the fix in this block landed.
+ */
+describe("results drawer - the drag handle's edges", () => {
+  const handle = () => screen.getByRole("separator", { name: /resize results drawer/i });
+
+  const stubHeight = (height: number) => {
+    const el = drawer();
+    el.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, top: 0, left: 0, right: 900, bottom: 600, width: 900, height, toJSON: () => ({}) }) as DOMRect;
+  };
+  const stubHost = (height: number) => {
+    const host = drawer().parentElement as HTMLElement;
+    Object.defineProperty(host, "clientHeight", { configurable: true, value: height });
+    fireEvent(window, new Event("resize"));
+    return host;
+  };
+
+  it("ignores a non-primary button: a right-click on the edge is not a resize", () => {
+    // `usePanelWidth.onPointerDown` bails on any button but 0, so no drag
+    // starts - but the drawer used to switch itself to a pixel height anyway,
+    // because seeding ran first and unconditionally. On a PEEKED drawer that
+    // was visible: the pixel height suppressed `collapsed` and the body
+    // appeared, from a context-menu click that was never a gesture at all.
+    renderDrawer({ preferredHeight: "peek" });
+    stubHeight(34);
+    stubHost(900);
+    expect(shownBody()).toBe("");
+
+    fireEvent.pointerDown(handle(), { button: 2, pointerId: 1, clientY: 600 });
+
+    expect(drawer().style.height).toBe("");
+    expect(shownBody()).toBe("");
+    // ...and the real gesture still works right afterwards, so the guard did
+    // not just disable the handle.
+    fireEvent.pointerDown(handle(), { button: 0, pointerId: 2, clientY: 600 });
+    fireEvent.pointerMove(window, { clientY: 400, pointerId: 2 });
+    fireEvent.pointerUp(window, { pointerId: 2 });
+    expect(Number.parseFloat(drawer().style.height)).toBeGreaterThan(200);
+  });
+
+  it("stays inside the window when it shrinks mid-drag", () => {
+    // A drag in flight while the host shrinks (a window resize, or a side rail
+    // opening) must not leave the pointer's number on screen: the ceiling that
+    // moved is the one that has to be honoured.
+    renderDrawer({ preferredHeight: "half" });
+    stubHeight(300);
+    stubHost(900);
+    fireEvent.pointerDown(handle(), { button: 0, pointerId: 1, clientY: 600 });
+    fireEvent.pointerMove(window, { clientY: 200, pointerId: 1 }); // 400px up
+    expect(Number.parseFloat(drawer().style.height)).toBe(700);
+
+    const host = stubHost(420); // the window shrank under the drag
+    fireEvent.pointerMove(window, { clientY: 190, pointerId: 1 });
+    const live = Number.parseFloat(drawer().style.height);
+    expect(host.clientHeight - live).toBeGreaterThanOrEqual(180);
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    // The size that got persisted is the clamped one, not the pointer's.
+    expect(Number(localStorage.getItem("tau.resultsDrawer.height"))).toBe(live);
+  });
+
+  it("ships its geometry: the handle's stylesheet is in the app's module graph", () => {
+    // The hit-target test above proves the stylesheet ASKS for a 24px+ strip.
+    // It cannot prove the strip reaches a user: an unimported stylesheet
+    // leaves the handle on the shared 8px rule, i.e. under the WCAG 2.2
+    // SC 2.5.8 floor and with its hairline 20px adrift. Assert the import
+    // exists in a shipped module, not in a test.
+    const root = join(__dirname, "../..");
+    const sources = ["App.tsx", "main.tsx", "components/drawer/ResultsDrawer.tsx"].map((rel) =>
+      readFileSync(join(root, rel), "utf8"),
+    );
+    expect(
+      sources.some((src) => /import\s+"[^"]*resultsDrawerResize\.css"/.test(src)),
+      "resultsDrawerResize.css is not imported anywhere that ships",
+    ).toBe(true);
   });
 });

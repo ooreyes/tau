@@ -233,7 +233,19 @@ describe("App schematic workspace tools", () => {
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
     expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
     expect(screen.queryByRole("complementary", { name: "Project explorer" })).toBeNull();
-    expect(screen.getAllByRole("separator")).toHaveLength(2); // Components + Assistant.
+    /*
+     * Named, not counted. A bare length of 2 broke the moment the results
+     * drawer grew its own drag handle - which is a separator, and a correct
+     * addition - and reported a new feature as a panel-layout regression. What
+     * this case is actually about is which PANEL resize handles are present, so
+     * it asks for those two by name and leaves the drawer's alone.
+     */
+    const panelHandles = screen.getAllByRole("separator")
+      .filter((el) => !/results drawer/i.test(el.getAttribute("aria-label") ?? ""));
+    expect(panelHandles.map((el) => el.getAttribute("aria-label"))).toEqual([
+      "Resize properties panel",
+      "Resize assistant panel",
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Explorer" }));
     expect(screen.getByRole("complementary", { name: "Project explorer" })).toBeTruthy();
@@ -608,6 +620,78 @@ describe("App schematic workspace tools", () => {
       /Simulation refused: U1 \(PowerProducts\\LTC4449\).*No approximate or partial circuit was run/,
     );
     expect(refusals.length).toBeGreaterThan(0);
+  });
+
+  it("never leaves the canvas card, the dock and the document disagreeing about a skipped part (DIAG)", async () => {
+    // The packaged-QA sheet's last part, verbatim. Its only record is a SYMBOL
+    // with no library folder, so nothing editable imports: the canvas card
+    // renders (components === 0 && wires === 0) while the dock refuses a run
+    // over the retained record. Three surfaces, one document.
+    const path = `${DEFAULT_WORKSPACE_ID}/one-dflop.asc`;
+    const contents = ["Version 4", "SHEET 1 880 680", "SYMBOL dflop 224 384 R0", "SYMATTR InstName A1"].join("\n");
+    const file = { path, name: "one-dflop.asc", contents, kind: "asc" as const };
+    // A neighbour every part of which imports, to check nothing leaks across.
+    const cleanPath = `${DEFAULT_WORKSPACE_ID}/rc.asc`;
+    const cleanFile = {
+      path: cleanPath,
+      name: "rc.asc",
+      contents: [
+        "Version 4",
+        "SHEET 1 880 680",
+        "FLAG 80 192 0",
+        "SYMBOL res 240 80 R90",
+        "SYMATTR InstName R1",
+        "SYMATTR Value 1k",
+        "SYMBOL voltage 80 80 R0",
+        "SYMATTR InstName V1",
+        "SYMATTR Value PULSE(0 5 0 1n 1n 1m 2m)",
+      ].join("\n"),
+      kind: "asc" as const,
+    };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([file, cleanFile]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [path]: file, [cleanPath]: cleanFile },
+      error: null,
+      capability: "none",
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "one-dflop.asc" }));
+    await screen.findByRole("tab", { name: /one-dflop\.asc/ });
+
+    // (a) What is really in the document, read from the store.
+    await waitFor(() => expect(useSchematic.getState().ascForeignSymbols).toHaveLength(1));
+    expect(useSchematic.getState().components).toHaveLength(0);
+    expect(useSchematic.getState().wires).toHaveLength(0);
+
+    // The card is the surface that was lying: an empty sheet whose file DID
+    // contain a part is not a fresh sheet.
+    const card = await screen.findByRole("region", { name: "Empty schematic" });
+    expect(card.textContent).not.toContain("Place your first component");
+    expect(card.textContent).toContain("A1 (dflop)");
+
+    // The dock's skip notice is still on screen while the record is here...
+    expect(screen.getAllByText(/Skipped A1/).length).toBeGreaterThan(0);
+
+    // ...and must not outlive it. Clearing the sheet drops ascForeignSymbols,
+    // so a notice about A1 now describes a part nobody can find.
+    act(() => useSchematic.getState().clearSheet());
+    await waitFor(() => expect(screen.queryByText(/Skipped A1/)).toBeNull());
+    expect((await screen.findByRole("region", { name: "Empty schematic" })).textContent)
+      .toContain("Place your first component");
+
+    // And a document whose parts all import is left with nothing to explain -
+    // no card at all, and no notice inherited from the sheet next door.
+    fireEvent.click(await screen.findByRole("button", { name: "rc.asc" }));
+    await screen.findByRole("tab", { name: /rc\.asc/ });
+    await waitFor(() => expect(
+      useSchematic.getState().components.map((component) => component.label).filter(Boolean).sort(),
+    ).toEqual(["R1", "V1"]));
+    expect(useSchematic.getState().ascForeignSymbols).toEqual([]);
+    expect(screen.queryByText(/Skipped/)).toBeNull();
+    expect(screen.queryByRole("region", { name: "Empty schematic" })).toBeNull();
   });
 
   it("saves an AC voltage source without the former vac export blocker", async () => {

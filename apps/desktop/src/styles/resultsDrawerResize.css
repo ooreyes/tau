@@ -1,0 +1,48 @@
+/* ── Results drawer: draggable top edge ───────────────────────────────────
+ *
+ * The drawer's height used to be three stylesheet-owned percentages behind one
+ * cycling button, which is why the report said it "is not resizable". It now
+ * carries the shared `PanelResizeHandle` on its top edge; everything here is
+ * the geometry that handle needs in THIS dock, and nothing else.
+ *
+ * Why the strip sits entirely ABOVE the drawer rather than straddling its
+ * border, which is the usual trick: the head row is 34px tall and its controls
+ * (the stop button, the size button - `size-7`, 28px) are centred in it, so a
+ * hit area tall enough to satisfy the 24px floor would overlap them by ~10px
+ * and steal the top of every click. An edge resizer's cost is a band of
+ * ns-resize cursor; paying it outside the drawer costs a strip of canvas that
+ * was already the drawer's own shadow, and paying it inside costs two buttons.
+ *
+ * The visible hairline stays ON the border (bottom of the strip) so the
+ * affordance appears where the edge actually is - the shared rule anchors it to
+ * the top of the strip, which here would be 28px adrift.
+ */
+
+.results-drawer--dock-bottom > .panel-resize-handle--top {
+  /* WCAG 2.2 SC 2.5.8 is a 24px floor; --control-hit is this app's scale for
+     it, so the handle tracks the scale instead of hard-coding a number. */
+  height: var(--control-hit);
+  top: calc(-1 * var(--control-hit));
+  bottom: auto;
+  /* The strip is outside the drawer's box, so it has to out-paint whatever the
+     mode surface has under the drawer's shadow. Same 6 the shared rule uses. */
+  z-index: 6;
+}
+
+.results-drawer--dock-bottom > .panel-resize-handle--top::after {
+  top: auto;
+  bottom: 0;
+}
+
+/* A live drag must track the pointer. `.results-drawer--dock-bottom` animates
+   `height` so the peek/half/full jumps read as motion rather than teleporting;
+   with a pixel height following the pointer that same transition turns into
+   lag, and the edge visibly trails the cursor.
+
+   The selector is doubled on purpose. `.results-drawer--dock-bottom` declares
+   the transition with the same one-class specificity, so a single class here
+   would win only by being later in the sheet order - and this sheet's position
+   depends on where it happens to be imported from. Two classes settle it. */
+.results-drawer.results-drawer--dragging-height {
+  transition: none;
+}

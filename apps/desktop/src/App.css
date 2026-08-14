@@ -5111,6 +5111,50 @@ body {
   background: var(--signal);
 }
 
+/* ── Run: armed and healthy ─────────────────────────────────────────────────
+   DESIGN_SYSTEM.md section 0 permits saturated colour for a measured trace or
+   a STATUS LAMP; the Run control IS the transport's lamp (Toolbar.tsx names it
+   so, and it already goes amber while running and red on failure), so a green
+   armed state is legal here and is not chrome drifting into brand colour. Do
+   not "correct" it back to neutral graphite.
+
+   Green never previously existed before a run: `git log -p` on these rules
+   shows it only ever arrived with `--ok`, and the idle invitation PDF4 added
+   (`.pdf4-action-sheen`, styles/pdf4Chrome.css) paints in --accent, which is
+   deliberately neutral. This rule only re-inks that phase - it does not add a
+   second animation - so Run and Ask Bode still share one keyframe and stay in
+   step. `styles/pdf4Chrome.css` loads AFTER App.css, so this wins on
+   specificity (0,2,0 against 0,1,0), not on source order; keep both classes in
+   the selector or it silently loses. */
+.run-button--ready.pdf4-action-sheen {
+  --pdf4-sheen-ink: var(--success);
+  /* Peak reads as a lit lamp; troughs stay panel-level, so the sweep is a slow
+     breath across the fill rather than a glare crossing the titlebar. */
+  background-image: linear-gradient(
+    108deg,
+    color-mix(in srgb, var(--success) 14%, var(--panel-2)) 0%,
+    color-mix(in srgb, var(--success) 30%, var(--panel-2)) 48%,
+    color-mix(in srgb, var(--success) 14%, var(--panel-2)) 100%
+  ) !important;
+  color: color-mix(in srgb, var(--success) 30%, var(--status-ink-mix)) !important;
+  border-color: color-mix(in srgb, var(--success) 46%, transparent) !important;
+}
+
+.run-button--ready .run-lamp-dot {
+  background: var(--success);
+  box-shadow: 0 0 4px var(--success-glow);
+}
+
+/* The repo honours reduce in two other places; this is the third. Restated
+   here rather than relying on pdf4Chrome.css's block so the armed treatment
+   cannot outlive its own opt-out if that file's selector ever narrows. */
+@media (prefers-reduced-motion: reduce) {
+  .run-button--ready.pdf4-action-sheen {
+    animation: none;
+    background-position: 50% 50%;
+  }
+}
+
 /* Run button status gradients - evidence-based color: green after a clean
    run, red after a failed one. Kept subtle (fill tint + hairline), never a
    saturated CTA slab. The lamp dot follows suit via currentColor-free vars. */
@@ -5201,7 +5245,34 @@ body {
   flex-direction: column;
   align-items: center;
   gap: var(--sp-1);
-  padding: var(--sp-2) 0;
+  /* The foot owns the window's bottom-left corner.
+     `.shell-body` reserves --status-bar-height at its bottom for the status
+     strip, and the rail used to stop at that reservation - which left the exact
+     unresolved notch the review screenshotted: rail veil, then a bare band of
+     canvas, then the window's rounded corner with nothing in it. The rail now
+     runs THROUGH that band (negative margin) while its content still stops at
+     the top of it (padding), so the terminating hairline in `.rail-foot` lands
+     on the status strip's own `border-top` line and the veil below it runs all
+     the way into the corner. `.statusbar` starts at --rail-width for the same
+     reason - two --chrome-veil layers over one another would read as a darker
+     patch in precisely this corner.
+
+     Deliberately NOT rounded. src-tauri/tauri.conf.json keeps the native frame
+     (titleBarStyle Overlay, no `decorations: false`, no `transparent`), so
+     AppKit masks the webview to the window's own curve - which tracks the
+     display and is nothing we can name in px. A CSS radius here is a second,
+     mismatched curve inside the first: any value tighter than the mask peels
+     the veil off the corner and leaves a crescent of canvas in it, which is a
+     sharper version of the gap this block exists to close. Square is correct;
+     the OS supplies the only curve. This is also why no other surface in this
+     file rounds a window edge.
+
+     One honest limit: the two hairlines are one line only while the strip is
+     rendered. StatusBar returns null in a resting schematic (no tool in hand,
+     no run), and there the foot's rule simply terminates the rail above a short
+     veil plinth - a closed shape either way, but not a seam across the window. */
+  padding: var(--sp-2) 0 var(--status-bar-height);
+  margin-bottom: calc(-1 * var(--status-bar-height));
   /* Veil, not panel (DESIGN_SYSTEM.md section 1.8). This was an opaque
      --panel-3 column with a hard right edge, which is what a docked sidebar
      looks like. The canvas is the substrate, so the rail sits ON it: the
@@ -5283,6 +5354,28 @@ body {
   flex: none;
   margin: var(--sp-1) 0;
   background: var(--border-subtle);
+}
+
+/* Settings sits here (components/shell/NavRail.tsx): a utility, pinned to the
+   bottom, separated from the four destinations by space rather than by a box. */
+.rail-foot {
+  margin-top: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+/* Unlike the inset 28px stub between destination groups, the foot's rule spans
+   the rail and butts against its right edge, so it continues the status strip's
+   hairline instead of floating above the corner as a second short mark. */
+.rail-foot .rail-separator {
+  width: 100%;
+  /* Same weight as `.statusbar`'s border-top, because at this y they are the
+     same line: 1px here would step up where the two meet. */
+  height: 0.5px;
+  margin: var(--sp-1) 0 0;
 }
 
 .explorer-panel {
@@ -9806,7 +9899,11 @@ button.bottom-panel-head:focus-visible {
 .statusbar {
   position: absolute;
   bottom: 0;
-  left: 0;
+  /* Starts where the rail ends: the rail's foot now runs down to the window
+     edge (search `.activity-rail`), and stacking this veil over that one would
+     darken exactly the bottom-left corner this pass exists to resolve. The two
+     hairlines - the foot's rule and this `border-top` - meet on one line. */
+  left: var(--rail-width);
   right: 0;
   z-index: var(--z-chrome);
   height: var(--status-bar-height);

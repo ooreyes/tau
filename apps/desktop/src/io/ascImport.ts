@@ -1397,14 +1397,54 @@ export function decodeTauPins(encoded: string, x: number, y: number): PinOverrid
   return pins;
 }
 
+/** Folders under LTspice's `lib/sym` whose mapping rules key on an exact leaf
+ *  name, so prefixing an unqualified symbol with one either resolves or does
+ *  not. The directory-wide rules (`Opamps\`) claim any leaf at all and must
+ *  stay out of this list: probing with one would invent a match for every
+ *  unmapped symbol. */
+const LEAF_EXACT_SYMBOL_FOLDERS = ["Digital", "SpecialFunctions"];
+
+/**
+ * The folder-qualified symbol Tau models for an unqualified SYMBOL type, or
+ * null when no folder makes it resolve.
+ *
+ * LTspice writes a symbol's `lib/sym` subfolder into the SYMBOL line, and the
+ * rules for these folders are gated on that prefix because bare leafs like
+ * `and`, `or` or `dflop` are too generic to claim globally. A file that reaches
+ * us without the prefix therefore reports "no Tau equivalent" for a part Tau
+ * models exactly - true of the resolver, and useless to the reader, who is left
+ * believing the device is unsupported. Derived by asking `ltspiceTypeToKind`
+ * instead of restating its leaf sets, so a folder gaining a symbol gains the
+ * hint on the same day.
+ */
+function qualifiedModelledSymbol(symbolType: string): string | null {
+  const type = symbolType.trim();
+  if (!type || /[\\/]/.test(type)) return null;
+  if (ltspiceTypeToKind(type)) return null;
+  for (const folder of LEAF_EXACT_SYMBOL_FOLDERS) {
+    const qualified = `${folder}\\${type}`;
+    if (ltspiceTypeToKind(qualified)) return qualified;
+  }
+  return null;
+}
+
 /**
  * The warning a `SYMBOL` with no Tau kind and no resolvable subcircuit raises.
  * Exported so the save-risk check can subtract the exact messages belonging to
  * symbols it already knows are carried verbatim; matching the text with a
  * regex there would let the two drift apart silently.
+ *
+ * When the type is an unqualified leaf Tau does model under its library folder,
+ * the sentence names that folder: "no Tau equivalent" alone is what a reader
+ * cannot act on, and it is wrong about the device even when it is right about
+ * the string.
  */
 export function foreignSymbolWarning(instName: string, symbolType: string): string {
-  return `Skipped ${instName || "an unnamed part"}: no Tau equivalent for LTspice symbol "${symbolType}".`;
+  const qualified = qualifiedModelledSymbol(symbolType);
+  const hint = qualified
+    ? ` Tau models "${qualified}": this SYMBOL line carries no library folder, so re-saving the file from LTspice imports the part.`
+    : "";
+  return `Skipped ${instName || "an unnamed part"}: no Tau equivalent for LTspice symbol "${symbolType}".${hint}`;
 }
 
 /** The extended slots of a symbol's attributes, in the order the file wrote

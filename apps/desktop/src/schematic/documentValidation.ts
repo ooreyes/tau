@@ -828,6 +828,106 @@ export interface DiagnosticNetContext {
   label?: string;
 }
 
+/**
+ * `ascImport`'s `foreignSymbolWarning`, as a document may carry it.
+ *
+ * Matched rather than rebuilt: the notice can be prefixed by the hierarchy
+ * instance that owns it ("X1: Skipped U1: ..."), and for an unqualified leaf it
+ * carries a library-folder hint - neither of which the importer's function can
+ * reproduce from a symbol type alone. Group 1 is that owning instance chain
+ * when there is one, group 2 the skipped part as the row names it, group 3 the
+ * symbol type.
+ *
+ * Group 2 is captured because the designator is what the reader acts on: a
+ * check that only asked whether SOME record of that symbol type was still
+ * present passed a renamed replacement through, leaving the dock naming A1 with
+ * only B1 in the document.
+ */
+const FOREIGN_SYMBOL_NOTICE =
+  /^(?:(.+?): )?Skipped (.+?): no Tau equivalent for LTspice symbol "([^"]*)"/;
+
+/** LTspice writes `Digital\dflop`; a `.sim` round-trip and our own probes may
+ *  differ in separator and case. Compare on the identity, not the spelling. */
+function symbolTypeKey(type: string): string {
+  return type.trim().replace(/\\/g, "/").toLowerCase();
+}
+
+/**
+ * Import notices, minus the ones the document no longer supports.
+ *
+ * Import warnings are captured once, per path, at open time - so a notice
+ * saying a part was skipped outlived the part: clear the sheet, or open a
+ * replacement over the same path, and the dock went on naming a device nowhere
+ * in the document, next to a canvas that showed nothing at all. A diagnostic
+ * must not survive the condition that produced it, so every skipped-symbol
+ * notice is re-checked against the records the document is actually carrying
+ * (the importer retains one foreign symbol for each such warning it raises).
+ *
+ * Only that one shape is filtered. Every other import notice - stranded
+ * terminals, duplicate designators, conversion warnings - describes something
+ * this pass cannot re-derive, and dropping it on a guess would be worse than
+ * showing it.
+ *
+ * A notice raised INSIDE a flattened sub-block is prefixed with the block
+ * instance and has no record of its own on the parent (the raw symbol stays
+ * with the block's file), so it is backed by that block instead. Keying every
+ * notice on foreign symbols would silence exactly the warnings a hierarchical
+ * import depends on.
+ *
+ * Where the document cannot settle the question either way the notice STAYS.
+ * Dropping a row is a claim that the part it names is gone, and this pass is
+ * only ever entitled to make that claim about a record it can see.
+ */
+export function documentBackedNotices(
+  notices: readonly string[],
+  foreignSymbols: readonly SchematicForeignSymbol[],
+  hierarchicalBlocks: readonly SchematicForeignSymbol[] = [],
+): string[] {
+  const instanceOf = (record: SchematicForeignSymbol) => (record.attrs.InstName ?? "").trim().toLowerCase();
+  const blocks = new Set(hierarchicalBlocks.map(instanceOf));
+  // `flattenSubcircuit` prefixes a body warning with the name the importer
+  // settled on, which falls back to a synthetic `X<n>` when the SYMBOL line
+  // named no instance - while the retained record keeps the attributes
+  // verbatim, so it has no name to be matched against. Such a block makes every
+  // prefix unverifiable rather than wrong.
+  const anonymousBlock = blocks.has("");
+  return notices.filter((notice) => {
+    const match = FOREIGN_SYMBOL_NOTICE.exec(notice);
+    if (!match) return true;
+    const [, owner, part, type] = match;
+    // Nested hierarchies chain their prefixes ("X1: X2: Skipped ..."); the
+    // outermost instance is the one this document holds a block for.
+    if (owner) return anonymousBlock || blocks.has(owner.split(":")[0].trim().toLowerCase());
+    const wanted = part.trim().toLowerCase();
+    return foreignSymbols.some((symbol) => {
+      if (symbolTypeKey(symbol.type) !== symbolTypeKey(type)) return false;
+      // A record the file never named is written up under a placeholder
+      // ("an unnamed part"), which is prose this module must not have to know:
+      // a nameless record backs any notice about its symbol, and a named one
+      // backs only the notice that names it.
+      const instance = instanceOf(symbol);
+      return instance === "" || instance === wanted;
+    });
+  });
+}
+
+/**
+ * The parts an import could not represent, as a reader can identify them.
+ *
+ * Named the way `simulationIntegrity`'s refusal names them - instance first,
+ * symbol in parentheses - because the two sentences are read together: the
+ * refusal explains why nothing will run, this list is what the canvas has to
+ * admit is missing.
+ */
+export function unimportedPartLabels(
+  foreignSymbols: readonly SchematicForeignSymbol[],
+): string[] {
+  return foreignSymbols.map((symbol) => {
+    const instName = symbol.attrs.InstName?.trim();
+    return instName ? `${instName} (${symbol.type})` : symbol.type;
+  });
+}
+
 export interface LiveDiagnostic {
   /** Stable within one pass; used as a React key and for deduplication. */
   id: string;

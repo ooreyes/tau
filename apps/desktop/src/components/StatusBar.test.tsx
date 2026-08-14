@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 
 import { StatusBar } from "./StatusBar";
 import { useSchematic } from "../store/useSchematic";
@@ -59,14 +59,31 @@ describe("StatusBar simulator guidance", () => {
     expect(screen.queryByText(/\.asc/)).toBeNull();
   });
 
-  it("puts the existing Settings utility at the lower-right without inventing idle status copy", () => {
-    const onOpenSettings = vi.fn();
-    const { container } = render(<StatusBar mode="schematic" result={null} onOpenSettings={onOpenSettings} />);
+  /**
+   * CHROME-2: Settings now lives at the foot of the activity rail, so the strip
+   * must not keep a second copy - and it must not be left rendering an empty
+   * utility cluster either. With no context of its own it goes back to
+   * rendering nothing at all.
+   */
+  it("no longer carries a Settings utility, and stays absent when it has nothing else to say", () => {
+    const { container } = render(<StatusBar mode="schematic" result={null} />);
 
-    expect(container.querySelector(".statusbar-utility")).toBeTruthy();
-    expect(container.querySelector(".statusbar-context")?.textContent).toBe("");
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(onOpenSettings).toHaveBeenCalledOnce();
+    expect(container.querySelector(".statusbar")).toBeNull();
+    expect(container.querySelector(".statusbar-utility")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
+    // The prop is gone, not merely unused: a shell that still passes it would
+    // otherwise silently resurrect the lower-right gear.
+    const source = readFileSync(join(__dirname, "StatusBar.tsx"), "utf8");
+    expect(source).not.toMatch(/onOpenSettings/);
+    expect(source).not.toMatch(/statusbar-utility/);
+  });
+
+  it("renders no empty utility cluster in the one mode that always shows the strip", () => {
+    const { container } = render(<StatusBar mode="simulator" result={null} />);
+
+    expect(container.querySelector(".statusbar")).toBeTruthy();
+    expect(container.querySelector(".statusbar-utility")).toBeNull();
+    expect(container.querySelector(".statusbar")?.querySelectorAll("button")).toHaveLength(0);
   });
 });
 

@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import {
   clampPanelWidth,
+  clearPanelWidth,
+  hasStoredPanelWidth,
   loadPanelWidth,
   savePanelWidth,
   usePanelWidth,
@@ -225,5 +227,44 @@ describe("usePanelWidth drag behavior - vertical edges (dock height)", () => {
   it("exposes a horizontal ARIA orientation for a vertical-drag handle", () => {
     render(<Harness cfg={config({ edge: "top" })} />);
     expect(screen.getByRole("separator").getAttribute("aria-orientation")).toBe("horizontal");
+  });
+});
+
+// `loadPanelWidth` folds "nothing stored" into the default, so a caller whose
+// resting size belongs to a stylesheet (the results drawer's `height: 46%`)
+// cannot use it to tell "never chosen" from "chosen, and it happens to equal
+// the default". These two answer that, and let such a caller hand the axis
+// back.
+describe("hasStoredPanelWidth / clearPanelWidth", () => {
+  it("reports only a usable stored number as stored", () => {
+    expect(hasStoredPanelWidth("tau.test.panelWidth")).toBe(false);
+    savePanelWidth("tau.test.panelWidth", 320);
+    expect(hasStoredPanelWidth("tau.test.panelWidth")).toBe(true);
+    // Junk is not a choice: the loader falls back to the default for these, so
+    // claiming they are stored would put a caller on a size it never derived.
+    localStorage.setItem("tau.test.panelWidth", "wide");
+    expect(hasStoredPanelWidth("tau.test.panelWidth")).toBe(false);
+    localStorage.setItem("tau.test.panelWidth", "   ");
+    expect(hasStoredPanelWidth("tau.test.panelWidth")).toBe(false);
+  });
+
+  it("forgets a stored size", () => {
+    savePanelWidth("tau.test.panelWidth", 320);
+    clearPanelWidth("tau.test.panelWidth");
+    expect(hasStoredPanelWidth("tau.test.panelWidth")).toBe(false);
+    expect(loadPanelWidth(config())).toBe(264); // back to the default
+  });
+
+  it("survives a storage that throws (private mode / quota)", () => {
+    const get = vi.spyOn(localStorage, "getItem").mockImplementation(() => {
+      throw new Error("SecurityError");
+    });
+    const remove = vi.spyOn(localStorage, "removeItem").mockImplementation(() => {
+      throw new Error("SecurityError");
+    });
+    expect(hasStoredPanelWidth("tau.test.panelWidth")).toBe(false);
+    expect(() => clearPanelWidth("tau.test.panelWidth")).not.toThrow();
+    get.mockRestore();
+    remove.mockRestore();
   });
 });

@@ -10,6 +10,7 @@ import "./styles/sourceSymbols.css";
 import "./styles/editorToolbarIcons.css";
 import "./styles/pdf4Chrome.css";
 import "./styles/diagnosticsDock.css";
+import "./styles/resultsDrawerResize.css";
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
 import { ComponentMeasurementsPanel } from "./components/ComponentMeasurementsPanel";
@@ -167,8 +168,10 @@ import { isInteractiveSchematic, liveControlHint, liveControls } from "./schemat
 import {
   MAX_MODEL_LIBRARIES,
   MAX_MODEL_LIBRARY_TOTAL_LENGTH,
+  documentBackedNotices,
   liveSchematicDiagnostics,
   retiredKindNotices,
+  unimportedPartLabels,
   validateSchematicDocument,
   type DiagnosticFocusTarget,
 } from "./schematic/documentValidation";
@@ -1682,10 +1685,29 @@ function App() {
    * `role="alert"` and the failure's own ordering; the live copy is redundant
    * on a document the run has already judged.
    */
-  const diagnosticMerge = useMemo(() => {
-    const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
-    return mergeDiagnostics(activeAnalysis, notices, liveDiagnostics, analysisRunning);
-  }, [activeAnalysis, activeFilePath, analysisRunning, importWarningsByPath, liveDiagnostics]);
+  /**
+   * This document's import notices, re-checked against this document.
+   *
+   * `importWarningsByPath` is a snapshot taken once, at open time, so a notice
+   * naming a skipped part outlived the part: clearing the sheet (or opening a
+   * replacement over the same path) left the dock reporting a device that was
+   * no longer anywhere in the document, above an empty canvas. The filter runs
+   * on every read of these notices - the merge, the badge and the panel - so
+   * the three cannot disagree about how many there are.
+   */
+  const activeImportNotices = useMemo(
+    () => documentBackedNotices(
+      activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [],
+      ascForeignSymbols,
+      ascHierarchicalBlocks,
+    ),
+    [activeFilePath, ascForeignSymbols, ascHierarchicalBlocks, importWarningsByPath],
+  );
+
+  const diagnosticMerge = useMemo(
+    () => mergeDiagnostics(activeAnalysis, activeImportNotices, liveDiagnostics, analysisRunning),
+    [activeAnalysis, activeImportNotices, analysisRunning, liveDiagnostics],
+  );
   const dockIssues = diagnosticMerge.liveIssues;
 
   const diagnosticsBadge = useMemo(() => {
@@ -1708,12 +1730,11 @@ function App() {
    */
   const diagnosticsRaiseKey = useMemo(() => {
     if (analysisRunning) return null;
-    const notices = activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : [];
     const failed = Boolean(activeAnalysis && !activeAnalysis.ok);
-    const count = (failed ? 1 : 0) + (activeAnalysis?.warnings?.length ?? 0) + notices.length;
+    const count = (failed ? 1 : 0) + (activeAnalysis?.warnings?.length ?? 0) + activeImportNotices.length;
     if (count === 0) return null;
     return `${failed ? "error" : "warning"}:${count}`;
-  }, [activeAnalysis, analysisRunning, activeFilePath, importWarningsByPath]);
+  }, [activeAnalysis, analysisRunning, activeImportNotices]);
 
   // Prefer ngspice `.meas ac` printout when present (P1.6).
   const acMeasurements = useMemo<MeasResult[]>(() => {
@@ -3937,6 +3958,11 @@ function App() {
       >
         <ActivityRail
           mode={mode}
+          /* Settings lives in the rail's foot now, not the status bar's right
+             edge: the status bar returns null in a resting schematic, which is
+             exactly the state the review screenshot was taken in - so the gear
+             was not merely in the wrong corner, it was absent. */
+          onOpenSettings={openSettingsSurface}
           explorerOpen={explorerColumnOpen}
           partsOpen={componentsColumnOpen}
           projectOpen={Boolean(projectRootPath)}
@@ -4114,6 +4140,13 @@ function App() {
                 onAskBode={openAssistant}
                 offerFirstSuccess={shouldOfferLearningPath(learningPath)}
                 onTryFirstSuccess={() => void startFirstSuccessExample()}
+                // The card renders whenever the sheet has no components and no
+                // wires, which an import whose every part was unmappable also
+                // satisfies. Handing it the retained records stops it telling
+                // someone whose file DID contain a part to place their first
+                // one, while the dock below refuses to simulate over that same
+                // part. Empty on a genuinely fresh sheet.
+                unimportedParts={unimportedPartLabels(ascForeignSymbols)}
               />
             )}
             {/*
@@ -4436,7 +4469,7 @@ function App() {
               <BottomPanel
                 result={activeAnalysis}
                 isRunning={analysisRunning}
-                notices={activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : []}
+                notices={activeImportNotices}
                 issues={dockIssues}
                 onSelectComponent={revealDiagnosticComponent}
                 onFocusDiagnostic={focusDiagnostic}
@@ -4573,7 +4606,7 @@ function App() {
           </Suspense>
         )}
       </div>
-      <StatusBar mode={mode} result={analysis} onOpenSettings={openSettingsSurface} />
+      <StatusBar mode={mode} result={analysis} />
       {shouldShowLearningPathCoach(learningPath)
         && !learningPathCoachHidden
         && learningPathTip

@@ -1853,3 +1853,65 @@ SYMATTR InstName U1`;
     expect(doc.warnings).toHaveLength(0);
   });
 });
+
+describe("an unqualified library symbol Tau does model (DIAG)", () => {
+  // The packaged-QA sheet's last part, verbatim: LTspice writes its library
+  // subfolder into the SYMBOL line, and this record does not carry one.
+  const ONE_DFLOP = `Version 4
+SHEET 1 880 680
+SYMBOL dflop 224 384 R0
+SYMATTR InstName A1`;
+
+  it("names the folder-qualified symbol Tau models, and says the record was kept", () => {
+    const doc = ascToSchematic(parseAsc(ONE_DFLOP));
+    // Ground truth, before any wording claim: nothing editable landed, and the
+    // raw record WAS retained. That pair is why the dock can refuse a run over
+    // A1 while the canvas has nothing on it.
+    expect(doc.components).toHaveLength(0);
+    expect(doc.foreignSymbols).toHaveLength(1);
+    expect(doc.foreignSymbols[0]?.attrs.InstName).toBe("A1");
+    // Not a resolution bug: the same leaf under its library folder maps, so the
+    // name the reader should see is derived from the resolver, not restated.
+    expect(ltspiceTypeToKind("dflop")).toBeNull();
+    const qualified = "Digital\\dflop";
+    expect(ltspiceTypeToKind(qualified)).not.toBeNull();
+    const warning = doc.warnings.find((w) => w.includes("A1"));
+    expect(warning).toBeDefined();
+    expect(warning).toContain(qualified);
+    // One row for one part: the hint extends the sentence rather than adding a
+    // second diagnostic the reader has to reconcile with the first.
+    expect(doc.warnings).toHaveLength(1);
+  });
+
+  it("leaves a genuinely unmodelled vendor symbol's warning free of a folder hint", () => {
+    const doc = ascToSchematic(parseAsc(`Version 4
+SHEET 1 880 680
+SYMBOL PowerProducts\\LTC4449 100 200 R0
+SYMATTR InstName U1`));
+    const warning = doc.warnings.find((w) => w.includes("U1"));
+    // There is no folder that makes LTC4449 resolve, so there is nothing to
+    // point at - the hint must not fire on every foreign symbol.
+    expect(warning).not.toMatch(/Tau models/);
+  });
+
+  /**
+   * A sheet with no importable PART is not a sheet with nothing on it.
+   *
+   * The empty-state card renders on `components === 0 && wires === 0`, which
+   * says nothing about directives, comments or text annotations - and a text
+   * annotation is drawn on the canvas, directly under the card. Any copy that
+   * widens the claim from "no part" to "nothing in the file" is therefore
+   * contradicted by what the reader can see, which is the whole defect this
+   * lane exists to remove. Ground truth for `EmptyState`'s wording.
+   */
+  it("still imports directives and on-canvas annotations from a file whose only part was skipped", () => {
+    const doc = ascToSchematic(parseAsc(`${ONE_DFLOP}
+TEXT 100 500 Left 2 !.tran 1m
+TEXT 100 550 Left 2 ;bench notes`));
+    expect(doc.components).toHaveLength(0);
+    expect(doc.foreignSymbols).toHaveLength(1);
+    // Both survived the import the card would be calling a total loss.
+    expect(doc.directives).toEqual([".tran 1m"]);
+    expect(doc.textAnnotations.map((annotation) => annotation.text)).toEqual([".tran 1m", "bench notes"]);
+  });
+});

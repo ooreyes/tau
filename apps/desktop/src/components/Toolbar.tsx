@@ -79,13 +79,15 @@ export function Toolbar({ mode, result, outcome = null, runState, isRunning, liv
   // The invitation is deliberately quiet and shared: when the primary Run
   // action is truly idle, Ask Bode may make the same gentle pass; once either
   // action has state, the semantic state wins and the sheen disappears.
-  const shouldInviteAction = !isRunning
-    && !liveRunning
-    && !runHasError
-    && !runIsAcceptable
+  // Armed: the circuit can be run and nothing has gone wrong yet. This is a
+  // statement about the transport, so - unlike the invitation below - it is
+  // deliberately NOT cleared by the assistant being open. Opening Bode changes
+  // nothing about run readiness, and a status lamp that goes out for an
+  // unrelated reason is a lying lamp.
+  const runIsArmed = !isRunning && !liveRunning && !runHasError && !runIsAcceptable
     && schematicOpen
-    && projectOpen
-    && !assistantOpen;
+    && projectOpen;
+  const shouldInviteAction = runIsArmed && !assistantOpen;
 
   // The status lamp is the single source of truth for run state - no cancel
   // path exists (nothing in the codebase can interrupt an in-flight ngspice
@@ -277,6 +279,14 @@ export function Toolbar({ mode, result, outcome = null, runState, isRunning, liv
                 disabled={isRunning || liveRunning || !schematicOpen}
                 className={cn(
                   "gap-1.5 bg-secondary hover:bg-accent",
+                  // `--ready` inks Run green: it is the transport's status lamp,
+                  // and green is what "armed, nothing wrong" reads as on a
+                  // bench. The two conditions are split on purpose - the lamp
+                  // follows readiness, the shimmering fill follows the shared
+                  // invitation - and `--ready` alone greens only the dot,
+                  // because the fill rule needs both classes. It adds no
+                  // keyframe of its own, so Run and Ask Bode stay in phase.
+                  runIsArmed && "run-button--ready",
                   shouldInviteAction && "pdf4-action-sheen pdf4-action-sheen--run",
                   runHasError && "run-button--error",
                   runIsAcceptable && "run-button--ok",

@@ -25,6 +25,7 @@ export function EmptyState({
   onNotice,
   offerFirstSuccess = false,
   onTryFirstSuccess,
+  unimportedParts = [],
 }: {
   projectOpen?: boolean;
   /**
@@ -52,6 +53,18 @@ export function EmptyState({
   /** First-success learning path CTA (product-gates slice). */
   offerFirstSuccess?: boolean;
   onTryFirstSuccess?: () => void;
+  /**
+   * Parts the open file DID contain and the import could not represent, named
+   * as the dock names them ("A1 (dflop)").
+   *
+   * The card's gate is "no components and no wires", which an import whose
+   * every part was unmappable satisfies - so a sheet that is empty *because*
+   * something was thrown away got the same "place your first component" copy as
+   * a brand-new one, while the dock beside it refused to simulate over exactly
+   * those parts. Empty for a genuinely fresh sheet, and that variant is
+   * unchanged.
+   */
+  unimportedParts?: readonly string[];
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
@@ -118,6 +131,19 @@ export function EmptyState({
     else await onOpenAscText?.(outcome.path, title, outcome.text);
   };
 
+  /**
+   * The sheet is empty because the import dropped everything on it, not because
+   * nobody has drawn anything yet. Only meaningful inside an open schematic:
+   * the no-project and no-schematic variants describe a shell with no document
+   * behind them, so a part list could not belong to either.
+   */
+  const skippedParts = schematicOpen ? unimportedParts : [];
+  // Long imports name the first few and count the rest: the point is to prove
+  // the file was not empty and give a handle to search for, not to reprint a
+  // list the dock already prints in full, one actionable row per part.
+  const skippedSummary = skippedParts.slice(0, 3).join(", ")
+    + (skippedParts.length > 3 ? `, and ${skippedParts.length - 3} more` : "");
+
   return (
     <section className="empty-state" aria-label="Empty schematic" ref={rootRef}>
       <div className="empty-panel">
@@ -133,15 +159,34 @@ export function EmptyState({
           {!projectOpen
             ? "Open a project folder"
             : schematicOpen
-              ? "Place your first component"
+              ? skippedParts.length > 0
+                // "No part", not "nothing": the render gate is components and
+                // wires, and a file's directives, comments and text annotations
+                // all import past it - an annotation is drawn on the canvas
+                // directly under this card, so the wider claim is refuted by
+                // the sheet the reader is looking at.
+                ? "This sheet is empty: no part in the file could be imported"
+                : "Place your first component"
               : "Create or open a schematic"}
         </h1>
         {projectOpen && schematicOpen ? (
           <>
-            <p>
-              Pick a part from Components on the right and click the sheet to
-              place it, or ask Bode to build the circuit for you.
-            </p>
+            {skippedParts.length > 0 ? (
+              <p>
+                {skippedParts.length === 1
+                  ? `${skippedSummary} is the only part this file contained, and Tau has no model for it.`
+                  : `${skippedSummary} came in with no Tau model, and they were all this file contained.`}
+                {" "}Tau keeps {skippedParts.length === 1 ? "that record" : "those records"} when you
+                save, so nothing is lost on disk — but the diagnostics below
+                refuse to simulate until {skippedParts.length === 1 ? "it is" : "they are"} replaced
+                or mapped to a subcircuit.
+              </p>
+            ) : (
+              <p>
+                Pick a part from Components on the right and click the sheet to
+                place it, or ask Bode to build the circuit for you.
+              </p>
+            )}
             <div className="empty-state-actions">
               {/* The single filled control, per DESIGN_SYSTEM 4: the next
                   action is to find a part, not to make another schematic. */}

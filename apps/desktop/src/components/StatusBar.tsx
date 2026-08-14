@@ -1,6 +1,4 @@
 import { cn } from "@/lib/utils";
-import { Settings } from "lucide-react";
-import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
 import { useSchematic } from "../store/useSchematic";
 import type { AnalysisResult } from "../simulation/linearTransient";
 
@@ -9,26 +7,24 @@ type LampState = "idle" | "ok" | "error";
 /**
  * The bottom strip, reduced to what only it can say.
  *
- * The lower-right Settings utility stays available without inventing a second
- * status or a filler card. The rest of the strip says only what changes:
+ * Settings used to sit here as a lower-right gear. It now lives at the foot of
+ * the activity rail (components/shell/NavRail.tsx), where the user asked for
+ * it, so this strip is once again ONLY status. The rest of it says only what
+ * changes:
  * `Ready` never said anything else while editing, `my.asc` is already in the
  * title bar AND on the document tab, and `Select` is the resting tool.
  *
  * What survives is the two things that genuinely change and are not written
  * anywhere else: the tool you are part-way through using, and simulator run
- * state. Without either context or the parent-supplied Settings utility, the
- * strip renders nothing at all; with Settings, it remains only that isolated
- * lower-right action rather than a reserved status band full of filler.
+ * state. With neither, the strip renders nothing at all - and now that the gear
+ * has left, there is no path that renders an empty utility cluster either.
  */
 export function StatusBar({
   mode,
   result,
-  onOpenSettings,
 }: {
   mode: "schematic" | "simulator";
   result: AnalysisResult | null;
-  /** Existing app utility, placed at the lower-right when the shell supplies it. */
-  onOpenSettings?: () => void;
 }) {
   const tool = useSchematic((s) => s.tool);
   // `select` is the resting state, so it is deliberately absent: a permanent
@@ -55,7 +51,7 @@ export function StatusBar({
   const state = result?.ok ? "Sim complete" : result ? "Sim error" : "Sim ready";
 
   const hint = mode === "simulator" ? simulatorHint : toolLabel;
-  if (mode !== "simulator" && !hint && !onOpenSettings) return null;
+  if (mode !== "simulator" && !hint) return null;
 
   return (
     <footer className="statusbar">
@@ -72,17 +68,6 @@ export function StatusBar({
           </span>
         )}
       </div>
-      {onOpenSettings && (
-        <div className="statusbar-utility">
-          <InstrumentIconButton
-            icon={Settings}
-            label="Settings"
-            tooltip="Settings"
-            tooltipSide="top"
-            onClick={onOpenSettings}
-          />
-        </div>
-      )}
     </footer>
   );
 }

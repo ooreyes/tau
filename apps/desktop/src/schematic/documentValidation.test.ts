@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  documentBackedNotices,
   duplicateReferenceDesignators,
   liveSchematicDiagnostics,
   retiredKindNotices,
+  unimportedPartLabels,
   validateSchematicDocument,
   type LiveDiagnostic,
 } from "./documentValidation";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
+import { foreignSymbolWarning, importAsc, makeSubcircuitResolver } from "../io/ascImport";
 import type { SchematicComponent, SchematicWire } from "./types";
 
 const validDocument = () => ({
@@ -741,5 +744,133 @@ describe("live schematic diagnostics (P3-14)", () => {
     const duplicateRef = validDocument();
     duplicateRef.components.push({ ...duplicateRef.components[0], id: "r2", label: "r1" });
     expect(() => validateSchematicDocument(duplicateRef)).toThrow(/is used 2 times/);
+  });
+});
+
+describe("import notices are re-derived from the document they describe (DIAG)", () => {
+  const dflop = {
+    type: "dflop",
+    x: 224,
+    y: 384,
+    orientation: "R0" as const,
+    attrs: { InstName: "A1" },
+  };
+  // Produced by the importer, not hand-written, so this test cannot pass by
+  // agreeing with a string that the importer no longer emits.
+  const skipped = foreignSymbolWarning("A1", "dflop");
+  const unrelated = "Dropped a stranded wire at (0, 0).";
+
+  it("keeps a skip notice while the part it names is still carried by the document", () => {
+    expect(documentBackedNotices([skipped, unrelated], [dflop])).toEqual([skipped, unrelated]);
+  });
+
+  it("drops the skip notice once the document no longer carries that part", () => {
+    // Clearing the sheet, or opening a replacement over the same path, leaves
+    // the notice describing a part the reader cannot find anywhere.
+    expect(documentBackedNotices([skipped, unrelated], [])).toEqual([unrelated]);
+  });
+
+  it("leaves a cleanly-imported document's notices untouched", () => {
+    expect(documentBackedNotices([unrelated], [])).toEqual([unrelated]);
+    expect(documentBackedNotices([], [])).toEqual([]);
+  });
+
+  it("keeps a flattened block's own skip notice, which the parent carries no record for", () => {
+    // A symbol inside a resolved sub-block is reported against the block
+    // instance and is deliberately NOT retained on the parent (the record stays
+    // with the block's file - ascImport.test.ts, "does not carry a foreign
+    // symbol from inside a flattened subcircuit body into the parent"). Keying
+    // this notice on foreign symbols alone would silence it entirely: the block
+    // is what the document carries, so the block is what backs it.
+    const nested = `X1: ${foreignSymbolWarning("U1", "PowerProducts\\LTC4449")}`;
+    const block = { type: "mydiv2", x: 200, y: 200, orientation: "R0" as const, attrs: { InstName: "X1" } };
+    expect(documentBackedNotices([nested], [], [block])).toEqual([nested]);
+    // ...and it goes when the block does.
+    expect(documentBackedNotices([nested], [], [])).toEqual([]);
+  });
+
+  /**
+   * The notice names an instance, so the instance is what has to still be here.
+   *
+   * Keying the check on the symbol TYPE alone passed a replacement document
+   * through: re-save the sheet in LTspice having renamed the part, open it over
+   * the same path (`importWarningsByPath` is keyed by path), and the dock went
+   * on naming A1 while the only record in the document was B1. "Must not
+   * survive the condition that produced it" is about the row the reader reads,
+   * and the reader reads a designator.
+   */
+  it("drops a notice naming a part the document does not carry, even when another instance of the same symbol does", () => {
+    const renamed = [{ ...dflop, attrs: { InstName: "B1" } }];
+    // The replacement's OWN notice is the one that belongs on screen.
+    const forB1 = foreignSymbolWarning("B1", "dflop");
+    expect(documentBackedNotices([skipped, forB1], renamed)).toEqual([forB1]);
+  });
+
+  it("keeps a notice for a skipped part the file never named, which has no designator to match on", () => {
+    // `foreignSymbolWarning` writes "an unnamed part" when SYMATTR InstName is
+    // absent; the record it retains has no InstName either, so the two are
+    // matched on the empty name rather than on that placeholder sentence.
+    const anonymous = foreignSymbolWarning("", "dflop");
+    expect(documentBackedNotices([anonymous], [{ ...dflop, attrs: {} }])).toEqual([anonymous]);
+    expect(documentBackedNotices([anonymous], [dflop])).toEqual([]);
+  });
+
+  /**
+   * A block instance the parent cannot identify must not cost the reader the
+   * warning.
+   *
+   * `flattenSubcircuit` prefixes a body warning with the instance name the
+   * importer settled on, which falls back to a synthetic `X<n>` when the SYMBOL
+   * line carries no InstName - while the retained block record keeps the
+   * attributes verbatim, i.e. no InstName at all. Matching prefix against
+   * record therefore failed on exactly the document that has the least to spare,
+   * and the notice - the only trace of a part that was thrown away - vanished.
+   * Unverifiable is not the same as unbacked: keep it.
+   */
+  it("keeps a flattened block's skip notice when the parent has no name to verify it against", () => {
+    const bodyAsy = [
+      "Version 4",
+      "SymbolType BLOCK",
+      "PIN -32 0 LEFT 8",
+      "PINATTR PinName a",
+      "PINATTR SpiceOrder 1",
+      "PIN 32 0 RIGHT 8",
+      "PINATTR PinName b",
+      "PINATTR SpiceOrder 2",
+    ].join("\n");
+    const bodyAsc = [
+      "Version 4",
+      "SHEET 1 100 200",
+      "FLAG 16 0 a",
+      "FLAG 16 160 b",
+      "SYMBOL res 0 -16 R0",
+      "SYMATTR InstName R1",
+      "SYMATTR Value 1k",
+      "SYMBOL PowerProducts\\LTC4449 0 100 R0",
+      "SYMATTR InstName U1",
+    ].join("\n");
+    const resolveSubcircuit = makeSubcircuitResolver((type) =>
+      type.toLowerCase() === "mydiv2" ? { asy: bodyAsy, asc: bodyAsc } : null,
+    );
+    // No SYMATTR InstName on the block instance, so the importer names the
+    // warning after its own counter and the record carries no name.
+    const imported = importAsc(
+      ["Version 4", "SHEET 1 880 680", "SYMBOL mydiv2 200 200 R0"].join("\n"),
+      { resolveSubcircuit },
+    );
+    // Ground truth from the importer, not a hand-written string.
+    const nested = imported.warnings.filter((warning) => warning.includes("LTC4449"));
+    expect(nested).toHaveLength(1);
+    expect(imported.hierarchicalBlocks).toHaveLength(1);
+    expect(imported.hierarchicalBlocks[0]?.attrs.InstName).toBeUndefined();
+    expect(
+      documentBackedNotices(imported.warnings, imported.foreignSymbols, imported.hierarchicalBlocks),
+    ).toEqual(imported.warnings);
+  });
+
+  it("labels the parts a reader has to act on, name and symbol", () => {
+    expect(unimportedPartLabels([dflop])).toEqual(["A1 (dflop)"]);
+    // No InstName in the file: the symbol type is the only handle there is.
+    expect(unimportedPartLabels([{ ...dflop, attrs: {} }])).toEqual(["dflop"]);
   });
 });

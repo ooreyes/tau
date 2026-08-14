@@ -3,6 +3,21 @@ import { ChevronDown, ChevronUp, Square } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+// Co-located rather than listed with App.tsx's stylesheet imports, which is
+// where this app's other sheets are pulled in. The deviation is deliberate:
+// this sheet is nothing but the geometry of THIS component's drag handle, and
+// an entry-point import is a dependency a reader of this file cannot see - the
+// first draft shipped without it, which left the handle on the shared 8px rule,
+// i.e. under the 24px hit floor. Importing it here makes the handle and its hit
+// area arrive together or not at all. (A duplicate import from App.tsx is inert
+// - the bundler dedupes by resolved id.)
+import "../../styles/resultsDrawerResize.css";
+import {
+  PanelResizeHandle,
+  clearPanelWidth,
+  hasStoredPanelWidth,
+  usePanelWidth,
+} from "@/components/panelResize";
 
 /**
  * The one bottom surface.
@@ -56,6 +71,22 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
  * affordance to build. `half` is the working size. `full` deliberately stops
  * short of the top so the circuit never disappears entirely - a drawer that
  * covers its own subject is a page, not a drawer.
+ *
+ * ...and why they are no longer the ONLY heights. The three were the whole
+ * height control until a user reported the obvious: "the error window is not
+ * resizable, I should be able to drag up or down". A button that cycles three
+ * stylesheet-owned percentages cannot express "260px of errors and the rest of
+ * the circuit", so the top edge now carries the same `PanelResizeHandle` the
+ * explorer and the analysis divider use - pointer plus arrow keys plus a
+ * persisted size, one mechanism, not a second one invented here.
+ *
+ * A drag writes a PIXEL height, so it has to override the class, and the two
+ * can disagree. **The discrete height wins whenever anything sets it** - the
+ * cycle button, Escape, the run-finished raise, a tab click, a mode change:
+ * each drops the drag override and forgets the stored pixels. Last gesture
+ * wins, and the alternative is worse than untidy - an override that outlived
+ * them would leave Escape and the size button visibly inert, which is exactly
+ * the silently-does-nothing defect the rest of this file is written against.
  *
  * All three answer one question: how much of the circuit am I willing to cover
  * to read this? Docked right the drawer covers nothing - it is a column, the
@@ -132,6 +163,30 @@ const NO_COVER: DrawerCover = { bottom: 0, right: 0 };
 export const RESULTS_DRAWER_NAME = "Results";
 
 const HEIGHT_ORDER: readonly DrawerHeight[] = ["peek", "half", "full"];
+
+/* ── Dragged height (bottom dock only) ──────────────────────────────────
+ * The numbers the drag is clamped against, and where each comes from. */
+
+/** localStorage key, same namespace as the other panels' persisted sizes. */
+const DRAG_HEIGHT_KEY = "tau.resultsDrawer.height";
+/** The head row's own height (`.results-drawer-head { height: 34px }`). The
+ *  floor is "the readout stays whole": lamp, tabs and the size control have to
+ *  remain reachable, or dragging down produces a drawer with no way back. */
+const MIN_DRAG_HEIGHT = 34;
+/** The same reserve `.results-drawer--full` keeps - a drawer that covers its
+ *  own subject is a page. Kept as one number so the ceiling of a drag and the
+ *  ceiling of the `full` class cannot drift apart. */
+const CANVAS_RESERVE = 180;
+/** Only reached before first layout (and in JSDOM, where every clientHeight is
+ *  0). Clamping to `MIN` against an unmeasured host would snap the drawer shut
+ *  on mount, so an unknown host means "don't clamp from above yet". */
+const UNMEASURED_MAX = 4000;
+/** Only used if a stored height exists but the live one cannot be measured. */
+const DEFAULT_DRAG_HEIGHT = 240;
+/** The handle's accessible name. Distinct from the cycle button's "Resize
+ *  results (half)" so the two are separately addressable to a screen reader
+ *  and to `getByRole`. */
+const DRAG_HANDLE_LABEL = "Resize results drawer height";
 
 /* A tab and its panel point at each other by id. Both derived from the one
  * `useId`, because `aria-controls` must resolve to an element that exists -
@@ -265,11 +320,104 @@ export function ResultsDrawer({
   // an empty body under a tab strip that no longer contains it.
   const active = offered.find((spec) => spec.value === tab) ?? offered[0] ?? null;
 
-  // The mode changed: adopt what it wants.
+  const dockedRight = orientation === "right";
+
+  /* ── The dragged height ───────────────────────────────────────────────
+   * `dragged` is what decides whether the pixel height is on screen at all:
+   * false means the peek/half/full class owns the height, which is the resting
+   * state and the only state the stylesheet's percentages work in. It starts
+   * true only when a previous session left a size behind. */
+  const [dragged, setDragged] = useState(() => hasStoredPanelWidth(DRAG_HEIGHT_KEY));
+  // How tall the host is, so the ceiling can leave CANVAS_RESERVE of circuit.
+  // Docked bottom the drawer is `position: absolute; inset: 0 0 0`, so its
+  // offsetParent IS the box the percentages resolve against; `parentElement`
+  // is the fallback for engines (JSDOM) that never compute an offsetParent.
+  const [hostHeight, setHostHeight] = useState(0);
+  useEffect(() => {
+    if (dockedRight) return;
+    const measure = () => {
+      const el = rootRef.current;
+      const host = (el?.offsetParent as HTMLElement | null) ?? el?.parentElement ?? null;
+      setHostHeight(host?.clientHeight ?? 0);
+    };
+    measure();
+    // A window resize can shrink the host under a persisted height; the hook's
+    // own re-clamp effect fixes the value once the new maximum arrives here.
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [dockedRight]);
+  const maxDragHeight = hostHeight > 0
+    ? Math.max(MIN_DRAG_HEIGHT, hostHeight - CANVAS_RESERVE)
+    : UNMEASURED_MAX;
+  const resize = usePanelWidth({
+    storageKey: DRAG_HEIGHT_KEY,
+    defaultWidth: DEFAULT_DRAG_HEIGHT,
+    minWidth: MIN_DRAG_HEIGHT,
+    maxWidth: maxDragHeight,
+    edge: "top",
+  });
+
+  /**
+   * Hand the axis back to the three discrete heights.
+   *
+   * Every discrete setter goes through this, which is the "last gesture wins"
+   * rule from the note at the top of the file. The stored pixels go too:
+   * leaving them would have the next reload contradict what the user just did.
+   */
+  const applyDiscreteHeight = useCallback(
+    (next: DrawerHeight | ((current: DrawerHeight) => DrawerHeight)) => {
+      setHeight(next);
+      setDragged(false);
+      clearPanelWidth(DRAG_HEIGHT_KEY);
+    },
+    [],
+  );
+
+  /**
+   * A drag starts from the height that is ON SCREEN, not from the hook's
+   * remembered one: at rest that height is a percentage only the layout knows,
+   * so it has to be measured, and it has to be written before the pointer
+   * handler reads it (`usePanelWidth.setWidth` updates its ref synchronously,
+   * which is why this ordering works inside one handler).
+   */
+  /** The drawer's height as laid out, for the handle's `aria-valuenow` while
+   *  the class still owns the height. Separate from the cover observer above
+   *  because that one only exists when a caller asked to be told. */
+  const [liveHeight, setLiveHeight] = useState(0);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (dockedRight || !el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setLiveHeight(el.getBoundingClientRect().height));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [dockedRight]);
+
+  /** The pixel height is on screen only in the bottom dock: docked right the
+   *  drawer is a full-height column and an inline height would fight it. */
+  const showDragHeight = dragged && !dockedRight;
+  const draggingHeight = resize.dragging && !dockedRight;
+
+  const seedFromScreen = useCallback(() => {
+    if (dragged) return;
+    const measured = rootRef.current?.getBoundingClientRect().height ?? 0;
+    if (measured > 0) resize.setWidth(measured);
+    setDragged(true);
+  }, [dragged, resize]);
+
+  // The mode changed: adopt what it wants. The mount run is deliberately NOT
+  // treated as a mode change - it fires once for every drawer, and routing it
+  // through `applyDiscreteHeight` would erase the persisted drag height of
+  // every user who ever dragged, on every launch.
+  const modeChangedRef = useRef(false);
   useEffect(() => {
     setTab(preferredTab);
-    setHeight(preferredHeight);
-  }, [preferredTab, preferredHeight]);
+    if (!modeChangedRef.current) {
+      modeChangedRef.current = true;
+      setHeight(preferredHeight);
+      return;
+    }
+    applyDiscreteHeight(preferredHeight);
+  }, [preferredTab, preferredHeight, applyDiscreteHeight]);
 
   // A finished run raises a collapsed drawer, because the result is the answer
   // to the thing the user just asked for. It does not force a height on
@@ -279,12 +427,17 @@ export function ResultsDrawer({
   // once at mount, which would have raised the drawer the moment the app
   // opened - before anything had run - and quietly overridden the `peek` the
   // schematic asks for.
+  //
+  // A drawer the user has DRAGGED is never touched by this: it is open at a
+  // size they chose, so there is nothing to raise, and snapping it to `half`
+  // would be the raise deciding it knows better.
   const seenRaiseRef = useRef(raiseSignal);
   useEffect(() => {
     if (Object.is(seenRaiseRef.current, raiseSignal)) return;
     seenRaiseRef.current = raiseSignal;
-    setHeight((current) => (current === "peek" ? "half" : current));
-  }, [raiseSignal]);
+    if (heightRef.current !== "peek" || draggedRef.current) return;
+    applyDiscreteHeight("half");
+  }, [raiseSignal, applyDiscreteHeight]);
 
   /**
    * A new issue never stays hidden behind a collapsed drawer.
@@ -311,16 +464,23 @@ export function ResultsDrawer({
   // reads. Declared first so it is already current when that effect runs on
   // the same commit.
   const heightRef = useRef(height);
+  // Same rule for the dragged flag, and for the same reason: both auto-raises
+  // read it out of an effect on a later commit, so it must be the committed
+  // value and not one a discarded render wrote.
+  const draggedRef = useRef(dragged);
   useEffect(() => {
     heightRef.current = height;
-  }, [height]);
+    draggedRef.current = dragged;
+  }, [height, dragged]);
   useEffect(() => {
     if (badgeKey === seenBadgeRef.current) return;
     seenBadgeRef.current = badgeKey;
-    if (!badgeKey || heightRef.current !== "peek") return;
+    // A dragged drawer is already open, so the issue is not hidden - which is
+    // the only thing this raise exists to prevent.
+    if (!badgeKey || heightRef.current !== "peek" || draggedRef.current) return;
     setTab("errors");
-    setHeight("half");
-  }, [badgeKey]);
+    applyDiscreteHeight("half");
+  }, [badgeKey, applyDiscreteHeight]);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -354,28 +514,30 @@ export function ResultsDrawer({
     [],
   );
 
-  const dockedRight = orientation === "right";
-  /** Docked right there is no collapsed state; see the heights note above. */
-  const collapsed = !dockedRight && height === "peek";
+  /** Docked right there is no collapsed state; see the heights note above.
+   *  A dragged height beats the word: dragging a peeked drawer open is the
+   *  gesture, and keying `collapsed` off the stale `peek` would have grown a
+   *  200px box with its body still out of the accessibility tree. */
+  const collapsed = !dockedRight && height === "peek" && !dragged;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       // Escape belongs to whatever holds focus. Outside the drawer it still
       // means "cancel the current tool" on the canvas.
-      if (!containsFocus() || dockedRight || height === "peek") return;
+      if (!containsFocus() || dockedRight || collapsed) return;
       event.preventDefault();
-      setHeight("peek");
+      applyDiscreteHeight("peek");
       // Peek hides the body, so focus has to leave first or it sits on a
       // `display: none` node and the browser drops it to <body>.
       rootRef.current?.querySelector<HTMLElement>(".results-drawer-size")?.focus();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [containsFocus, dockedRight, height]);
+  }, [applyDiscreteHeight, containsFocus, dockedRight, collapsed]);
 
   const cycleHeight = () => {
-    setHeight((current) => {
+    applyDiscreteHeight((current) => {
       const next = HEIGHT_ORDER[(HEIGHT_ORDER.indexOf(current) + 1) % HEIGHT_ORDER.length];
       return next;
     });
@@ -390,10 +552,48 @@ export function ResultsDrawer({
       // stylesheet quietly contradict the "no collapsed state" rule above.
       className={`results-drawer results-drawer--dock-${orientation}${
         dockedRight ? "" : ` results-drawer--${height}`
-      }`}
+      }${draggingHeight ? " results-drawer--dragging-height" : ""}`}
+      // The inline height is what makes the drag continuous: it beats the
+      // percentage class by specificity, and the class is still emitted so
+      // everything else keyed on peek/half/full keeps reading the same word.
+      // The `--dragging-height` modifier drops the height transition, or the
+      // animation would make the edge lag the pointer.
+      style={showDragHeight ? { height: `${resize.width}px` } : undefined}
       aria-label={RESULTS_DRAWER_NAME}
       aria-busy={status === "running"}
     >
+      {/* Docked right the height is not negotiable (the column is as tall as
+          the workspace) and the width divider App renders owns the axis that
+          is - so no handle here, for the same reason the size button is gone. */}
+      {!dockedRight && (
+        <PanelResizeHandle
+          edge="top"
+          label={DRAG_HANDLE_LABEL}
+          // At rest the height is a percentage, so `aria-valuenow` reports the
+          // MEASURED height rather than the hook's unused default - a splitter
+          // that announces a number the panel does not have is a lie a screen
+          // reader has no way to check.
+          width={showDragHeight ? resize.width : Math.round(liveHeight) || resize.width}
+          minWidth={MIN_DRAG_HEIGHT}
+          maxWidth={maxDragHeight}
+          dragging={resize.dragging}
+          onPointerDown={(event) => {
+            // Seed only for the button that actually starts a drag. The hook
+            // bails on any other, and seeding first regardless made a
+            // right-click on the edge switch the drawer to a pixel height with
+            // no gesture behind it - visible on a peeked drawer, whose body
+            // then opened, because the pixel height suppresses `collapsed`.
+            if (event.button !== 0) return;
+            seedFromScreen();
+            resize.onPointerDown(event);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowUp" || event.key === "ArrowDown") seedFromScreen();
+            resize.onKeyDown(event);
+          }}
+        />
+      )}
+
       <div className="results-drawer-head">
         <span
           className={`results-drawer-status results-drawer-status--${status}`}
@@ -425,8 +625,9 @@ export function ResultsDrawer({
               // Picking a tab is a request to read it. The strip is legible at
               // peek - that is the point of peek - so it was possible to click
               // Errors on the strength of its badge and have nothing happen
-              // but the underline move.
-              setHeight((current) => (current === "peek" ? "half" : current));
+              // but the underline move. A dragged drawer is already open, so
+              // there is nothing to raise and its size is left alone.
+              if (height === "peek" && !dragged) applyDiscreteHeight("half");
             }}
           >
             <TabsList aria-label="Results" className="results-drawer-tabs">

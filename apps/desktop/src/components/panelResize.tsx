@@ -41,6 +41,37 @@ export function loadPanelWidth(config: PanelWidthConfig): number {
   }
 }
 
+/**
+ * Has the user ever chosen a size for this panel?
+ *
+ * `loadPanelWidth` cannot answer that - it folds "nothing stored" into the
+ * default. A caller whose resting size is NOT a number it owns needs the
+ * difference: the results drawer's resting height is a percentage its
+ * stylesheet owns (`height: 46%`), so an absent key means "leave the class
+ * alone", not "use 240px".
+ */
+export function hasStoredPanelWidth(storageKey: string): boolean {
+  if (typeof localStorage === "undefined") return false;
+  try {
+    const raw = localStorage.getItem(storageKey);
+    return raw !== null && raw.trim() !== "" && Number.isFinite(Number(raw));
+  } catch {
+    return false;
+  }
+}
+
+/** Forget a stored size, for a caller that can hand the axis back to something
+ *  else (the drawer's peek/half/full button) and must not have a stale drag
+ *  reappear on the next reload. */
+export function clearPanelWidth(storageKey: string): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(storageKey);
+  } catch {
+    // Same tolerance as the setter: storage is a convenience here.
+  }
+}
+
 export function savePanelWidth(storageKey: string, width: number): void {
   if (typeof localStorage === "undefined") return;
   try {

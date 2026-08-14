@@ -138,6 +138,11 @@ export const PRESERVED_PREFERENCES: readonly {
     controlledAt: "The divider between the circuit and the analysis pane",
   },
   {
+    key: "tau.resultsDrawer.height",
+    label: "Results drawer height",
+    controlledAt: "The drawer's own drag handle, or its collapse button",
+  },
+  {
     key: "tau.assistant.width",
     label: "Assistant panel width",
     controlledAt: "The panel's own drag handle",

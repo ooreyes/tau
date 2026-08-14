@@ -57,9 +57,10 @@ function renderSharedChrome() {
   return render(
     <>
       <Toolbar {...toolbarProps} />
-      <StatusBar mode="schematic" result={null} onOpenSettings={vi.fn()} />
+      <StatusBar mode="schematic" result={null} />
       <ActivityRail
         mode="schematic"
+        onOpenSettings={vi.fn()}
         explorerOpen
         partsOpen={false}
         projectOpen

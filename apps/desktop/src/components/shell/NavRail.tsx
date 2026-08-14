@@ -10,7 +10,7 @@
  * `ModeProps` travels with it: every field is something the rail needs.
  */
 import type { ReactNode } from "react";
-import { Activity, CircuitBoard, FolderOpen, Search } from "lucide-react";
+import { Activity, CircuitBoard, FolderOpen, Search, Settings } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ModeProps {
@@ -23,6 +23,12 @@ interface ModeProps {
   onModeChange: (mode: "schematic" | "simulator") => void;
   onSearch: () => void;
   onFocusComponents: () => void;
+  /**
+   * App-level settings, moved here from the status strip's lower-right utility.
+   * Optional so the rail can be rendered without a shell (tests, storybook-ish
+   * harnesses) and simply grows no foot.
+   */
+  onOpenSettings?: () => void;
 }
 
 export function ActivityRail({
@@ -35,6 +41,7 @@ export function ActivityRail({
   onModeChange,
   onSearch,
   onFocusComponents,
+  onOpenSettings,
 }: ModeProps) {
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
@@ -51,6 +58,21 @@ export function ActivityRail({
       <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")} disabled={!schematicOpen}>
         <Activity size={18} strokeWidth={1.6} />
       </RailButton>
+      {onOpenSettings && (
+        /* The foot. Settings is a utility, not a destination, so it is pinned to
+           the bottom (App.css `.rail-foot`) and comes last in the tab order
+           rather than sitting among the four places you can go. The hairline
+           BELOW it is the rail's terminating rule: it lands on the same line as
+           the status strip's `border-top`, so the two read as one line across
+           the window and the rounded bottom-left corner beneath belongs to this
+           block instead of being the empty gap the review screenshotted. */
+        <div className="rail-foot">
+          <RailButton label="Settings" onClick={onOpenSettings}>
+            <Settings size={18} strokeWidth={1.6} />
+          </RailButton>
+          <RailSeparator />
+        </div>
+      )}
     </nav>
   );
 }
