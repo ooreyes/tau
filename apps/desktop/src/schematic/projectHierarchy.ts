@@ -394,15 +394,31 @@ const CHILD_DEVICE_RULES: Record<ComponentKind, ChildDeviceRule> = {
       }
       // Not the ideal path, so either the part carries LTspice provenance and
       // keeps its real junction, or its value spells explicit Shockley
-      // parameters. The root deck turns the latter into a per-instance `.model`;
-      // a block body does not emit those yet, and quietly dropping numbers the
-      // author typed would change the diode. Refuse instead.
+      // parameters. The latter gets a per-instance `.model`, the same way the
+      // root deck does it - quietly dropping numbers the author typed would
+      // change the diode.
+      //
+      // This is also the only way to pin a REAL junction deterministically. A
+      // bare `D` depends on provenance, and provenance does not survive a `.asc`
+      // round trip: the exporter writes the part's `TauKind`/`TauValue`, and the
+      // importer restores a native component with no `ltSymbolType`, so the same
+      // diode is ideal on reload. Spelling Is=/N= says what you mean.
       const value = ctx.component.value.trim();
       const params = value.split(/[\s,;]+/).filter((token) => token.includes("="));
       if (params.length > 0) {
-        ctx.refuse(
-          `carries explicit junction parameters (${params.join(" ")}), which a linked sheet cannot emit as a per-instance model yet.`,
-        );
+        const unsupported = params.filter((token) => !/^(?:is|n)\s*=/i.test(token));
+        if (unsupported.length > 0) {
+          ctx.refuse(
+            `carries junction parameters a linked sheet cannot emit yet (${unsupported.join(" ")}). Only Is= and N= are supported.`,
+          );
+        }
+        const numeric = (key: string, fallback: string): string => {
+          const hit = new RegExp(`(?:^|[\\s,;])${key}\\s*=\\s*([^\\s,;]+)`, "i").exec(` ${value}`);
+          return hit ? hit[1] : fallback;
+        };
+        const perInstance = `TAU_DIODE_${asciiFold(ctx.ref("D"))}`;
+        ctx.addModelCard(perInstance, `.model ${perInstance} D(Is=${numeric("is", "1e-14")} N=${numeric("n", "1")})`);
+        return [`${ctx.ref("D")} ${ctx.at("a")} ${ctx.at("k")} ${perInstance}`];
       }
       const named = value.split(/\s+/)[0] ?? "";
       if (named && !/^(?:d|tau_diode)$/i.test(named)) {

@@ -1,0 +1,26 @@
+Tau generated circuit
+* The deck Tau generates from top.sim + Buck25to5.asc.
+* Written by buckSubcircuitFolder.test.ts - do not edit by hand.
+*
+* The .subckt body below was compiled from the LINKED .asc sheet.
+* Measured in ngspice on this exact deck: V(out) = 5.00316 V into 1 k,
+* 6.06 mV ripple, 5.855 V startup peak.
+*
+* Runnable as-is:  ngspice -b DECK.txt
+.options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7 rshunt=1e12 rseries=1e-3
+.subckt Buck25to5 VIN VOUT
+.model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)
+.model TAU_DIODE_d__tau_buck25to5_3 D(Is=1e-14 N=1)
+S__tau_Buck25to5_1 VIN __tau_buck25to5_n2 __tau_buck25to5_n1 0 TAU_SW
+L__tau_Buck25to5_2 __tau_buck25to5_n2 VOUT 0.0047
+D__tau_Buck25to5_3 0 __tau_buck25to5_n2 TAU_DIODE_d__tau_buck25to5_3
+V__tau_Buck25to5_4 __tau_buck25to5_n1 0 DC 0 PULSE(0 5 0 1e-9 1e-9 0.000001107 0.000005)
+C__tau_Buck25to5_5 VOUT 0 5e-7
+R__tau_Buck25to5_6 VOUT __tau_buck25to5_n3 100
+C__tau_Buck25to5_7 __tau_buck25to5_n3 0 0.000009999999999999999
+.ends Buck25to5
+V1 n001 0 DC 25
+RLOAD out 0 1000
+X1 n001 out Buck25to5
+.tran 2e-8 0.005
+.end

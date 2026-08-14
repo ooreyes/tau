@@ -30,139 +30,14 @@ import { loadProjectHierarchySheets } from "./projectHierarchyRuntime";
 import { canonicalProjectOwnerPath, canonicalProjectSheetPath } from "./projectSubcircuit";
 import { schematicToAsc } from "../io/ascExport";
 import { importAsc } from "../io/ascImport";
-import type { NetLabel, SchematicComponent, SchematicWire } from "./types";
-
-/** Switching period and on-time, in seconds, for the validated design. */
-const PERIOD_S = 5e-6;
-const ON_TIME_S = 1.107e-6;
-const PWM_VALUE = `PULSE(0 5 0 1n 1n ${ON_TIME_S * 1e6}u ${PERIOD_S * 1e6}u)`;
-
-type Doc = {
-  components: SchematicComponent[];
-  wires: SchematicWire[];
-  netLabels: NetLabel[];
-  directives?: string[];
-};
-
-const part = (
-  id: string,
-  kind: SchematicComponent["kind"],
-  x: number,
-  y: number,
-  value: string,
-  label: string,
-  rotation: 0 | 90 | 180 | 270 = 0,
-): SchematicComponent => ({ id, kind, x, y, rotation, value, label }) as SchematicComponent;
-
-const wire = (id: string, ...points: [number, number][]): SchematicWire => ({
-  id,
-  points: points.map(([x, y]) => ({ x, y })),
-});
-
-/**
- * The child sheet. Laid out as a left-to-right power path so a human opening
- * it reads VIN -> switch -> SW node -> inductor -> VOUT, with the returns
- * dropping to ground symbols underneath.
- */
-function buckChildSheet(): Doc {
-  const components: SchematicComponent[] = [
-    // Power path. Tau's two-terminal parts are horizontal at rotation 0.
-    part("s1", "switch", 256, 128, "TAU_SW", "S1"),
-    part("l1", "inductor", 384, 128, "4.7m", "L1"),
-    // Catch diode: rotation 270 maps (x,y)->(y,-x), which puts K above and A
-    // below, so the arrow points up from ground into the SW node.
-    //
-    // `ltSymbolType` is not decoration - it is what this sheet really is. The
-    // deliverable is a `.asc`, so every part in it carries LTspice provenance,
-    // and for a junction that provenance decides the MODEL: a part read from a
-    // `.asc` keeps its real Shockley junction, while a part placed natively in
-    // Tau gets the textbook ideal one. Building the fixture without it would
-    // test a different circuit than the file on disk - and specifically the one
-    // that does not converge here (see the note at the foot of this file).
-    { ...part("d1", "diode", 320, 192, "D", "D1", 270), ltSymbolType: "diode" } as SchematicComponent,
-    // Gate drive. A source is vertical at rotation 0 (p above, n below).
-    part("vpwm", "vsource", 176, 208, PWM_VALUE, "VPWM"),
-    // Output filter capacitor, and the Rd+Cd damping branch beside it.
-    part("c1", "capacitor", 480, 192, "0.5u", "C1", 90),
-    part("rd", "resistor", 576, 176, "100", "RD", 90),
-    part("cd", "capacitor", 576, 272, "10u", "CD", 90),
-    // Ground symbols, one under each return.
-    part("g1", "ground", 320, 256, "", ""),
-    part("g2", "ground", 176, 272, "", ""),
-    part("g3", "ground", 272, 256, "", ""),
-    part("g4", "ground", 480, 256, "", ""),
-    part("g5", "ground", 576, 336, "", ""),
-  ];
-  const wires: SchematicWire[] = [
-    // VIN into the switch.
-    wire("w-vin", [192, 128], [224, 128]),
-    // SW node, split at x=320 so the diode's wire meets a real endpoint
-    // instead of forming a mid-segment T junction.
-    wire("w-sw-a", [288, 128], [320, 128]),
-    wire("w-sw-b", [320, 128], [352, 128]),
-    wire("w-d-k", [320, 160], [320, 128]),
-    wire("w-d-a", [320, 224], [320, 256]),
-    // Gate drive up and across to the switch's NC+ control pin.
-    wire("w-gate", [176, 176], [176, 160], [240, 160]),
-    wire("w-pwm-gnd", [176, 240], [176, 272]),
-    // The switch's NC- control pin returns to ground.
-    wire("w-nc-gnd", [272, 160], [272, 256]),
-    // Inductor out to VOUT, split so the filter taps meet endpoints.
-    wire("w-vout-a", [416, 128], [480, 128]),
-    wire("w-vout-b", [480, 128], [576, 128]),
-    wire("w-c1-top", [480, 128], [480, 160]),
-    wire("w-c1-gnd", [480, 224], [480, 256]),
-    wire("w-rd-top", [576, 128], [576, 144]),
-    wire("w-rd-cd", [576, 208], [576, 240]),
-    wire("w-cd-gnd", [576, 304], [576, 336]),
-  ];
-  // The two public ports. `port` is what serialises to an LTspice IOPIN.
-  const netLabels: NetLabel[] = [
-    { id: "n-vin", x: 192, y: 128, text: "VIN", port: "In" },
-    { id: "n-vout", x: 480, y: 128, text: "VOUT", port: "Out" },
-  ];
-  return { components, wires, netLabels };
-}
-
-/**
- * The parent sheet: 25 V in, the block, a 1 k load.
- *
- * `childPath` is a parameter only so the baseline block at the bottom of this
- * file can re-run the identical circuit under the currently-accepted `.sim`
- * extension and isolate the second refusal from the first. Real callers use the
- * default.
- */
-function topSheet(childPath = "Buck25to5.asc"): Doc {
-  const components: SchematicComponent[] = [
-    part("v1", "vsource", 128, 208, "25", "V1"),
-    part("rload", "resistor", 512, 208, "1k", "RLOAD", 90),
-    part("gv", "ground", 128, 288, "", ""),
-    part("gr", "ground", 512, 288, "", ""),
-    {
-      ...part("x1", "subckt", 320, 176, "Buck25to5", "X1"),
-      // The ordered p1..pN bank the block contract requires. The ORDER lives
-      // here, on the parent, which is why the child needs no ordering field.
-      pinOverride: [
-        { id: "p1", label: "VIN", x: 272, y: 176 },
-        { id: "p2", label: "VOUT", x: 368, y: 176 },
-      ],
-      projectSubcircuit: {
-        sheetPath: childPath,
-        model: "Buck25to5",
-        ports: ["VIN", "VOUT"],
-      },
-    } as SchematicComponent,
-  ];
-  const wires: SchematicWire[] = [
-    wire("t-in", [128, 176], [272, 176]),
-    wire("t-out-a", [368, 176], [440, 176]),
-    wire("t-out-b", [440, 176], [512, 176]),
-    wire("t-v-gnd", [128, 240], [128, 288]),
-    wire("t-r-gnd", [512, 240], [512, 288]),
-  ];
-  const netLabels: NetLabel[] = [{ id: "t-out", x: 440, y: 176, text: "OUT" }];
-  return { components, wires, netLabels, directives: [".tran 20n 5m"] };
-}
+import {
+  buckChildSheet,
+  part,
+  topSheet,
+  wire,
+  type FixtureSheet as Doc,
+} from "./buckSubcircuitFixture";
+import type { NetLabel, SchematicComponent } from "./types";
 
 /** Net id carrying a given component pin, for connectivity assertions. */
 function netOfPin(doc: Doc, componentId: string, pinId: string): string {
@@ -464,13 +339,13 @@ describe("the emitted block, byte for byte", () => {
       // to emit its starter cards from the root's own component kinds, and this
       // parent is only a source, a load and a block.
       ".model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)",
-      ".model TAU_DIODE D(Is=1e-14 N=1)",
+      ".model TAU_DIODE_d__tau_buck25to5_3 D(Is=1e-14 N=1)",
       // VIN -> switch -> SW node (n2); gate is n1.
       "S__tau_Buck25to5_1 VIN __tau_buck25to5_n2 __tau_buck25to5_n1 0 TAU_SW",
       "L__tau_Buck25to5_2 __tau_buck25to5_n2 VOUT 0.0047",
       // Catch diode, ground -> SW node. One line, so the real junction: the
       // ideal path would emit a second zero-volt sense source here.
-      "D__tau_Buck25to5_3 0 __tau_buck25to5_n2 TAU_DIODE",
+      "D__tau_Buck25to5_3 0 __tau_buck25to5_n2 TAU_DIODE_d__tau_buck25to5_3",
       "V__tau_Buck25to5_4 __tau_buck25to5_n1 0 DC 0 PULSE(0 5 0 1e-9 1e-9 0.000001107 0.000005)",
       "C__tau_Buck25to5_5 VOUT 0 5e-7",
       "R__tau_Buck25to5_6 VOUT __tau_buck25to5_n3 100",
