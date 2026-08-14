@@ -12,9 +12,24 @@ import { EditorToolbar } from "./editor/EditorChrome";
 import { BottomPanel } from "./drawer/DiagnosticsTab";
 import { behavioralSpecText, checkBehavioral } from "../simulation/behavioral";
 import type { AnalysisResult } from "../simulation/linearTransient";
-import type { SchematicComponent } from "../schematic/types";
+import type { SchematicComponent, SchematicPortDirection } from "../schematic/types";
+import type { ProjectSheetInterfaceEntry } from "../schematic/projectSubcircuit";
+
+/** An index entry for a readable child, built the way App's index will build it. */
+function okEntry(
+  sheetPath: string,
+  ports: readonly [string, SchematicPortDirection][],
+): ProjectSheetInterfaceEntry {
+  return {
+    sheetPath,
+    fileName: sheetPath.split("/").pop() ?? sheetPath,
+    status: "ok",
+    ports: ports.map(([name, direction], index) => ({ name, labelId: `l${index}`, direction })),
+  };
+}
 import { useSchematic } from "../store/useSchematic";
 import { useProject } from "../store/useProject";
+import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
 import { usePanelWidth } from "@/components/ui/resizable";
 
 /**
@@ -92,7 +107,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
   it("opens the child-sheet interface authoring surface from the production toolbar", () => {
     const onOpenProjectInterface = vi.fn();
     render(<EditorToolbar mode="schematic" {...noopToolbarProps} onOpenProjectInterface={onOpenProjectInterface} />);
-    fireEvent.click(screen.getByRole("button", { name: "Child sheet interface" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sheet interface" }));
     expect(onOpenProjectInterface).toHaveBeenCalledOnce();
   });
 
@@ -613,7 +628,11 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     expect(openLibraries).toHaveBeenCalledOnce();
   });
 
-  it("offers an accessible sibling-sheet and ordered-port contract without guessing", async () => {
+  it("links a chosen sheet with ZERO retyping: the pinout arrives from the child", async () => {
+    // PDF5 reason 1, closed. The old surface made you read the child's ports,
+    // remember them, and retype them in the right order into a free-text box.
+    // This test fires no change event on any textbox - see the meta-check
+    // below, which reads this test's own source to prove it.
     const selected = {
       id: "x-project",
       kind: "subckt" as const,
@@ -632,24 +651,697 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       ],
     });
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    render(<ComponentInspector selected={selected} projectFilePath="/project/root.sim" />);
+    render(
+      <ComponentInspector
+        selected={selected}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["OUT", "Out"], ["GND", "BiDir"]])]}
+      />,
+    );
 
     const sheet = screen.getByRole("combobox", { name: "Project sheet" });
     fireEvent.pointerDown(sheet, { button: 0, pointerId: 5, pointerType: "mouse" });
-    const child = await screen.findByRole("option", { name: "child.sim" });
-    fireEvent.click(child);
-    fireEvent.change(screen.getByRole("textbox", { name: "Project model name" }), { target: { value: "ChildModel" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Ordered project ports" }), { target: { value: "IN, OUT, GND" } });
-    fireEvent.click(screen.getByRole("button", { name: "Link project sheet" }));
+    fireEvent.click(await screen.findByRole("option", { name: /child\.sim · 3 ports: IN, OUT, GND/ }));
+
+    // The model name is derived from the file stem, already in the field.
+    expect((screen.getByRole("textbox", { name: "Project model name" }) as HTMLInputElement).value)
+      .toBe("Child");
+    // The pinout is shown, in order, with the side each direction implies.
+    const proposed = screen.getByRole("list", { name: "Proposed pin order" });
+    expect(within(proposed).getAllByRole("listitem").map((row) => row.textContent))
+      .toEqual(["1INinleft", "2OUToutright", "3GNDbidirleft"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Link this sheet" }));
 
     expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
       sheetPath: "child.sim",
-      model: "ChildModel",
+      model: "Child",
       ports: ["IN", "OUT", "GND"],
     });
-    expect(screen.getByRole("group", { name: "Project sheet link" }).querySelector('[role="status"]')?.textContent)
+    // The bank follows the child's directions: In left, Out right, BiDir to the
+    // shorter column (ties left), while ids/labels stay in ports order.
+    expect(useSchematic.getState().components[0].pinOverride).toEqual([
+      { id: "p1", label: "IN", x: -48, y: -16 },
+      { id: "p2", label: "OUT", x: 48, y: 0 },
+      { id: "p3", label: "GND", x: -48, y: 16 },
+    ]);
+    expect(screen.queryByRole("option", { name: /legacy\.asc/ })).toBeNull();
+  });
+
+  it("proves the zero-retyping claim: that test drives no textbox at all", () => {
+    // A test that says "no typing was needed" while typing is worthless, so the
+    // claim is checked against the test's own source rather than trusted.
+    const source = readFileSync(join(__dirname, "ShellPanels.test.tsx"), "utf8");
+    const start = source.indexOf('it("links a chosen sheet with ZERO retyping');
+    const end = source.indexOf('it("proves the zero-retyping claim');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(source.slice(start, end)).not.toContain("fireEvent.change");
+  });
+
+  it("keeps the free-text ordered contract for an EE, behind Advanced", () => {
+    // C1: the field is DEMOTED, not deleted. An EE may want a terminal order
+    // the child did not declare, or a contract for a sheet not written yet.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(
+      <ComponentInspector
+        selected={selected}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["OUT", "Out"], ["GND", "BiDir"]])]}
+      />,
+    );
+
+    expect(screen.queryByRole("textbox", { name: "Ordered project ports" })).toBeNull();
+
+    // The sheet is chosen by the reader, never pre-selected for them.
+    const eeSheet = screen.getByRole("combobox", { name: "Project sheet" });
+    expect(eeSheet.textContent).toBe("Choose a Tau sheet");
+    fireEvent.pointerDown(eeSheet, { button: 0, pointerId: 5, pointerType: "mouse" });
+    fireEvent.click(screen.getByRole("option", { name: /child\.sim/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit contract manually" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Manual project model name" }), { target: { value: "ChildModel" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ordered project ports" }), { target: { value: "GND, IN, OUT" } });
+
+    // A deliberate difference is framed as one, not as an error.
+    expect(screen.getByText(/Your contract, deliberately different/)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Link project sheet" }));
+    expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
+      sheetPath: "child.sim",
+      model: "ChildModel",
+      ports: ["GND", "IN", "OUT"],
+    });
+    expect(within(screen.getByRole("group", { name: "Project sheet link" })).getAllByRole("status")
+      .map((row) => row.textContent).join(" | "))
       .toContain("child’s public ports match in order");
-    expect(screen.queryByRole("option", { name: "legacy.asc" })).toBeNull();
+  });
+
+  it("refuses a project link on an .asc sheet in plain words, with a way out", () => {
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    const saveAs = vi.fn();
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "legacy.asc", path: "/project/legacy.asc", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(
+      <ComponentInspector
+        selected={selected}
+        projectFilePath="/project/legacy.asc"
+        sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["OUT", "Out"]])]}
+        onSaveSheetAsSim={saveAs}
+      />,
+    );
+
+    const group = screen.getByRole("group", { name: "Project sheet link" });
+    expect(within(group).getByRole("status").textContent)
+      .toBe("An .asc sheet cannot hold a project link. Save this sheet as .sim first.");
+    expect(screen.queryByRole("button", { name: "Link this sheet" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Project sheet" })).toBeNull();
+    fireEvent.click(within(group).getByRole("button", { name: "Save as .sim" }));
+    expect(saveAs).toHaveBeenCalledOnce();
+  });
+
+  it("annotates a sheet with no interface as selectable, and an unreadable one as disabled", async () => {
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    const openSheet = vi.fn();
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "mixer.sim", path: "/project/mixer.sim", kind: "file" },
+        { name: "broken.sim", path: "/project/broken.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(
+      <ComponentInspector
+        selected={selected}
+        projectFilePath="/project/root.sim"
+        onOpenSheet={openSheet}
+        sheetInterfaces={[
+          { sheetPath: "mixer.sim", fileName: "mixer.sim", status: "no-interface", ports: [] },
+          {
+            sheetPath: "broken.sim", fileName: "broken.sim", status: "unreadable", ports: [],
+            reason: "Unexpected token } in JSON at position 41",
+          },
+        ]}
+      />,
+    );
+
+    const sheet = screen.getByRole("combobox", { name: "Project sheet" });
+    fireEvent.pointerDown(sheet, { button: 0, pointerId: 5, pointerType: "mouse" });
+    const unreadable = await screen.findByRole("option", { name: /broken\.sim · unreadable/ });
+    expect(unreadable.getAttribute("data-disabled")).not.toBeNull();
+    fireEvent.click(await screen.findByRole("option", { name: /mixer\.sim · no interface yet/ }));
+
+    // Selectable, but the only honest confirm is "go mark its nets".
+    expect(screen.queryByRole("button", { name: "Link this sheet" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open mixer.sim and mark its nets" }));
+    expect(openSheet).toHaveBeenCalledWith("mixer.sim");
+  });
+
+  it("shows a reorder as drift, reviews it in two labelled columns, and adopts it once", () => {
+    // PDF5 reason 3. The dangerous case: same names, new order, so the stored
+    // contract still looks legal while the netlist's node order has changed.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "Child", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id], wires: [], netLabels: [], probes: [] });
+    useSchematic.getState().setProjectSubcircuitLink(
+      "x-project",
+      { sheetPath: "child.sim", model: "Child", ports: ["IN", "OUT", "GND"] },
+      { directions: ["In", "Out", "BiDir"] },
+    );
+    const linked = useSchematic.getState().components[0];
+    // The child has since swapped its last two ports.
+    const entry = okEntry("child.sim", [["IN", "In"], ["GND", "BiDir"], ["OUT", "Out"]]);
+    render(
+      <ComponentInspector
+        selected={linked}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[entry]}
+        comparedSource="disk"
+      />,
+    );
+
+    const group = screen.getByRole("group", { name: "Project sheet link" });
+    expect(within(group).getByText(/reordered its connections: IN, OUT, GND -> IN, GND, OUT/)).toBeTruthy();
+
+    fireEvent.click(within(group).getByRole("button", { name: "Review interface change…" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("columnheader", { name: "This block’s contract" })).toBeTruthy();
+    expect(within(dialog).getByRole("columnheader", { name: "child.sim now" })).toBeTruthy();
+    expect(within(dialog).getByText(/Compared against child\.sim as saved on disk\./)).toBeTruthy();
+    // Keeping is the default act; nothing has changed yet.
+    expect(within(dialog).getByRole("button", { name: "Keep current contract" })).toBeTruthy();
+    expect(useSchematic.getState().components[0].projectSubcircuit?.ports).toEqual(["IN", "OUT", "GND"]);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adopt sheet interface" }));
+
+    const adopted = useSchematic.getState().components[0];
+    expect(adopted.projectSubcircuit).toEqual({
+      sheetPath: "child.sim", model: "Child", ports: ["IN", "GND", "OUT"],
+    });
+    // The X card's node order follows the contract - ids stay p1..pN in ports
+    // order - and the geometry is whatever the ONE slot rule says for the
+    // child's live directions, never a second layout rule in the inspector.
+    expect(adopted.pinOverride?.map((pin) => [pin.id, pin.label])).toEqual([
+      ["p1", "IN"], ["p2", "GND"], ["p3", "OUT"],
+    ]);
+    expect(adopted.pinOverride).toEqual(buildSubcircuitPinOverride(
+      { x: 0, y: 0, rotation: 0, mirrored: false },
+      ["IN", "GND", "OUT"],
+      ["In", "BiDir", "Out"],
+    ));
+    // The pin that changed column really moved, so the picture is not stale.
+    expect(adopted.pinOverride?.find((pin) => pin.label === "GND")?.x)
+      .not.toBe(linked.pinOverride?.find((pin) => pin.label === "GND")?.x);
+    expect(useSchematic.getState().past.length).toBeGreaterThan(0);
+  });
+
+  it("calls a direction-only change what it is: inert, with a relayout and no scare", () => {
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "Child", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id], wires: [], netLabels: [], probes: [] });
+    useSchematic.getState().setProjectSubcircuitLink(
+      "x-project",
+      { sheetPath: "child.sim", model: "Child", ports: ["IN", "OUT", "GND"] },
+      { directions: ["In", "Out", "BiDir"] },
+    );
+    const linked = useSchematic.getState().components[0];
+    // GND was BiDir (bottom-LEFT, the way an EE draws a ground) and is now Out,
+    // which moves it to the right column. Same names, same order, same nodes.
+    expect(linked.pinOverride?.find((pin) => pin.label === "GND")?.x).toBe(-48);
+    render(
+      <ComponentInspector
+        selected={linked}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["OUT", "Out"], ["GND", "Out"]])]}
+      />,
+    );
+
+    const group = screen.getByRole("group", { name: "Project sheet link" });
+    expect(within(group).getByText(/Nothing electrical changes\./)).toBeTruthy();
+    fireEvent.click(within(group).getByRole("button", { name: "Review interface change…" }));
+    const dialog = screen.getByRole("dialog");
+    // The only offer is a redraw; nothing here may imply Run is about to fail.
+    expect(within(dialog).getByRole("button", { name: "Re-lay out this block" })).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: "Adopt sheet interface" })).toBeNull();
+  });
+
+  it("never auto-repairs or auto-unlinks a vanished child sheet", () => {
+    // C8. A parent's netlist must not change as a side effect of another file's
+    // deletion, so the stored contract AND the pin bank are left intact and the
+    // only remedies are explicit.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "Child", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [{ name: "root.sim", path: "/project/root.sim", kind: "file" }],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id], wires: [], netLabels: [], probes: [] });
+    useSchematic.getState().setProjectSubcircuitLink("x-project", {
+      sheetPath: "child.sim", model: "Child", ports: ["IN", "OUT", "GND"],
+    });
+    const before = JSON.stringify(useSchematic.getState().components[0]);
+    const linked = useSchematic.getState().components[0];
+    render(
+      <ComponentInspector
+        selected={linked}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[{ sheetPath: "child.sim", fileName: "child.sim", status: "missing", ports: [] }]}
+      />,
+    );
+
+    const group = screen.getByRole("group", { name: "Project sheet link" });
+    expect(within(group).getByText(/child\.sim is missing from this project/)).toBeTruthy();
+    expect(JSON.stringify(useSchematic.getState().components[0])).toBe(before);
+
+    // Unlinking exists, but only as something a person did.
+    fireEvent.click(within(group).getByRole("button", { name: "Unlink" }));
+    expect(useSchematic.getState().components[0].projectSubcircuit).toBeUndefined();
+  });
+
+  it("recovers from a vanished child by pointing the block at a real sheet", async () => {
+    // VERIFY: the missing-sheet row offered "Choose another sheet", which opened
+    // the MANUAL CONTRACT editor - not a sheet chooser - while the control that
+    // does choose a sheet sat two rows above it. The recovery has to be the
+    // Select, and it has to actually rewrite the link.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "Child", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "rescue.sim", path: "/project/rescue.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id], wires: [], netLabels: [], probes: [] });
+    useSchematic.getState().setProjectSubcircuitLink("x-project", {
+      sheetPath: "gone.sim", model: "Child", ports: ["IN", "OUT", "GND"],
+    });
+    const linked = useSchematic.getState().components[0];
+    render(
+      <ComponentInspector
+        selected={linked}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[
+          { sheetPath: "gone.sim", fileName: "gone.sim", status: "missing", ports: [] },
+          okEntry("rescue.sim", [["IN", "In"], ["OUT", "Out"], ["GND", "BiDir"]]),
+        ]}
+      />,
+    );
+
+    const group = screen.getByRole("group", { name: "Project sheet link" });
+    expect(within(group).getByRole("alert").textContent).toContain("“Project sheet” above");
+    expect(within(group).queryByRole("button", { name: "Choose another sheet" })).toBeNull();
+
+    fireEvent.pointerDown(screen.getByRole("combobox", { name: "Project sheet" }), { button: 0, pointerId: 5, pointerType: "mouse" });
+    fireEvent.click(await screen.findByRole("option", { name: /rescue\.sim · 3 ports/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Relink this sheet" }));
+
+    expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
+      sheetPath: "rescue.sim", model: "Rescue", ports: ["IN", "OUT", "GND"],
+    });
+  });
+
+  it("offers a derived model name that the compiler will not refuse", () => {
+    // A student must never eat a Run refusal about a name they never typed, so
+    // the derived default is pre-checked against the same collision sets
+    // buildProjectHierarchyDeck checks - here, an inline .subckt named Child.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({
+      components: [selected], selectedId: selected.id, selectedIds: [selected.id],
+      directives: [".subckt Child a b", ".ends"],
+    });
+    render(
+      <ComponentInspector
+        selected={selected}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["OUT", "Out"]])]}
+      />,
+    );
+
+    const collisionSheet = screen.getByRole("combobox", { name: "Project sheet" });
+    fireEvent.pointerDown(collisionSheet, { button: 0, pointerId: 5, pointerType: "mouse" });
+    fireEvent.click(screen.getByRole("option", { name: /child\.sim/ }));
+
+    expect((screen.getByRole("textbox", { name: "Project model name" }) as HTMLInputElement).value)
+      .toBe("Child2");
+    fireEvent.click(screen.getByRole("button", { name: "Link this sheet" }));
+    expect(useSchematic.getState().components[0].projectSubcircuit?.model).toBe("Child2");
+  });
+
+  it("never links a sheet the reader did not choose", () => {
+    // VERIFY: the Select used to open pre-filled with the alphabetically first
+    // sibling, and "Link this sheet" was the panel's only prominent button - so
+    // one click bound the block to a file nobody picked. A sheet is the one
+    // irreversible choice on this panel (it decides the netlist), and the spec's
+    // "a port is never created by the app choosing a net" applies to it too.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "aaa.sim", path: "/project/aaa.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(
+      <ComponentInspector
+        selected={selected}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[
+          okEntry("aaa.sim", [["A", "In"], ["B", "Out"]]),
+          okEntry("child.sim", [["IN", "In"], ["OUT", "Out"], ["GND", "BiDir"]]),
+        ]}
+      />,
+    );
+
+    // Nothing is chosen, so nothing is proposed and nothing can be committed.
+    expect(screen.getByRole("combobox", { name: "Project sheet" }).textContent)
+      .toBe("Choose a Tau sheet");
+    expect(screen.queryByRole("list", { name: "Proposed pin order" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Link this sheet" })).toBeNull();
+    expect(useSchematic.getState().components[0].projectSubcircuit).toBeUndefined();
+  });
+
+  it("keeps a many-port sheet's annotation readable instead of pasting 20 names into a 168px control", async () => {
+    // VERIFY: the option/trigger label listed EVERY port name, so a 20-port
+    // block produced a 410-character string inside a max-w-[168px] trigger -
+    // which in a 900x600 window is an ellipsis with no information in it.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    const many = Array.from({ length: 20 }, (_, index) => [
+      `VERYLONGPORTNAME${index}`,
+      (index % 3 === 0 ? "In" : index % 3 === 1 ? "Out" : "BiDir") as SchematicPortDirection,
+    ] as [string, SchematicPortDirection]);
+    render(
+      <ComponentInspector
+        selected={selected}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", many)]}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByRole("combobox", { name: "Project sheet" }), { button: 0, pointerId: 5, pointerType: "mouse" });
+    const option = await screen.findByRole("option", { name: /child\.sim/ });
+    const label = option.textContent ?? "";
+    fireEvent.click(option);
+    // The count is the fact that survives truncation, so it leads; the names
+    // are a sample, not the list, and the list is the pin table below.
+    expect(label).toContain("20 ports");
+    expect(label.length).toBeLessThan(64);
+    expect(label).toMatch(/…$/);
+    // The full pinout is still available in full, one row per port.
+    expect(within(screen.getByRole("list", { name: "Proposed pin order" })).getAllByRole("listitem"))
+      .toHaveLength(20);
+  });
+
+  it("does not accuse an untouched pre-Item-14 document of changing its interface", () => {
+    // VERIFY: a link stored before this change has the historical half-split
+    // bank, so its pin SIDES disagree with the child's directions even though
+    // the child never changed a thing. The panel reported that as
+    // "child.sim changed its interface. 2 direction changes." - a sentence
+    // about a file edit that did not happen, on every existing document, which
+    // is how a drift indicator gets learned as noise and ignored.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "Child", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id], wires: [], netLabels: [], probes: [] });
+    // No directions: exactly what the importer and every pre-Item-14 save did.
+    useSchematic.getState().setProjectSubcircuitLink("x-project", {
+      sheetPath: "child.sim", model: "Child", ports: ["IN", "OUT", "GND"],
+    });
+    const linked = useSchematic.getState().components[0];
+    // The bank really is the legacy half-split, derived rather than asserted.
+    expect(linked.pinOverride).toEqual(buildSubcircuitPinOverride(
+      { x: 0, y: 0, rotation: 0, mirrored: false },
+      ["IN", "OUT", "GND"],
+    ));
+    render(
+      <ComponentInspector
+        selected={linked}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["OUT", "Out"], ["GND", "BiDir"]])]}
+      />,
+    );
+
+    const group = screen.getByRole("group", { name: "Project sheet link" });
+    expect(group.textContent).not.toContain("changed its interface");
+    // What IS true is said instead: the picture, not the contract, is old.
+    expect(within(group).getByText(/older side layout/)).toBeTruthy();
+    expect(within(group).getByText(/Nothing electrical changes/)).toBeTruthy();
+    fireEvent.click(within(group).getByRole("button", { name: "Review interface change…" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).not.toContain("changed its interface");
+    expect(within(dialog).getByRole("button", { name: "Re-lay out this block" })).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: "Adopt sheet interface" })).toBeNull();
+    // And a genuine rename on the same legacy bank is still reported as one.
+    cleanup();
+    render(
+      <ComponentInspector
+        selected={linked}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["VOUT", "Out"], ["GND", "BiDir"]])]}
+      />,
+    );
+    expect(screen.getByRole("group", { name: "Project sheet link" }).textContent)
+      .toContain("changed its interface");
+  });
+
+  it("confirms a good link in the live app, where the panel is re-rendered from the store", () => {
+    // VERIFY: every other test in this file holds ONE frozen `selected` object,
+    // so it never sees what App shows - a fresh component prop after the write.
+    // That re-render ran the reset effect and wiped the only success message the
+    // panel had, so a student's zero-typing link landed with no confirmation at
+    // all. The confirmation must be derived from the link's own verdict.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id], wires: [], netLabels: [], probes: [] });
+    const interfaces = [okEntry("child.sim", [["IN", "In"], ["OUT", "Out"], ["GND", "BiDir"]])];
+    const Host = () => {
+      const live = useSchematic((state) => state.components[0]);
+      return (
+        <ComponentInspector
+          selected={live}
+          projectFilePath="/project/root.sim"
+          sheetInterfaces={interfaces}
+        />
+      );
+    };
+    render(<Host />);
+
+    const sheet = screen.getByRole("combobox", { name: "Project sheet" });
+    fireEvent.pointerDown(sheet, { button: 0, pointerId: 5, pointerType: "mouse" });
+    fireEvent.click(screen.getByRole("option", { name: /child\.sim · 3 ports/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Link this sheet" }));
+
+    const group = screen.getByRole("group", { name: "Project sheet link" });
+    expect(within(group).getAllByRole("status").map((row) => row.textContent).join(" | "))
+      .toMatch(/3 ports match child\.sim in order/);
+    // And it is a verdict, not a toast: it is still there on the next render.
+    act(() => {
+      useSchematic.setState((state) => ({ components: state.components.map((part) => ({ ...part })) }));
+    });
+    expect(screen.getByRole("group", { name: "Project sheet link" }).textContent)
+      .toMatch(/3 ports match child\.sim in order/);
+  });
+
+  it("compiles the deck the UI-authored link promises, with the directed bank the panel drew", async () => {
+    // VERIFY / spec D1 at the parent's own seam: the inspector now writes a
+    // DIRECTED pin bank (In left, Out right, BiDir to the shorter column), which
+    // is a different picture from every pre-Item-14 document. The compiler's
+    // exact-bank check reads ids and labels only, so the emitted cards must be
+    // unaffected - and that claim is worth nothing unless a deck is actually
+    // built from what the panel wrote and read back.
+    const selected = {
+      id: "x-project", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    useProject.setState({
+      rootPath: "/project",
+      tree: [
+        { name: "root.sim", path: "/project/root.sim", kind: "file" },
+        { name: "child.sim", path: "/project/child.sim", kind: "file" },
+      ],
+    });
+    useSchematic.setState({
+      components: [
+        { id: "v1", kind: "vsource", x: -160, y: 0, rotation: 0, value: "10", label: "V1" },
+        selected,
+      ],
+      selectedId: selected.id,
+      selectedIds: [selected.id],
+      wires: [],
+      netLabels: [],
+      probes: [],
+      directives: [],
+    });
+    render(
+      <ComponentInspector
+        selected={selected}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", [["VIN", "In"], ["VOUT", "Out"], ["GND", "BiDir"]])]}
+      />,
+    );
+    const sheet = screen.getByRole("combobox", { name: "Project sheet" });
+    fireEvent.pointerDown(sheet, { button: 0, pointerId: 5, pointerType: "mouse" });
+    fireEvent.click(await screen.findByRole("option", { name: /child\.sim/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Link this sheet" }));
+
+    const instance = useSchematic.getState().components
+      .find((part) => part.id === "x-project")!;
+    const bank = instance.pinOverride!;
+    // The bank really is the directed one, not the historical half-split.
+    expect(bank).toEqual(buildSubcircuitPinOverride(
+      { x: 0, y: 0, rotation: 0, mirrored: false },
+      ["VIN", "VOUT", "GND"],
+      ["In", "Out", "BiDir"],
+    ));
+    expect(bank).not.toEqual(buildSubcircuitPinOverride(
+      { x: 0, y: 0, rotation: 0, mirrored: false },
+      ["VIN", "VOUT", "GND"],
+    ));
+
+    // Every terminal is named on the parent's drawing, at the coordinate the
+    // panel put it - read out of the bank, not retyped.
+    const netLabelAt = (pin: { id: string; label: string; x: number; y: number }) => ({
+      id: `n-${pin.id}`, x: pin.x, y: pin.y, text: pin.label,
+    });
+    const { buildProjectHierarchyDeck } = await import("../schematic/projectHierarchy");
+    const { deck, blocks } = buildProjectHierarchyDeck({
+      rootPath: "root.sim",
+      root: {
+        components: useSchematic.getState().components,
+        wires: [],
+        netLabels: [
+          ...bank.map(netLabelAt),
+          { id: "n-vsrc-hi", x: -160, y: -32, text: "VIN" },
+          { id: "n-vsrc-lo", x: -160, y: 32, text: "GND" },
+        ],
+        directives: [],
+      },
+      sheets: [{
+        path: "child.sim",
+        document: {
+          components: [
+            { id: "r1", kind: "resistor", x: 32, y: 0, rotation: 0, value: "1k", label: "R1" },
+            { id: "c1", kind: "capacitor", x: 96, y: 0, rotation: 0, value: "100n", label: "C1" },
+          ],
+          wires: [],
+          netLabels: [
+            { id: "in", x: 0, y: 0, text: "VIN", port: "In" as const },
+            { id: "out", x: 64, y: 0, text: "VOUT", port: "Out" as const },
+            { id: "gnd", x: 128, y: 0, text: "GND", port: "BiDir" as const },
+          ],
+          projectPorts: [
+            { name: "VIN", labelId: "in", direction: "In" as const },
+            { name: "VOUT", labelId: "out", direction: "Out" as const },
+            { name: "GND", labelId: "gnd", direction: "BiDir" as const },
+          ],
+          directives: [],
+        },
+      }],
+      analysis: { kind: "op" },
+    });
+
+    // The contract's ORDER, not the drawing's sides, is what the header and the
+    // X card carry - which is the whole point of storing the snapshot.
+    expect(blocks[0].text.split("\n")[0]).toBe(".subckt Child VIN VOUT GND");
+    const blockLines = blocks[0].text.split("\n");
+    expect(blockLines[blockLines.length - 1]).toBe(".ends Child");
+    const xCard = deck.netlist.split("\n").find((line) => /^X1\s/.test(line))!;
+    const xFields = xCard.split(/\s+/);
+    expect(xFields[xFields.length - 1]).toBe("Child");
+    // Three nodes, in the contract's order, taken from the parent's own nets.
+    expect(xCard.split(/\s+/).slice(1, 4)).toEqual(["vin", "vout", "0"]);
+    expect(deck.unresolvedSubckts).toEqual([]);
   });
 
   it("reports linked-sheet presence truthfully and suppresses contradictory attachment recovery", () => {
@@ -670,7 +1362,10 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     render(<ComponentInspector selected={selected} projectFilePath="/project/root.sim" onAttachModelFile={openLibraries} />);
 
     const linkGroup = screen.getByRole("group", { name: "Project sheet link" });
-    expect(within(linkGroup).getByRole("status").textContent).toMatch(/child\.sim is present/i);
+    // Two honest status rows now: presence, and "not checked yet" for an index
+    // App has not supplied here. Neither may be dropped for the other's sake.
+    expect(within(linkGroup).getAllByRole("status").map((row) => row.textContent).join(" | "))
+      .toMatch(/child\.sim is present/i);
     expect(screen.getByText("Linked project model")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Attach .lib/.sub file" })).toBeNull();
     expect(screen.queryByText(/Needs definition/)).toBeNull();
@@ -1956,3 +2651,4 @@ describe("ComponentInspector - parts with no parameters", () => {
     if (raw) expect(raw.value).toBe("1:1");
   });
 });
+

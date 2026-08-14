@@ -11,6 +11,13 @@ import "./styles/editorToolbarIcons.css";
 import "./styles/pdf4Chrome.css";
 import "./styles/diagnosticsDock.css";
 import "./styles/resultsDrawerResize.css";
+import {
+  canonicalProjectSheetPath,
+  projectRelativeSheetPath as relativeSheetPath,
+  projectSheetInterfaceDrift,
+  type ProjectSheetInterfaceEntry,
+} from "./schematic/projectSubcircuit";
+import { subcircuitBankSides, subcircuitPortSlots } from "./schematic/subcircuitGeometry";
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
 import { ComponentMeasurementsPanel } from "./components/ComponentMeasurementsPanel";
@@ -160,6 +167,7 @@ import {
   blankAscText,
   isAscFile,
   isSimFile,
+  joinPath,
   remapMovedProjectPath,
   serializeSchematicFile,
   type ProjectNode,
@@ -196,7 +204,7 @@ import { formatSeconds, type LiveRunStatus } from "./simulation/liveRun";
 import { buildSpiceDeck, unresolvedSubcktMessage } from "./engine/spiceNetlist";
 import type { NativeDeckBuilder } from "./engine/nativeSpice";
 import { isActuable, isDraggableWiper } from "./schematic/actuation";
-import type { SchematicComponent } from "./schematic/types";
+import type { SchematicComponent, SchematicPortDirection } from "./schematic/types";
 
 /**
  * Settings is a whole second surface — seven pages, a provider catalog, usage
@@ -967,6 +975,149 @@ function App() {
     }
     return documents;
   }, [activeId, currentDocument, tabs]);
+
+  /*
+   * THE SHEET-INTERFACE INDEX - what every sibling Tau sheet declares as its
+   * public interface right now.
+   *
+   * This is the thing that turns "retype the child's ports in the right order"
+   * into "choose a sheet". Three properties are load-bearing:
+   *
+   * 1. ADVISORY ONLY. `buildProjectHierarchyDeck` stays the sole judge of a
+   *    link. This index never authorises a run; it only stops the UI asking the
+   *    reader for something the project already knows. If it is wrong, a run
+   *    still refuses.
+   * 2. AN OPEN TAB WINS over the same path on disk, because an unsaved
+   *    interface edit is the copy the reader is reasoning about. Which one was
+   *    read is reported as `comparedSource` so a drift review can say so.
+   * 3. EMPTY MEANS "NOT CHECKED", never "agrees". The drift classifier has a
+   *    distinct `not-checked` arm for exactly this, and conflating the two
+   *    would let a stale link look healthy.
+   *
+   * Held in state and filled by an effect rather than derived in a memo,
+   * because reading a sibling sheet is asynchronous - `readSim` crosses the
+   * Tauri boundary - and a memo cannot await.
+   */
+  const [sheetInterfaceIndex, setSheetInterfaceIndex] = useState<readonly ProjectSheetInterfaceEntry[]>([]);
+
+  useEffect(() => {
+    if (!projectRootPath) { setSheetInterfaceIndex([]); return; }
+    let cancelled = false;
+    const readSheet = useProject.getState().readSim;
+
+    const entryFor = (
+      absolutePath: string,
+      doc: SchematicDocument | null,
+      unreadable?: string,
+    ): ProjectSheetInterfaceEntry | null => {
+      const relative = relativeSheetPath(projectRootPath, absolutePath);
+      const sheetPath = relative ? canonicalProjectSheetPath(relative) : null;
+      if (!sheetPath) return null;
+      const fileName = basename(absolutePath);
+      if (unreadable) return { sheetPath, fileName, status: "unreadable", ports: [], reason: unreadable };
+      const ports = doc?.projectPorts ?? [];
+      return ports.length > 0
+        ? { sheetPath, fileName, status: "ok", ports }
+        : { sheetPath, fileName, status: "no-interface", ports: [] };
+    };
+
+    void (async () => {
+      const byPath = new Map<string, ProjectSheetInterfaceEntry>();
+      // Open tabs first; a later disk read must not overwrite them.
+      for (const tab of tabsRef.current) {
+        if (!tab.filePath || !isSimFile(tab.filePath)) continue;
+        const doc = tab.id === activeId ? currentDocument : tab.doc ?? null;
+        const entry = entryFor(tab.filePath, doc);
+        if (entry) byPath.set(entry.sheetPath, entry);
+      }
+      const files: string[] = [];
+      const walk = (nodes: readonly ProjectNode[]) => {
+        for (const node of nodes) {
+          if (node.kind === "dir") { walk(node.children ?? []); continue; }
+          if (isSimFile(node.name)) files.push(node.path);
+        }
+      };
+      walk(projectTree);
+      for (const path of files) {
+        const relative = relativeSheetPath(projectRootPath, path);
+        const sheetPath = relative ? canonicalProjectSheetPath(relative) : null;
+        if (!sheetPath || byPath.has(sheetPath)) continue;
+        try {
+          const raw = await readSheet(path);
+          if (cancelled) return;
+          const entry = entryFor(path, validateSchematicDocument(JSON.parse(raw)));
+          if (entry) byPath.set(entry.sheetPath, entry);
+        } catch (error) {
+          if (cancelled) return;
+          const entry = entryFor(path, null, error instanceof Error ? error.message : "This sheet could not be read.");
+          if (entry) byPath.set(entry.sheetPath, entry);
+        }
+      }
+      if (!cancelled) setSheetInterfaceIndex([...byPath.values()]);
+    })();
+
+    return () => { cancelled = true; };
+  }, [projectRootPath, projectTree, activeId, currentDocument]);
+
+  /*
+   * Drift per linked instance, derived from that index.
+   *
+   * Deliberately NOT a repaint. A drifted instance keeps every pin and every
+   * wire exactly where its stored contract put them, because the stored
+   * contract is precisely what will be netlisted; moving the picture to match a
+   * child the netlist does not yet use would be the one lie this feature cannot
+   * afford. The annotation is an argument addressed to the reader, and the
+   * resync action is the only thing allowed to move geometry.
+   *
+   * `no-interface` is folded into `drifted` rather than given its own lamp: from
+   * the instance's point of view a child that has stopped declaring any ports is
+   * a contract that no longer matches, and the sentence says which.
+   */
+  const subcircuitDrift = useMemo(() => {
+    const map = new Map<string, { kind: "drifted" | "missing-sheet" | "sheet-unreadable"; sentence: string; pins?: readonly string[] }>();
+    for (const component of components) {
+      const link = component.projectSubcircuit;
+      if (!link) continue;
+      const entry = sheetInterfaceIndex.find((candidate) => candidate.sheetPath === link.sheetPath) ?? null;
+      const current = subcircuitBankSides(component).map((side) => side ?? "left");
+      const expected = entry?.status === "ok"
+        ? subcircuitPortSlots(entry.ports.map((port) => port.name), entry.ports.map((port) => port.direction))
+            .map((slot) => slot.side)
+        : [];
+      const drift = projectSheetInterfaceDrift(link.ports, entry, { current, expected });
+      switch (drift.kind) {
+        case "in-sync":
+        case "not-checked":
+          continue;
+        case "missing-sheet":
+          map.set(component.id, { kind: "missing-sheet", sentence: `${link.sheetPath} is not in this project any more.` });
+          continue;
+        case "sheet-unreadable":
+          map.set(component.id, { kind: "sheet-unreadable", sentence: drift.reason });
+          continue;
+        case "no-interface":
+          map.set(component.id, {
+            kind: "drifted",
+            sentence: `${link.sheetPath} no longer declares any ports, so this block's contract matches nothing.`,
+          });
+          continue;
+        case "drifted":
+          map.set(component.id, {
+            kind: "drifted",
+            sentence: drift.summary,
+            pins: drift.rows.map((row) => `p${row.position}`),
+          });
+          continue;
+      }
+    }
+    return map;
+  }, [components, sheetInterfaceIndex]);
+
+
+
+
+
+
   const [projectHierarchyContext, setProjectHierarchyContext] = useState<{
     rootPath: string;
     sheets: ProjectHierarchySheet[];
@@ -1102,6 +1253,60 @@ function App() {
     toast(message, { duration: 2600 });
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
   }, []);
+
+  /*
+   * "This net is an input/output of this sheet", as ONE undo step.
+   *
+   * The net's name and the ordered port that rides it are written together by
+   * the store action, so the two can never disagree - which is the whole reason
+   * the draft commits through here instead of `upsertNetLabel` when a direction
+   * is chosen.
+   */
+  const commitNetLabelPort = useCallback((
+    x: number,
+    y: number,
+    text: string,
+    direction: SchematicPortDirection | null,
+  ): { ok: boolean; error?: string } => {
+    const result = useSchematic.getState().upsertNetLabelPort(x, y, text, direction);
+    // The result is RETURNED, not swallowed: the draft keeps itself open and
+    // shows the reason inline, which is the difference between "that name is
+    // taken" landing where the reader is typing and landing in a toast they
+    // have already looked away from. A notice as well would be two voices.
+    return result;
+  }, []);
+
+  /** An `.asc` sheet cannot carry a project link at all - say so early. */
+  const sheetInterfaceDisabledReason = useMemo(() => {
+    const path = activeFilePath;
+    if (!path) return "Save this sheet into the project before giving it an interface.";
+    if (isAscFile(path)) {
+      return "An .asc sheet cannot define a reusable interface. Save it as a Tau .sim sheet first.";
+    }
+    return null;
+  }, [activeFilePath]);
+
+  /** Which sheets instantiate the sheet in front of us, for the child's dialog. */
+  const sheetUsedBy = useMemo(() => {
+    if (!projectRootPath || !activeFilePath) return [];
+    const relative = relativeSheetPath(projectRootPath, activeFilePath);
+    const me = relative ? canonicalProjectSheetPath(relative) : null;
+    if (!me) return [];
+    const rows: { sheetPath: string; reference: string }[] = [];
+    for (const tab of tabsRef.current) {
+      const doc = tab.id === activeId ? currentDocument : tab.doc;
+      if (!doc || !tab.filePath) continue;
+      const tabRelative = relativeSheetPath(projectRootPath, tab.filePath);
+      const from = tabRelative ? canonicalProjectSheetPath(tabRelative) : null;
+      if (!from || from === me) continue;
+      for (const component of doc.components) {
+        if (component.projectSubcircuit?.sheetPath === me) {
+          rows.push({ sheetPath: from, reference: component.label || component.id });
+        }
+      }
+    }
+    return rows;
+  }, [projectRootPath, activeFilePath, activeId, currentDocument]);
 
   // The default shell never exposes a model-file browser. An unresolved
   // selected part still has one intentional, file-driven recovery route: the
@@ -1657,6 +1862,20 @@ function App() {
     // works after the reader has panned away.
     setRevealTarget((prev) => ({ id: componentId, signal: prev.signal + 1 }));
   }, [select]);
+
+  /*
+   * The drift lamp on the drawing selects the block and brings it into view.
+   *
+   * Deliberately NOT a second dialog: the review lives in the inspector
+   * (ProjectInterfaceReviewDialog, rendered from ComponentInspector), which is
+   * the surface that already owns the contract and the resync action. Opening a
+   * competing copy from here would give the same decision two homes and two
+   * pieces of state to disagree about. Clicking the lamp therefore does what
+   * clicking the block does, and the reader continues in one place.
+   */
+  const reviewSubcircuitDrift = useCallback((componentId: string) => {
+    revealDiagnosticComponent(componentId);
+  }, [revealDiagnosticComponent]);
   const focusDiagnostic = useCallback((target: DiagnosticFocusTarget) => {
     if (target.kind === "component") {
       revealDiagnosticComponent(target.componentId);
@@ -2720,6 +2939,27 @@ function App() {
       showNotice(userFacingErrorMessage(error, "Could not open .sim file."));
     }
   }, [openDocument, showNotice, setImportWarningsByPath]);
+
+  /** Open a child sheet from a project-relative link path. */
+  const openLinkedSheetPath = useCallback((sheetPath: string) => {
+    if (!projectRootPath) return;
+    const target = joinPath(projectRootPath, sheetPath);
+    const already = tabsRef.current.find((tab) => tab.filePath === target);
+    if (already) { setActiveId(already.id); return; }
+    void (async () => {
+      try {
+        const json = await useProject.getState().readSim(target);
+        openSimFromProject(target, basename(target), json);
+      } catch (error) {
+        showNotice(error instanceof Error ? error.message : `Could not open ${sheetPath}.`);
+      }
+    })();
+  }, [projectRootPath, openSimFromProject, showNotice]);
+
+  const openLinkedSheetForComponent = useCallback((componentId: string) => {
+    const link = components.find((candidate) => candidate.id === componentId)?.projectSubcircuit;
+    if (link) openLinkedSheetPath(link.sheetPath);
+  }, [components, openLinkedSheetPath]);
 
   const openAscFromProject = useCallback(async (
     path: string,
@@ -4115,6 +4355,16 @@ function App() {
                 revealSignal={revealTarget.signal}
                 revealNetPoint={revealNetTarget.point}
                 revealNetSignal={revealNetTarget.signal}
+                /* Item 14: without these the feature is invisible in the app -
+                 * the drawing cannot say a net is a port, a block cannot say its
+                 * contract drifted, and there is no way into the sheet a block
+                 * stands for. Editor instance only: the simulator's Canvas is
+                 * read-only, so authoring props would be a lie there. */
+                subcircuitDrift={subcircuitDrift}
+                onReviewDrift={reviewSubcircuitDrift}
+                onOpenLinkedSheet={openLinkedSheetForComponent}
+                onCommitNetLabelPort={commitNetLabelPort}
+                sheetInterfaceDisabledReason={sheetInterfaceDisabledReason}
                 onSelectionRect={setSelectionRect}
                 onSelectedComponentDragChange={setSelectedComponentDragActive}
               />
@@ -4428,6 +4678,12 @@ function App() {
               ? <WireInspector wire={inspectedWire} />
               : (
                 <ComponentInspector
+                  /* The index is what removes the retyping: choose a sheet and
+                   * its declared pinout arrives. Empty means "not checked yet",
+                   * never "agrees". */
+                  sheetInterfaces={sheetInterfaceIndex}
+                  comparedSource="open-tab"
+                  onOpenSheet={openLinkedSheetPath}
                   selected={inspectedParts}
                   manualModelControls={false}
                   onAttachModelFile={attachModelFile}
@@ -4639,7 +4895,12 @@ function App() {
           <SimulationSetupDialog open={simulationSetupOpen} onOpenChange={setSimulationSetupOpen} />
         )}
         {projectSheetPortsMounted && (
-          <ProjectSheetPortsDialog open={projectSheetPortsOpen} onOpenChange={setProjectSheetPortsOpen} />
+          <ProjectSheetPortsDialog
+            open={projectSheetPortsOpen}
+            onOpenChange={setProjectSheetPortsOpen}
+            usedBy={sheetUsedBy}
+            interfaceDisabledReason={sheetInterfaceDisabledReason ?? undefined}
+          />
         )}
       </Suspense>
       <LocalAiSetupDialog onReady={() => showNotice("Local AI is ready on this Mac.")} />

@@ -20,7 +20,7 @@ import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { componentDisplayName } from "../schematic/componentNames";
 import { engineeringSpelling } from "../schematic/engineering";
 import { ComponentSymbol } from "../schematic/symbols";
-import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import type { SchematicComponent, SchematicPortDirection, SchematicWire } from "../schematic/types";
 import { isPhotodiodePhotocurrentValue, isStaticSwitchValue } from "../schematic/kindGroups";
 import {
   decodeParams,
@@ -37,7 +37,15 @@ import {
   toDisplayParamValue,
   type ParamField,
 } from "../schematic/params";
-import { buildSubcircuitPinOverride, localSubcircuitPins } from "../schematic/subcircuitGeometry";
+import { buildSubcircuitPinOverride, subcircuitBankSides, subcircuitPortSlots } from "../schematic/subcircuitGeometry";
+import {
+  asciiFold,
+  defaultProjectModelName,
+  projectSheetInterfaceDrift,
+  type PortSide,
+  type ProjectInterfaceDrift,
+  type ProjectSheetInterfaceEntry,
+} from "../schematic/projectSubcircuit";
 import { EngineeringInput } from "./EngineeringInput";
 import { BehavioralSourceEditor } from "./BehavioralSourceEditor";
 import { IndependentSourceEditor } from "./IndependentSourceEditor";
@@ -46,7 +54,9 @@ import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import { inspectOpampModel, opampIdentity } from "../engine/opampModel";
 import { componentModelOptions, isModelComponentKind } from "../engine/componentModelCatalog";
 import { hasLtspiceProvenance, idealJunctionModel, type IdealJunctionModel } from "../engine/idealModels";
-import { definedModelNames } from "../engine/modelDirectives";
+import { definedModelNames, definedSubcktNames } from "../engine/modelDirectives";
+import { bundledSubcircuitBlock, sanitizeSubcktName } from "../engine/bundledSubcircuits";
+import { parseUserModelLibraries } from "../engine/userModelLibrary";
 import {
   encodeSubcircuitInstanceValue,
   parseSubcircuitInstanceValue,
@@ -61,6 +71,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -1448,12 +1466,16 @@ function junctionModelSummary(
 function subcircuitPortSides(
   component: SchematicComponent,
   ports: readonly string[],
-): readonly (string | null)[] {
-  const pins = component.pinOverride?.length
-    ? localSubcircuitPins(component)
-    : buildSubcircuitPinOverride({ x: 0, y: 0, rotation: 0, mirrored: false }, ports);
-  if (pins.length !== ports.length) return ports.map(() => null);
-  return pins.map((pin) => (pin.x < 0 ? "left" : pin.x > 0 ? "right" : null));
+  directions?: readonly SchematicPortDirection[],
+): readonly PortSide[] {
+  // A placed instance reports where its terminals REALLY are, read back out of
+  // the persisted bank, because that geometry is electrically live. An instance
+  // with no bank yet reports where the one slot rule would put them.
+  const sides = component.pinOverride?.length
+    ? subcircuitBankSides(component)
+    : subcircuitPortSlots(ports, directions).map((slot) => slot.side);
+  if (sides.length !== ports.length) return ports.map(() => null);
+  return sides;
 }
 
 /**
@@ -1852,33 +1874,281 @@ function componentHeadline(component: SchematicComponent): string {
   }
 }
 
+/** Direction as the drawing and the netlist both say it, in one short word. */
+function portDirectionWord(direction: SchematicPortDirection): string {
+  return direction === "BiDir" ? "bidir" : direction.toLowerCase();
+}
+
 /**
- * Minimal project hierarchy authoring surface. The compiler still owns the
- * electrical proof: this control records an explicit sibling sheet and an
- * ordered port contract, while Run refuses until the child declares the same
- * public ports. It never guesses from symbol pins or screen position.
+ * Every model name a generated `.subckt` may NOT take, folded the way the
+ * compiler folds it.
+ *
+ * This is the pre-check that keeps a student out of a Run refusal about a name
+ * they never typed: `buildProjectHierarchyDeck` refuses a project model that
+ * collides with an inline `.subckt`, an attached library, a Tau-owned bundled
+ * block, an ordinary root X instance, or a second sheet already linked under
+ * the same name. Those are exactly the sets read here - the same helpers, so
+ * this can only ever be as strict as Run, never more permissive in a way that
+ * matters. It is ADVISORY: Run remains the judge and its strings are unchanged.
+ */
+function reservedProjectModelKeys(
+  components: readonly SchematicComponent[],
+  directives: readonly string[],
+  libraryTexts: readonly string[],
+  selfId: string,
+): ReadonlySet<string> {
+  const reserved = new Set<string>();
+  for (const name of definedSubcktNames(directives)) {
+    reserved.add(asciiFold(name));
+    reserved.add(asciiFold(sanitizeSubcktName(name)));
+  }
+  for (const name of parseUserModelLibraries(libraryTexts).subckts.keys()) {
+    reserved.add(asciiFold(name));
+  }
+  for (const component of components) {
+    if (component.kind !== "subckt") continue;
+    if (component.projectSubcircuit) {
+      // Another instance's model name is only reserved when it names a
+      // DIFFERENT sheet; two instances of the same sheet share one model.
+      if (component.id !== selfId) reserved.add(asciiFold(component.projectSubcircuit.model));
+      continue;
+    }
+    const raw = component.value.trim().split(/\s+/)[0] ?? "";
+    if (raw) reserved.add(asciiFold(sanitizeSubcktName(raw)));
+  }
+  return reserved;
+}
+
+/** First free spelling of a derived model name, or null when there is none. */
+function availableProjectModelName(base: string | null, reserved: ReadonlySet<string>): string | null {
+  if (!base) return null;
+  const free = (candidate: string) =>
+    !reserved.has(asciiFold(candidate)) && bundledSubcircuitBlock(asciiFold(candidate)) === null;
+  if (free(base)) return base;
+  for (let suffix = 2; suffix <= 99; suffix += 1) {
+    const candidate = `${base}${suffix}`;
+    if (free(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** The index's entry for a path, or null when the index has not resolved it. */
+function sheetInterfaceFor(
+  entries: readonly ProjectSheetInterfaceEntry[],
+  sheetPath: string | null,
+): ProjectSheetInterfaceEntry | null {
+  if (!sheetPath) return null;
+  const key = asciiFold(sheetPath);
+  return entries.find((entry) => asciiFold(entry.sheetPath) === key) ?? null;
+}
+
+/**
+ * What a sheet option says about itself before you pick it. The port names are
+ * on the option because "3 ports" answers a different question than "IN, OUT,
+ * GND": the first tells you the block's shape, the second tells you it is the
+ * block you meant.
+ *
+ * The names are a SAMPLE, not the list. A 20-port sheet made this string 400+
+ * characters inside a 168px trigger, which is an ellipsis carrying no
+ * information; the count leads because the count is what survives truncation,
+ * and the full ordered pinout is the table below, which is where a reader can
+ * actually read it.
+ */
+const SHEET_OPTION_NAME_BUDGET = 28;
+function sheetOptionAnnotation(entry: ProjectSheetInterfaceEntry | null): string {
+  if (!entry) return "not checked yet";
+  switch (entry.status) {
+    case "ok": {
+      const shown: string[] = [];
+      let used = 0;
+      for (const port of entry.ports) {
+        // Always show at least one name, then only what fits the budget.
+        if (shown.length > 0 && used + port.name.length + 2 > SHEET_OPTION_NAME_BUDGET) break;
+        used += port.name.length + (shown.length > 0 ? 2 : 0);
+        shown.push(port.name);
+      }
+      const names = shown.length < entry.ports.length
+        ? `${shown.join(", ")}…`
+        : shown.join(", ");
+      return `${entry.ports.length} ${entry.ports.length === 1 ? "port" : "ports"}: ${names}`;
+    }
+    case "no-interface":
+      return "no interface yet";
+    case "unreadable":
+      return "unreadable";
+    case "missing":
+      return "missing from this project";
+  }
+}
+
+/** One diff row's two columns plus its generated consequence. */
+function ProjectInterfaceDiffTable({
+  drift,
+  fileName,
+}: {
+  drift: Extract<ProjectInterfaceDrift, { kind: "drifted" }>;
+  fileName: string;
+}) {
+  return (
+    <table className="sheet-drift-table">
+      <thead>
+        <tr>
+          <th scope="col">#</th>
+          <th scope="col">This block’s contract</th>
+          <th scope="col">{fileName} now</th>
+          <th scope="col">Change</th>
+        </tr>
+      </thead>
+      <tbody>
+        {drift.rows.map((row) => (
+          <tr key={row.position} className={`sheet-drift-row is-${row.change}`}>
+            <td className="mono-num">{row.position}</td>
+            <td className="mono-num">{row.was ? row.was.name : "—"}</td>
+            <td className="mono-num">
+              {row.now ? `${row.now.name} · ${portDirectionWord(row.now.direction)}` : "—"}
+            </td>
+            <td>{row.change}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
+ * The review act. Nothing is reconciled without it, and its DEFAULT is to
+ * change nothing: a stale contract that still netlists what it says is a
+ * legitimate state, and Run will refuse it in its own words if the mismatch is
+ * real. Adopting is the deliberate, single, undoable alternative.
+ */
+function ProjectInterfaceReviewDialog({
+  open,
+  onOpenChange,
+  fileName,
+  drift,
+  summary,
+  title,
+  comparedSource,
+  onAdopt,
+}: {
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+  fileName: string;
+  drift: Extract<ProjectInterfaceDrift, { kind: "drifted" }>;
+  /** The sentence the panel decided on, so the dialog cannot contradict it. */
+  summary?: string;
+  /** Overridden when the difference is this block's old layout, not a file edit. */
+  title?: string;
+  comparedSource?: "open-tab" | "disk";
+  onAdopt: () => void;
+}) {
+  // A badge that cannot say WHICH copy of the child it read is a badge that
+  // gets ignored the first time it disagrees with an unsaved tab.
+  const sourceSentence = comparedSource === "open-tab"
+    ? `Compared against ${fileName} as it is open now, including unsaved edits.`
+    : comparedSource === "disk"
+      ? `Compared against ${fileName} as saved on disk.`
+      : `Compared against the copy of ${fileName} in this project’s index.`;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sheet-drift-dialog">
+        <DialogHeader>
+          <DialogTitle>{title ?? "Sheet interface changed"}</DialogTitle>
+          <DialogDescription>{summary ?? drift.summary}</DialogDescription>
+        </DialogHeader>
+        <ProjectInterfaceDiffTable drift={drift} fileName={fileName} />
+        <div className="sheet-drift-consequence">
+          {drift.rows
+            .filter((row) => row.change !== "same")
+            .map((row) => (
+              <p key={row.position}>{row.consequence}</p>
+            ))}
+        </div>
+        <p className="sheet-drift-source">{sourceSentence}</p>
+        <DialogFooter>
+          {/* Default = keep. The parent's file is not degraded by another
+              file's edit unless someone says so. */}
+          <Button type="button" size="sm" autoFocus onClick={() => onOpenChange(false)}>
+            Keep current contract
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={onAdopt}>
+            {drift.electricallyInert ? "Re-lay out this block" : "Adopt sheet interface"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * The parent half of "a sheet is a block" (PDF5 item 14).
+ *
+ * What changed and why: this used to make you TYPE the interface into a
+ * free-text "Ordered project ports" box, read off the child sheet from memory,
+ * in the right order, with Run refusing order-sensitively afterwards. That is
+ * PDF5 reason 1. Now the pinout ARRIVES from the chosen sheet - names, order
+ * and directions - and linking is one button and zero keystrokes.
+ *
+ * Three things are deliberate:
+ *
+ *  - The free-text field is DEMOTED, not deleted. An experienced EE genuinely
+ *    wants a terminal order the child did not declare, or a contract for a
+ *    sheet that is not written yet, and a difference on purpose is framed as
+ *    "your contract, deliberately different" rather than as an error.
+ *  - The index this panel reads is ADVISORY. `buildProjectHierarchyDeck` is
+ *    still the only judge; every refusal string it throws is unchanged. Drift
+ *    is an earlier, friendlier voice for the same fact, never the authority.
+ *  - Nothing is reconciled automatically. A child sheet that vanished, or
+ *    changed, leaves this instance's stored contract AND its pin bank exactly
+ *    as they are, because both are electrically live and a parent's netlist must
+ *    never change as a side effect of another file's edit.
  */
 function ProjectSubcircuitLinkEditor({
   component,
   choices,
+  sheetInterfaces = [],
+  projectFilePath = null,
+  comparedSource,
+  onOpenSheet,
+  onSaveSheetAsSim,
 }: {
   component: SchematicComponent;
   choices: readonly ProjectSheetChoice[];
+  /** Advisory authoring index, supplied by App; empty means "not checked". */
+  sheetInterfaces?: readonly ProjectSheetInterfaceEntry[];
+  /** Current tab path: an `.asc` sheet cannot hold a project link at all. */
+  projectFilePath?: string | null;
+  /** Which copy of a child the index read, so the drift review can say so. */
+  comparedSource?: "open-tab" | "disk";
+  onOpenSheet?: (sheetPath: string) => void;
+  onSaveSheetAsSim?: () => void;
 }) {
   const setProjectSubcircuitLink = useSchematic((s) => s.setProjectSubcircuitLink);
+  const resyncProjectSubcircuit = useSchematic((s) => s.resyncProjectSubcircuit);
+  const components = useSchematic((s) => s.components);
+  const directives = useSchematic((s) => s.directives);
+  const modelLibraries = useSchematic((s) => s.userModelLibraries);
   const link = component.projectSubcircuit;
-  const [sheetPath, setSheetPath] = useState(link?.sheetPath ?? choices[0]?.path ?? "");
-  const [model, setModel] = useState(link?.model ?? (component.label.trim() || "X1"));
-  const [ports, setPorts] = useState(link?.ports.join(", ") ?? "");
+
+  // NOT `choices[0]`. Pre-selecting the alphabetically first sibling meant the
+  // panel's one prominent button linked this block to a file the reader never
+  // chose - the same sin as auto-picking a net, on the one decision here that
+  // rewrites the netlist. An unlinked block starts with nothing selected.
+  const [sheetPath, setSheetPath] = useState(link?.sheetPath ?? "");
+  const [manualPorts, setManualPorts] = useState(link?.ports.join(", ") ?? "");
+  const [manualModel, setManualModel] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setSheetPath(link?.sheetPath ?? choices[0]?.path ?? "");
-    setModel(link?.model ?? (component.label.trim() || "X1"));
-    setPorts(link?.ports.join(", ") ?? "");
+    setSheetPath(link?.sheetPath ?? "");
+    setManualPorts(link?.ports.join(", ") ?? "");
+    setManualModel(null);
     setError(null);
     setSaved(false);
+    setReviewOpen(false);
   }, [choices, component.id, component.label, link?.model, link?.ports, link?.sheetPath]);
 
   const availableChoices = link && !choices.some((choice) => choice.path === link.sheetPath)
@@ -1886,9 +2156,81 @@ function ProjectSubcircuitLinkEditor({
     : choices;
   const linkedSheetPresent = Boolean(link && choices.some((choice) => choice.path === link.sheetPath));
 
-  const apply = () => {
-    const orderedPorts = ports.split(/[\s,]+/).map((port) => port.trim()).filter(Boolean);
-    const result = setProjectSubcircuitLink(component.id, { sheetPath, model, ports: orderedPorts });
+  const selectedEntry = sheetInterfaceFor(sheetInterfaces, sheetPath || null);
+  const selectedFileName = selectedEntry?.fileName
+    ?? availableChoices.find((choice) => choice.path === sheetPath)?.label
+    ?? basename(sheetPath || "");
+  const proposedPorts = selectedEntry?.status === "ok" ? selectedEntry.ports : [];
+  const proposedNames = proposedPorts.map((port) => port.name);
+  const proposedDirections = proposedPorts.map((port) => port.direction);
+  const proposedSides = subcircuitPortSlots(proposedNames, proposedDirections).map((slot) => slot.side);
+
+  // ZERO TYPING: the model name is derived from the file stem and pre-checked
+  // against the collision sets the compiler checks, so the offered default is
+  // one Run will accept. `null` means the stem cannot make a SPICE-safe name -
+  // said out loud rather than sanitized behind the user's back.
+  const reserved = useMemo(
+    () => reservedProjectModelKeys(components, directives, modelLibraries.map((library) => library.text), component.id),
+    [component.id, components, directives, modelLibraries],
+  );
+  const derivedModel = useMemo(
+    () => availableProjectModelName(defaultProjectModelName(selectedFileName), reserved),
+    [reserved, selectedFileName],
+  );
+  const sheetIsLinked = link?.sheetPath === sheetPath;
+  const modelValue = manualModel ?? (sheetIsLinked ? link!.model : derivedModel ?? "");
+
+  const linkedEntry = sheetInterfaceFor(sheetInterfaces, link?.sheetPath ?? null);
+  const linkedFileName = linkedEntry?.fileName
+    ?? (link ? basename(link.sheetPath) : "");
+  const linkedDirections = linkedEntry?.status === "ok"
+    ? linkedEntry.ports.map((port) => port.direction)
+    : [];
+  const drift: ProjectInterfaceDrift | null = link
+    ? projectSheetInterfaceDrift(link.ports, linkedEntry, {
+        // current = where this instance's terminals REALLY are; expected = where
+        // the child's live directions would put them. Both from the one slot
+        // rule in subcircuitGeometry.
+        current: subcircuitBankSides(component),
+        expected: linkedEntry?.status === "ok"
+          ? subcircuitPortSlots(linkedEntry.ports.map((port) => port.name), linkedDirections).map((slot) => slot.side)
+          : [],
+      })
+    : null;
+  const drifted = drift?.kind === "drifted" ? drift : null;
+
+  // A link stored before Item 14 has the historical half-split bank, so its pin
+  // SIDES disagree with the child's directions even though the child never
+  // changed. Saying "child.sim changed its interface" there is a statement about
+  // a file edit that did not happen - on every existing document - and a lamp
+  // that cries wolf on open is a lamp nobody reads. The evidence is exact: the
+  // bank IS the undirected layout for this contract, so the picture is old, not
+  // the contract. Only the wording changes; the offer (re-lay out) is the same,
+  // and a real rename or reorder on the same bank still reads as drift because
+  // those rows are not direction-only.
+  const laidOutByLegacyRule = useMemo(() => {
+    const bank = component.pinOverride;
+    if (!link || !bank || bank.length !== link.ports.length) return false;
+    const legacy = buildSubcircuitPinOverride(component, link.ports);
+    return legacy.every((pin, index) => (
+      pin.id === bank[index]?.id && pin.x === bank[index]?.x && pin.y === bank[index]?.y
+    ));
+  }, [component, link]);
+  const staleLayoutOnly = Boolean(drifted?.electricallyInert && laidOutByLegacyRule);
+  const driftSentence = staleLayoutOnly
+    ? `This block is drawn with Tau’s older side layout, not ${linkedFileName}’s pin directions. Nothing electrical changes; Run is unaffected.`
+    : drifted?.summary ?? "";
+
+  const commit = (
+    ports: readonly string[],
+    model: string,
+    directions?: readonly SchematicPortDirection[],
+  ) => {
+    const result = setProjectSubcircuitLink(
+      component.id,
+      { sheetPath, model, ports: [...ports] },
+      directions ? { directions } : undefined,
+    );
     if (!result.ok) {
       setError(result.error ?? "Could not save the project-sheet link.");
       setSaved(false);
@@ -1898,11 +2240,59 @@ function ProjectSubcircuitLinkEditor({
     setSaved(true);
   };
 
+  const adopt = () => {
+    if (linkedEntry?.status !== "ok") return;
+    const result = resyncProjectSubcircuit(component.id, {
+      ports: linkedEntry.ports.map((port) => port.name),
+      directions: linkedEntry.ports.map((port) => port.direction),
+    });
+    if (!result.ok) {
+      setError(result.error ?? "Could not adopt the sheet interface.");
+      return;
+    }
+    setError(null);
+    setReviewOpen(false);
+  };
+
+  // The `.asc` trap, refused where the decision is made instead of at save
+  // time. An `.asc` document has no place to persist a project link, so no
+  // control here is enabled and the one row says why and what to do.
+  if (projectFilePath && isAscFile(projectFilePath)) {
+    return (
+      <div className="property-advanced project-sheet-link" role="group" aria-label="Project sheet link">
+        <p className="property-hint" role="status">
+          An .asc sheet cannot hold a project link. Save this sheet as .sim first.
+        </p>
+        <Button type="button" variant="outline" size="sm" disabled={!onSaveSheetAsSim} onClick={() => onSaveSheetAsSim?.()}>
+          Save as .sim
+        </Button>
+      </div>
+    );
+  }
+
+  const manualContract = manualPorts.split(/[\s,]+/).map((port) => port.trim()).filter(Boolean);
+  const manualDiffers = selectedEntry?.status === "ok"
+    && manualContract.length > 0
+    && !(manualContract.length === proposedNames.length
+      && manualContract.every((port, index) => asciiFold(port) === asciiFold(proposedNames[index] ?? "")));
+
   return (
     <div className="property-advanced project-sheet-link" role="group" aria-label="Project sheet link">
-      <p className="property-hint">
-        Choose a sibling Tau sheet and name its ordered public ports. Run checks that contract against the child sheet; it never infers ports.
-      </p>
+      <div className="project-sheet-link-head">
+        <p className="property-hint">
+          Choose a sibling Tau sheet; its ports arrive in order. Run checks that contract against the child sheet; it never infers ports.
+        </p>
+        {link && linkedSheetPresent && onOpenSheet && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenSheet(link.sheetPath)}
+          >
+            {`Open ${linkedFileName}`}
+          </Button>
+        )}
+      </div>
       {link && (
         <p className="property-hint" role="status">
           {linkedSheetPresent
@@ -1912,46 +2302,217 @@ function ProjectSubcircuitLinkEditor({
       )}
       <label className="property-field">
         <span>Project sheet</span>
-        <Select value={sheetPath || undefined} onValueChange={(next) => { setSheetPath(next); setSaved(false); }}>
+        {/* Controlled for its whole lifetime - "" is "nothing chosen yet", which
+            is now the starting state, and flipping between undefined and a
+            string makes React warn on every link. */}
+        <Select value={sheetPath} onValueChange={(next) => { setSheetPath(next); setManualModel(null); setSaved(false); }}>
           <SelectTrigger size="sm" className="property-select mono-num w-full max-w-[168px]" aria-label="Project sheet">
             <SelectValue placeholder="Choose a Tau sheet" />
           </SelectTrigger>
           <SelectContent>
-            {availableChoices.map((choice) => (
-              <SelectItem key={choice.path} value={choice.path}>{choice.label}</SelectItem>
-            ))}
+            {availableChoices.map((choice) => {
+              const entry = sheetInterfaceFor(sheetInterfaces, choice.path);
+              // An unreadable child is the one option that must not be
+              // selectable: there is nothing to copy from it, and the loader's
+              // own reason is the only useful thing to show.
+              return (
+                <SelectItem key={choice.path} value={choice.path} disabled={entry?.status === "unreadable"}>
+                  {entry ? `${choice.label} · ${sheetOptionAnnotation(entry)}` : choice.label}
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
       </label>
-      <label className="property-field">
-        <span>Project model name</span>
-        <input
-          className="mono-num property-text"
-          value={model}
-          aria-label="Project model name"
-          spellCheck={false}
-          onChange={(event) => { setModel(event.currentTarget.value); setSaved(false); }}
-        />
-      </label>
-      <label className="property-field">
-        <span>Ordered project ports</span>
-        <input
-          className="mono-num property-text"
-          value={ports}
-          aria-label="Ordered project ports"
-          placeholder="IN, OUT, GND"
-          spellCheck={false}
-          onChange={(event) => { setPorts(event.currentTarget.value); setSaved(false); }}
-        />
-      </label>
+      {selectedEntry?.status === "unreadable" && (
+        <p className="property-validation-error" role="alert">{selectedEntry.reason ?? "This sheet could not be read."}</p>
+      )}
+      {selectedEntry?.status === "ok" && (
+        <>
+          <label className="property-field">
+            <span>Project model name</span>
+            <input
+              className="mono-num property-text"
+              value={modelValue}
+              aria-label="Project model name"
+              spellCheck={false}
+              onChange={(event) => { setManualModel(event.currentTarget.value); setSaved(false); }}
+            />
+          </label>
+          {!derivedModel && !sheetIsLinked && (
+            <p className="property-hint">
+              {`“${selectedFileName}” has no SPICE-safe default name; type one for this block.`}
+            </p>
+          )}
+          {/* The proposed pinout, read-only: this is the thing you used to have
+              to retype. Ordinal, name, direction and the side the direction
+              puts it on, so the drawing and this list cannot disagree. */}
+          <ol className="port-list project-sheet-pin-table" aria-label="Proposed pin order">
+            {proposedPorts.map((port, index) => (
+              <li key={`${index}-${port.name}`}>
+                <span className="port-index mono-num">{index + 1}</span>
+                <span className="port-name mono-num">{port.name}</span>
+                <span className="port-direction">{portDirectionWord(port.direction)}</span>
+                {proposedSides[index] && <span className="port-side">{proposedSides[index]}</span>}
+              </li>
+            ))}
+          </ol>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!sheetPath || !modelValue.trim()}
+            onClick={() => commit(proposedNames, modelValue.trim(), proposedDirections)}
+          >
+            {link ? "Relink this sheet" : "Link this sheet"}
+          </Button>
+        </>
+      )}
+      {selectedEntry?.status === "no-interface" && (
+        <>
+          <p className="property-hint" role="status">
+            {`${selectedFileName} has no inputs or outputs marked yet, so there is no pinout to copy.`}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!onOpenSheet}
+            onClick={() => onOpenSheet?.(sheetPath)}
+          >
+            {`Open ${selectedFileName} and mark its nets`}
+          </Button>
+        </>
+      )}
+      {/* "Not checked" is never rendered as "fine": an unresolved index is
+          silence, and saying so is the only honest thing to print. Printed once
+          - for a chosen sheet, or (below) as this instance's drift verdict. */}
+      {sheetPath && !selectedEntry && !(link && link.sheetPath === sheetPath) && (
+        <p className="property-hint" role="status">
+          {`${selectedFileName} has not been checked yet. Use “Edit contract manually” to state the ordered contract yourself.`}
+        </p>
+      )}
+      {drift && drift.kind === "not-checked" && (
+        <p className="property-hint" role="status">
+          {`${linkedFileName} has not been checked yet, so this block's contract is not compared. Run still checks it exactly.`}
+        </p>
+      )}
+      {drift && drift.kind === "no-interface" && (
+        <p className="property-hint" role="status">
+          {`${linkedFileName} has no inputs or outputs marked, so Run refuses this block until it does.`}
+        </p>
+      )}
       {choices.length === 0 && !link && (
         <p className="property-hint">No sibling .sim or .tau.json sheet is available in the open project yet.</p>
       )}
-      <Button type="button" variant="outline" size="sm" disabled={!sheetPath} onClick={apply}>
-        {link ? "Update project sheet link" : "Link project sheet"}
+      {drift && drift.kind === "missing-sheet" && link && (
+        <div className="project-sheet-drift is-missing">
+          <p className="property-validation-error" role="alert">
+            {`${link.sheetPath} is missing from this project. This block keeps its contract and its pins exactly as they are; Run refuses until that sheet is back. Point this block at another sheet in “Project sheet” above, or unlink it.`}
+          </p>
+          {/* A "Choose another sheet" button stood here and opened the MANUAL
+              CONTRACT editor - a different thing than its own label, two rows
+              under the Select that really does choose the sheet. The recovery
+              is the Select; the sentence says so instead of miming it. */}
+          {/* Never automatic. Unlinking rewrites the parent's netlist, so it is
+              always a thing a person did. */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const result = setProjectSubcircuitLink(component.id, null);
+              if (!result.ok) setError(result.error ?? "Could not unlink this sheet.");
+            }}
+          >
+            Unlink
+          </Button>
+        </div>
+      )}
+      {drift && drift.kind === "sheet-unreadable" && (
+        <p className="property-validation-error" role="alert">{drift.reason}</p>
+      )}
+      {drifted && (
+        <div className="project-sheet-drift">
+          <p className="project-sheet-drift-summary" role="status">{driftSentence}</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => setReviewOpen(true)}>
+            Review interface change…
+          </Button>
+          <ProjectInterfaceReviewDialog
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
+            fileName={linkedFileName}
+            drift={drifted}
+            summary={driftSentence}
+            title={staleLayoutOnly ? "Block layout is out of date" : undefined}
+            comparedSource={comparedSource}
+            onAdopt={adopt}
+          />
+        </div>
+      )}
+      {/* ADVANCED. The order a child declares is the common case, not the only
+          legitimate one: an EE may want a different terminal order, or a
+          contract for a sheet that does not exist yet. */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-expanded={advancedOpen}
+        onClick={() => setAdvancedOpen((open) => !open)}
+      >
+        Edit contract manually
       </Button>
+      {advancedOpen && (
+        <div className="project-sheet-advanced">
+          <label className="property-field">
+            <span>Project model name</span>
+            <input
+              className="mono-num property-text"
+              value={modelValue}
+              aria-label="Manual project model name"
+              spellCheck={false}
+              onChange={(event) => { setManualModel(event.currentTarget.value); setSaved(false); }}
+            />
+          </label>
+          <label className="property-field">
+            <span>Ordered project ports</span>
+            <input
+              className="mono-num property-text"
+              value={manualPorts}
+              aria-label="Ordered project ports"
+              placeholder="IN, OUT, GND"
+              spellCheck={false}
+              onChange={(event) => { setManualPorts(event.currentTarget.value); setSaved(false); }}
+            />
+          </label>
+          {manualDiffers && (
+            <p className="property-hint" role="status">
+              {`Your contract, deliberately different from ${selectedFileName}: ${manualContract.join(", ")} against ${proposedNames.join(", ")}. Run compares this instance against the sheet exactly and in order.`}
+            </p>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!sheetPath}
+            onClick={() => commit(manualContract, modelValue.trim())}
+          >
+            {link ? "Update project sheet link" : "Link project sheet"}
+          </Button>
+        </div>
+      )}
       {error && <p className="property-validation-error" role="alert">{error}</p>}
-      {saved && <p className="property-hint" role="status">Project sheet contract saved; Run will refuse until the child’s public ports match in order.</p>}
+      {/* The confirmation is a VERDICT, not a toast. `saved` is local state, and
+          in the running app the very next render arrives with a fresh component
+          prop, which resets it - so a student's zero-typing link used to land
+          with no confirmation at all. An in-sync link says so from the link
+          itself, and keeps saying it. */}
+      {drift?.kind === "in-sync" && link && (
+        <p className="property-hint" role="status">
+          {`Linked · this block’s ${link.ports.length} ${link.ports.length === 1 ? "port" : "ports"} match ${linkedFileName} in order, so Run will compile it.`}
+        </p>
+      )}
+      {saved && drift?.kind !== "in-sync" && <p className="property-hint" role="status">Project sheet contract saved; Run will refuse until the child’s public ports match in order.</p>}
     </div>
   );
 }
@@ -1972,6 +2533,10 @@ function ComponentPropertyGroup({
   manualModelControls = true,
   groupCount = 1,
   projectFilePath = null,
+  sheetInterfaces = [],
+  comparedSource,
+  onOpenSheet,
+  onSaveSheetAsSim,
 }: {
   component: SchematicComponent;
   /** Explicit file-driven recovery path; the default shell keeps it hidden. */
@@ -1981,6 +2546,12 @@ function ComponentPropertyGroup({
   groupCount?: number;
   /** Current tab path, used to offer sibling project sheets only. */
   projectFilePath?: string | null;
+  /** Advisory sheet-interface index from App (see ProjectSubcircuitLinkEditor). */
+  sheetInterfaces?: readonly ProjectSheetInterfaceEntry[];
+  /** Which copy of a child sheet the index read, for the drift review's sake. */
+  comparedSource?: "open-tab" | "disk";
+  onOpenSheet?: (sheetPath: string) => void;
+  onSaveSheetAsSim?: () => void;
 }) {
   const selected = component;
   const entry = CATALOG_BY_KIND[selected.kind];
@@ -2366,7 +2937,15 @@ function ComponentPropertyGroup({
             />
           ) : selected.kind === "subckt" ? (
             <>
-              <ProjectSubcircuitLinkEditor component={selected} choices={projectSheetOptions} />
+              <ProjectSubcircuitLinkEditor
+                component={selected}
+                choices={projectSheetOptions}
+                sheetInterfaces={sheetInterfaces}
+                projectFilePath={projectFilePath}
+                comparedSource={comparedSource}
+                onOpenSheet={onOpenSheet}
+                onSaveSheetAsSim={onSaveSheetAsSim}
+              />
               {selected.projectSubcircuit ? (
                 <>
                   <div className="property-field">
@@ -2764,11 +3343,22 @@ export function ComponentInspector({
   onAttachModelFile,
   manualModelControls = false,
   projectFilePath = null,
+  sheetInterfaces = [],
+  comparedSource,
+  onOpenSheet,
+  onSaveSheetAsSim,
 }: {
   selected: SchematicComponent | readonly SchematicComponent[] | null;
   onAttachModelFile?: () => void;
   manualModelControls?: boolean;
   projectFilePath?: string | null;
+  /** Advisory path -> interface index, built and memoised by App. */
+  sheetInterfaces?: readonly ProjectSheetInterfaceEntry[];
+  comparedSource?: "open-tab" | "disk";
+  /** Open a project sheet in a tab (parent -> child navigation). */
+  onOpenSheet?: (sheetPath: string) => void;
+  /** Offer Save-as-.sim when the current tab is an .asc that cannot hold a link. */
+  onSaveSheetAsSim?: () => void;
 }) {
   const parts: readonly SchematicComponent[] = !selected
     ? []
@@ -2806,6 +3396,10 @@ export function ComponentInspector({
           manualModelControls={manualModelControls}
           onAttachModelFile={onAttachModelFile}
           projectFilePath={projectFilePath}
+          sheetInterfaces={sheetInterfaces}
+          comparedSource={comparedSource}
+          onOpenSheet={onOpenSheet}
+          onSaveSheetAsSim={onSaveSheetAsSim}
         />
       ))}
     </div>

@@ -17,6 +17,7 @@ import type {
   SchematicSheet,
   ProjectSheetPort,
   ProjectSubcircuitLink,
+  SchematicPortDirection,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { actuatedValue, wiperValue, type ActuationPhase } from "../schematic/actuation";
@@ -224,6 +225,32 @@ interface SchematicState extends Doc {
   startLabeling: () => void;
   upsertNetLabel: (x: number, y: number, text: string) => void;
   /**
+   * Commit a net label AND its sheet-interface intent in ONE transaction.
+   *
+   * This is the drawing-first authoring gesture (Item 14): the net-label draft
+   * carries a four-way Internal | Input | Output | Both ways choice, and the
+   * commit writes `netLabel.port` plus the matching `projectPorts` entry
+   * together. Two separate writes could not be one undo entry, and a half
+   * applied pair is exactly the state `documentValidation` refuses on load.
+   *
+   * `direction === null` means Internal: an EXPLICIT demotion out of the
+   * interface, which is not the same thing as today's `upsertNetLabel`
+   * SILENTLY dropping a port because the user renamed the net. Renaming a
+   * marked net here keeps its ordinal and rewrites the name, which is legal
+   * precisely because `name === label.text` is the invariant and both move in
+   * the same transaction.
+   *
+   * The resulting port array is validated by `projectSheetPortsValidation`
+   * BEFORE anything is written, so a refusal (a duplicated name, say) mutates
+   * nothing and produces no history entry.
+   */
+  upsertNetLabelPort: (
+    x: number,
+    y: number,
+    text: string,
+    direction: SchematicPortDirection | null,
+  ) => ProjectSubcircuitResult;
+  /**
    * Update a net label without pushing to undo history (caller must call
    * `beginChange()` once before the first keystroke, then use this for
    * subsequent characters so the whole edit is a single undo entry).
@@ -295,8 +322,38 @@ interface SchematicState extends Doc {
   setWiper: (id: string, fraction: number) => boolean;
   /** Select a `.subckt` contract and rebuild its exact p1..pN terminal bank. */
   setSubcircuitModel: (id: string, model: string, ports: readonly string[]) => void;
-  /** Attach/detach a Tau project sheet as this X instance's real source. */
-  setProjectSubcircuitLink: (id: string, link: ProjectSubcircuitLink | null) => ProjectSubcircuitResult;
+  /**
+   * Attach/detach a Tau project sheet as this X instance's real source.
+   *
+   * `options.directions` is a LAYOUT HINT used at this instant and never
+   * stored: it decides which side of the body each terminal lands on through
+   * `subcircuitGeometry`'s single slot rule. There is deliberately no field for
+   * it on `ProjectSubcircuitLink`, because `pinOverride` already IS the record
+   * of the directions used at link time - side is losslessly readable back out
+   * of the bank (`subcircuitBankSides`). Omitting the option keeps the historical
+   * half-split bank byte-for-byte, which is what the importer and every
+   * pre-Item-14 document depend on.
+   */
+  setProjectSubcircuitLink: (
+    id: string,
+    link: ProjectSubcircuitLink | null,
+    options?: { directions?: readonly SchematicPortDirection[] },
+  ) => ProjectSubcircuitResult;
+  /**
+   * Adopt a child sheet's changed interface on one linked instance, as ONE
+   * undoable transaction: the stored ordered contract and the terminal bank are
+   * rewritten together, and every wire/label/probe attached to a SURVIVING pin
+   * follows it.
+   *
+   * A pin that went away leaves its wire endpoint exactly where it was, as a
+   * free endpoint. That is fail-closed applied to geometry: silently sliding
+   * that wire onto whichever terminal now occupies a nearby coordinate would
+   * change the circuit without saying so.
+   */
+  resyncProjectSubcircuit: (
+    id: string,
+    next: { ports: readonly string[]; directions?: readonly SchematicPortDirection[] },
+  ) => ProjectSubcircuitResult;
   /** Select a real op-amp subcircuit while preserving imported Value/Value2 slots. */
   setOpampModel: (id: string, model: string) => void;
   /** Rename a component's reference designator (canvas label). */
@@ -423,6 +480,74 @@ function normalizedProjectSubcircuitLink(
   const validation = projectSubcircuitLinkValidation(candidate);
   return validation.ok ? { link: candidate } : { error: validation.error };
 }
+/**
+ * The ONE place a project-linked instance's stored contract and terminal bank
+ * are written together.
+ *
+ * Both entry points - `setProjectSubcircuitLink` (link/relink) and
+ * `resyncProjectSubcircuit` (adopt a drifted child interface) - come here, so
+ * there is a single answer to "what happens to the wires when the bank
+ * changes", and the two can never drift apart.
+ *
+ * Why the bank is rebuilt HERE and nowhere else: `pinOverride` holds ABSOLUTE
+ * WORLD COORDINATES and `getComponentPins` returns them verbatim, so those
+ * coordinates decide which parent net each terminal touches. Pin geometry is
+ * electrically live. Re-deriving a bank on load or on render would silently
+ * rewire the parent; recomputing it inside this action is safe only because
+ * this action also relocates everything attached to the pins that survive.
+ *
+ * `endpointRelocations` matches pins BY ID between the before/after component,
+ * which is what makes the removed-pin case fail-closed for free: a pin that no
+ * longer exists produces no relocation, so its wire endpoint is left exactly
+ * where it was, as a free endpoint, instead of being dragged onto whatever
+ * terminal now sits nearby.
+ */
+function applyProjectSubcircuitLink(
+  s: SchematicState,
+  id: string,
+  link: ProjectSubcircuitLink,
+  directions: readonly SchematicPortDirection[] | undefined,
+  recordInto: (state: SchematicState) => Pick<SchematicState, "past" | "future">,
+): Partial<SchematicState> {
+  const before = s.components.filter((component) => component.id === id);
+  if (before.length !== 1 || before[0].kind !== "subckt") return {};
+  const components = s.components.map((component) => {
+    if (component.id !== id || component.kind !== "subckt") return component;
+    const next: SchematicComponent = {
+      ...component,
+      value: link.model,
+      // Directions are a hint consumed at this instant. Omitting them keeps the
+      // historical half-split bank byte-for-byte for every existing document
+      // and for the importer, which has no directions to offer.
+      pinOverride: directions
+        ? buildSubcircuitPinOverride(component, link.ports, directions)
+        : buildSubcircuitPinOverride(component, link.ports),
+      projectSubcircuit: copyProjectSubcircuitLink(link)!,
+    };
+    // A project link owns its contract. Imported `.asy` metadata is a
+    // separate file-backed behavior and must never masquerade as it.
+    delete next.ltSymbolType;
+    delete next.ltWindows;
+    delete next.ltExtraAttrs;
+    delete next.ltModelName;
+    delete next.ltModelFile;
+    return next;
+  });
+  const after = components.filter((component) => component.id === id);
+  const relocations = endpointRelocations(before, after);
+  const stationaryPinKeys = new Set(s.components
+    .filter((component) => component.id !== id)
+    .flatMap((component) => getComponentPins(component))
+    .map(pointKey));
+  return {
+    ...recordInto(s),
+    components,
+    wires: relocateAttachedEndpoints(s.wires, relocations, stationaryPinKeys),
+    netLabels: s.netLabels.map((label) => relocateAnchoredPoint(label, relocations, stationaryPinKeys)),
+    probes: s.probes.map((probe) => probe.componentId ? probe : relocateAnchoredPoint(probe, relocations, stationaryPinKeys)),
+  };
+}
+
 const STORAGE_KEY = "tau.schematic.v1";
 const nextRotation = (r: Rotation): Rotation => (((r + 90) % 360) as Rotation);
 const docOf = (s: Doc): Doc => ({
@@ -1443,6 +1568,88 @@ export const useSchematic = create<SchematicState>()((set, get) => {
         return { ...recordInto(s), netLabels: [...s.netLabels, { id: nanoid(6), x, y, text: trimmed }] };
       }),
 
+    // The drawing-first authoring commit. Everything `upsertNetLabel` does
+    // (bare-node add, re-label of the same node MOVES the existing label rather
+    // than stacking a duplicate, empty text removes) plus the sheet-interface
+    // half, in ONE recorded transaction.
+    //
+    // The difference that matters is the rename case. `upsertNetLabel` strips
+    // `label.port` and filters the `projectPorts` entry whenever a marked net
+    // is renamed - a silent demotion, i.e. data loss on an ordinary edit, and
+    // the reason PDF5 says the child's interface "does not survive a change".
+    // Here the port keeps its ORDINAL and takes the new name with it. That is
+    // sound precisely because `name === label.text` is the invariant and this
+    // action writes both halves at once; the old code had to demote only
+    // because it could write one half.
+    //
+    // `direction === null` is Internal: an explicit, user-chosen demotion.
+    upsertNetLabelPort: (x, y, text, direction) => {
+      const snapshot = get();
+      const trimmed = text.trim();
+      const physicalNets = extractCircuit(snapshot.components, snapshot.wires, []).nets;
+      const clickedNet = netAtPoint(physicalNets, snapshot.wires, { x, y });
+      const nodeOf = (label: NetLabel) => netAtPoint(physicalNets, snapshot.wires, { x: label.x, y: label.y })?.id;
+      const existing = clickedNet
+        ? snapshot.netLabels.find((label) => nodeOf(label) === clickedNet.id)
+        : snapshot.netLabels.find((label) => label.x === x && label.y === y);
+
+      if (!trimmed && !existing) return { ok: true }; // nothing to add or remove - no history entry
+      if (!trimmed) {
+        // A port cannot outlive the net name it carries, so removing the label
+        // removes its interface entry in the same undo step.
+        set((s) => ({
+          ...recordInto(s),
+          netLabels: s.netLabels.filter((label) => label.id !== existing!.id),
+          projectPorts: s.projectPorts.filter((port) => port.labelId !== existing!.id),
+        }));
+        return { ok: true };
+      }
+
+      const labelId = existing?.id ?? nanoid(6);
+      const marked = snapshot.projectPorts.some((port) => port.labelId === labelId);
+      const nextPorts: ProjectSheetPort[] = direction === null
+        ? snapshot.projectPorts.filter((port) => port.labelId !== labelId)
+        : marked
+          // RENAME IN PLACE: same position in the ordered interface, new name.
+          ? snapshot.projectPorts.map((port) => (
+              port.labelId === labelId ? { name: trimmed, labelId, direction } : { ...port }
+            ))
+          : [...snapshot.projectPorts.map((port) => ({ ...port })), { name: trimmed, labelId, direction }];
+
+      // Validated BEFORE anything is written: a duplicate name (or any other
+      // refusal the compiler would also make) leaves the document untouched and
+      // adds no history entry, so a rejected gesture is not an undo step.
+      const validation = projectSheetPortsValidation(nextPorts);
+      if (!validation.ok) return { ok: false, error: validation.error };
+
+      const unchanged = existing
+        && existing.text === trimmed
+        && existing.x === x
+        && existing.y === y
+        && (existing.port ?? null) === direction;
+      if (unchanged) return { ok: true };
+
+      set((s) => ({
+        ...recordInto(s),
+        netLabels: existing
+          ? s.netLabels.map((label) => {
+              if (label.id !== existing.id) return label;
+              const { port: _previous, ...rest } = label;
+              return direction
+                ? { ...rest, x, y, text: trimmed, port: direction }
+                : { ...rest, x, y, text: trimmed };
+            })
+          : [
+              ...s.netLabels,
+              direction
+                ? { id: labelId, x, y, text: trimmed, port: direction }
+                : { id: labelId, x, y, text: trimmed },
+            ],
+        projectPorts: nextPorts,
+      }));
+      return { ok: true };
+    },
+
     setNetLabelDirect: (x, y, text) =>
       set((s) => {
         const physicalNets = extractCircuit(s.components, s.wires, []).nets;
@@ -1764,7 +1971,7 @@ export const useSchematic = create<SchematicState>()((set, get) => {
           probes: s.probes.map((probe) => probe.componentId ? probe : relocateAnchoredPoint(probe, relocations, stationaryPinKeys)),
         };
       }),
-    setProjectSubcircuitLink: (id, link) => {
+    setProjectSubcircuitLink: (id, link, options) => {
       const current = get().components.find((component) => component.id === id);
       if (!current || current.kind !== "subckt") {
         return { ok: false, error: "Select a subcircuit instance before linking a project sheet." };
@@ -1783,40 +1990,24 @@ export const useSchematic = create<SchematicState>()((set, get) => {
       }
       const normalized = normalizedProjectSubcircuitLink(link);
       if (!normalized.link) return { ok: false, error: normalized.error };
-      set((s) => {
-        const before = s.components.filter((component) => component.id === id);
-        if (before.length !== 1 || before[0].kind !== "subckt") return {};
-        const components = s.components.map((component) => {
-          if (component.id !== id || component.kind !== "subckt") return component;
-          const next: SchematicComponent = {
-            ...component,
-            value: normalized.link!.model,
-            pinOverride: buildSubcircuitPinOverride(component, normalized.link!.ports),
-            projectSubcircuit: copyProjectSubcircuitLink(normalized.link!)!,
-          };
-          // A project link owns its contract. Imported `.asy` metadata is a
-          // separate file-backed behavior and must never masquerade as it.
-          delete next.ltSymbolType;
-          delete next.ltWindows;
-          delete next.ltExtraAttrs;
-          delete next.ltModelName;
-          delete next.ltModelFile;
-          return next;
-        });
-        const after = components.filter((component) => component.id === id);
-        const relocations = endpointRelocations(before, after);
-        const stationaryPinKeys = new Set(s.components
-          .filter((component) => component.id !== id)
-          .flatMap((component) => getComponentPins(component))
-          .map(pointKey));
-        return {
-          ...recordInto(s),
-          components,
-          wires: relocateAttachedEndpoints(s.wires, relocations, stationaryPinKeys),
-          netLabels: s.netLabels.map((label) => relocateAnchoredPoint(label, relocations, stationaryPinKeys)),
-          probes: s.probes.map((probe) => probe.componentId ? probe : relocateAnchoredPoint(probe, relocations, stationaryPinKeys)),
-        };
+      set((s) => applyProjectSubcircuitLink(s, id, normalized.link!, options?.directions, recordInto));
+      return { ok: true };
+    },
+    resyncProjectSubcircuit: (id, next) => {
+      const current = get().components.find((component) => component.id === id);
+      if (!current || current.kind !== "subckt" || !current.projectSubcircuit) {
+        return { ok: false, error: "Only a project-linked subcircuit instance can adopt a sheet interface." };
+      }
+      // Adopting an interface never changes WHICH sheet or model this instance
+      // is: those are the author's intent, and only the ordered port contract
+      // (plus the picture that carries it) is being brought up to date.
+      const normalized = normalizedProjectSubcircuitLink({
+        sheetPath: current.projectSubcircuit.sheetPath,
+        model: current.projectSubcircuit.model,
+        ports: [...next.ports],
       });
+      if (!normalized.link) return { ok: false, error: normalized.error };
+      set((s) => applyProjectSubcircuitLink(s, id, normalized.link!, next.directions, recordInto));
       return { ok: true };
     },
     setOpampModel: (id, model) =>

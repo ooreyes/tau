@@ -15,12 +15,23 @@ import {
   NON_ACTUABLE,
 } from "../schematic/actuation";
 import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
-import type { NetLabel, Point, SchematicAscShape, SchematicComponent, SchematicWire } from "../schematic/types";
+import type {
+  NetLabel,
+  Point,
+  SchematicAscShape,
+  SchematicComponent,
+  SchematicPortDirection,
+  SchematicWire,
+} from "../schematic/types";
 import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
 import {
+  SUBCIRCUIT_CAPTION_ADVANCE,
+  SUBCIRCUIT_CAPTION_INSET,
   isNativeMultiPinSubcircuit,
   localSubcircuitPins,
+  middleEllipsisCaption,
   nativeSubcircuitBody,
+  subcircuitCaptionBudget,
 } from "../schematic/subcircuitGeometry";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { OpCurrentFlowLayer } from "./OpCurrentFlowLayer";
@@ -240,6 +251,34 @@ interface DragState {
   groupProbeOrigins?: Map<string, Point>;
 }
 
+/**
+ * What the canvas needs to ANNOTATE a linked block whose child sheet moved on.
+ *
+ * Deliberately a view-model, not a verdict this file computes: the classifier
+ * lives beside the fail-closed compiler's own vocabulary, and Run stays the
+ * only judge. `"drifted"` draws a dashed outline (it will simulate again the
+ * moment the child matches); `"missing-sheet"` / `"sheet-unreadable"` draw the
+ * lamp SOLID, because those will not resolve on their own.
+ */
+export interface SubcircuitDriftAnnotation {
+  kind: "drifted" | "missing-sheet" | "sheet-unreadable";
+  /** One sentence, already written for a human. Becomes the group's
+   *  accessible name and its hover <title> - the state is never colour-only. */
+  sentence: string;
+  /** Pin ids (`p1`…`pN`) the change touches, so the reader can see WHICH
+   *  terminals the argument is about without opening anything. */
+  pins?: readonly string[];
+}
+
+/** The child's whole authoring vocabulary, in the order the row reads.
+ *  `null` is an ordinary internal net - the default, and today's behaviour. */
+const DIRECTION_SEGMENTS = [
+  [null, "Internal"],
+  ["In", "Input"],
+  ["Out", "Output"],
+  ["BiDir", "Both ways"],
+] as const satisfies readonly (readonly [SchematicPortDirection | null, string])[];
+
 /** Three dots and an arrow: what the animation means, drawn once. */
 function FlowLegendMark() {
   return (
@@ -284,6 +323,11 @@ export function Canvas({
   onSelectionRect,
   onSelectedComponentDragChange,
   currentVisualizer = false,
+  subcircuitDrift,
+  onReviewDrift,
+  onOpenLinkedSheet,
+  onCommitNetLabelPort,
+  sheetInterfaceDisabledReason = null,
 }: {
   /** Last DC operating point; drives the current-flow visualizer. */
   op?: OperatingPointResult | null;
@@ -348,6 +392,47 @@ export function Canvas({
    *  while you are still drawing the circuit is noise, not information. Off
    *  hides the layer entirely rather than freezing it. */
   currentVisualizer?: boolean;
+  /**
+   * Per-instance drift annotation, keyed by component id.
+   *
+   * ACCEPTED, NEVER COMPUTED HERE. Whether a parent's stored contract still
+   * matches the child sheet is a question about another file; the canvas is
+   * given the verdict as a sentence and a pin list so the drawing can point at
+   * the terminals the argument is about. A drifted instance does not MOVE -
+   * not one pin, not one wire - because the stored contract is exactly what
+   * will be netlisted, and repainting to the child's new interface would show
+   * a picture the netlist does not match.
+   */
+  subcircuitDrift?: ReadonlyMap<string, SubcircuitDriftAnnotation>;
+  /** The drift lamp was operated: open the review dialog for this instance. */
+  onReviewDrift?: (componentId: string) => void;
+  /** Double-click on a linked block's body: open the sheet it stands for. */
+  onOpenLinkedSheet?: (componentId: string) => void;
+  /**
+   * ONE ATOMIC COMMIT for "this net is an input/output of this sheet".
+   *
+   * Supplied, the net-label draft grows a direction control and commits
+   * through this instead of `upsertNetLabel`, so the label's `port` and the
+   * sheet's ordered `projectPorts` entry land in a SINGLE undo step - a net
+   * name and the port that rides it can never disagree. Absent (and it is
+   * absent until the store action is wired), the draft behaves exactly as it
+   * always has: no control, no new gesture, no behaviour change.
+   *
+   * Returns the validation verdict; a refusal is shown in the draft's own
+   * error row and NOTHING is written.
+   */
+  onCommitNetLabelPort?: (
+    x: number,
+    y: number,
+    text: string,
+    direction: SchematicPortDirection | null,
+  ) => { ok: boolean; error?: string };
+  /**
+   * Why this sheet cannot carry an interface, if it cannot - an `.asc` sheet
+   * has no room for one. Refused at the point of the GESTURE, in the child's
+   * own words, instead of staying silent until a save warning.
+   */
+  sheetInterfaceDisabledReason?: string | null;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, zoom: 1 });
@@ -355,8 +440,19 @@ export function Canvas({
   const [wireDraft, setWireDraft] = useState<{ start: Point; cursor: Point } | null>(null);
   const [snapHover, setSnapHover] = useState<{ x: number; y: number; pin: boolean } | null>(null);
   /** Pending net label being typed (label tool): world point + draft text. */
-  const [labelDraft, setLabelDraft] = useState<{ x: number; y: number; text: string; error?: string } | null>(null);
+  const [labelDraft, setLabelDraft] = useState<{
+    x: number;
+    y: number;
+    text: string;
+    error?: string;
+    /** null = an ordinary internal net, which is the default and today's
+     *  behaviour. Non-null marks this net as part of the sheet's interface. */
+    direction?: SchematicPortDirection | null;
+  } | null>(null);
   const labelInputRef = useRef<HTMLInputElement | null>(null);
+  /** The draft's direction row, so blurring INTO it does not commit the draft
+   *  out from under the choice the user is still making. */
+  const directionRowRef = useRef<HTMLDivElement | null>(null);
   /** Rubber-band box in screen coords, null when not drawing. */
   const [boxDrag, setBoxDrag] = useState<BoxDrag | null>(null);
   // Pointer move/up can arrive before React has committed the visual state
@@ -437,6 +533,9 @@ export function Canvas({
   const setWiper = useSchematic((s) => s.setWiper);
   const removeProbe = useSchematic((s) => s.removeProbe);
   const netLabels = useSchematic((s) => s.netLabels);
+  /** READ ONLY, and only to draw the ordinal on a marked tag: `projectPorts` is
+   *  the sheet's ORDER, and the drawing is where that order should be legible. */
+  const projectPorts = useSchematic((s) => s.projectPorts);
   const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
   const setNetLabelOffsetDirect = useSchematic((s) => s.setNetLabelOffsetDirect);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1002,7 +1101,7 @@ export function Canvas({
       const existing = netLabels.find((label) =>
         netAtPoint(physicalNets, wires, label)?.id === netAtPoint(physicalNets, wires, point)?.id,
       );
-      setLabelDraft({ x: point.x, y: point.y, text: existing?.text ?? "" });
+      setLabelDraft({ x: point.x, y: point.y, text: existing?.text ?? "", direction: existing?.port ?? null });
     }
     return true;
   };
@@ -1035,6 +1134,18 @@ export function Canvas({
         });
         return false;
       }
+    }
+    if (onCommitNetLabelPort) {
+      // Fail-closed: the store validates the whole (name, direction, ordered
+      // ports) tuple BEFORE writing anything, so a refusal leaves the draft
+      // open with its reason rather than half-marking the sheet.
+      const result = onCommitNetLabelPort(labelDraft.x, labelDraft.y, trimmed, labelDraft.direction ?? null);
+      if (!result.ok) {
+        setLabelDraft({ ...labelDraft, error: result.error ?? "That port cannot be added." });
+        return false;
+      }
+      setLabelDraft(null);
+      return true;
     }
     upsertNetLabel(labelDraft.x, labelDraft.y, trimmed);
     setLabelDraft(null);
@@ -1135,7 +1246,7 @@ export function Canvas({
       if (labelDraft) return;
       const w = snappedCursor(e.clientX, e.clientY);
       const existing = netLabels.find((l) => l.x === w.x && l.y === w.y);
-      setLabelDraft({ x: w.x, y: w.y, text: existing?.text ?? "" });
+      setLabelDraft({ x: w.x, y: w.y, text: existing?.text ?? "", direction: existing?.port ?? null });
       return;
     }
 
@@ -1185,6 +1296,15 @@ export function Canvas({
     if (!interactive) return;
     const world = screenToWorld(e.clientX, e.clientY);
     const hit = componentAt(components, world.x, world.y);
+    // Parent -> child navigation. The target is the WHOLE body, not an 8px
+    // corner glyph, and it comes before the value editor because "this block
+    // is my boost converter" makes opening the boost converter the obvious
+    // meaning of double-clicking it. `componentAt` already uses
+    // nativeSubcircuitBody, so the widened body is the hit area for free.
+    if (hit?.projectSubcircuit?.sheetPath && onOpenLinkedSheet) {
+      onOpenLinkedSheet(hit.id);
+      return;
+    }
     if (hit && hit.kind !== "ground") {
       editDirty.current = false;
       setEditingId(hit.id);
@@ -1796,7 +1916,7 @@ export function Canvas({
     if (!interactive && labeling) {
       // Click-without-drag opens the rename draft - unchanged from before
       // labels were draggable.
-      setLabelDraft({ x: l.x, y: l.y, text: l.text });
+      setLabelDraft({ x: l.x, y: l.y, text: l.text, direction: l.port ?? null });
     } else if (interactive && tool.mode === "select") {
       if (shiftKey) toggleSelectLabel(l.id);
       else selectMixed({ componentIds: [], wireIds: [], labelIds: [l.id], probeIds: [] });
@@ -2002,6 +2122,42 @@ export function Canvas({
 
           {previewWire && <WirePolyline points={previewWire} className="wire preview" />}
 
+          {/* CANDIDATE NETS. "You cannot see which nets are candidates" is the
+              authoring complaint the drawing-first interface has to answer, and
+              it is answered the same way for an ordinary net label: while the
+              label tool is armed, every electrical net marks its own connection
+              points so you can see where a name - or a port - will stick.
+              Additive and non-interactive: pointer events stay off, so net
+              resolution remains snappedCursor -> netAtPoint exactly as before
+              and a click off a net is still refused. */}
+          {labeling && (
+            <g className="net-candidate-layer" aria-hidden="true">
+              {physicalNets.flatMap((net) => net.points.map((point) => (
+                // `snap-dot` is not decoration-by-analogy: these ARE the snap
+                // points a label click resolves to, and reusing the styled
+                // class means the mark cannot ship as SVG's initial opaque
+                // BLACK fill if a bespoke rule is never written for it.
+                <circle
+                  key={`cand-${net.id}-${point.x}-${point.y}`}
+                  className="net-candidate-mark snap-dot"
+                  cx={point.x}
+                  cy={point.y}
+                  r={3}
+                />
+              )))}
+            </g>
+          )}
+          {/* The pick puck. The pick TARGET is the net, so the puck is what
+              carries WCAG 2.2 SC 2.5.8 - 24 units across, not a small widget
+              hung off the net - and it lands on the snapped point the click
+              will actually resolve to, so the gesture cannot surprise you. */}
+          {labeling && snapHover && netAtPoint(physicalNets, wires, snapHover) && (
+            // `snap-ring` again for the ink: an unstyled r=12 circle is a
+            // 24-unit opaque BLACK disc sitting on top of the very net you are
+            // trying to see, which is the opposite of the affordance.
+            <circle className="net-pick-puck snap-ring" cx={snapHover.x} cy={snapHover.y} r={12} />
+          )}
+
           {/* Soft snap markers while wiring / placing / moving / probing / labeling */}
           {interactive && (wiring || probing || labeling || placing || movingParts) &&
             snapTargets.map((p) => {
@@ -2042,6 +2198,8 @@ export function Canvas({
               operable={simulatorOperability(c, interactive, tool.mode)}
               hovered={hoverOperable?.id === c.id}
               sevenSegmentState={sevenSegmentStates?.get(c.id)}
+              drift={subcircuitDrift?.get(c.id) ?? null}
+              onReviewDrift={onReviewDrift ? () => onReviewDrift(c.id) : undefined}
             />
           ))}
 
@@ -2125,9 +2283,74 @@ export function Canvas({
               // keeps the net connection legible instead of a label reading
               // as floating and unattached.
               const showLeader = Math.hypot(offset.dx, offset.dy) > 24;
+              /**
+               * A MARKED NET LOOKS MARKED, and its ORDER is on the drawing.
+               *
+               * The glyph is the shape family of the `IOPIN` this serializes
+               * to: the apex points INTO the net for an input, AWAY for an
+               * output, and a blunt hexagon says "both ways". Stroke only,
+               * neutral/status ink, never a trace hue - a port is a statement
+               * about the sheet, not a signal reading. The 1-based ordinal in
+               * the badge is the terminal number the parent will wire to, so
+               * port order stops being a hidden list in a dialog.
+               */
+              const ordinal = l.port
+                ? projectPorts.findIndex((port) => port.labelId === l.id) + 1
+                : 0;
+              const w = 9;
+              const h = 5;
+              const tag = l.port === "In"
+                // Apex on the left, pointing back at the net it names.
+                ? `M ${-w} 0 L ${-w + 4} ${-h} L ${w} ${-h} L ${w} ${h} L ${-w + 4} ${h} Z`
+                : l.port === "Out"
+                  ? `M ${-w} ${-h} L ${w - 4} ${-h} L ${w} 0 L ${w - 4} ${h} L ${-w} ${h} Z`
+                  : `M ${-w + 3} ${-h} L ${w - 3} ${-h} L ${w} 0 L ${w - 3} ${h} L ${-w + 3} ${h} L ${-w} 0 Z`;
               return (
                 <g key={l.id}>
                   {showLeader && <line className="net-label-leader" x1={l.x} y1={l.y} x2={tx} y2={ty} />}
+                  {l.port && (
+                    <g
+                      className={`net-port-tag dir-${l.port.toLowerCase()}`}
+                      transform={`translate(${l.x} ${l.y})`}
+                      data-net-port={l.port}
+                      data-net-port-ordinal={ordinal || undefined}
+                    >
+                      <title>{`${l.text || "unnamed net"} - sheet ${
+                        l.port === "In" ? "input" : l.port === "Out" ? "output" : "bidirectional port"
+                      }${ordinal ? `, terminal ${ordinal}` : ""}`}</title>
+                      {/* Ink declared HERE, in tokens, as presentation
+                          attributes: stroke-only muted so a port reads as a
+                          statement about the sheet and never as a trace hue,
+                          and - decisively - so the tag cannot fall back to
+                          SVG's initial opaque black fill before App.css grows
+                          a rule for it. Presentation attributes are the
+                          lowest-priority origin, so a later stylesheet rule
+                          still wins without this having to be unpicked. */}
+                      <path
+                        className="net-port-tag-body"
+                        d={tag}
+                        fill="none"
+                        stroke="var(--canvas-label-muted)"
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      {ordinal > 0 && (
+                        <text
+                          className="net-port-ordinal"
+                          x={l.port === "In" ? w - 3 : -w + 3}
+                          y={2.2}
+                          textAnchor="middle"
+                          fill="var(--muted)"
+                          stroke="none"
+                          fontFamily="var(--font-mono)"
+                          fontSize={6}
+                          fontWeight={500}
+                        >
+                          {ordinal}
+                        </text>
+                      )}
+                    </g>
+                  )}
                   <text
                     className={`net-label-text${selectedLabelIds.includes(l.id) ? " selected" : ""}`}
                     x={tx}
@@ -2308,11 +2531,106 @@ export function Canvas({
               setLabelDraft(null);
             }
           }}
-          onBlur={() => {
-            // Click-away confirms, like Enter (empty text removes the label).
+          onBlur={(event) => {
+            // Click-away confirms, like Enter (empty text removes the label) -
+            // EXCEPT when focus moved into this draft's own direction row.
+            // Without this, Tab out of the name field commits the label as
+            // Internal and unmounts the row, so the direction segments would
+            // be reachable by mouse only and a keyboard user could never mark
+            // a net as an input or an output at all (WCAG 2.1.1).
+            const next = event.relatedTarget;
+            if (next instanceof Node && directionRowRef.current?.contains(next)) return;
             commitLabelDraft();
           }}
         />
+      )}
+      {/**
+       * "Highlight the pins that are your inputs and outputs", in the draft
+       * that is already open.
+       *
+       * This is the WHOLE of the child's authoring act, and it deliberately
+       * costs no new tool: the net was already resolved by the click
+       * (snappedCursor -> netAtPoint, and a click off a net is still refused),
+       * so all that was missing was a way to say what the net is FOR. Default
+       * "Internal" means an ordinary net label behaves exactly as it does
+       * today. Each segment is --control-hit (28px) tall and wide enough for
+       * its word, so the row clears WCAG 2.2 SC 2.5.8 without a hidden target.
+       */}
+      {labelDraft && onCommitNetLabelPort && (
+        <div
+          ref={directionRowRef}
+          className="net-port-direction"
+          role="radiogroup"
+          aria-label="Sheet interface role for this net"
+          style={{
+            left: labelDraft.x * view.zoom + view.x,
+            top: (labelDraft.y + 28) * view.zoom + view.y,
+          }}
+        >
+          {sheetInterfaceDisabledReason && (
+            <p className="net-port-direction-reason" role="note">{sheetInterfaceDisabledReason}</p>
+          )}
+          <div className="net-port-direction-segments">
+            {DIRECTION_SEGMENTS.map(([direction, caption], index) => {
+              const active = (labelDraft.direction ?? null) === direction;
+              const blocked = (at: number) =>
+                Boolean(sheetInterfaceDisabledReason) && DIRECTION_SEGMENTS[at][0] !== null;
+              /** Next selectable segment in `step`'s direction, wrapping. */
+              const step = (delta: number) => {
+                for (let hop = 1; hop <= DIRECTION_SEGMENTS.length; hop += 1) {
+                  const at = (index + delta * hop + DIRECTION_SEGMENTS.length * hop) % DIRECTION_SEGMENTS.length;
+                  if (!blocked(at)) return at;
+                }
+                return index;
+              };
+              return (
+                <button
+                  key={caption}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  // Roving tabindex, as a radiogroup requires: Tab reaches the
+                  // group once and lands on the CHECKED segment, rather than
+                  // making the user press Tab four times to leave it.
+                  tabIndex={active ? 0 : -1}
+                  data-direction-segment={index}
+                  className={`net-port-direction-segment${active ? " active" : ""}`}
+                  // An .asc sheet cannot carry a Tau sheet interface, and
+                  // saying so HERE - at the gesture - is the whole point.
+                  // "Internal" stays live: an ordinary net label is still fine.
+                  disabled={blocked(index)}
+                  // Keep focus on the name input, or its onBlur would commit
+                  // the draft out from under the click that is still choosing.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setLabelDraft({ ...labelDraft, direction, error: undefined })}
+                  onKeyDown={(event) => {
+                    // Enter/Space from inside the row commits the draft, so the
+                    // whole gesture - name, direction, commit - is completable
+                    // without ever returning to the mouse.
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      commitLabelDraft();
+                      return;
+                    }
+                    const delta = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1
+                      : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1
+                        : 0;
+                    if (!delta) return;
+                    event.preventDefault();
+                    const at = step(delta);
+                    setLabelDraft({ ...labelDraft, direction: DIRECTION_SEGMENTS[at][0], error: undefined });
+                    // Selection follows focus, so move focus with it.
+                    directionRowRef.current
+                      ?.querySelector<HTMLButtonElement>(`[data-direction-segment="${at}"]`)
+                      ?.focus();
+                  }}
+                >
+                  {caption}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
       {labelDraft?.error && (
         <div
@@ -2321,7 +2639,7 @@ export function Canvas({
           role="alert"
           style={{
             left: labelDraft.x * view.zoom + view.x,
-            top: (labelDraft.y + 28) * view.zoom + view.y,
+            top: (labelDraft.y + (onCommitNetLabelPort ? 62 : 28)) * view.zoom + view.y,
           }}
         >
           {labelDraft.error}
@@ -2384,6 +2702,8 @@ function ComponentView({
   operable = null,
   hovered = false,
   sevenSegmentState,
+  drift = null,
+  onReviewDrift,
 }: {
   comp: SchematicComponent;
   selected: boolean;
@@ -2392,6 +2712,9 @@ function ComponentView({
   hovered?: boolean;
   /** Present only on the read-only simulator canvas; absent in the editor. */
   sevenSegmentState?: SevenSegmentDisplayState;
+  /** Annotation only - see SubcircuitDriftAnnotation. Never relayouts. */
+  drift?: SubcircuitDriftAnnotation | null;
+  onReviewDrift?: () => void;
 }) {
   // Presentational only - selection/drag/edit are resolved centrally by
   // geometry in the SVG handlers, so render order never decides hit results.
@@ -2407,6 +2730,16 @@ function ComponentView({
   const nativeSubcircuit = isNativeMultiPinSubcircuit(comp);
   const subcircuitPins = nativeSubcircuit ? localSubcircuitPins(comp) : [];
   const subcircuitBody = nativeSubcircuit ? nativeSubcircuitBody(comp) : null;
+  // The name a block answers to: the linked sheet's model when there is one,
+  // otherwise the instance's own value. A block that can say its own name and
+  // name all its terminals does not also need the generic X glyph - an X plus
+  // three names is noise. Unlinked and imported/file-backed X devices keep it,
+  // and they still take the generic 48x40 fallback in symbols.tsx.
+  const subcircuitModelName = nativeSubcircuit
+    ? (comp.projectSubcircuit?.model || comp.value || "").trim()
+    : "";
+  const namesItself = Boolean(subcircuitModelName) && subcircuitPins.some((pin) => pin.label);
+  const driftedPins = new Set(drift?.pins ?? []);
   // The cursor is instant but silent, so the operable parts also carry a name
   // for the gesture. It reaches a screen reader through the group's accessible
   // name and a mouse reader as the native dwell tooltip.
@@ -2420,10 +2753,16 @@ function ComponentView({
     : "";
   return (
     <g
-      className={`component${selected ? " selected" : ""}${operableClass}`}
+      className={`component${selected ? " selected" : ""}${operableClass}${drift ? " subckt-drifted" : ""}`}
       transform={`translate(${comp.x} ${comp.y})`}
+      // Dash, lamp, dotted captions AND words: the drift state is never
+      // conveyed by colour alone, and the sentence reaches a screen reader and
+      // a dwell tooltip without opening anything.
+      aria-label={drift ? drift.sentence : undefined}
+      data-drift={drift ? drift.kind : undefined}
     >
       {operableName && <title>{operableName}</title>}
+      {!operableName && drift && <title>{drift.sentence}</title>}
       {!nativeSubcircuit && overridePins?.map((pin) => {
         const native = nativePins.get(pin.id);
         if (!native) return null;
@@ -2453,7 +2792,30 @@ function ComponentView({
                 y2={pin.y}
               />
             ))}
-            <path d="M -7 -7 L 7 7 M -7 7 L 7 -7" />
+            {/* Stale is ANNOTATION layered on the same body, never a relayout:
+                a hairline outline in the warning line token, body fill left
+                alone, no wash. Dashed for drift (it will simulate again the
+                moment the child matches) and solid for a sheet that is gone or
+                unreadable, which will not resolve on its own. */}
+            {drift && (
+              <rect
+                className={`subckt-body-drift${drift.kind === "drifted" ? " transient" : ""}`}
+                x={subcircuitBody.minX}
+                y={subcircuitBody.minY}
+                width={subcircuitBody.maxX - subcircuitBody.minX}
+                height={subcircuitBody.maxY - subcircuitBody.minY}
+                rx={3}
+                // The dash IS the non-colour channel, so it must not depend on
+                // a stylesheet rule landing later; and an unstyled rect would
+                // fill the body opaque black rather than annotate it.
+                fill="none"
+                stroke="var(--diagnostic-warning-line)"
+                strokeWidth={1.25}
+                strokeDasharray={drift.kind === "drifted" ? "4 3" : undefined}
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+            {!namesItself && <path d="M -7 -7 L 7 7 M -7 7 L 7 -7" />}
           </>
         ) : (
           <ComponentSymbol
@@ -2479,22 +2841,147 @@ function ComponentView({
         )}
       </g>
       {nativeSubcircuit && subcircuitBody && subcircuitPins.map((pin) => {
+        const onLeft = pin.x < 0;
         const labelPoint = transformPoint({
-          x: pin.x < 0 ? subcircuitBody.minX + 4 : subcircuitBody.maxX - 4,
+          x: onLeft
+            ? subcircuitBody.minX + SUBCIRCUIT_CAPTION_INSET
+            : subcircuitBody.maxX - SUBCIRCUIT_CAPTION_INSET,
           y: pin.y,
         }, placement.rotation, placement.mirrored);
+        /**
+         * THE ANCHOR IS A PROPERTY OF THE PIN'S OWN SIDE, NOT OF ITS ROTATED
+         * COORDINATE. This used to read `labelPoint.x`, i.e. the position AFTER
+         * transformPoint had rotated it. rotatePoint(90) maps (x,y) -> (-y,x),
+         * so a left-side pin at local (-24,-32) produced labelPoint.x = +32 ->
+         * "end" while its sibling at (-24,+32) produced -32 -> "start": two
+         * captions on the SAME physical side of a 90/270-rotated block ran in
+         * opposite directions, one of them straight out through the body wall.
+         *
+         * Instead: take the pin's LOCAL inward normal (+x for a left pin, -x
+         * for a right one) and map THAT through the same orientation. Its
+         * screen-x sign is the direction the caption must run to stay inside
+         * the body, at every one of the eight orientations. When the normal
+         * comes out vertical (the block is on its side, so the caption hangs
+         * off a horizontal edge) there is no left/right to prefer and "middle"
+         * centres it on its own lead. Rotating a block never relayouts it -
+         * sides are local facts - and this keeps the captions saying so.
+         */
+        const inward = transformPoint(
+          { x: onLeft ? 1 : -1, y: 0 },
+          placement.rotation,
+          placement.mirrored,
+        );
+        const anchor = Math.abs(inward.x) < 0.5 ? "middle" : inward.x > 0 ? "start" : "end";
+        const full = pin.label ?? "";
+        // Middle-ellipsis plus a full-name <title>, the pattern PinLabel already
+        // uses: the head and tail of a net name carry its identity, the middle
+        // does not, and the whole string is still one hover away.
+        const drawn = middleEllipsisCaption(full, subcircuitCaptionBudget(subcircuitBody.maxX));
+        const affected = driftedPins.has(pin.id);
         return (
           <text
             key={`subckt-label-${pin.id}`}
-            className="subckt-pin-label"
+            className={`subckt-pin-label${affected ? " drifted" : ""}`}
+            data-subckt-pin={pin.id}
+            data-subckt-pin-label={full}
             x={labelPoint.x}
             y={labelPoint.y + 3}
-            textAnchor={labelPoint.x < -8 ? "start" : labelPoint.x > 8 ? "end" : "middle"}
+            textAnchor={anchor}
           >
-            {pin.label}
+            {drawn !== full && <title>{full}</title>}
+            {drawn}
           </text>
         );
       })}
+      {/* The block's own name, across the top inside the body. Centred in the
+          clear strip above the topmost caption (halfHeight = maxPinY + 12, so
+          minY..minY+8 can never hold a caption) rather than dead centre, where
+          an odd-numbered bank puts a terminal at y = 0. */}
+      {nativeSubcircuit && subcircuitBody && namesItself && (() => {
+        const budget = Math.max(
+          1,
+          Math.floor((subcircuitBody.maxX - subcircuitBody.minX - 8) / SUBCIRCUIT_CAPTION_ADVANCE),
+        );
+        const drawn = middleEllipsisCaption(subcircuitModelName, budget);
+        const at = transformPoint({ x: 0, y: subcircuitBody.minY + 8 }, placement.rotation, placement.mirrored);
+        return (
+          <text
+            className="subckt-model-label"
+            data-subckt-model={subcircuitModelName}
+            x={at.x}
+            y={at.y}
+            textAnchor="middle"
+            // This label is the ONLY thing naming the block now that the X
+            // glyph is dropped for it, and it renders on every existing linked
+            // instance with no new prop. Unstyled it would inherit the app's
+            // ~13px UI size as WORLD units and paint black - a name three
+            // times the body's clear strip. The size must match
+            // SUBCIRCUIT_CAPTION_ADVANCE, which is what the width rule
+            // measured the gutter with.
+            fill="var(--muted)"
+            stroke="none"
+            fontFamily="var(--font-mono)"
+            fontSize={7}
+            fontWeight={500}
+          >
+            {drawn !== subcircuitModelName && <title>{subcircuitModelName}</title>}
+            {drawn}
+          </text>
+        );
+      })()}
+      {/* The lamp. Drawn OUTSIDE the oriented group so its hit rect stays
+          axis-aligned at --control-hit whatever the block's rotation, and it is
+          the sentence - not the colour - that carries the meaning. */}
+      {nativeSubcircuit && subcircuitBody && drift && (() => {
+        const corner = transformPoint(
+          { x: subcircuitBody.maxX, y: subcircuitBody.minY },
+          placement.rotation,
+          placement.mirrored,
+        );
+        return (
+          <g
+            className={`subckt-drift-lamp${drift.kind === "drifted" ? " transient" : ""}`}
+            role="button"
+            tabIndex={0}
+            aria-label={drift.sentence}
+            transform={`translate(${corner.x} ${corner.y})`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onReviewDrift?.();
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              event.stopPropagation();
+              onReviewDrift?.();
+            }}
+          >
+            <title>{drift.sentence}</title>
+            {/* 28x28 transparent target = --control-hit, well over WCAG 2.2
+                SC 2.5.8's 24x24 floor, around a 7-unit painted lamp. */}
+            {/* `transparent`, never `none`: a fill of `none` is not hit-tested,
+                so the 28x28 target would exist in the DOM and be unclickable -
+                and an unstyled rect would instead be a black square. */}
+            <rect
+              className="subckt-drift-lamp-hit"
+              x={-14}
+              y={-14}
+              width={28}
+              height={28}
+              fill="transparent"
+              stroke="none"
+            />
+            <circle
+              className="subckt-drift-lamp-dot"
+              cx={0}
+              cy={0}
+              r={3.5}
+              fill="var(--diagnostic-warning)"
+              stroke="none"
+            />
+          </g>
+        );
+      })()}
       {showPins && (
         <g className="pin-layer" transform={overridePins ? undefined : orient}>
           {/* The instance's own bank, so the pin dots match the gate that is

@@ -833,14 +833,33 @@ describe("The modal editors are fetched only from default routes", () => {
     expect(within(dialog).getByText(/Choose a common analysis/)).toBeTruthy();
   });
 
-  it("mounts the child-sheet interface dialog from a fresh schematic toolbar", async () => {
+  it("refuses a sheet interface on an .asc sheet, in plain words, and says why", async () => {
+    /*
+     * Re-expected against the new design, not repaired. This case used to assert
+     * a group named "Child sheet project ports" and a button "Add project port".
+     * Both encoded the old shape: the dialog no longer calls the reader's own
+     * sheet a "child", and the add button took THE FIRST UNUSED NET LABEL IT
+     * FOUND - the auto-pick this pass deleted, because a port whose net nobody
+     * chose is how an interface ends up in an order nobody meant.
+     *
+     * The fixture opens `untitled.asc`, and that is the interesting half: an
+     * `.asc` document cannot carry `projectPorts` at all, so the dialog refuses
+     * up front with a sentence instead of offering a control that would always
+     * fail. Asserting the refusal is worth more than asserting a button, because
+     * silence here was the original trap - the user found out at save time.
+     */
     await renderOpenProject();
 
-    fireEvent.click(screen.getByRole("button", { name: "Child sheet interface" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sheet interface" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Child sheet interface" });
-    expect(within(dialog).getByRole("group", { name: "Child sheet project ports" })).toBeTruthy();
-    expect(within(dialog).getByRole("button", { name: "Add project port" })).toBeTruthy();
+    const dialog = await screen.findByRole("dialog", { name: "Sheet interface" });
+    const group = within(dialog).getByRole("group", { name: "Sheet interface" });
+    const refusal = within(group).getByRole("note");
+    expect(refusal.textContent).toMatch(/\.asc/i);
+    expect(refusal.textContent).toMatch(/\.sim/i);
+    // No live control is offered on a sheet that cannot hold one.
+    expect(within(group).queryByRole("button", { name: /Pick a net on the drawing/i })).toBeNull();
+    expect(within(group).queryByRole("button", { name: "Add project port" })).toBeNull();
   });
 });
 

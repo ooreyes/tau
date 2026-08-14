@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { Canvas } from "./Canvas";
 import { buildLabelPlacements, circuitBounds, circuitBoundsWithLabels, sourceValueLabel } from "./Canvas.geometry";
 import { useSchematic } from "../store/useSchematic";
 import type { SchematicAscShape, SchematicComponent } from "../schematic/types";
+import { buildSubcircuitPinOverride, subcircuitBankSides } from "../schematic/subcircuitGeometry";
 
 // Structural, not imported: the store's state interface is module-local, and
 // widening its visibility for a test is not this lane's file to change.
@@ -659,5 +662,477 @@ describe("Canvas - fit centres in the VISIBLE canvas box and follows a resize (P
       await Promise.resolve();
     });
     expect(readView()).toEqual(panned);
+  });
+});
+
+/**
+ * The caption-anchor regression (acceptance check A4).
+ *
+ * `textAnchor` used to be chosen from `labelPoint.x` AFTER `transformPoint`
+ * had rotated it. `rotatePoint(90)` maps (x,y) -> (-y,x), so a left-side pin at
+ * local (-24,-32) yielded labelPoint.x = +32 -> "end" while its sibling at
+ * (-24,+32) yielded -32 -> "start": two captions on the SAME physical side of a
+ * rotated block pointed opposite ways. The anchor is a property of the pin's
+ * LOCAL side, so it is derived from that and mapped through the rotated side
+ * normal instead.
+ */
+describe("Canvas - a linked block's pin captions anchor off their own side (A4)", () => {
+  const ORIENTATIONS: { rotation: 0 | 90 | 180 | 270; mirrored: boolean }[] = [
+    { rotation: 0, mirrored: false }, { rotation: 90, mirrored: false },
+    { rotation: 180, mirrored: false }, { rotation: 270, mirrored: false },
+    { rotation: 0, mirrored: true }, { rotation: 90, mirrored: true },
+    { rotation: 180, mirrored: true }, { rotation: 270, mirrored: true },
+  ];
+
+  for (const { rotation, mirrored } of ORIENTATIONS) {
+    it(`anchors every caption by local side at ${rotation}deg${mirrored ? " mirrored" : ""}`, () => {
+      const base: SchematicComponent = {
+        id: "x1", kind: "subckt", x: 320, y: 240, rotation, mirrored,
+        value: "Boost", label: "X1",
+        projectSubcircuit: { sheetPath: "boost.sim", model: "Boost", ports: ["IN", "OUT", "GND"] },
+      };
+      const comp: SchematicComponent = {
+        ...base,
+        pinOverride: buildSubcircuitPinOverride(base, ["IN", "OUT", "GND"], ["In", "Out", "BiDir"]),
+      };
+      useSchematic.setState({ components: [comp], ascShapes: [] } as Partial<SchematicState> as SchematicState);
+      render(<Canvas />);
+
+      // Expected side comes from the geometry module reading the persisted
+      // bank back - not from a literal typed out next to the implementation.
+      const sides = subcircuitBankSides(comp);
+      const captions = [...document.querySelectorAll("text.subckt-pin-label[data-subckt-pin]")];
+      expect(captions.length).toBe(3);
+      const nodeFor = (label: string) => captions
+        .find((node) => node.getAttribute("data-subckt-pin-label") === label)!;
+
+      // THE INVARIANT THE BUG BROKE: two captions on the same LOCAL side of a
+      // block must run the same way, at every orientation. Before the fix the
+      // anchor came from the post-rotation x, so at 90/270 the two left-column
+      // captions got opposite anchors.
+      const anchorsBySide = new Map<string, Set<string>>();
+      for (const [index, label] of ["IN", "OUT", "GND"].entries()) {
+        const side = String(sides[index]);
+        const anchor = nodeFor(label).getAttribute("text-anchor")!;
+        (anchorsBySide.get(side) ?? anchorsBySide.set(side, new Set()).get(side)!).add(anchor);
+      }
+      for (const [side, anchors] of anchorsBySide) {
+        expect([...anchors], `local ${side} captions disagree`).toHaveLength(1);
+      }
+
+      // ...and the caption runs INWARD, toward the body it belongs to: that is
+      // the only direction that keeps it inside the outline, and the anchor is
+      // derived from the rendered position rather than a hand-written table of
+      // eight orientations.
+      for (const label of ["IN", "OUT", "GND"]) {
+        const node = nodeFor(label);
+        const x = Number(node.getAttribute("x"));
+        const anchor = node.getAttribute("text-anchor")!;
+        // "middle" is the honest answer when the block is on its side: the
+        // caption hangs off a horizontal edge and there is no left/right to
+        // prefer, so it centres on its own lead.
+        if (anchor === "middle") {
+          expect(rotation === 90 || rotation === 270).toBe(true);
+          continue;
+        }
+        expect(anchor, `${label} at ${rotation}deg runs out through the body wall`)
+          .toBe(x < 0 ? "start" : "end");
+      }
+    });
+  }
+});
+
+describe("Canvas - a linked block says its own name, and says when it is stale", () => {
+  const LINK = { sheetPath: "boost.sim", model: "Boost", ports: ["IN", "OUT", "GND"] };
+  const block = (): SchematicComponent => {
+    const base: SchematicComponent = {
+      id: "x1", kind: "subckt", x: 320, y: 240, rotation: 0, mirrored: false,
+      value: "Boost", label: "X1", projectSubcircuit: LINK,
+    };
+    return { ...base, pinOverride: buildSubcircuitPinOverride(base, LINK.ports, ["In", "Out", "BiDir"]) };
+  };
+  const mount = (props: Parameters<typeof Canvas>[0] = {}) => {
+    useSchematic.setState({ components: [block()], ascShapes: [] } as Partial<SchematicState> as SchematicState);
+    return render(<Canvas {...props} />);
+  };
+
+  it("names the block and drops the generic X glyph once it has names", () => {
+    mount();
+    expect(document.querySelector("text.subckt-model-label")?.textContent).toBe("Boost");
+    // The X glyph is that exact path; an unlinked X device still keeps it.
+    const glyphs = [...document.querySelectorAll("path")]
+      .filter((node) => node.getAttribute("d") === "M -7 -7 L 7 7 M -7 7 L 7 -7");
+    expect(glyphs).toHaveLength(0);
+  });
+
+  it("keeps the X glyph on a subcircuit that cannot name itself", () => {
+    const bare: SchematicComponent = {
+      id: "x2", kind: "subckt", x: 320, y: 240, rotation: 0, mirrored: false,
+      value: "", label: "X2",
+      pinOverride: [{ id: "p1", label: "", x: 272, y: 240 }, { id: "p2", label: "", x: 368, y: 240 }],
+    };
+    useSchematic.setState({ components: [bare], ascShapes: [] } as Partial<SchematicState> as SchematicState);
+    render(<Canvas />);
+    expect([...document.querySelectorAll("path")]
+      .filter((n) => n.getAttribute("d") === "M -7 -7 L 7 7 M -7 7 L 7 -7")).toHaveLength(1);
+  });
+
+  it("draws no drift annotation at all when nothing has drifted", () => {
+    mount();
+    expect(document.querySelector(".subckt-body-drift")).toBeNull();
+    expect(document.querySelector(".subckt-drift-lamp")).toBeNull();
+    expect(document.querySelector("text.subckt-pin-label.drifted")).toBeNull();
+  });
+
+  it("annotates a stale block in words, marks the pins at issue, and never moves it", () => {
+    const clean = mount();
+    const pinsBefore = [...document.querySelectorAll("text.subckt-pin-label")]
+      .map((n) => `${n.getAttribute("x")},${n.getAttribute("y")},${n.getAttribute("text-anchor")}`);
+    cleanup();
+    const sentence = "boost.sim reordered its connections: IN, OUT, GND -> IN, GND, OUT.";
+    const onReviewDrift = vi.fn();
+    mount({
+      subcircuitDrift: new Map([["x1", { kind: "drifted" as const, sentence, pins: ["p2", "p3"] }]]),
+      onReviewDrift,
+    });
+    void clean;
+
+    // The sentence, not the colour, is what carries the state.
+    expect(screen.getByRole("button", { name: sentence })).toBeTruthy();
+    expect(document.querySelector(".component.subckt-drifted")?.getAttribute("aria-label")).toBe(sentence);
+    expect(document.querySelector(".subckt-body-drift.transient")).toBeTruthy();
+
+    // Only the pins the change is about are underlined.
+    expect([...document.querySelectorAll("text.subckt-pin-label.drifted")]
+      .map((n) => n.getAttribute("data-subckt-pin"))).toEqual(["p2", "p3"]);
+
+    // NOT ONE PIXEL MOVED: the stored contract is what will be netlisted.
+    expect([...document.querySelectorAll("text.subckt-pin-label")]
+      .map((n) => `${n.getAttribute("x")},${n.getAttribute("y")},${n.getAttribute("text-anchor")}`))
+      .toEqual(pinsBefore);
+    expect(useSchematic.getState().components[0].pinOverride).toEqual(block().pinOverride);
+
+    // A 28-unit target = --control-hit, over WCAG 2.2 SC 2.5.8's 24 floor.
+    const hit = document.querySelector(".subckt-drift-lamp-hit")!;
+    expect(hit.getAttribute("width")).toBe("28");
+    expect(hit.getAttribute("height")).toBe("28");
+    fireEvent.click(document.querySelector(".subckt-drift-lamp")!);
+    expect(onReviewDrift).toHaveBeenCalledWith("x1");
+  });
+
+  it("draws a missing sheet's lamp solid rather than dashed", () => {
+    mount({
+      subcircuitDrift: new Map([["x1", {
+        kind: "missing-sheet" as const,
+        sentence: "boost.sim is missing from this project.",
+      }]]),
+    });
+    expect(document.querySelector(".subckt-body-drift")).toBeTruthy();
+    expect(document.querySelector(".subckt-body-drift.transient")).toBeNull();
+    expect(document.querySelector(".subckt-drift-lamp.transient")).toBeNull();
+  });
+
+  it("opens the linked sheet on a double-click anywhere on the body (D7)", () => {
+    const onOpenLinkedSheet = vi.fn();
+    mount({ onOpenLinkedSheet });
+    const svg = document.querySelector("svg.canvas")!;
+    // 30 units off-centre: the whole body is the target, not a corner glyph.
+    fireEvent.doubleClick(svg, { clientX: 0, clientY: 0 });
+    // (0,0) is off the part; nothing opens.
+    expect(onOpenLinkedSheet).not.toHaveBeenCalled();
+    fireEvent.doubleClick(svg, { clientX: 320, clientY: 240 });
+    expect(onOpenLinkedSheet).toHaveBeenCalledWith("x1");
+    // Opening the sheet replaces the value editor, so no inline edit opened.
+    expect(document.querySelector("input.value-edit-input")).toBeNull();
+  });
+});
+
+describe("Canvas - candidate nets are visible while the label tool is armed (A6)", () => {
+  const arm = (mode: "select" | "label") => {
+    useSchematic.setState({
+      components: [{ id: "r1", kind: "resistor", x: 96, y: 96, rotation: 0, value: "1k", label: "R1" } as SchematicComponent],
+      wires: [{ id: "w1", points: [{ x: 96, y: 128 }, { x: 224, y: 128 }] }],
+      ascShapes: [],
+      tool: { mode },
+    } as Partial<SchematicState> as SchematicState);
+    render(<Canvas />);
+  };
+
+  it("shows no candidate marks at all with the select tool", () => {
+    arm("select");
+    expect(document.querySelector(".net-candidate-layer")).toBeNull();
+  });
+
+  it("marks every electrical net once the label tool is armed", () => {
+    arm("label");
+    const layer = document.querySelector(".net-candidate-layer")!;
+    expect(layer.querySelectorAll(".net-candidate-mark").length).toBeGreaterThan(0);
+    // Decoration only - net resolution stays snappedCursor -> netAtPoint.
+    expect(layer.getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
+describe("Canvas - a net says what it is FOR, in the draft already open (D5b)", () => {
+  const NET = { id: "w1", points: [{ x: 96, y: 128 }, { x: 224, y: 128 }] };
+  const armLabelTool = () => {
+    useSchematic.setState({
+      components: [
+        { id: "r1", kind: "resistor", x: 96, y: 96, rotation: 0, value: "1k", label: "R1" } as SchematicComponent,
+      ],
+      wires: [NET],
+      netLabels: [],
+      projectPorts: [],
+      ascShapes: [],
+      tool: { mode: "label" },
+    } as Partial<SchematicState> as SchematicState);
+  };
+  const openDraft = () => fireEvent.pointerDown(document.querySelector("svg.canvas")!, {
+    button: 0, clientX: 128, clientY: 128,
+  });
+
+  it("shows no direction control at all until the commit seam is wired", () => {
+    armLabelTool();
+    render(<Canvas />);
+    openDraft();
+    // Today's behaviour, byte for byte: a name field and nothing else.
+    expect(screen.getByLabelText("Net label name")).toBeTruthy();
+    expect(document.querySelector(".net-port-direction")).toBeNull();
+  });
+
+  it("offers four segments, defaults to Internal, and clears the 24px floor", () => {
+    armLabelTool();
+    render(<Canvas onCommitNetLabelPort={() => ({ ok: true })} />);
+    openDraft();
+    const radios = screen.getAllByRole("radio");
+    expect(radios.map((r) => r.textContent)).toEqual(["Internal", "Input", "Output", "Both ways"]);
+    expect(radios.filter((r) => r.getAttribute("aria-checked") === "true").map((r) => r.textContent))
+      .toEqual(["Internal"]);
+    // The 28px floor is a stylesheet fact; assert the class the sheet keys on
+    // is present so App.css cannot silently stop styling this row.
+    expect(document.querySelectorAll(".net-port-direction-segment")).toHaveLength(4);
+  });
+
+  it("commits the direction that was EXPLICITLY chosen, never an inherited one", () => {
+    armLabelTool();
+    const onCommitNetLabelPort = vi.fn(() => ({ ok: true }));
+    render(<Canvas onCommitNetLabelPort={onCommitNetLabelPort} />);
+    openDraft();
+    fireEvent.change(screen.getByLabelText("Net label name"), { target: { value: "VIN" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Input" }));
+    fireEvent.keyDown(screen.getByLabelText("Net label name"), { key: "Enter" });
+    expect(onCommitNetLabelPort).toHaveBeenCalledWith(128, 128, "VIN", "In");
+  });
+
+  it("leaves the draft open with the store's own reason when the commit is refused", () => {
+    armLabelTool();
+    render(<Canvas onCommitNetLabelPort={() => ({ ok: false, error: "A port named VIN already exists." })} />);
+    openDraft();
+    fireEvent.change(screen.getByLabelText("Net label name"), { target: { value: "VIN" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Output" }));
+    fireEvent.keyDown(screen.getByLabelText("Net label name"), { key: "Enter" });
+    expect(screen.getByRole("alert").textContent).toBe("A port named VIN already exists.");
+    expect(screen.getByLabelText("Net label name")).toBeTruthy();
+    // Nothing was written - the choice is still on screen to correct.
+    expect(useSchematic.getState().netLabels).toEqual([]);
+  });
+
+  /**
+   * KEYBOARD REACHABILITY. The name input commits on blur ("click-away
+   * confirms"), so Tab out of it destroys the draft. That makes the direction
+   * segments mouse-only: a keyboard user can never mark a net as an
+   * input or an output at all, which fails WCAG 2.1.1 and makes the whole
+   * drawing-first authoring act inaccessible - not merely awkward.
+   */
+  it("survives Tab out of the name field into the direction row", () => {
+    armLabelTool();
+    const onCommitNetLabelPort = vi.fn(() => ({ ok: true }));
+    render(<Canvas onCommitNetLabelPort={onCommitNetLabelPort} />);
+    openDraft();
+    const input = screen.getByLabelText("Net label name");
+    fireEvent.change(input, { target: { value: "VIN" } });
+    // Tab moves focus to the row; the browser reports it as `relatedTarget`.
+    fireEvent.blur(input, { relatedTarget: screen.getByRole("radio", { name: "Internal" }) });
+    expect(onCommitNetLabelPort).not.toHaveBeenCalled();
+    expect(document.querySelector(".net-port-direction")).not.toBeNull();
+  });
+
+  it("is a real radiogroup: arrows move the choice, Enter commits it", () => {
+    armLabelTool();
+    const onCommitNetLabelPort = vi.fn(() => ({ ok: true }));
+    render(<Canvas onCommitNetLabelPort={onCommitNetLabelPort} />);
+    openDraft();
+    fireEvent.change(screen.getByLabelText("Net label name"), { target: { value: "VIN" } });
+    const seg = () => screen.getByRole("radio", { name: "Internal" });
+    fireEvent.blur(screen.getByLabelText("Net label name"), { relatedTarget: seg() });
+    // Roving tabindex, so Tab lands on the CHECKED segment, not all four.
+    expect(screen.getAllByRole("radio").map((r) => r.getAttribute("tabindex")))
+      .toEqual(["0", "-1", "-1", "-1"]);
+    fireEvent.keyDown(seg(), { key: "ArrowRight" });
+    expect(screen.getAllByRole("radio").filter((r) => r.getAttribute("aria-checked") === "true")
+      .map((r) => r.textContent)).toEqual(["Input"]);
+    fireEvent.keyDown(screen.getByRole("radio", { name: "Input" }), { key: "Enter" });
+    expect(onCommitNetLabelPort).toHaveBeenCalledWith(128, 128, "VIN", "In");
+  });
+
+  it("refuses the interface on an .asc sheet at the gesture, in the sheet's own words", () => {
+    armLabelTool();
+    const reason = "An .asc sheet cannot carry a Tau sheet interface - save it as .sim first";
+    render(<Canvas onCommitNetLabelPort={() => ({ ok: true })} sheetInterfaceDisabledReason={reason} />);
+    openDraft();
+    expect(screen.getByRole("note").textContent).toBe(reason);
+    // Internal stays live: an ordinary net label on an .asc sheet is still fine.
+    const disabled = (name: string) =>
+      (screen.getByRole("radio", { name }) as HTMLButtonElement).disabled;
+    expect(disabled("Internal")).toBe(false);
+    for (const name of ["Input", "Output", "Both ways"]) expect(disabled(name)).toBe(true);
+  });
+});
+
+describe("Canvas - a marked net wears its direction and its ordinal (D5d)", () => {
+  const mountMarked = () => {
+    useSchematic.setState({
+      components: [],
+      wires: [{ id: "w1", points: [{ x: 96, y: 128 }, { x: 224, y: 128 }] }],
+      netLabels: [
+        { id: "l1", x: 96, y: 128, text: "VIN", port: "In" },
+        { id: "l2", x: 224, y: 128, text: "VOUT", port: "Out" },
+        { id: "l3", x: 160, y: 160, text: "GND", port: "BiDir" },
+        { id: "l4", x: 160, y: 192, text: "n001" },
+      ],
+      projectPorts: [
+        { name: "VIN", labelId: "l1", direction: "In" },
+        { name: "VOUT", labelId: "l2", direction: "Out" },
+        { name: "GND", labelId: "l3", direction: "BiDir" },
+      ],
+      ascShapes: [],
+      tool: { mode: "select" },
+    } as Partial<SchematicState> as SchematicState);
+    render(<Canvas />);
+  };
+
+  it("draws a tag only on the marked nets, one per port", () => {
+    mountMarked();
+    expect([...document.querySelectorAll(".net-port-tag")].map((n) => n.getAttribute("data-net-port")))
+      .toEqual(["In", "Out", "BiDir"]);
+  });
+
+  it("prints the 1-based terminal number the parent will wire to", () => {
+    mountMarked();
+    expect([...document.querySelectorAll("text.net-port-ordinal")].map((n) => n.textContent))
+      .toEqual(["1", "2", "3"]);
+  });
+
+  it("points an input's apex INTO the net and an output's AWAY from it", () => {
+    mountMarked();
+    const dOf = (dir: string) => document
+      .querySelector(`.net-port-tag[data-net-port="${dir}"] .net-port-tag-body`)!
+      .getAttribute("d")!;
+    // The apex is the single x-extreme vertex: leftmost for In, rightmost for Out.
+    const xs = (d: string) => [...d.matchAll(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g)]
+      .map((m) => [Number(m[1]), Number(m[2])] as const);
+    const apexCount = (d: string, pick: (v: number[]) => boolean) => xs(d).filter((p) => pick([...p])).length;
+    const inD = dOf("In");
+    const outD = dOf("Out");
+    expect(apexCount(inD, ([x, y]) => x === Math.min(...xs(inD).map(([px]) => px)) && y === 0)).toBe(1);
+    expect(apexCount(outD, ([x, y]) => x === Math.max(...xs(outD).map(([px]) => px)) && y === 0)).toBe(1);
+    // Both ways is blunt at both ends - two vertices on the centre line.
+    const biD = dOf("BiDir");
+    expect(xs(biD).filter(([, y]) => y === 0)).toHaveLength(2);
+  });
+
+  it("says the same thing in words, so the glyph is never the only channel", () => {
+    mountMarked();
+    expect(document.querySelector('.net-port-tag[data-net-port="In"] title')?.textContent)
+      .toBe("VIN - sheet input, terminal 1");
+  });
+});
+
+/**
+ * THE UNSTYLED-MARK GATE.
+ *
+ * An SVG shape with no `fill` rule and no `fill` attribute is not invisible -
+ * SVG's initial fill is opaque BLACK, and its initial pointer-events is
+ * `visiblePainted`. So a new canvas mark whose class has no rule in App.css
+ * does not "wait for the stylesheet to land": it ships as a black blob on the
+ * instrument face, in both themes, ignoring "colour is measurement" entirely.
+ *
+ * This gate is derived from BOTH artefacts and restates neither: the class
+ * tokens come out of the rendered DOM, the styled set comes out of App.css.
+ */
+describe("Canvas - every painted mark declares its own ink (no black-blob defaults)", () => {
+  const PAINTED = "circle, rect, path, ellipse, line, text, polygon, polyline";
+
+  const styledClasses = (): Set<string> => {
+    // vitest runs with cwd = apps/desktop; `import.meta.url` is not a file URL
+    // under the jsdom environment, so resolve off the package root instead.
+    const css = readFileSync(resolve(process.cwd(), "src/App.css"), "utf8");
+    // Only selector text, never declaration values, or `var(--x)` names and
+    // `color-mix` arguments would masquerade as styled class names.
+    const set = new Set<string>();
+    for (const block of css.split("}")) {
+      const selector = block.slice(block.lastIndexOf("{") >= 0 ? 0 : 0, block.indexOf("{"));
+      for (const match of selector.matchAll(/\.([A-Za-z_][\w-]*)/g)) set.add(match[1]);
+    }
+    return set;
+  };
+
+  /** Marks that paint with neither a rule for their base class nor an
+   *  explicit fill/stroke of their own. */
+  const unstyledMarks = (root: ParentNode): string[] => {
+    const styled = styledClasses();
+    const bad = new Set<string>();
+    for (const node of root.querySelectorAll(PAINTED)) {
+      const tokens = (node.getAttribute("class") ?? "").split(/\s+/).filter(Boolean);
+      if (!tokens.length) continue;
+      const declaresInk = node.hasAttribute("fill") || node.hasAttribute("stroke");
+      if (declaresInk) continue;
+      if (tokens.some((token) => styled.has(token))) continue;
+      bad.add(`${node.tagName.toLowerCase()}.${tokens.join(".")}`);
+    }
+    return [...bad].sort();
+  };
+
+  it("finds the gate itself trustworthy - a knowingly unstyled mark IS reported", () => {
+    const { container } = render(
+      <svg><circle className="tau-definitely-not-in-app-css" r={3} /></svg>,
+    );
+    expect(unstyledMarks(container)).toEqual(["circle.tau-definitely-not-in-app-css"]);
+  });
+
+  it("leaves no unstyled mark on a linked block, stale or clean", () => {
+    const LINK = { sheetPath: "boost.sim", model: "Boost", ports: ["IN", "OUT", "GND"] };
+    const base: SchematicComponent = {
+      id: "x1", kind: "subckt", x: 320, y: 240, rotation: 0, mirrored: false,
+      value: "Boost", label: "X1", projectSubcircuit: LINK,
+    };
+    useSchematic.setState({
+      components: [{ ...base, pinOverride: buildSubcircuitPinOverride(base, LINK.ports, ["In", "Out", "BiDir"]) }],
+      wires: [], netLabels: [], ascShapes: [], tool: { mode: "select" },
+    } as Partial<SchematicState> as SchematicState);
+    const { container } = render(
+      <Canvas
+        subcircuitDrift={new Map([["x1", { kind: "drifted" as const, sentence: "boost.sim reordered its connections.", pins: ["p2"] }]])}
+        onReviewDrift={() => {}}
+      />,
+    );
+    expect(unstyledMarks(container)).toEqual([]);
+  });
+
+  it("leaves no unstyled mark while the label tool is armed over a net", () => {
+    useSchematic.setState({
+      components: [], ascShapes: [],
+      wires: [{ id: "w1", points: [{ x: 96, y: 128 }, { x: 224, y: 128 }] }],
+      netLabels: [{ id: "l1", x: 96, y: 128, text: "VIN", port: "In" }],
+      projectPorts: [{ name: "VIN", labelId: "l1", direction: "In" }],
+      tool: { mode: "label" },
+    } as Partial<SchematicState> as SchematicState);
+    const { container } = render(<Canvas interactive />);
+    const svg = container.querySelector("svg")!;
+    svg.getBoundingClientRect = () => ({ x: 0, y: 0, width: 900, height: 600, top: 0, left: 0, right: 900, bottom: 600, toJSON: () => ({}) }) as DOMRect;
+    fireEvent.pointerMove(svg, { clientX: 160, clientY: 128 });
+    // The puck is the whole 24-unit pick target; if it never rendered this
+    // case would be vacuous, so prove it is there before judging its ink.
+    expect(container.querySelector(".net-pick-puck")).not.toBeNull();
+    expect(unstyledMarks(container)).toEqual([]);
   });
 });

@@ -151,3 +151,256 @@ export function hasMatchingOrderedProjectPorts(
   return linkPorts.length === sheetPorts.length && linkPorts.every((port, index) =>
     asciiFold(port) === asciiFold(sheetPorts[index]?.name ?? ""));
 }
+
+/* ======================================================================
+ * Item 14 vocabulary: what a project sheet offers, and how a parent's
+ * stored contract differs from it. Everything below is PURE and imports
+ * nothing but ./types, deliberately:
+ *
+ *  - no store and no component import, so the classifier can be called from
+ *    a store action, a renderer, a dialog and a headless test alike;
+ *  - no subcircuitGeometry import, which is why {@link projectSheetInterfaceDrift}
+ *    takes `sides` as a parameter instead of computing them. The single rule
+ *    about which side a pin lands on lives in subcircuitGeometry; duplicating
+ *    it here would create a second rule that could disagree with the drawing.
+ * ====================================================================== */
+
+/**
+ * What an authoring-time index knows about one project sheet.
+ *
+ * ADVISORY ONLY. No compiler path may read this: `buildProjectHierarchyDeck`
+ * stays the only judge of whether a link is legal, and the equivalence test
+ * (spec D5) exists to prove an index entry is never `ok` where Run refuses.
+ *
+ * `reason` carries the loader's own words verbatim - paraphrasing a parse
+ * error into house prose is how a user loses the one string that would have
+ * told them which byte of their file is wrong.
+ *
+ * `status: "missing"` records a sheet the link names but the project does not
+ * contain. It is deliberately a status rather than an absent entry, because an
+ * absent entry means "not looked at yet" ({@link ProjectInterfaceDrift}
+ * `not-checked`) and the two must never be confused: one is silence, the other
+ * is a fact.
+ */
+export interface ProjectSheetInterfaceEntry {
+  /** Canonical project-relative path, i.e. {@link canonicalProjectSheetPath} output. */
+  sheetPath: string;
+  fileName: string;
+  status: "ok" | "no-interface" | "unreadable" | "missing";
+  /** Empty unless `status === "ok"`. */
+  ports: readonly ProjectSheetPort[];
+  /** The loader's own words, verbatim, when it had any. */
+  reason?: string;
+}
+
+/** Which column of a linked block's body a terminal sits in. */
+export type PortSide = "left" | "right" | null;
+
+export interface ProjectInterfaceDriftRow {
+  /** 1-based terminal position - the same ordinal the emitted X card uses. */
+  position: number;
+  /** The parent's stored belief at this position, if it has one. */
+  was?: { name: string; side: PortSide };
+  /** The child sheet's live declaration at this position, if it has one. */
+  now?: { name: string; direction: SchematicPortDirection; side: PortSide };
+  change: "same" | "renamed" | "moved" | "direction" | "added" | "removed";
+  /** Generated from this row by {@link driftRowConsequence}; never a per-case literal. */
+  consequence: string;
+}
+
+export type ProjectInterfaceDrift =
+  | { kind: "in-sync" }
+  | { kind: "not-checked" }
+  | { kind: "missing-sheet" }
+  | { kind: "sheet-unreadable"; reason: string }
+  | { kind: "no-interface" }
+  | {
+      kind: "drifted";
+      rows: ProjectInterfaceDriftRow[];
+      /** Same names, different order: the case that silently changes the netlist. */
+      reordered: boolean;
+      /** True iff nothing in this diff changes an emitted node. */
+      electricallyInert: boolean;
+      summary: string;
+    };
+
+const FALLBACK_UNREADABLE_REASON = "This sheet could not be read.";
+
+function directionWord(direction: SchematicPortDirection): string {
+  return asciiFold(direction);
+}
+
+function sideWord(side: PortSide): string {
+  return side ?? "unplaced";
+}
+
+/**
+ * The ONE place a row's prose is produced. The wording differs per change kind
+ * because the consequences genuinely differ, but every sentence is composed
+ * from this row's own fields, so a case cannot quietly start describing a
+ * position, pin number or name other than its own.
+ */
+function driftRowConsequence(row: Omit<ProjectInterfaceDriftRow, "consequence">): string {
+  const pin = `pin ${row.position}`;
+  const was = row.was;
+  const now = row.now;
+  switch (row.change) {
+    case "same":
+      return `Position ${row.position} is unchanged.`;
+    case "renamed":
+      // There is no cross-file port identity to appeal to (labelId is reminted
+      // on every load), so this states the positional fact and nothing more.
+      return `Node order is unchanged. The generated .subckt header will name terminal ${row.position} ${now?.name ?? ""} instead of ${was?.name ?? ""}.`;
+    case "moved":
+      return `Position ${row.position} was ${was?.name ?? ""} and is now ${now?.name ?? ""}. This changes which net becomes which node, so the wire on ${pin} will move.`;
+    case "direction":
+      return `${now?.name ?? ""} is now ${directionWord(now?.direction ?? "BiDir")}, so ${pin} moves from the ${sideWord(was?.side ?? null)} side to the ${sideWord(now?.side ?? null)} side. Nothing electrical changes.`;
+    case "added":
+      return `${now?.name ?? ""} is new on the sheet and would become ${pin}.`;
+    case "removed":
+      return `${was?.name ?? ""} is gone from the sheet, so the wire on ${pin} would be left unconnected.`;
+  }
+}
+
+/** Plural nouns for the summary, so the count line is also built once. */
+const CHANGE_NOUNS: Record<ProjectInterfaceDriftRow["change"], readonly [string, string]> = {
+  same: ["unchanged", "unchanged"],
+  renamed: ["renamed", "renamed"],
+  moved: ["moved", "moved"],
+  direction: ["direction change", "direction changes"],
+  added: ["added", "added"],
+  removed: ["removed", "removed"],
+};
+
+const SUMMARY_ORDER: readonly ProjectInterfaceDriftRow["change"][] = [
+  "moved", "renamed", "added", "removed", "direction",
+];
+
+function driftSummary(
+  fileName: string,
+  linkPorts: readonly string[],
+  nowNames: readonly string[],
+  rows: readonly ProjectInterfaceDriftRow[],
+  reordered: boolean,
+  electricallyInert: boolean,
+): string {
+  const counts = new Map<ProjectInterfaceDriftRow["change"], number>();
+  for (const row of rows) counts.set(row.change, (counts.get(row.change) ?? 0) + 1);
+  const parts = SUMMARY_ORDER.flatMap((change) => {
+    const count = counts.get(change) ?? 0;
+    if (count === 0) return [];
+    const [singular, plural] = CHANGE_NOUNS[change];
+    return [`${count} ${count === 1 ? singular : plural}`];
+  });
+  // The reorder headline is loud on purpose: it is the only drift that keeps a
+  // legal-looking contract while changing which net becomes which node.
+  const headline = reordered
+    ? `${fileName} reordered its connections: ${linkPorts.join(", ")} -> ${nowNames.join(", ")}.`
+    : `${fileName} changed its interface.`;
+  const sentences = [headline];
+  if (parts.length > 0) sentences.push(`${parts.join(", ")}.`);
+  if (electricallyInert) sentences.push("Nothing electrical changes.");
+  return sentences.join(" ");
+}
+
+/**
+ * Compare a parent's STORED ordered contract against a child sheet's live
+ * interface, plus the sides the instance is actually drawn with against the
+ * sides the child's directions now imply.
+ *
+ * Nothing here reconciles anything: the verdict is advice for a human, and a
+ * real mismatch is still refused by the compiler with its own words.
+ *
+ * @param linkPorts the parent's `link.ports`, in emitted node order.
+ * @param entry the index entry, or null when the index has not resolved yet.
+ * @param sides `current` = the instance's actual bank sides (one per
+ *   `linkPorts` entry, read back out of `pinOverride`); `expected` = the sides
+ *   the child's live directions imply (one per `entry.ports` entry). Both are
+ *   computed by the caller from subcircuitGeometry's single slot rule.
+ */
+export function projectSheetInterfaceDrift(
+  linkPorts: readonly string[],
+  entry: ProjectSheetInterfaceEntry | null,
+  sides: { current: readonly PortSide[]; expected: readonly PortSide[] },
+): ProjectInterfaceDrift {
+  if (!entry) return { kind: "not-checked" };
+  if (entry.status === "missing") return { kind: "missing-sheet" };
+  if (entry.status === "unreadable") {
+    return { kind: "sheet-unreadable", reason: entry.reason ?? FALLBACK_UNREADABLE_REASON };
+  }
+  const sheetPorts = entry.ports ?? [];
+  if (entry.status === "no-interface" || sheetPorts.length === 0) return { kind: "no-interface" };
+
+  const foldedLink = linkPorts.map(asciiFold);
+  const foldedNow = sheetPorts.map((port) => asciiFold(port.name));
+  const sameLength = foldedLink.length === foldedNow.length;
+  const namesInOrder = sameLength && foldedLink.every((name, index) => name === foldedNow[index]);
+  const sidesAgree = sides.current.length === sides.expected.length
+    && sides.current.every((side, index) => side === sides.expected[index]);
+  // In-sync is exactly `hasMatchingOrderedProjectPorts` AND identical sides.
+  // The property test (B5) pins this equality, because a friendly "fine" that
+  // Run then refuses is worse than no indicator at all.
+  if (namesInOrder && sidesAgree) return { kind: "in-sync" };
+
+  // A pure permutation is provable exactly, and only when nothing was added or
+  // removed; anything else is reported as the positional fact it is.
+  const multiset = (names: readonly string[]) => [...names].sort().join(" ");
+  const reordered = sameLength && !namesInOrder && multiset(foldedLink) === multiset(foldedNow);
+
+  const rows: ProjectInterfaceDriftRow[] = [];
+  const positions = Math.max(foldedLink.length, foldedNow.length);
+  for (let index = 0; index < positions; index += 1) {
+    const hasWas = index < linkPorts.length;
+    const hasNow = index < sheetPorts.length;
+    const was = hasWas ? { name: linkPorts[index]!, side: sides.current[index] ?? null } : undefined;
+    const nowPort = hasNow ? sheetPorts[index]! : undefined;
+    const now = nowPort
+      ? { name: nowPort.name, direction: nowPort.direction, side: sides.expected[index] ?? null }
+      : undefined;
+    let change: ProjectInterfaceDriftRow["change"];
+    if (!hasNow) change = "removed";
+    else if (!hasWas) change = "added";
+    else if (foldedLink[index] === foldedNow[index]) {
+      change = was!.side === now!.side ? "same" : "direction";
+    } else change = reordered ? "moved" : "renamed";
+    const partial = { position: index + 1, was, now, change } as Omit<ProjectInterfaceDriftRow, "consequence">;
+    rows.push({ ...partial, consequence: driftRowConsequence(partial) });
+  }
+
+  const electricallyInert = rows.every((row) => row.change === "same" || row.change === "direction");
+  return {
+    kind: "drifted",
+    rows,
+    reordered,
+    electricallyInert,
+    summary: driftSummary(
+      entry.fileName,
+      linkPorts,
+      sheetPorts.map((port) => port.name),
+      rows,
+      reordered,
+      electricallyInert,
+    ),
+  };
+}
+
+/**
+ * The model name a parent gets offered when it links a sheet, so a student
+ * never types one. Case is not identity here (every project-link comparison
+ * folds ASCII case), so capitalising the stem changes spelling only.
+ *
+ * Returns NULL rather than sanitizing. `boost-converter.sim` has no default
+ * name, and saying so is the point: PROJECT_SPICE_TOKEN is deliberately
+ * narrower than ngspice's grammar precisely so a link never depends on a
+ * sanitizer quietly renaming an interface behind the user's back.
+ */
+export function defaultProjectModelName(fileName: string): string | null {
+  if (typeof fileName !== "string" || !fileName) return null;
+  const leaf = fileName.replace(/\\/g, "/").split("/").pop() ?? "";
+  const stem = /\.tau\.json$/i.test(leaf)
+    ? leaf.slice(0, -".tau.json".length)
+    : leaf.replace(/\.[^.]*$/, "");
+  if (!stem || stem.length > MAX_PROJECT_SUBCIRCUIT_NAME_LENGTH) return null;
+  const capitalized = stem.replace(/^[a-z]/, (letter) => letter.toUpperCase());
+  return PROJECT_SPICE_TOKEN.test(capitalized) ? capitalized : null;
+}

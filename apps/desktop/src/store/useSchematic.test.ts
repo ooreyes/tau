@@ -21,7 +21,21 @@ import {
 import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { dispatchShortcutAction, resolveShortcut, type ShortcutHandlers } from "../schematic/shortcuts";
 import { getComponentPins } from "../schematic/pins";
-import type { ComponentKind } from "../schematic/types";
+import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
+import type { ComponentKind, PinOverride, SchematicComponent, SchematicPortDirection } from "../schematic/types";
+
+/**
+ * The direction-aware third argument is BLOCK's lane (spec 5.1); until it is
+ * declared, name it here through one cast rather than duplicating the slot rule
+ * in a test. The point of the assertion is that the STORE holds no second
+ * layout rule - the bank it writes is whatever `subcircuitGeometry` says for
+ * that (ports, directions) pair.
+ */
+const geometryBank = buildSubcircuitPinOverride as (
+  component: Pick<SchematicComponent, "x" | "y" | "rotation" | "mirrored">,
+  ports: readonly string[],
+  directions?: readonly SchematicPortDirection[],
+) => PinOverride[];
 
 const sourceDocument = (): SchematicDocument => ({
   components: [
@@ -2418,5 +2432,229 @@ describe("P3-01 a legacy source alias converges to its canonical kind in one tra
     expect(useSchematic.getState().setSourceIdentity("missing", "vsource", "5")).toBe(false);
 
     expect(useSchematic.getState().components[0]).toMatchObject({ kind: "vsource", value: "5" });
+  });
+});
+
+/**
+ * Item 14 (PDF5) - the parent side of "a sheet is a block".
+ *
+ * These cases pin the three store contracts the drawing-first flow rests on:
+ * marking a net as a public port atomically, linking a child sheet with a
+ * direction hint that is USED but never STORED, and adopting a changed child
+ * interface as ONE undoable transaction whose geometry is fail-closed (a pin
+ * that went away leaves its wire where it was; it is never quietly re-attached
+ * to a different terminal).
+ */
+describe("project sheet blocks - marking, linking, resyncing", () => {
+  /** Two independent physical nets, each reachable at a bare wire endpoint. */
+  const twoNetDocument = (): SchematicDocument => ({
+    components: [
+      { id: "r1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" },
+      { id: "r2", kind: "resistor", x: 96, y: 128, rotation: 0, value: "2k", label: "R2" },
+    ],
+    wires: [
+      { id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] },
+      { id: "w2", points: [{ x: 0, y: 128 }, { x: 64, y: 128 }] },
+    ],
+  });
+
+  it("upsertNetLabelPort marks a net and its ordered interface in one undoable act", () => {
+    useSchematic.getState().loadCircuit(twoNetDocument());
+    const historyBefore = useSchematic.getState().past.length;
+
+    const result = useSchematic.getState().upsertNetLabelPort(0, 0, "VIN", "In");
+
+    expect(result).toEqual({ ok: true });
+    const marked = useSchematic.getState();
+    expect(marked.past.length).toBe(historyBefore + 1);
+    expect(marked.netLabels).toHaveLength(1);
+    expect(marked.netLabels[0]).toMatchObject({ text: "VIN", port: "In" });
+    // The interface entry must point at the label that was just written, not
+    // at a name that happens to match.
+    expect(marked.projectPorts).toEqual([
+      { name: "VIN", labelId: marked.netLabels[0].id, direction: "In" },
+    ]);
+
+    // ONE undo entry has to take both structures back together, or a marked
+    // net and its ordinal can end up describing different documents.
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().projectPorts).toEqual([]);
+    expect(useSchematic.getState().netLabels).toEqual([]);
+  });
+
+  it("upsertNetLabelPort renames a marked net in place where upsertNetLabel silently demotes it", () => {
+    // First, the bug, on the action that has it. This is the PDF5 data-loss
+    // case: an ordinary rename drops the net out of the sheet interface.
+    useSchematic.getState().loadCircuit(twoNetDocument());
+    useSchematic.getState().upsertNetLabelPort(0, 0, "VIN", "In");
+    const labelId = useSchematic.getState().netLabels[0].id;
+    useSchematic.getState().upsertNetLabel(0, 0, "VBAT");
+    expect(useSchematic.getState().netLabels[0]).toMatchObject({ text: "VBAT" });
+    expect(useSchematic.getState().netLabels[0].port).toBeUndefined();
+    expect(useSchematic.getState().projectPorts).toEqual([]);
+
+    // Now the same rename through the new action, on the same fixture.
+    useSchematic.getState().loadCircuit(twoNetDocument());
+    useSchematic.getState().upsertNetLabelPort(0, 128, "GND", "BiDir");
+    useSchematic.getState().upsertNetLabelPort(0, 0, "VIN", "In");
+    const before = useSchematic.getState();
+    const position = before.projectPorts.findIndex((port) => port.name === "VIN");
+    expect(position).toBe(1);
+
+    expect(useSchematic.getState().upsertNetLabelPort(0, 0, "VBAT", "In")).toEqual({ ok: true });
+
+    const after = useSchematic.getState();
+    expect(after.netLabels.find((label) => label.text === "VBAT")).toMatchObject({ port: "In" });
+    // Same ordinal, new name - the port survived the rename.
+    expect(after.projectPorts[position]).toMatchObject({ name: "VBAT", direction: "In" });
+    expect(after.projectPorts).toHaveLength(before.projectPorts.length);
+    expect(labelId).toBeTruthy();
+  });
+
+  it("upsertNetLabelPort refuses a duplicate port name and writes nothing", () => {
+    useSchematic.getState().loadCircuit(twoNetDocument());
+    useSchematic.getState().upsertNetLabelPort(0, 0, "VIN", "In");
+    const snapshot = {
+      netLabels: JSON.stringify(useSchematic.getState().netLabels),
+      projectPorts: JSON.stringify(useSchematic.getState().projectPorts),
+      history: useSchematic.getState().past.length,
+    };
+
+    const clash = useSchematic.getState().upsertNetLabelPort(0, 128, "vin", "Out");
+
+    expect(clash.ok).toBe(false);
+    expect(clash.error).toBeTruthy();
+    expect(JSON.stringify(useSchematic.getState().netLabels)).toBe(snapshot.netLabels);
+    expect(JSON.stringify(useSchematic.getState().projectPorts)).toBe(snapshot.projectPorts);
+    expect(useSchematic.getState().past.length).toBe(snapshot.history);
+  });
+
+  it("upsertNetLabelPort with a null direction demotes explicitly, keeping the label", () => {
+    useSchematic.getState().loadCircuit(twoNetDocument());
+    useSchematic.getState().upsertNetLabelPort(0, 0, "VIN", "In");
+
+    expect(useSchematic.getState().upsertNetLabelPort(0, 0, "VIN", null)).toEqual({ ok: true });
+
+    expect(useSchematic.getState().netLabels[0]).toMatchObject({ text: "VIN" });
+    expect(useSchematic.getState().netLabels[0].port).toBeUndefined();
+    expect(useSchematic.getState().projectPorts).toEqual([]);
+  });
+
+  it("setProjectSubcircuitLink takes a direction hint without storing it or renumbering the bank", () => {
+    const place = (): SchematicComponent[] => ([
+      { id: "x1", kind: "subckt", x: 0, y: 0, rotation: 0, value: "legacy", label: "X1" },
+    ]);
+    const ports = ["VIN", "VOUT", "GND"];
+
+    useSchematic.setState({ components: place(), wires: [], netLabels: [], probes: [] });
+    expect(useSchematic.getState().setProjectSubcircuitLink("x1", {
+      sheetPath: "boost.sim", model: "Boost", ports,
+    })).toEqual({ ok: true });
+    const plain = useSchematic.getState().components[0].pinOverride ?? [];
+
+    useSchematic.setState({ components: place(), wires: [], netLabels: [], probes: [] });
+    expect(useSchematic.getState().setProjectSubcircuitLink("x1", {
+      sheetPath: "boost.sim", model: "Boost", ports,
+    }, { directions: ["In", "Out", "BiDir"] })).toEqual({ ok: true });
+    const directed = useSchematic.getState().components[0];
+
+    // The stored contract is the SAME either way: directions are a layout hint
+    // used at this instant, never persisted (there is no field for them).
+    expect(directed.projectSubcircuit).toEqual({ sheetPath: "boost.sim", model: "Boost", ports });
+    expect(JSON.stringify(directed.projectSubcircuit)).not.toContain("In");
+    // The electrical identity of the bank - ordered ids and labels - is what
+    // `exactLinkForComponent` proves, and it may not move with the hint.
+    const bank = directed.pinOverride ?? [];
+    expect(bank.map((pin) => pin.id)).toEqual(plain.map((pin) => pin.id));
+    expect(bank.map((pin) => pin.label)).toEqual(plain.map((pin) => pin.label));
+    // And the positions come from the geometry module's own answer for this
+    // (ports, directions) pair - never from a second layout rule in the store.
+    expect(bank).toEqual(geometryBank(
+      { x: 0, y: 0, rotation: 0, mirrored: false },
+      ports,
+      ["In", "Out", "BiDir"],
+    ));
+  });
+
+  it("resyncProjectSubcircuit adopts a new interface in one undo entry and leaves a removed pin's wire free", () => {
+    // A four-port instance, with a wire hanging off every terminal.
+    useSchematic.setState({
+      components: [{ id: "x1", kind: "subckt", x: 0, y: 0, rotation: 0, value: "legacy", label: "X1" }],
+      wires: [], netLabels: [], probes: [], past: [], future: [],
+    });
+    useSchematic.getState().setProjectSubcircuitLink("x1", {
+      sheetPath: "boost.sim", model: "Boost", ports: ["VIN", "EN", "VOUT", "GND"],
+    });
+    const placed = useSchematic.getState().components[0].pinOverride ?? [];
+    expect(placed).toHaveLength(4);
+    useSchematic.setState({
+      wires: placed.map((pin, index) => ({
+        id: `w${index}`,
+        points: [{ x: pin.x, y: pin.y }, { x: pin.x + (pin.x < 0 ? -64 : 64), y: pin.y }],
+      })),
+    });
+    const removed = placed[3];
+    const historyBefore = useSchematic.getState().past.length;
+
+    const result = useSchematic.getState().resyncProjectSubcircuit("x1", {
+      ports: ["VIN", "EN", "VOUT"],
+      directions: ["In", "In", "Out"],
+    });
+
+    expect(result).toEqual({ ok: true });
+    const after = useSchematic.getState();
+    expect(after.past.length).toBe(historyBefore + 1);
+    expect(after.components[0].projectSubcircuit).toEqual({
+      sheetPath: "boost.sim", model: "Boost", ports: ["VIN", "EN", "VOUT"],
+    });
+
+    // The surviving pins took their wires with them...
+    const pins = getComponentPins(after.components[0]);
+    expect(pins).toHaveLength(3);
+    const pinKeys = new Set(pins.map((pin) => `${pin.x},${pin.y}`));
+    for (const pin of pins) {
+      expect(after.wires.some((wire) => wire.points.some((point) => point.x === pin.x && point.y === pin.y)))
+        .toBe(true);
+    }
+    // ...and the removed pin's wire still exists, untouched, at its old
+    // coordinate, attached to nothing. Fail-closed applied to geometry.
+    const orphan = after.wires.find((wire) => wire.id === "w3");
+    expect(orphan?.points[0]).toEqual({ x: removed.x, y: removed.y });
+    expect(pinKeys.has(`${removed.x},${removed.y}`)).toBe(false);
+
+    // One Cmd-Z puts the whole adopt back.
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0].projectSubcircuit?.ports)
+      .toEqual(["VIN", "EN", "VOUT", "GND"]);
+  });
+
+  it("resyncProjectSubcircuit refuses a contract the compiler would refuse, and changes nothing", () => {
+    useSchematic.setState({
+      components: [{ id: "x1", kind: "subckt", x: 0, y: 0, rotation: 0, value: "legacy", label: "X1" }],
+      wires: [], netLabels: [], probes: [], past: [], future: [],
+    });
+    useSchematic.getState().setProjectSubcircuitLink("x1", {
+      sheetPath: "boost.sim", model: "Boost", ports: ["VIN", "VOUT"],
+    });
+    const before = JSON.stringify(useSchematic.getState().components[0]);
+    const historyBefore = useSchematic.getState().past.length;
+
+    const empty = useSchematic.getState().resyncProjectSubcircuit("x1", { ports: [] });
+    const duplicated = useSchematic.getState().resyncProjectSubcircuit("x1", { ports: ["VIN", "vin"] });
+
+    expect(empty.ok).toBe(false);
+    expect(duplicated.ok).toBe(false);
+    expect(JSON.stringify(useSchematic.getState().components[0])).toBe(before);
+    expect(useSchematic.getState().past.length).toBe(historyBefore);
+  });
+
+  it("resyncProjectSubcircuit refuses an instance that is not project-linked", () => {
+    useSchematic.setState({
+      components: [{ id: "x1", kind: "subckt", x: 0, y: 0, rotation: 0, value: "vendor", label: "X1" }],
+      past: [], future: [],
+    });
+
+    expect(useSchematic.getState().resyncProjectSubcircuit("x1", { ports: ["A", "B"] }).ok).toBe(false);
+    expect(useSchematic.getState().resyncProjectSubcircuit("nope", { ports: ["A", "B"] }).ok).toBe(false);
   });
 });

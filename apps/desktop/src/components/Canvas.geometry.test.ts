@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { buildSubcircuitPinOverride, nativeSubcircuitBody } from "../schematic/subcircuitGeometry";
+import type { SchematicPortDirection } from "../schematic/types";
 import {
   ascArcPath,
   ascShapeBounds,
@@ -17,6 +19,8 @@ import {
   rectsOverlap,
   rerouteMovedWires,
   routeWireSmart,
+  collides,
+  componentAt,
   segmentIntersectsRect,
   translateAttachedWireEndpoints,
   wireIntersectsRect,
@@ -939,5 +943,53 @@ describe("P4-05 snapped tag cursor geometry", () => {
       expect(TAG_CURSOR_ART.width * preview.scale * zoom).toBeCloseTo(TAG_CURSOR_ART.width, 8);
       expect(TAG_CURSOR_ART.height * preview.scale * zoom).toBeCloseTo(TAG_CURSOR_ART.height, 8);
     }
+  });
+});
+
+/**
+ * Acceptance check A5. `nativeSubcircuitBody` is deliberately still a PURE
+ * function of the persisted bank, and that is why widening it for long captions
+ * needed no second layout rule: selection, marquee, placement collision and the
+ * fit box all read the same one box. These assertions exist so the next person
+ * to touch the width rule finds out immediately if they have broken that.
+ */
+describe("A5 - a widened block body is the same box everywhere", () => {
+  const linked = (ports: string[], directions: SchematicPortDirection[]): SchematicComponent => {
+    const base: SchematicComponent = {
+      id: "x1", kind: "subckt", x: 0, y: 0, rotation: 0, mirrored: false,
+      value: "Boost", label: "X1",
+      projectSubcircuit: { sheetPath: "boost.sim", model: "Boost", ports },
+    };
+    return { ...base, pinOverride: buildSubcircuitPinOverride(base, ports, directions) };
+  };
+  const short = linked(["IN", "OUT"], ["In", "Out"]);
+  const long = linked(["VIN_SENSE_AA", "VOUT_MON_BBB"], ["In", "Out"]);
+
+  it("grows the body, so the widened block really is a different box", () => {
+    expect(nativeSubcircuitBody(long).maxX)
+      .toBeGreaterThan(nativeSubcircuitBody(short).maxX);
+  });
+
+  it("selects a click 30 units off-centre, which only the widened body covers", () => {
+    // 30 is outside the legacy 28-unit half-width and inside the widened one -
+    // read off the boxes, so the point stays meaningful if the clamp changes.
+    expect(nativeSubcircuitBody(short).maxX).toBeLessThan(30);
+    expect(nativeSubcircuitBody(long).maxX).toBeGreaterThanOrEqual(30);
+    expect(componentAt([long], 30, 0)?.id).toBe("x1");
+  });
+
+  it("uses that same box for placement collision", () => {
+    // Sweep outward and find where the two blocks start to disagree about a
+    // ground pad dropped there. That column must land in the strip the widening
+    // added - which is only true if `collides` reads nativeSubcircuitBody too.
+    const refuses = (c: SchematicComponent, x: number) => collides([c], x, 0, "ground", 0, null);
+    const disagreement = Array.from({ length: 120 }, (_, x) => x)
+      .find((x) => refuses(long, x) !== refuses(short, x));
+    expect(disagreement, "collision never noticed the widened body").toBeDefined();
+    expect(refuses(long, disagreement!)).toBe(true);
+    expect(disagreement!).toBeGreaterThan(nativeSubcircuitBody(short).maxX);
+    expect(disagreement!).toBeLessThanOrEqual(
+      nativeSubcircuitBody(long).maxX + (nativeSubcircuitBody(long).maxX - nativeSubcircuitBody(short).maxX) + 24,
+    );
   });
 });

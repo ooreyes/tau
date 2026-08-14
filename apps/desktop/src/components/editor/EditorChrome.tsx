@@ -114,7 +114,7 @@ export function EditorToolbar({
       <IconButton title="Simulation setup" disabled={readOnly} onClick={onOpenSimulationSetup}>
         <SlidersHorizontal size={TOOL_ICON_SIZE} strokeWidth={1.6} />
       </IconButton>
-      <IconButton title="Child sheet interface" disabled={readOnly} onClick={onOpenProjectInterface}>
+      <IconButton title="Sheet interface" disabled={readOnly} onClick={onOpenProjectInterface}>
         <Network size={TOOL_ICON_SIZE} strokeWidth={1.6} />
       </IconButton>
       <div className="editor-toolbar-spacer" />

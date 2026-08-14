@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, MousePointerClick, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { useSchematic } from "../store/useSchematic";
+import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import type { ProjectSheetPort, SchematicPortDirection } from "../schematic/types";
 
 const DIRECTIONS: readonly SchematicPortDirection[] = ["In", "Out", "BiDir"];
@@ -26,15 +27,58 @@ function directionLabel(direction: SchematicPortDirection): string {
 }
 
 /**
+ * How a direction is offered on a candidate net. There is deliberately no
+ * default: each button IS the choice, so a port's direction can never be
+ * inherited from whatever the net label happened to already carry (PDF5
+ * reason 2 - the old flow both picked the net and guessed the intent).
+ */
+const CANDIDATE_CHOICES: readonly { direction: SchematicPortDirection; label: string; verb: string }[] = [
+  { direction: "In", label: "In", verb: "an input" },
+  { direction: "Out", label: "Out", verb: "an output" },
+  { direction: "BiDir", label: "Both", verb: "bidirectional" },
+];
+
+const EMPTY_INTERFACE_MESSAGE =
+  "This sheet has no inputs or outputs marked yet. Mark a net and this sheet can be used as a block on another sheet.";
+
+export interface ProjectSheetPortsEditorProps {
+  /**
+   * Parents that instantiate this sheet, supplied by the host (App owns the
+   * sheet-interface index). Derived, never stored; `undefined` means "the host
+   * has not told us", which is NOT the same claim as "nobody uses this sheet",
+   * so the row is omitted rather than asserting the latter.
+   */
+  usedBy?: readonly { sheetPath: string; reference: string }[];
+  /**
+   * When set, this document cannot carry a Tau sheet interface at all (an
+   * `.asc` sheet). Refused here, at the point of authoring, instead of
+   * silently until save - PDF5 reason 6 on the child side.
+   */
+  interfaceDisabledReason?: string;
+  /** Let the host close the surrounding dialog when we hand the user the drawing. */
+  onRequestClose?: () => void;
+}
+
+/**
  * The child-side half of project hierarchy authoring. A port is not a string
  * guessed from a symbol pin: it is an ordered reference to an existing net
  * label, with the label's text and explicit direction written atomically by
  * `setProjectSheetPorts`. This editor exposes all three authored facts and
  * keeps the compiler's exact-label contract visible while editing.
+ *
+ * Item 14 rule: the app never chooses which net becomes a port. Every port
+ * here originates in a user gesture that names both the net AND the direction,
+ * and the drawing itself ("Pick a net on the drawing") is the primary route.
  */
-export function ProjectSheetPortsEditor() {
+export function ProjectSheetPortsEditor({
+  usedBy,
+  interfaceDisabledReason,
+  onRequestClose,
+}: ProjectSheetPortsEditorProps = {}) {
   const projectPorts = useSchematic((state) => state.projectPorts);
   const netLabels = useSchematic((state) => state.netLabels);
+  const components = useSchematic((state) => state.components);
+  const wires = useSchematic((state) => state.wires);
   const setProjectSheetPorts = useSchematic((state) => state.setProjectSheetPorts);
   const [draft, setDraft] = useState<ProjectSheetPort[]>(() => projectPorts.map((port) => ({ ...port })));
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
@@ -91,19 +135,72 @@ export function ProjectSheetPortsEditor() {
     commit(next);
   };
 
-  const usedLabelIds = new Set(draft.map((port) => port.labelId));
-  const addPort = () => {
-    const label = netLabels.find((candidate) => candidate.text.trim() && !usedLabelIds.has(candidate.id));
-    if (!label) {
-      setError(netLabels.length === 0
-        ? "Add a net label to the child sheet before authoring a project port."
-        : "Each project port must map to a different net label.");
-      return;
+  /**
+   * Which electrical net each net label actually sits on, computed with the
+   * SAME two functions the fail-closed compiler uses (`extractCircuit` +
+   * `netAtPoint`, projectHierarchy.ts:198-206). Deliberately not a second rule:
+   * if these ever disagree with Run, the test in this file's
+   * "child-side agreement with the compiler" block fails, because it derives
+   * its expected wording from the message the compiler throws.
+   *
+   * `null` means "no net, or a net with no component pin" - the exact condition
+   * Run refuses with 'does not connect to a component net'.
+   */
+  const netIdByLabelId = useMemo(() => {
+    const nets = extractCircuit(components, wires, netLabels).nets;
+    const map = new Map<string, string | null>();
+    for (const label of netLabels) {
+      const net = netAtPoint(nets, wires, label);
+      map.set(label.id, net && net.pins.length > 0 ? net.id : null);
     }
-    commit([
-      ...draft,
-      { name: label.text, labelId: label.id, direction: label.port ?? "BiDir" },
-    ]);
+    return map;
+  }, [components, wires, netLabels]);
+
+  /**
+   * The two authoring mistakes Run refuses, said here instead - at the moment
+   * of the gesture, on the sheet that caused them, instead of on a parent sheet
+   * after a Run. Advisory only: nothing is blocked and nothing is repaired, so
+   * a student can mark a net first and wire it second.
+   */
+  const problems = useMemo(() => {
+    const found: string[] = [];
+    const owners = new Map<string, string>();
+    for (const port of draft) {
+      const netId = netIdByLabelId.get(port.labelId) ?? null;
+      if (netId === null) {
+        found.push(`${port.name} does not connect to a component net. Run refuses the sheet until this net reaches a component pin.`);
+        continue;
+      }
+      const owner = owners.get(netId);
+      if (owner !== undefined) {
+        found.push(`${owner} and ${port.name} cannot share one electrical net.`);
+        continue;
+      }
+      owners.set(netId, port.name);
+    }
+    return found;
+  }, [draft, netIdByLabelId]);
+
+  const usedLabelIds = new Set(draft.map((port) => port.labelId));
+  const portPositionByLabelId = new Map(draft.map((port, index) => [port.labelId, index + 1]));
+
+  /**
+   * Every net label with a name is a candidate. Nothing is filtered by
+   * plausibility and nothing is ranked: the list is the drawing's own facts, in
+   * document order, so the user recognises their net instead of trusting us.
+   */
+  const candidates = netLabels.filter((label) => label.text.trim().length > 0);
+
+  const markCandidate = (labelId: string, direction: SchematicPortDirection) => {
+    const label = labelsById.get(labelId);
+    if (!label) return;
+    const name = label.text.trim();
+    // `setProjectSheetPorts` enforces name === label text exactly. If the label
+    // carries stray whitespace the only way to satisfy that invariant is to
+    // write the trimmed spelling to BOTH, in the same transaction, which is
+    // what labelTextById is for. Direction comes from the button, never the label.
+    const labelTextById = name === label.text ? undefined : { [labelId]: name };
+    commit([...draft, { name, labelId, direction }], labelTextById);
   };
 
   const movePort = (index: number, delta: -1 | 1) => {
@@ -114,15 +211,27 @@ export function ProjectSheetPortsEditor() {
     commit(next);
   };
 
+  // An .asc document cannot hold projectPorts at all, so no live control is
+  // offered: an enabled control that always refuses is worse than a sentence.
+  if (interfaceDisabledReason) {
+    return (
+      <div className="project-sheet-ports-editor" role="group" aria-label="Sheet interface">
+        <p className="property-validation-error project-sheet-port-disabled" role="note">
+          {interfaceDisabledReason}
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="project-sheet-ports-editor" role="group" aria-label="Child sheet project ports">
+    <div className="project-sheet-ports-editor" role="group" aria-label="Sheet interface">
       <p className="property-hint">
-        Define the child sheet's public interface in order. Each port name is the mapped net label; Run checks this contract exactly when the sheet is linked.
+        Mark the nets this sheet exposes, in order. Each port name is its net label; Run checks this contract exactly when the sheet is linked.
       </p>
       {draft.length === 0 ? (
-        <p className="property-hint" role="status">No project ports yet. Add a labelled child-sheet net.</p>
+        <p className="property-hint" role="status">{EMPTY_INTERFACE_MESSAGE}</p>
       ) : (
-        <ol className="project-sheet-port-list" aria-label="Ordered child-sheet project ports">
+        <ol className="project-sheet-port-list" aria-label="Ordered sheet interface ports">
           {draft.map((port, index) => {
             const label = labelsById.get(port.labelId);
             const nameValue = nameDrafts[port.labelId] ?? label?.text ?? port.name;
@@ -200,12 +309,100 @@ export function ProjectSheetPortsEditor() {
           })}
         </ol>
       )}
+
+      {/* The candidate column: the drawing's nets, with which ones are already
+          part of the interface stated rather than implied. */}
+      <div className="project-sheet-port-candidates" role="group" aria-label="Nets on this sheet">
+        <p className="property-hint">
+          {candidates.length === 0
+            ? "This sheet has no named nets yet. Label a net first, then mark it."
+            : "Nets on this sheet. Choose a direction to mark one as a port."}
+        </p>
+        {candidates.length > 0 && (
+          <ul className="project-sheet-port-candidate-list">
+            {candidates.map((label) => {
+              const position = portPositionByLabelId.get(label.id);
+              const name = label.text.trim();
+              return (
+                <li key={label.id} className="project-sheet-port-candidate">
+                  <span className="mono-num">{name}</span>
+                  {netIdByLabelId.get(label.id) === null && (
+                    <span className="property-hint">not on a component net</span>
+                  )}
+                  {position === undefined ? (
+                    <span className="project-sheet-port-candidate-actions">
+                      {CANDIDATE_CHOICES.map((choice) => (
+                        <Button
+                          key={choice.direction}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-label={`Mark ${name} as ${choice.verb}`}
+                          onClick={() => markCandidate(label.id, choice.direction)}
+                        >
+                          {choice.label}
+                        </Button>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="project-sheet-port-candidate-mark mono-num">Port {position}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* One verdict on the interface as a whole: either the two refusals Run
+          would give, or the pinout a parent will receive - in order, because
+          the contract is positional. Never both, and never silence. */}
+      {problems.length > 0 ? (
+        <ul className="project-sheet-port-problems" role="alert">
+          {problems.map((problem) => (
+            <li key={problem} className="property-validation-error">{problem}</li>
+          ))}
+        </ul>
+      ) : draft.length > 0 && (
+        <p className="property-hint project-sheet-port-ready" role="status">
+          Ready: another sheet can use this one as a block. Pinout in order: {draft.map((port) => port.name).join(", ")}.
+        </p>
+      )}
+
+      {usedBy !== undefined && (
+        <div className="project-sheet-port-usedby" role="group" aria-label="Sheets using this one as a block">
+          {usedBy.length === 0 ? (
+            <p className="property-hint">No other sheet uses this one as a block yet.</p>
+          ) : (
+            <ul className="project-sheet-port-usedby-list">
+              {usedBy.map((use) => (
+                <li key={`${use.sheetPath}-${use.reference}`} className="mono-num">
+                  {use.sheetPath} - {use.reference}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <div className="project-sheet-port-footer">
-        <Button type="button" variant="outline" size="sm" onClick={addPort}>
-          <Plus size={13} aria-hidden="true" />
-          Add project port
+        {/* The primary route is the drawing, not this table: arm the label tool
+            and get out of the way. This creates NOTHING by itself. */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            useSchematic.getState().startLabeling();
+            onRequestClose?.();
+          }}
+        >
+          <MousePointerClick size={13} aria-hidden="true" />
+          Pick a net on the drawing
         </Button>
-        {saved && <span className="property-hint" role="status">Child-sheet interface saved.</span>}
+        {/* Not a live region: the interface verdict above already announces the
+            state, and two live regions on one edit read as noise. */}
+        {saved && <span className="property-hint">Sheet interface saved.</span>}
       </div>
       {error && <p className="property-validation-error" role="alert">{error}</p>}
     </div>
@@ -215,20 +412,38 @@ export function ProjectSheetPortsEditor() {
 export function ProjectSheetPortsDialog({
   open,
   onOpenChange,
+  usedBy,
+  interfaceDisabledReason,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+} & Pick<ProjectSheetPortsEditorProps, "usedBy" | "interfaceDisabledReason">) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[700px]">
         <DialogHeader>
-          <DialogTitle>Child sheet interface</DialogTitle>
+          <DialogTitle>Sheet interface</DialogTitle>
           <DialogDescription>
-            Author the ordered project ports exposed by this child sheet. Parent links must match these names, directions, and order.
+            Mark the nets this sheet exposes as inputs and outputs, in order. Another sheet can then use this one as a block, and its pinout arrives from here.
           </DialogDescription>
         </DialogHeader>
-        <ProjectSheetPortsEditor />
+        {/*
+          The body scrolls, the header and the Done footer do not. `DialogContent`
+          is `fixed top-1/2 -translate-y-1/2` with NO max-height and NO overflow
+          (ui/dialog.tsx:66-67), so an interface panel that now stacks the ordered
+          port list, every named net on the sheet, the verdict and the "Used by"
+          list grows straight past the viewport on the 900x600 window - and with
+          nothing scrollable, both the footer and the "Pick a net on the drawing"
+          button end up off-screen and unreachable. Bounding it here rather than
+          in ui/dialog.tsx keeps every other dialog's geometry untouched.
+        */}
+        <div className="max-h-[min(60vh,26rem)] overflow-y-auto" data-slot="sheet-interface-scroll">
+          <ProjectSheetPortsEditor
+            usedBy={usedBy}
+            interfaceDisabledReason={interfaceDisabledReason}
+            onRequestClose={() => onOpenChange(false)}
+          />
+        </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
         </DialogFooter>
