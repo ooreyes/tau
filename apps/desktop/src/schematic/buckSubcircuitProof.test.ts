@@ -25,7 +25,7 @@
 import { describe, expect, it } from "vitest";
 import { extractCircuit } from "./netlist";
 import { getComponentPins } from "./pins";
-import { buildProjectHierarchyDeck, ProjectHierarchyError } from "./projectHierarchy";
+import { buildProjectHierarchyDeck, childDeviceDisposition, ProjectHierarchyError } from "./projectHierarchy";
 import { loadProjectHierarchySheets } from "./projectHierarchyRuntime";
 import { canonicalProjectOwnerPath, canonicalProjectSheetPath } from "./projectSubcircuit";
 import { schematicToAsc } from "../io/ascExport";
@@ -71,7 +71,15 @@ function buckChildSheet(): Doc {
     part("l1", "inductor", 384, 128, "4.7m", "L1"),
     // Catch diode: rotation 270 maps (x,y)->(y,-x), which puts K above and A
     // below, so the arrow points up from ground into the SW node.
-    part("d1", "diode", 320, 192, "D", "D1", 270),
+    //
+    // `ltSymbolType` is not decoration - it is what this sheet really is. The
+    // deliverable is a `.asc`, so every part in it carries LTspice provenance,
+    // and for a junction that provenance decides the MODEL: a part read from a
+    // `.asc` keeps its real Shockley junction, while a part placed natively in
+    // Tau gets the textbook ideal one. Building the fixture without it would
+    // test a different circuit than the file on disk - and specifically the one
+    // that does not converge here (see the note at the foot of this file).
+    { ...part("d1", "diode", 320, 192, "D", "D1", 270), ltSymbolType: "diode" } as SchematicComponent,
     // Gate drive. A source is vertical at rotation 0 (p above, n below).
     part("vpwm", "vsource", 176, 208, PWM_VALUE, "VPWM"),
     // Output filter capacitor, and the Rd+Cd damping branch beside it.
@@ -433,73 +441,84 @@ describe("a .asc may be a linked child but never the sheet that owns links", () 
 });
 
 /**
- * Documents today's refusals so the widening is provably a change in behaviour
- * rather than a change in wording, and records the ORDER they fire in - which
- * is itself a finding. Running the two sheets above against the code as it
- * stands refuses twice, for two independent reasons:
+ * The generated block, pinned exactly.
  *
- *   1. `invalid-path` - `.asc` is not an accepted linked-sheet extension at
- *      all, so the path gate rejects the pair before any device is examined.
- *   2. `invalid-contract` - the child's interface is read from
- *      `document.projectPorts`, an array a `.asc` file has nowhere to store.
- *      The IOPIN markers the sheet really does carry are ignored. This is the
- *      substantive reason `.asc` children need a derived port contract, and it
- *      is invisible until blocker 1 is out of the way.
- *   3. `unsupported-child` - behind both, the child compiler's whitelist knows
- *      only ground/R/C/L/subckt, so the switch, diode and gate-drive source are
- *      each refused.
- *
- * All three must fall for the buck to run. Delete this block in the same commit
- * that makes the proof above pass.
+ * A golden string is worth the maintenance here because every interesting
+ * property of this feature is visible in it at once: the port order, the model
+ * cards carried inside the body, the internal node namespace, and the fact that
+ * the catch diode resolves to a real Shockley junction rather than the ideal one.
+ * A silent change to any of those is the failure mode that a "does it contain an
+ * S line" assertion would sail straight past.
  */
-describe("baseline: what the linked-sheet compiler refuses before the widening", () => {
-  const buildPair = (rootPath: string, sheetPath: string) => {
-    const child = buckChildSheet();
-    const top = topSheet(sheetPath);
-    return () =>
-      buildProjectHierarchyDeck({
-        rootPath,
-        root: top as never,
-        sheets: [{ path: sheetPath, document: child as never }],
-        analysis: { kind: "tran", stopTime: 5e-3, steps: 2000 } as never,
-      });
-  };
+describe("the emitted block, byte for byte", () => {
+  it("matches the validated reference deck", () => {
+    const built = buildProjectHierarchyDeck({
+      rootPath: "top.sim",
+      root: topSheet() as never,
+      sheets: [{ path: "Buck25to5.asc", document: buckChildSheet() as never }],
+      analysis: { kind: "tran", stopTime: 5e-3, steps: 2000 } as never,
+    });
+    expect(built.blocks[0].text.split("\n")).toEqual([
+      ".subckt Buck25to5 VIN VOUT",
+      // Carried in the BODY, not left to the root: the root deck decides whether
+      // to emit its starter cards from the root's own component kinds, and this
+      // parent is only a source, a load and a block.
+      ".model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)",
+      ".model TAU_DIODE D(Is=1e-14 N=1)",
+      // VIN -> switch -> SW node (n2); gate is n1.
+      "S__tau_Buck25to5_1 VIN __tau_buck25to5_n2 __tau_buck25to5_n1 0 TAU_SW",
+      "L__tau_Buck25to5_2 __tau_buck25to5_n2 VOUT 0.0047",
+      // Catch diode, ground -> SW node. One line, so the real junction: the
+      // ideal path would emit a second zero-volt sense source here.
+      "D__tau_Buck25to5_3 0 __tau_buck25to5_n2 TAU_DIODE",
+      "V__tau_Buck25to5_4 __tau_buck25to5_n1 0 DC 0 PULSE(0 5 0 1e-9 1e-9 0.000001107 0.000005)",
+      "C__tau_Buck25to5_5 VOUT 0 5e-7",
+      "R__tau_Buck25to5_6 VOUT __tau_buck25to5_n3 100",
+      "C__tau_Buck25to5_7 __tau_buck25to5_n3 0 0.000009999999999999999",
+      ".ends Buck25to5",
+    ]);
+  });
+});
 
-  const codeOf = (run: () => unknown): string => {
-    try {
-      run();
-    } catch (error) {
-      expect(error).toBeInstanceOf(ProjectHierarchyError);
-      return (error as ProjectHierarchyError).code;
-    }
-    throw new Error("expected a refusal, but the build succeeded");
-  };
+/**
+ * Every component kind has a recorded decision, and every refusal says
+ * something useful.
+ *
+ * The original defect was not that the supported set was small - it was that it
+ * could fall behind the palette in silence, so a part a user could place refused
+ * only at Run with a message that named no way forward. The table is an
+ * exhaustive `Record<ComponentKind, …>`, so a NEW kind is a `tsc` error rather
+ * than a silent gap; this test covers the other half, that the decisions which
+ * do exist are specific enough to act on.
+ */
+describe("every component kind has a stated disposition", () => {
+  const ALL_KINDS: SchematicComponent["kind"][] = [
+    "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource",
+    "vac", "iac", "vpulse", "logicConstant", "diode", "led", "zener", "photodiode",
+    "opamp", "comparator", "digitalGate", "dflop", "srflop", "tflop", "jkflop",
+    "counter", "timer555", "adc", "dac", "sevenSeg", "sampleHold", "modulator",
+    "vcvs", "vccs", "cccs", "ccvs", "bsource", "nmos", "pmos", "njf", "pjf",
+    "npn", "pnp", "potentiometer", "bulb", "switch", "pushButton", "spdt",
+    "relay", "motor", "transformer", "ctTransformer", "tline", "subckt", "ground",
+  ];
 
-  it("no longer refuses a .asc sheet at the path gate", () => {
-    // Whatever is left to complain about, it must not be the extension.
-    expect(codeOf(buildPair("top.asc", "Buck25to5.asc"))).not.toBe("invalid-path");
+  it("emits exactly the kinds a linked sheet claims to support", () => {
+    const emitted = ALL_KINDS.filter((kind) => childDeviceDisposition(kind) === "emit").sort();
+    expect(emitted).toEqual([
+      "capacitor", "diode", "ground", "inductor", "polarizedCapacitor",
+      "resistor", "subckt", "switch", "vsource",
+    ]);
   });
 
-  it("refuses the buck's active devices once a port contract is present", () => {
-    // Hand the compiler the very contract the IOPIN markers imply, which is
-    // what deriving ports will do internally. The only thing left to refuse is
-    // then what is actually inside the child.
-    const child = buckChildSheet();
-    const withPorts = {
-      ...child,
-      projectPorts: child.netLabels
-        .filter((label) => label.port)
-        .map((label) => ({ name: label.text, labelId: label.id, direction: label.port })),
-    };
-    expect(
-      codeOf(() =>
-        buildProjectHierarchyDeck({
-          rootPath: "top.sim",
-          root: topSheet("Buck25to5.sim") as never,
-          sheets: [{ path: "Buck25to5.sim", document: withPorts as never }],
-          analysis: { kind: "tran", stopTime: 5e-3, steps: 2000 } as never,
-        }),
-      ),
-    ).toBe("unsupported-child");
+  it("gives every refused kind a reason that names a way forward", () => {
+    for (const kind of ALL_KINDS) {
+      const disposition = childDeviceDisposition(kind);
+      if (disposition === "emit") continue;
+      // Long enough to be a sentence, and it must explain rather than restate.
+      expect(disposition.length, `${kind} refusal is a real explanation`).toBeGreaterThan(40);
+      expect(disposition, `${kind} refusal explains or redirects`).toMatch(
+        /Use |are emitted|belongs to|does not generate|carries no|cannot resolve|cannot rewrite|does not own|not carried/,
+      );
+    }
   });
 });
