@@ -26,6 +26,8 @@ import { describe, expect, it } from "vitest";
 import { extractCircuit } from "./netlist";
 import { getComponentPins } from "./pins";
 import { buildProjectHierarchyDeck, ProjectHierarchyError } from "./projectHierarchy";
+import { loadProjectHierarchySheets } from "./projectHierarchyRuntime";
+import { canonicalProjectOwnerPath, canonicalProjectSheetPath } from "./projectSubcircuit";
 import { schematicToAsc } from "../io/ascExport";
 import { importAsc } from "../io/ascImport";
 import type { NetLabel, SchematicComponent, SchematicWire } from "./types";
@@ -358,6 +360,75 @@ describe("a .asc child sheet declares its interface with IOPIN markers alone", (
     }
     // Derivation must not paper over a real disagreement.
     expect(code).toBe("invalid-contract");
+  });
+});
+
+/**
+ * A `.asc` is a legal link TARGET and an illegal link OWNER, and the two need
+ * separate path grammars. Widening the single grammar looked sufficient and was
+ * not: the same function governs the ROOT resolver, so an `.asc` root started
+ * resolving, its written refusal stopped firing, and the sheet enumerator then
+ * dropped that same file - one clear sentence became an incoherent failure.
+ *
+ * The reachability half matters just as much. The compiler accepting `.asc` is
+ * worth nothing if the runtime loader never hands it one, which is exactly what
+ * a `.sim`-only enumerator did. These tests drive the real loader, not the
+ * compiler directly, because that is the layer the app actually calls.
+ */
+describe("a .asc may be a linked child but never the sheet that owns links", () => {
+  it("accepts .asc as a link target and refuses it as a link owner", () => {
+    expect(canonicalProjectSheetPath("blocks/Buck25to5.asc")).toBe("blocks/Buck25to5.asc");
+    expect(canonicalProjectOwnerPath("blocks/Buck25to5.asc")).toBeNull();
+    // The owner grammar is otherwise the target grammar, unchanged.
+    expect(canonicalProjectOwnerPath("top.sim")).toBe("top.sim");
+    expect(canonicalProjectOwnerPath("top.tau.json")).toBe("top.tau.json");
+    expect(canonicalProjectOwnerPath("../escape.sim")).toBeNull();
+  });
+
+  const tree = [
+    { name: "top.sim", path: "/proj/top.sim", kind: "file" as const },
+    { name: "Buck25to5.asc", path: "/proj/Buck25to5.asc", kind: "file" as const },
+  ];
+
+  it("refuses a .asc root with the sentence that names the supported formats", async () => {
+    await expect(
+      loadProjectHierarchySheets({
+        projectRoot: "/proj",
+        rootSheetPath: "/proj/Buck25to5.asc",
+        tree,
+        readText: async () => "",
+      }),
+    ).rejects.toThrow(/must be saved as a Tau \.sim or \.tau\.json sheet/);
+  });
+
+  it("enumerates and parses a .asc child sheet through the real loader", async () => {
+    // The child is a genuine `.asc`, produced by Tau's own exporter from the
+    // buck document, so this exercises the same bytes a user would have on disk.
+    const child = buckChildSheet();
+    const ascText = schematicToAsc({
+      components: child.components,
+      wires: child.wires,
+      netLabels: child.netLabels,
+    }).text;
+
+    const loaded = await loadProjectHierarchySheets({
+      projectRoot: "/proj",
+      rootSheetPath: "/proj/top.sim",
+      tree,
+      readText: async (path) => {
+        if (path === "/proj/Buck25to5.asc") return ascText;
+        throw new Error(`unexpected read of ${path}`);
+      },
+    });
+
+    expect(loaded.rootPath).toBe("top.sim");
+    const sheet = loaded.sheets.find((entry) => entry.path === "Buck25to5.asc");
+    expect(sheet, "the .asc child was enumerated, not skipped").toBeDefined();
+    // And it came back as the real circuit, with its ports intact - not an
+    // empty document that would fail later for an unrelated reason.
+    expect(sheet!.document.components.length).toBeGreaterThan(0);
+    const ports = (sheet!.document.netLabels ?? []).filter((label) => label.port);
+    expect(ports.map((p) => p.text).sort()).toEqual(["VIN", "VOUT"]);
   });
 });
 

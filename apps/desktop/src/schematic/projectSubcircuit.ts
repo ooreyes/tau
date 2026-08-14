@@ -62,6 +62,33 @@ export function canonicalProjectSheetPath(value: string): string | null {
 }
 
 /**
+ * The narrower grammar a sheet that **owns** links must satisfy.
+ *
+ * A `.asc` is a legal link TARGET and an illegal link OWNER, and one regex
+ * cannot say that. The two roles ask different questions:
+ *
+ *   target - can Tau READ an interface out of this file? For `.asc`, yes: the
+ *            `FLAG`/`IOPIN` pair states each port and its direction.
+ *   owner  - can Tau WRITE this file's own hierarchy back? For `.asc`, no.
+ *            LTspice's format can persist neither `projectSubcircuit` (the
+ *            parent's link) nor `projectPorts`, and a block instance saves
+ *            through the lossy-carrier path, which carries only `TauKind` and
+ *            `TauValue`. A parent saved as `.asc` would therefore lose its
+ *            hierarchy silently - the one outcome the compiler exists to
+ *            prevent.
+ *
+ * Widening only {@link canonicalProjectSheetPath} looked sufficient and was not:
+ * it also governs the ROOT resolver, so an `.asc` root began resolving, the
+ * root refusal stopped firing, and the sheet enumerator then dropped that same
+ * file - turning one clear sentence into an incoherent failure.
+ */
+export function canonicalProjectOwnerPath(value: string): string | null {
+  const normalized = canonicalProjectSheetPath(value);
+  if (!normalized) return null;
+  return /\.asc$/i.test(normalized) ? null : normalized;
+}
+
+/**
  * Turn a project-owned absolute/virtual path into the one spelling a persisted
  * project link may carry. This is a containment seam, not a general path
  * normalizer: callers must provide the open project root, and a sibling that

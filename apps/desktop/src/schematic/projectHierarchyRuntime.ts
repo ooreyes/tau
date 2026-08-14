@@ -1,8 +1,9 @@
-import { isSimFile, type ProjectNode } from "../project/types";
+import { isAscFile, isProjectFile, type ProjectNode } from "../project/types";
 import { validateSchematicDocument } from "./documentValidation";
+import { importProjectAsc } from "../io/projectAscImport";
 import {
   asciiFold,
-  canonicalProjectSheetPath,
+  canonicalProjectOwnerPath,
   projectRelativeSheetPath,
 } from "./projectSubcircuit";
 import {
@@ -39,11 +40,17 @@ function flattenFiles(nodes: readonly ProjectNode[]): ProjectNode[] {
   ]);
 }
 
+/**
+ * The ROOT's own path, under the owner grammar. A root owns links, so it must be
+ * a format that can persist them - see {@link canonicalProjectOwnerPath}. This
+ * deliberately does NOT use the target grammar: that one admits `.asc`, which is
+ * readable as a child but cannot store a parent's hierarchy.
+ */
 function rootRelativeSheetPath(projectRoot: string, absolutePath: string): string | null {
   const root = normalizedPath(projectRoot);
   const candidate = normalizedPath(absolutePath);
   if (!root || !candidate || !pathKey(candidate).startsWith(`${pathKey(root)}/`)) return null;
-  return canonicalProjectSheetPath(candidate.slice(root.length + 1));
+  return canonicalProjectOwnerPath(candidate.slice(root.length + 1));
 }
 
 function loadError(path: string, message: string): ProjectHierarchyError {
@@ -71,7 +78,11 @@ export async function loadProjectHierarchySheets(
   const openByPath = new Map((input.openDocuments ?? []).map((entry) => [pathKey(entry.path), entry.document]));
   const sheets: ProjectHierarchySheet[] = [];
   for (const node of flattenFiles(input.tree)) {
-    if (!isSimFile(node.name)) continue;
+    // `.asc` included: a linked child may be an LTspice sheet. Filtering to
+    // `.sim` here is what made `.asc` support unreachable even once the
+    // compiler accepted it - the sheet was never enumerated, so the link
+    // failed as `missing-sheet` instead of compiling.
+    if (!isProjectFile(node.name)) continue;
     const path = projectRelativeSheetPath(input.projectRoot, node.path);
     if (!path) {
       throw new ProjectHierarchyError(
@@ -91,10 +102,46 @@ export async function loadProjectHierarchySheets(
     let document: SchematicDocument;
     try {
       const text = await input.readText(node.path);
-      document = validateSchematicDocument(JSON.parse(text) as unknown);
+      if (isAscFile(node.name)) {
+        // Route through the same project-aware importer the editor uses when it
+        // opens a `.asc`, rather than a second reduced parser: a child sheet has
+        // to see the identical components, pin geometry and net labels the user
+        // sees on screen, or the block would compile from a different circuit
+        // than the one they are looking at.
+        const imported = await importProjectAsc(text, {
+          sourcePath: node.path,
+          rootPath: input.projectRoot,
+          readText: input.readText,
+          // A child sheet is resolved for compilation, not for editing, so no
+          // symbol/library discovery beyond the project is attempted here. A
+          // part that needed one surfaces as a foreign symbol, which
+          // `compileChildBlock` already refuses by name.
+          pathExists: async () => false,
+        });
+        document = validateSchematicDocument({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          directives: imported.directives,
+          textAnnotations: imported.textAnnotations,
+          ascShapes: imported.shapes,
+          ascDataFlags: imported.dataFlags,
+          ascForeignSymbols: imported.foreignSymbols,
+          ascHierarchicalBlocks: imported.hierarchicalBlocks,
+          ascSheet: imported.sheet,
+          probes: [],
+          ...(imported.modelLibraries.length > 0 ? { userModelLibraries: imported.modelLibraries } : {}),
+        });
+      } else {
+        document = validateSchematicDocument(JSON.parse(text) as unknown);
+      }
     } catch (error) {
       if (error instanceof ProjectHierarchyError) throw error;
-      const detail = error instanceof Error && error.message.trim() ? error.message : "invalid Tau JSON";
+      // Name the format that actually failed. "invalid Tau JSON" was the only
+      // fallback, which is a false statement about a `.asc` and sends the user
+      // looking for a JSON error in an LTspice file.
+      const fallback = isAscFile(node.name) ? "could not be read as an LTspice .asc sheet" : "invalid Tau JSON";
+      const detail = error instanceof Error && error.message.trim() ? error.message : fallback;
       throw loadError(path, detail);
     }
     sheets.push({ path, document });
