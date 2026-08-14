@@ -119,6 +119,21 @@ const LIVE_DEFAULT_SLICE_SAMPLES: usize = 2_048;
 /** Ceiling on what a caller may ask for in one frame, so a frontend bug cannot
  * turn a 20 ms poll into a multi-megabyte transfer. */
 const LIVE_MAX_SLICE_SAMPLES: usize = 32_768;
+/// Widest JSON a single `f64` occupies in a slice column, comma included.
+/// `serde_json` prints shortest-round-trip, so 24 is a ceiling rather than a
+/// guess: a 17-significant-digit float with a sign and a 3-digit exponent fits.
+const LIVE_SLICE_VALUE_JSON_BYTES: usize = 24;
+/// Values (columns x samples) one poll may deliver.
+///
+/// `clamp_slice_samples` bounds SAMPLES, and nothing bounded the number of
+/// COLUMNS - so a poll naming many vectors at the sample ceiling produced a
+/// frame larger than `MAX_LIVE_FRAME_BYTES`. The parent's reader caps its read
+/// at that many bytes, so an oversized frame arrives truncated, fails to parse,
+/// and the session is retired: a legitimate-looking request killed the run. The
+/// budget therefore has to bound the PRODUCT, which is what actually determines
+/// the frame size. Quarter of the wire cap, so the telemetry and log that travel
+/// in the same frame have room.
+const LIVE_MAX_SLICE_VALUES: usize = MAX_LIVE_FRAME_BYTES / 4 / LIVE_SLICE_VALUE_JSON_BYTES;
 /** Traces one poll may name. A transient plot of a large circuit can publish
  * thousands of vectors; a plot showing thousands of them is not a plot. */
 const LIVE_MAX_POLL_NAMES: usize = 64;
@@ -575,6 +590,15 @@ fn clamp_slice_samples(requested: Option<usize>) -> usize {
         .clamp(1, LIVE_MAX_SLICE_SAMPLES)
 }
 
+/// `clamp_slice_samples`, then reduced so `columns * samples` fits
+/// `LIVE_MAX_SLICE_VALUES`. At least one sample always survives: a frame that
+/// carries no data is still readable, and the caller learns the run's cursor.
+fn clamp_slice_samples_for_columns(requested: Option<usize>, columns: usize) -> usize {
+    let samples = clamp_slice_samples(requested);
+    let columns = columns.max(1);
+    samples.min((LIVE_MAX_SLICE_VALUES / columns).max(1))
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The live run itself (child-side, and directly testable)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -954,7 +978,14 @@ impl LiveRun {
 
     fn poll(&mut self, request: &LivePollRequest) -> Result<LiveSlicePayload, String> {
         let indices = self.resolve_names(&request.names)?;
-        let max_samples = clamp_slice_samples(request.max_samples);
+        // Samples alone are not the frame size; columns x samples is. Fit the
+        // product to the wire budget by lowering the sample count, which
+        // degrades resolution rather than dropping a vector the caller asked
+        // for - a missing column would silently change what is plotted, while
+        // fewer samples is visibly the same signal at a coarser step (the
+        // decimation stride below already handles that case).
+        let max_samples =
+            clamp_slice_samples_for_columns(request.max_samples, indices.len().max(1));
         let keys: Vec<&CString> = indices
             .iter()
             .map(|index| &self.vector_keys[*index])
@@ -1744,7 +1775,20 @@ impl LiveSession {
                     match frame_payload(text.trim_end()) {
                         Some(payload) => {
                             return serde_json::from_str(payload).map_err(|error| {
-                                format!("Tau's live ngspice worker returned invalid data: {error}")
+                                // A line at the reader's cap arrived without its
+                                // newline, i.e. the frame was longer than the
+                                // wire budget and this is only its first chunk.
+                                // Say that, rather than blaming the data: the
+                                // payload budget above exists to make this
+                                // unreachable, so if it fires the budget is
+                                // wrong and the message has to point there.
+                                if line.len() >= MAX_LIVE_FRAME_BYTES {
+                                    format!(
+                                        "Tau's live ngspice worker produced a frame larger than the {MAX_LIVE_FRAME_BYTES} byte limit, so it could not be read. Ask for fewer vectors or samples per frame."
+                                    )
+                                } else {
+                                    format!("Tau's live ngspice worker returned invalid data: {error}")
+                                }
                             })
                         }
                         None => {
@@ -3877,4 +3921,45 @@ R1 out 0 1k
         );
         run.halt(LiveStopReason::HaltedByUser, "test".to_string());
     }
+    /// Samples were clamped and columns were not, so a poll naming many vectors
+    /// at the sample ceiling produced a frame bigger than the wire cap. The
+    /// parent reads at most that many bytes, so the frame arrived truncated,
+    /// failed to parse, and the live session was retired - a legitimate-looking
+    /// request killing the run. The budget has to bound the PRODUCT.
+    #[test]
+    fn a_poll_frame_can_never_exceed_the_wire_budget() {
+        // The worst case the old code allowed: the documented sample ceiling on
+        // a wide poll.
+        for columns in [1usize, 8, 64, 256, 4096] {
+            let samples = clamp_slice_samples_for_columns(Some(LIVE_MAX_SLICE_SAMPLES), columns);
+            assert!(samples >= 1, "{columns} columns left no samples at all");
+            let values = columns.saturating_mul(samples);
+            assert!(
+                values <= LIVE_MAX_SLICE_VALUES,
+                "{columns} columns x {samples} samples = {values} values, over the budget of {LIVE_MAX_SLICE_VALUES}"
+            );
+            // And the reason the budget is expressed in values: the JSON it
+            // implies has to stay inside the frame the reader will accept.
+            assert!(
+                values * LIVE_SLICE_VALUE_JSON_BYTES < MAX_LIVE_FRAME_BYTES,
+                "{columns} columns would still overflow the {MAX_LIVE_FRAME_BYTES} byte frame"
+            );
+        }
+    }
+
+    /// The clamp must not quietly shrink ordinary polls, which are narrow.
+    #[test]
+    fn ordinary_polls_keep_the_samples_they_asked_for() {
+        assert_eq!(
+            clamp_slice_samples_for_columns(None, 4),
+            LIVE_DEFAULT_SLICE_SAMPLES
+        );
+        assert_eq!(clamp_slice_samples_for_columns(Some(2_048), 8), 2_048);
+        // Still honours the absolute sample ceiling for a single column.
+        assert_eq!(
+            clamp_slice_samples_for_columns(Some(usize::MAX), 1),
+            LIVE_MAX_SLICE_SAMPLES
+        );
+    }
+
 }
