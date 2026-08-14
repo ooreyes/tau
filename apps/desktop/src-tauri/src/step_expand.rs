@@ -63,6 +63,54 @@ pub fn split_step_directives(lines: &[String]) -> Result<(Vec<String>, Vec<StepA
     Ok((base, axes))
 }
 
+/** A `.step` axis name, restricted to a SPICE designator.
+ *
+ * This is not defensive politeness, and the reason is the same one
+ * `live_spice::alter_command` already documents: the name is spliced into
+ * `alter <name>=<value>` and handed to `ngSpice_Command`, which is the *whole*
+ * ngspice command interpreter — `source`, `shell`, `destroy` and `write` are all
+ * reachable through it, and its text is split on whitespace and newlines with
+ * backquote and `$` expansion applied. The live channel validates for exactly
+ * this; the batch `.step` path grew later and did not, so a `.asc` that arrives
+ * by email could put separators or a backquote in a source name and reach the
+ * interpreter. `screen_card`'s deck allowlist cannot catch it, because these
+ * `alter` strings are COMMANDS and never pass through the deck at all.
+ *
+ * The grammar matches `validate_instance` so the two channels agree, minus `$`:
+ * a stepped designator has no business naming an interpreter variable, and
+ * leaving it out costs nothing real.
+ *
+ * Returning `None` is a hard refusal naming the line — `split_step_directives`
+ * turns it into an error — so a rejected card fails loudly instead of silently
+ * collapsing a swept family into a single run.
+ */
+fn valid_step_source_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    let mut characters = name.chars();
+    characters
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic())
+        && characters.all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '#' | '-' | '+')
+        })
+}
+
+/// A `.step param` name is a plain identifier: it is substituted into `.param`
+/// deck text rather than an interpreter command, but it is kept narrow for the
+/// same reason - one grammar per field, no separators.
+fn valid_step_param_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    let mut characters = name.chars();
+    characters
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && characters.all(|character| character.is_ascii_alphanumeric() || character == '_')
+}
+
 pub fn parse_step_directive(line: &str) -> Option<StepAxis> {
     let cleaned = line.trim().trim_start_matches(['.', '!']).trim();
     let tokens: Vec<&str> = cleaned
@@ -91,6 +139,9 @@ pub fn parse_step_directive(line: &str) -> Option<StepAxis> {
             return None;
         }
         let n = tokens[i].to_string();
+        if !valid_step_param_name(&n) {
+            return None;
+        }
         i += 1;
         (StepKind::Param, Some(n))
     } else if head == "temp" {
@@ -98,6 +149,10 @@ pub fn parse_step_directive(line: &str) -> Option<StepAxis> {
         (StepKind::Temp, None)
     } else {
         let n = tokens[i].to_string();
+        // The source name reaches the ngspice command interpreter verbatim.
+        if !valid_step_source_name(&n) {
+            return None;
+        }
         i += 1;
         (StepKind::Source, Some(n))
     };
@@ -464,4 +519,64 @@ mod tests {
             .iter()
             .any(|l| l.contains("Rload=3000") || l.contains("rload=3000")));
     }
+
+    /// A `.step` source name is spliced into `alter <name>=<value>` and handed to
+    /// `ngSpice_Command`, the whole ngspice interpreter. Before this validation a
+    /// crafted `.asc` could put a backquote or a separator in that name and reach
+    /// it - `screen_card`'s deck allowlist cannot see a COMMAND.
+    #[test]
+    fn refuses_step_names_that_would_reach_the_ngspice_interpreter() {
+        for hostile in [
+            ".step v1`id` 1 2 1",
+            ".step v1;shell 1 2 1",
+            ".step v1|tee 1 2 1",
+            ".step $v1 1 2 1",
+            ".step v1&whoami 1 2 1",
+            ".step param p`id` 1 2 1",
+            ".step param p;x 1 2 1",
+        ] {
+            assert!(
+                parse_step_directive(hostile).is_none(),
+                "accepted a hostile .step name: {hostile}"
+            );
+            assert!(
+                split_step_directives(&[hostile.to_string()]).is_err(),
+                "hostile .step did not fail the deck: {hostile}"
+            );
+        }
+    }
+
+    /// The grammar has to stay wide enough for real designators, or the fix
+    /// breaks ordinary decks instead of hostile ones.
+    #[test]
+    fn still_accepts_ordinary_designators_and_param_names() {
+        for good in [
+            ".step v1 1 2 1",
+            ".step Vin 0 5 1",
+            ".step I2 1 2 1",
+            ".step x1.v1 1 2 1",
+            ".step param Rload 1 2 1",
+            ".step param temp_co 1 2 1",
+            ".step temp 0 50 25",
+        ] {
+            assert!(parse_step_directive(good).is_some(), "rejected a real .step: {good}");
+        }
+    }
+
+    /// The exact shape that reaches the interpreter, so a future refactor cannot
+    /// quietly reintroduce an unvalidated splice.
+    #[test]
+    fn source_alter_commands_are_free_of_interpreter_metacharacters() {
+        let axis = parse_step_directive(".step v1 1 3 1").expect("a real .step parses");
+        let members = step_members(&[axis]).expect("members expand");
+        for member in &members {
+            for command in source_alter_commands(member) {
+                assert!(
+                    crate::spice::reject_interpreter_metacharacters(&command).is_ok(),
+                    "generated command would be refused at the sink: {command}"
+                );
+            }
+        }
+    }
+
 }

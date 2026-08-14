@@ -186,7 +186,7 @@ const MAX_LIVE_NOISE_LINES: usize = 32;
  *
  * One engine at a time is not a convenience here. The bounded path and the live
  * path both spawn a child that loads the same `libngspice` and stages code
- * models into the same fixed `/tmp/tau-ngspice-codemodels` directory, and both
+ * models into the same fixed per-user `$TMPDIR/tau-ngspice-codemodels` directory, and both
  * would compete for the same machine while the user believes one number on
  * screen came from one circuit. Refusing the second request with a sentence
  * that names the first is the only honest arrangement. */
@@ -430,7 +430,9 @@ fn validate_instance(instance: &str) -> Result<String, String> {
         return Err(refusal());
     }
     if !characters.all(|character| {
-        character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '$' | '#' | '-' | '+')
+        // No '$': it is ngspice's variable-substitution sigil, and a
+        // designator has no business naming an interpreter variable.
+        character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '#' | '-' | '+')
     }) {
         return Err(refusal());
     }
@@ -751,6 +753,10 @@ impl LiveRun {
 
     /// Raw `ngSpice_Command`, folding the engine's own words into a failure.
     fn raw_command(&mut self, command: &str) -> Result<(), String> {
+        // Same gate as the batch runner's `run_named_command`, from the same
+        // shared function: these two are the only ways into the interpreter and
+        // they must not drift apart again.
+        crate::spice::reject_interpreter_metacharacters(command)?;
         let text = CString::new(command)
             .map_err(|_| "An ngspice command contained a NUL byte.".to_string())?;
         let status = unsafe { (self.engine.api.command)(text.as_ptr() as *mut c_char) };

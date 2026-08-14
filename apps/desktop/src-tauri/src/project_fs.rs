@@ -40,6 +40,54 @@ fn inside(root: &Path, path: &Path) -> bool {
     path != root && path.starts_with(root)
 }
 
+/// Refuse any path with a dot-prefixed component below the project root.
+///
+/// `inside` answers "is this under the root", which is necessary and not
+/// sufficient. Tauri's own filesystem scope will not touch a dotfile: for an
+/// authorized folder `P` it installs the literal pattern `P` plus the recursive
+/// glob under it, matched with `require_literal_leading_dot = true` on unix
+/// ("dotfiles are not supposed to be exposed by default on unix", in Tauri's own
+/// words), so that recursive glob never matches `P/.git/...`. These native
+/// commands used `std::fs` directly and only checked ancestry, so they could
+/// create, write and move into exactly the namespace the plugin withholds - and
+/// the reachable targets are the paths developer tooling executes on sight:
+/// `.git/hooks/` scripts (a rename preserves the exec bit), `.git/config`,
+/// `.claude/settings.local.json`, `.vscode/tasks.json`, `.envrc`.
+///
+/// Tau itself has no reason to write a dotfile: it creates schematics and
+/// folders. So this closes the gap without narrowing any real feature, and it
+/// checks the whole relative path rather than just the leaf, because a caller can
+/// name `P/.git` as the PARENT - every real git repository already contains one,
+/// so no attacker setup is needed for that half.
+fn free_of_hidden_components(root: &Path, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(root) else {
+        // Not under the root at all; `inside` is the check that reports that.
+        return false;
+    };
+    relative.components().all(|component| match component {
+        Component::Normal(value) => !value.to_string_lossy().starts_with('.'),
+        // A canonical path under the root holds only normal components.
+        _ => false,
+    })
+}
+
+/// The containment rule every project write must satisfy: under the root, and
+/// clear of the dot-prefixed namespace Tauri's own scope refuses.
+fn writable_project_path(root: &Path, path: &Path) -> Result<(), String> {
+    if path != root && !inside(root, path) {
+        // Wording preserved: three tests pin this sentence, and it is the one
+        // users already see.
+        return Err("The target folder must be inside the open project.".into());
+    }
+    if !free_of_hidden_components(root, path) {
+        return Err(
+            "Tau does not create or move files inside hidden folders such as .git or .vscode."
+                .into(),
+        );
+    }
+    Ok(())
+}
+
 fn create_project_text_file_exclusive_inner(
     project_root: &Path,
     parent_path: &Path,
@@ -48,12 +96,13 @@ fn create_project_text_file_exclusive_inner(
 ) -> Result<CreateProjectTextFileResult, String> {
     let root = canonical_directory(project_root, "project root")?;
     let parent = canonical_directory(parent_path, "target folder")?;
-    if parent != root && !inside(&root, &parent) {
-        return Err("The target folder must be inside the open project.".into());
-    }
+    writable_project_path(&root, &parent)?;
     let leaf = name.trim();
     if !safe_leaf_name(leaf) {
         return Err("The filename must be a single name without path separators.".into());
+    }
+    if leaf.starts_with('.') {
+        return Err("Tau does not create hidden files.".into());
     }
     if contents.len() > MAX_CREATED_TEXT_BYTES {
         return Err(format!(
@@ -91,12 +140,13 @@ fn create_project_directory_inner(
 ) -> Result<PathBuf, String> {
     let root = canonical_directory(project_root, "project root")?;
     let parent = canonical_directory(parent_path, "target folder")?;
-    if parent != root && !inside(&root, &parent) {
-        return Err("The target folder must be inside the open project.".into());
-    }
+    writable_project_path(&root, &parent)?;
     let leaf = name.trim();
     if !safe_leaf_name(leaf) {
         return Err("The folder name must be a single name without path separators.".into());
+    }
+    if leaf.starts_with('.') {
+        return Err("Tau does not create hidden folders.".into());
     }
 
     let destination = parent.join(leaf);
@@ -136,9 +186,12 @@ fn move_project_entry_inner(
             "The source must be inside the open project and cannot be the project root.".into(),
         );
     }
-    if target_directory != root && !inside(&root, &target_directory) {
-        return Err("The target folder must be inside the open project.".into());
-    }
+    // Both ends, because a move is two mutations: it removes from the source and
+    // creates at the destination. Reading a hidden folder is not Tau's business
+    // either way, and relocating an executable file INTO `.git/hooks` was the
+    // sharpest form of this defect - `rename` preserves the mode bits.
+    writable_project_path(&root, &source)?;
+    writable_project_path(&root, &target_directory)?;
 
     let current_name = source
         .file_name()
@@ -149,6 +202,9 @@ fn move_project_entry_inner(
         return Err(
             "The destination name must be a single filename without path separators.".into(),
         );
+    }
+    if leaf.starts_with('.') {
+        return Err("Tau does not move items to hidden names.".into());
     }
 
     // A directory cannot be moved beneath itself. Checking the canonical
@@ -555,4 +611,61 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(outside).unwrap();
     }
+
+    /// Tauri's own fs scope refuses dot-prefixed paths (`require_literal_leading_dot`
+    /// on unix), but these native commands used `std::fs` and only checked
+    /// ancestry - so they could write exactly the namespace the plugin withholds.
+    /// `.git/hooks/` scripts, `.claude/settings.local.json` and `.vscode/tasks.json`
+    /// are executed on sight by ordinary developer tooling.
+    #[test]
+    fn refuses_writes_into_hidden_project_directories() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        let git = root.join(".git");
+        fs::create_dir_all(git.join("hooks")).unwrap();
+
+        // `.git` named as the PARENT. No attacker setup: every real repository
+        // already has this directory.
+        let error =
+            create_project_text_file_exclusive_inner(&root, &git, "config", "x").unwrap_err();
+        assert!(error.contains("hidden"), "unexpected refusal: {error}");
+
+        let error = create_project_directory_inner(&root, &root, ".claude").unwrap_err();
+        assert!(error.contains("hidden"), "unexpected refusal: {error}");
+
+        let error =
+            create_project_text_file_exclusive_inner(&root, &root, ".envrc", "x").unwrap_err();
+        assert!(error.contains("hidden"), "unexpected refusal: {error}");
+
+        // The sharpest one: relocating an executable into `.git/hooks`, where
+        // `rename` carries its mode bits.
+        let payload = root.join("payload.asc");
+        fs::write(&payload, "Version 4\n").unwrap();
+        let error =
+            move_project_entry_inner(&root, &payload, &git.join("hooks"), Some("post-checkout"))
+                .unwrap_err();
+        assert!(error.contains("hidden"), "unexpected refusal: {error}");
+    }
+
+    /// The rule must not narrow anything Tau actually does.
+    #[test]
+    fn still_creates_and_moves_ordinary_project_items() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        let filters = create_project_directory_inner(&root, &root, "Filters").unwrap();
+        assert!(filters.is_dir());
+        let created = create_project_text_file_exclusive_inner(
+            &root,
+            &filters,
+            "low-pass.asc",
+            "Version 4\n",
+        )
+        .unwrap();
+        assert!(matches!(created, CreateProjectTextFileResult::Created { .. }));
+        let source = root.join("scratch.asc");
+        fs::write(&source, "Version 4\n").unwrap();
+        let moved = move_project_entry_inner(&root, &source, &filters, None).unwrap();
+        assert!(moved.is_file());
+    }
+
 }

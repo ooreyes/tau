@@ -135,11 +135,21 @@ fn allowed_cloud_url(provider: &str, url: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Headers the renderer may set on a proxied call: an ALLOWLIST, not a denylist.
+///
+/// The previous denylist named five secrets to strip and therefore had to be
+/// complete to be correct. It was not: `x-goog-api-key` is accepted as
+/// credentials by the Gemini endpoint and was not on the list. An allowlist
+/// inverts the failure mode - a header nobody considered is dropped rather than
+/// forwarded - which is the same reason the deck screen in `spice.rs` allowlists
+/// card types instead of banning the dangerous ones.
+///
+/// The SDK only needs content negotiation and API versioning; the credential is
+/// attached by `auth_header_for` from the keychain and never by the caller.
 fn header_allowed_from_renderer(name: &str) -> bool {
-    let lower = name.to_ascii_lowercase();
-    !matches!(
-        lower.as_str(),
-        "authorization" | "x-api-key" | "cookie" | "proxy-authorization" | "host"
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "content-type" | "accept" | "accept-encoding" | "anthropic-version" | "anthropic-beta"
     )
 }
 
@@ -298,4 +308,34 @@ mod tests {
         assert!(auth_header_for("openai", "sk-proj").is_err());
         assert!(auth_header_for("mistral", "x").is_err());
     }
+
+    /// An allowlist, not a denylist. The previous denylist named five secrets to
+    /// strip and had to be complete to be correct; it missed `x-goog-api-key`,
+    /// which the Gemini endpoint accepts as credentials.
+    #[test]
+    fn renderer_headers_are_allowlisted_not_denylisted() {
+        for forwarded in ["content-type", "Accept", "anthropic-version"] {
+            assert!(
+                header_allowed_from_renderer(forwarded),
+                "dropped a header the SDK needs: {forwarded}"
+            );
+        }
+        for dropped in [
+            "authorization",
+            "x-api-key",
+            "x-goog-api-key",
+            "X-Goog-Api-Key",
+            "cookie",
+            "host",
+            "proxy-authorization",
+            "x-forwarded-for",
+            "anything-nobody-considered",
+        ] {
+            assert!(
+                !header_allowed_from_renderer(dropped),
+                "forwarded a header the renderer must not set: {dropped}"
+            );
+        }
+    }
+
 }

@@ -65,6 +65,12 @@ fn valid_hugging_face_repository(repository: &str) -> bool {
     let valid_part = |part: &str| {
         !part.is_empty()
             && part.len() <= 96
+            // At least one alphanumeric, so a part cannot be all dots. `.` is in
+            // the byte set because real repo names contain it, which also made
+            // ".." a "valid" owner - and `mlx_lm.server` resolves `--model` as a
+            // local path when one exists, so "../x" pointed the loader outside
+            // the Hub namespace this validator exists to describe.
+            && part.bytes().any(|byte| byte.is_ascii_alphanumeric())
             && part
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
@@ -308,8 +314,15 @@ fn bootstrap_uv() -> Result<PathBuf, String> {
     }
 
     let extract = Command::new("/usr/bin/tar")
+        // `--strip-components=1`: the pinned tarball wraps its payload in a
+        // `uv-aarch64-apple-darwin/` directory, so without this the binary landed
+        // one level below where the code looks for it and the install failed
+        // every time with "uv archive did not contain the expected binary".
+        // Safe against tar-slip because the archive's SHA-256 was verified above,
+        // so its entry names are already known-good.
         .args(["-xzf"])
         .arg(&archive)
+        .arg("--strip-components=1")
         .arg("-C")
         .arg(&staging)
         .stdin(Stdio::null())
@@ -878,4 +891,30 @@ mod tests {
             assert!(UV_BOOTSTRAP_SHA256.chars().all(|c| c.is_ascii_hexdigit()));
         }
     }
+
+    /// `.` is in the byte set because real repo names contain it, which also made
+    /// ".." a valid "owner" - and `mlx_lm.server` resolves `--model` as a local
+    /// path when one exists, so "../x" pointed the loader out of the Hub
+    /// namespace this validator exists to describe.
+    #[test]
+    fn repository_parts_must_contain_something_other_than_dots() {
+        for hostile in ["../x", "x/..", "../..", "./x", "x/.", "../etc"] {
+            assert!(
+                !valid_hugging_face_repository(hostile),
+                "accepted a traversal-shaped repository: {hostile}"
+            );
+        }
+        for good in [
+            "mlx-community/Qwen2.5-7B-Instruct-4bit",
+            "owner/model.v2",
+            "a/b",
+            "org_name/model-name",
+        ] {
+            assert!(
+                valid_hugging_face_repository(good),
+                "rejected a real repository: {good}"
+            );
+        }
+    }
+
 }

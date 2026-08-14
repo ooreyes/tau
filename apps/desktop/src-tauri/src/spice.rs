@@ -477,9 +477,15 @@ impl SpiceEngine {
         // atomically (temp file + rename), reused when the bytes already
         // match, and never needs Drop. The embedded code signatures travel
         // with the copied bytes.
-        #[cfg(unix)]
-        let staged_dir = PathBuf::from("/tmp/tau-ngspice-codemodels");
-        #[cfg(not(unix))]
+        // Per-user, NOT `/tmp`. This used to be the literal
+        // `/tmp/tau-ngspice-codemodels`, and `/private/tmp` is mode 1777: the
+        // first account to create that directory owns it, and its contents are
+        // `dlopen`'d into this process by the `codemodel` command below. On a
+        // shared Mac that is a native-code load from a path another local user
+        // could have created. macOS's per-user `$TMPDIR` (`/var/folders/<hash>/T`)
+        // is mode 700, keeps the no-whitespace property the block comment above
+        // requires, and is just as stable across runs - so nothing about the
+        // reuse-by-content-hash or the leak-free fixed path changes.
         let staged_dir = std::env::temp_dir().join("tau-ngspice-codemodels");
         if staged_dir
             .to_string_lossy()
@@ -491,6 +497,34 @@ impl SpiceEngine {
                     .to_string(),
             );
         }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+            if !staged_dir.exists() {
+                std::fs::DirBuilder::new()
+                    .recursive(true)
+                    .mode(0o700)
+                    .create(&staged_dir)
+                    .map_err(|error| {
+                        format!("Could not stage bundled ngspice code models: {error}")
+                    })?;
+            }
+            // Refuse a staging directory any other account can write, whoever
+            // created it. These bytes get loaded as native code, so "probably
+            // ours" is not good enough, and a refusal here is recoverable by
+            // deleting the directory while a silent load is not.
+            let mode = std::fs::metadata(&staged_dir)
+                .map_err(|error| format!("Could not inspect the code-model staging path: {error}"))?
+                .permissions()
+                .mode();
+            if mode & 0o022 != 0 {
+                return Err(format!(
+                    "{} is writable by other accounts, so Tau will not load code models from it. Delete it and reopen Tau.",
+                    staged_dir.display()
+                ));
+            }
+        }
+        #[cfg(not(unix))]
         std::fs::create_dir_all(&staged_dir)
             .map_err(|error| format!("Could not stage bundled ngspice code models: {error}"))?;
         sweep_stale_codemodel_dirs(&staged_dir);
@@ -688,6 +722,7 @@ impl SpiceEngine {
     }
 
     fn run_named_command(&mut self, command: &str) -> Result<(), String> {
+        reject_interpreter_metacharacters(command)?;
         let command = CString::new(command)
             .map_err(|_| "ngspice command contains a NUL byte.".to_string())?;
         let command_status = unsafe { (self.api.command)(command.as_ptr() as *mut c_char) };
@@ -1748,6 +1783,53 @@ fn stitch_cards(lines: &[String]) -> Result<Vec<StitchedCard>, String> {
 
 /// Screen one card, physical or stitched. `compact` must come from
 /// [`compact_lower`]; `line_number` is 1-based and only used for diagnostics.
+/// The last gate before a string reaches `ngSpice_Command`, shared by every
+/// caller in the crate.
+///
+/// `ngSpice_Command` is the whole ngspice command interpreter, not the netlist
+/// parser: `source`, `shell`, `destroy` and `write` are all reachable through it,
+/// its text is split on whitespace and newlines, and it applies backquote and
+/// `$` expansion. `screen_card`'s deck allowlist gives this channel no protection
+/// at all, because nothing sent here is a deck card.
+///
+/// It screens two independent things, and needs both:
+///
+///  1. An ALLOWLIST of verbs. A metacharacter denylist alone would have passed
+///     `source /etc/passwd` - no metacharacter, entirely dangerous. Writing the
+///     test for this fix is what surfaced that, so the verb is checked first.
+///  2. The characters that let one command become two, or that trigger
+///     expansion, so a validated verb cannot carry a second command in its
+///     arguments.
+///
+/// It lives in ONE place on purpose. Both channels - the batch runner's
+/// `run_named_command` and the live session's `raw_command` - must agree, and the
+/// vulnerability this closes existed precisely because they did not: the live
+/// path validated its fields (`live_spice::alter_command`) while the batch path
+/// grew `.step` source stepping later and spliced an unvalidated name from a
+/// `.asc` straight into `alter`. Two lists would drift again.
+pub(crate) fn reject_interpreter_metacharacters(command: &str) -> Result<(), String> {
+    /// Every verb this crate legitimately sends. Adding one is a deliberate act.
+    const ALLOWED_VERBS: [&str; 6] = ["remcirc", "run", "bg_run", "bg_halt", "bg_resume", "alter"];
+
+    let verb = command.split_whitespace().next().unwrap_or_default();
+    if !ALLOWED_VERBS.contains(&verb) {
+        return Err(format!(
+            "Refusing the ngspice command {verb:?}: Tau sends only its own fixed set of engine commands."
+        ));
+    }
+    if let Some(bad) = command.chars().find(|c| {
+        matches!(
+            c,
+            '`' | '$' | ';' | '|' | '&' | '<' | '>' | '(' | ')' | '\n' | '\r' | '\0'
+        )
+    }) {
+        return Err(format!(
+            "Refusing an ngspice command containing {bad:?}: Tau assembles engine commands from validated fields only."
+        ));
+    }
+    Ok(())
+}
+
 fn screen_card(compact: &str, line_number: usize) -> Result<(), String> {
     // The embedded engine executes inside Tau's process and is not covered
     // by Tauri's filesystem scope. Reject every supported ngspice/XSPICE
@@ -2225,6 +2307,44 @@ mod tests {
     #[test]
     fn requires_an_end_card() {
         assert!(deck_lines("Tau\n.op\n").is_err());
+    }
+
+    /// The sink gate, tested directly. Both command channels route through this
+    /// one function precisely so they cannot drift apart again - the batch path
+    /// spliced an unvalidated `.step` name into `alter` while the live path
+    /// validated its fields.
+    #[test]
+    fn refuses_interpreter_metacharacters_on_the_command_channel() {
+        for hostile in [
+            "alter v1`id`=1",
+            "alter v1=1;shell touch /tmp/x",
+            "alter v1=1|tee /tmp/x",
+            "alter $foo=1",
+            "alter v1=1 && whoami",
+            "alter v1=1\nshell id",
+            "alter v1=1 > /tmp/x",
+            "source /etc/passwd",
+        ] {
+            assert!(
+                super::reject_interpreter_metacharacters(hostile).is_err(),
+                "let a metacharacter through: {hostile:?}"
+            );
+        }
+        // Everything this crate legitimately sends still passes.
+        for real in [
+            "remcirc",
+            "run",
+            "bg_run",
+            "bg_halt",
+            "bg_resume",
+            "alter v1 = 5",
+            "alter r2 resistance = 1000",
+        ] {
+            assert!(
+                super::reject_interpreter_metacharacters(real).is_ok(),
+                "refused a real engine command: {real}"
+            );
+        }
     }
 
     #[test]
