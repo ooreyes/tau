@@ -208,7 +208,7 @@
     "theme": "light",
     "viewport": "900x600",
     "pass": true,
-    "detail": "3 distinct live widths (floor 3, from 6px of published headroom); settled at 306px vs last live 306px; 40 moves in 348ms (8.7ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
+    "detail": "3 distinct live widths (floor 3, from 6px of published headroom); settled at 306px vs last live 306px; 40 moves in 350ms (8.8ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
     "data": {
       "widths": [
         302,
@@ -252,12 +252,12 @@
         306,
         306
       ],
-      "elapsed": 348,
+      "elapsed": 350,
       "distinct": 3,
       "settled": 306,
       "headroom": 6,
       "trackingFloor": 3,
-      "perMove": 8.7
+      "perMove": 8.75
     }
   },
   {
@@ -469,7 +469,7 @@
     "theme": "light",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "40 distinct live widths (floor 20, from 120px of published headroom); settled at 380px vs last live 380px; 40 moves in 509ms (12.7ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
+    "detail": "40 distinct live widths (floor 20, from 120px of published headroom); settled at 380px vs last live 380px; 40 moves in 501ms (12.5ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
     "data": {
       "widths": [
         302,
@@ -513,12 +513,12 @@
         378,
         380
       ],
-      "elapsed": 509,
+      "elapsed": 501,
       "distinct": 40,
       "settled": 380,
       "headroom": 120,
       "trackingFloor": 20,
-      "perMove": 12.725
+      "perMove": 12.525
     }
   },
   {
@@ -730,7 +730,7 @@
     "theme": "dark",
     "viewport": "900x600",
     "pass": true,
-    "detail": "3 distinct live widths (floor 3, from 6px of published headroom); settled at 306px vs last live 306px; 40 moves in 349ms (8.7ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
+    "detail": "3 distinct live widths (floor 3, from 6px of published headroom); settled at 306px vs last live 306px; 40 moves in 346ms (8.7ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
     "data": {
       "widths": [
         302,
@@ -774,12 +774,12 @@
         306,
         306
       ],
-      "elapsed": 349,
+      "elapsed": 346,
       "distinct": 3,
       "settled": 306,
       "headroom": 6,
       "trackingFloor": 3,
-      "perMove": 8.725
+      "perMove": 8.65
     }
   },
   {
@@ -991,7 +991,7 @@
     "theme": "dark",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "40 distinct live widths (floor 20, from 120px of published headroom); settled at 380px vs last live 380px; 40 moves in 502ms (12.6ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
+    "detail": "40 distinct live widths (floor 20, from 120px of published headroom); settled at 380px vs last live 380px; 40 moves in 500ms (12.5ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
     "data": {
       "widths": [
         302,
@@ -1035,12 +1035,12 @@
         378,
         380
       ],
-      "elapsed": 502,
+      "elapsed": 500,
       "distinct": 40,
       "settled": 380,
       "headroom": 120,
       "trackingFloor": 20,
-      "perMove": 12.55
+      "perMove": 12.5
     }
   }
 ]
