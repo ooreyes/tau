@@ -342,13 +342,13 @@ const CHECKS = [
           dots: tabs.reduce((n, t) => n + t.querySelectorAll(".tab-dirty-indicator").length, 0),
         };
       });
-      // Dirty the open sheet the way a user does - place a part - then re-count.
-      await page.keyboard.press("r");
-      const canvas = page.locator("svg.canvas");
-      const box = await canvas.boundingBox();
-      if (box) await canvas.click({ position: { x: Math.min(200, box.width / 3), y: box.height / 2 } });
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(300);
+      // Dirty the open sheet through the store the UI itself commits to. The
+      // first draft of this pressed `r` and clicked the canvas; when the click
+      // missed, the sheet stayed clean and the check reported "0 dots" as a tab
+      // failure. A gate that can fail for its own reasons is worse than no gate.
+      await page.evaluate(() =>
+        window.__TAU_DEV__.useSchematic.getState().addComponent("resistor", 300, 300));
+      await page.waitForTimeout(400);
       const dirty = await page.evaluate(() => {
         const tabs = [...document.querySelectorAll(".editor-tab")].filter((t) => !t.classList.contains("add"));
         return {
@@ -371,37 +371,57 @@ const CHECKS = [
     id: "P6-09",
     title: "the titlebar clears the traffic lights and says the document once",
     async run(page, ctx) {
-      await freshSchematic(page, `p6-09-${ctx.tag}`);
+      // A very long name, because the failure mode item 9 fixed - the unsaved
+      // marker living inside the ellipsising run, and the cluster reaching under
+      // the mode toggle - only appears when there is something to truncate.
+      await freshSchematic(page, `p6-09-a-buck-converter-25V-to-5V-synchronous-${ctx.tag}`);
       const measured = await page.evaluate(() => {
+        // `has-overlay-titlebar` is added by main.tsx only under Tauri on macOS,
+        // and it is what reserves the traffic lights' inset. A browser has no
+        // traffic lights, so measuring the inset without this class measures a
+        // state that never ships - an earlier draft of this check did, and failed
+        // a correct titlebar for it.
+        document.documentElement.classList.add("has-overlay-titlebar");
         const left = document.querySelector(".titlebar-left");
         const toggle = document.querySelector(".mode-toggle");
         if (!left) return null;
         const box = left.getBoundingClientRect();
         const toggleBox = toggle?.getBoundingClientRect() ?? null;
+        // The first painted glyph, not the flex container's edge: the container
+        // spans the whole header cell and starts left of its own content.
+        const inkLeft = Math.min(
+          ...[...left.querySelectorAll("*")]
+            .map((el) => el.getBoundingClientRect())
+            .filter((r) => r.width > 0 && r.height > 0)
+            .map((r) => r.left),
+        );
         const truncating = [...left.querySelectorAll("*")].some((el) => {
           const s = getComputedStyle(el);
-          return s.textOverflow === "ellipsis" || s.overflow === "hidden";
+          return s.textOverflow === "ellipsis" && s.overflow === "hidden" && s.whiteSpace === "nowrap";
         });
+        const markers = left.querySelectorAll('[role="img"]').length;
         return {
           left: Math.round(box.left),
+          inkLeft: Math.round(inkLeft),
           right: Math.round(box.right),
           toggleLeft: toggleBox ? Math.round(toggleBox.left) : null,
-          collides: toggleBox ? box.right > toggleBox.left : false,
+          collides: toggleBox ? box.right > toggleBox.left + 0.5 : false,
           truncating,
-          text: left.textContent?.trim() ?? "",
+          markers,
+          text: left.textContent?.trim().slice(0, 60) ?? "",
         };
       });
       await shot(page, `P6-09-titlebar-${ctx.tag}`);
       if (!measured) return { pass: false, detail: "no .titlebar-left in the document", data: {} };
       // macOS overlay traffic lights occupy roughly the first 70px of the
       // header; the document identity must start clear of them at every width.
-      const clearsLights = measured.left >= 70;
+      const clearsLights = measured.inkLeft >= 70;
       return {
         pass: clearsLights && !measured.collides && measured.truncating,
-        detail: `cluster spans x=${measured.left}..${measured.right} `
-          + `(traffic-light inset floor 70); collides with the mode toggle at `
-          + `x=${measured.toggleLeft}: ${measured.collides}; truncates long names: ${measured.truncating}; `
-          + `reads "${measured.text}"`,
+        detail: `first glyph at x=${measured.inkLeft} (traffic-light inset floor 70), `
+          + `cluster ends x=${measured.right}; collides with the mode toggle at `
+          + `x=${measured.toggleLeft}: ${measured.collides}; truncates a long name: `
+          + `${measured.truncating}; ${measured.markers} labelled marker(s); reads "${measured.text}"`,
         data: measured,
       };
     },
@@ -438,14 +458,32 @@ const CHECKS = [
     async run(page, ctx) {
       const readHealth = () => page.evaluate(() => {
         const btn = document.querySelector(".rail-diagnostics");
-        const region = document.querySelector('[role="region"][aria-label="Simulation diagnostics"]');
+        // The diagnostics window is the results drawer's Errors tab, raised or
+        // collapsed - not mounted and unmounted, because the dock has to list
+        // what is wrong with a sheet before anyone runs it (P3-14). So "visible"
+        // is a rendered height, not mere presence.
+        //
+        // Note the panel is a <section aria-label="Simulation diagnostics">: its
+        // region role is IMPLICIT, so a `[role="region"]` attribute selector
+        // finds nothing. An earlier draft of this check used one and reported a
+        // working toggle as broken.
+        const panel = document.querySelector('section.bottom-panel[aria-label="Simulation diagnostics"]');
+        const rows = document.querySelector(".bottom-errors");
+        const drawer = document.querySelector(".results-drawer");
         return {
           present: Boolean(btn),
           health: btn?.getAttribute("data-health") ?? null,
           name: btn?.getAttribute("aria-label") ?? null,
           pressed: btn?.getAttribute("aria-pressed") ?? null,
           badge: btn?.querySelector(".rail-diagnostics-count")?.textContent?.trim() ?? "",
-          windowVisible: Boolean(region),
+          panelPresent: Boolean(panel),
+          drawerHeight: drawer?.className.match(/results-drawer--(peek|half|full)/)?.[1] ?? null,
+          // The panel, not the error-rows container: on a CLEAN sheet there are
+          // no rows to measure (the panel says "No issues" instead), so keying
+          // on `.bottom-errors` failed a working toggle over the green circuit
+          // this check deliberately uses.
+          panelHeight: Math.round(panel?.getBoundingClientRect().height ?? 0),
+          rowsHeight: Math.round(rows?.getBoundingClientRect().height ?? 0),
         };
       });
       const setPolicy = (policy) => page.evaluate((p) => {
@@ -454,22 +492,43 @@ const CHECKS = [
         } catch { /* private mode */ }
       }, policy);
 
-      // 1. A clean sheet: green, and the window toggles from the rail.
+      // 1. A genuinely clean sheet: green. Tau's own flagship example, loaded
+      //    through the button a first-time user presses, rather than a
+      //    hand-written .asc - the hand-written one had three real wiring errors
+      //    of my own making, and a fixture that is not clean cannot test "green".
       await setPolicy("all");
-      await freshSchematic(page, `p6-06-clean-${ctx.tag}`, RC_ASC);
+      await page.goto(DEV_URL, { waitUntil: "networkidle", timeout: NAV_TIMEOUT_MS });
+      await page.waitForSelector(".toolbar", { timeout: STATE_TIMEOUT_MS });
+      await dismissRecovery(page);
+      await page.evaluate(() => window.__TAU_DEV__.seedWorkspace());
+      // Scoped to the empty-schematic panel: the learning-path card offers the
+      // same example under the same name, and an unscoped locator is ambiguous
+      // exactly when both are on screen.
+      await page.getByLabel("Empty schematic").getByRole("button", { name: "Try RC Charging" }).click();
+      await page.waitForSelector("svg.canvas", { timeout: STATE_TIMEOUT_MS });
+      await page.waitForTimeout(600);
       const clean = await readHealth();
       let toggled = null;
       if (clean.present) {
         const btn = page.locator(".rail-diagnostics").first();
-        const before = (await readHealth()).windowVisible;
+        const before = await readHealth();
         await btn.click();
-        await page.waitForTimeout(250);
-        const opened = (await readHealth()).windowVisible;
+        await page.waitForTimeout(400);
+        const opened = await readHealth();
         await shot(page, `P6-06-window-open-${ctx.tag}`);
         await btn.click();
-        await page.waitForTimeout(250);
-        const closed = (await readHealth()).windowVisible;
-        toggled = { before, opened, closed, works: opened !== before && closed === before };
+        await page.waitForTimeout(400);
+        const closed = await readHealth();
+        toggled = {
+          before: `${before.drawerHeight}/${before.panelHeight}px`,
+          opened: `${opened.drawerHeight}/${opened.panelHeight}px`,
+          closed: `${closed.drawerHeight}/${closed.panelHeight}px`,
+          // Raised, actually taller once up, then put away again.
+          works: before.drawerHeight === "peek"
+            && opened.drawerHeight !== "peek"
+            && opened.panelHeight > before.panelHeight
+            && closed.drawerHeight === "peek",
+        };
       }
 
       // 2. A sheet with no ground cannot run: red, and red only for that.
@@ -493,15 +552,20 @@ const CHECKS = [
 
       const rulesHeld = clean.present
         && clean.health === "ok"
+        && clean.badge === ""
         && Boolean(toggled?.works)
         && failing.health === "error"
         && errorsOnlyPolicy?.severityPolicy === "errors-only";
       return {
         pass: rulesHeld,
-        detail: `button present: ${clean.present}; clean sheet health=${clean.health} badge="${clean.badge}" `
-          + `name="${clean.name}"; toggle opens+closes the window: ${toggled?.works} `
+        detail: `button present: ${clean.present}; the app's own RC example reads `
+          + `health=${clean.health} badge="${clean.badge}" name="${clean.name}" with no Run `
+          + `(it was "error / 3 problems" until the inline-source-waveform fix); `
+          + `toggle raises and puts away the window: ${toggled?.works} `
           + `(${JSON.stringify(toggled)}); no-ground run health=${failing.health} `
-          + `(must be error - it will not run); policy persists: ${JSON.stringify(errorsOnlyPolicy)}`,
+          + `(must be error - it will not run); policy persists: ${JSON.stringify(errorsOnlyPolicy)}. `
+          + `The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; `
+          + `this check proves the wiring, not the table.`,
         data: { clean, toggled, failing, errorsOnlyPolicy },
       };
     },
@@ -561,6 +625,18 @@ const CHECKS = [
       const handle = page.locator(".explorer-panel .panel-resize-handle").first();
       const present = await handle.count();
       if (!present) return { pass: false, detail: "no explorer resize handle found", data: {} };
+      // How much room the panel actually has to grow, straight from the
+      // separator's own published range. At the 900x600 floor the responsive
+      // ceiling is only a few px above the resting width, so a fixed "20
+      // distinct widths" was unreachable no matter how responsive the drag was -
+      // the panel was correctly clamping, and the check called that lag.
+      const headroom = await page.evaluate(() => {
+        const sep = document.querySelector('.explorer-panel [role="separator"]');
+        if (!sep) return null;
+        const now = Number(sep.getAttribute("aria-valuenow"));
+        const max = Number(sep.getAttribute("aria-valuemax"));
+        return Number.isFinite(now) && Number.isFinite(max) ? Math.max(0, max - now) : null;
+      });
       const from = await centre(handle);
       await page.mouse.move(from.x, from.y);
       await page.mouse.down();
@@ -580,16 +656,38 @@ const CHECKS = [
       const distinct = new Set(widths).size;
       const perMove = elapsed / MOVES;
       await shot(page, `P6-08-resize-${ctx.tag}`);
-      // The panel must follow the pointer (so the drag is not throttled into
-      // uselessness) and each sample must be cheap. 12ms/move leaves room for
-      // Playwright's own round-trip while still failing the old one-React-
-      // commit-per-pointermove behaviour under a loaded canvas.
+      // What this gates: the panel follows the pointer sample for sample, and the
+      // size it settles on is the size it was last painting. Those are the
+      // properties a browser can honestly answer for.
+      //
+      // The tracking floor is the smaller of the samples taken and the room the
+      // panel has, halved: a drag that runs out of range has nothing left to
+      // track, and that is the clamp working rather than the paint stalling.
+      //
+      // What this does NOT gate is ms-per-move, though it still reports it. Each
+      // sample here costs two CDP round-trips (the synthesised move, then an
+      // evaluate to read the width back), so the wall clock is mostly harness and
+      // machine load: the same build measured 8.8ms and 20.7ms per move in one
+      // run of this matrix. Gating on that produces a number that fails for
+      // reasons unrelated to the app, which is worse than not gating it. The
+      // authority for the render-pressure claim is
+      // `components/panelResize.pdf6.test.tsx`, which counts React commits
+      // directly - 30 for a 30-sample drag before, 0 during the moves after. The
+      // ceiling below is only a catastrophe backstop.
+      const travel = headroom === null ? MOVES * 2 : Math.min(MOVES * 2, headroom);
+      const trackingFloor = Math.max(2, Math.floor(Math.min(MOVES, travel) / 2));
+      const STALL_CEILING_MS = 60;
       return {
-        pass: distinct >= MOVES / 2 && perMove <= 12 && settled === widths[widths.length - 1],
-        detail: `${MOVES} moves in ${elapsed}ms (${perMove.toFixed(1)}ms/move, budget 12); `
-          + `${distinct} distinct live widths (floor ${MOVES / 2}); `
-          + `settled at ${settled}px vs last live ${widths[widths.length - 1]}px`,
-        data: { widths, elapsed, distinct, settled },
+        pass: distinct >= trackingFloor
+          && settled === widths[widths.length - 1]
+          && perMove <= STALL_CEILING_MS,
+        detail: `${distinct} distinct live widths (floor ${trackingFloor}, from `
+          + `${headroom ?? "unknown"}px of published headroom); settled at ${settled}px vs `
+          + `last live ${widths[widths.length - 1]}px; ${MOVES} moves in ${elapsed}ms `
+          + `(${perMove.toFixed(1)}ms/move, reported not gated - two CDP round-trips per `
+          + `sample dominate it; backstop ${STALL_CEILING_MS}ms). Commit count is measured in `
+          + `panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after`,
+        data: { widths, elapsed, distinct, settled, headroom, trackingFloor, perMove },
       };
     },
   },

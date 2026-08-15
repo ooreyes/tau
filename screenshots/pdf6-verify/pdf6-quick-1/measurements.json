@@ -1,0 +1,252 @@
+[
+  {
+    "id": "P6-01",
+    "title": "a file can be dragged into a folder, with visible drop feedback",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "\"p6-01-dark-1280x800.asc\" parent after a real pointer drag: \"workspace://Schematics/Charging Circuit\"; landed in folder: true; drop-target highlight seen mid-drag: true (0/0/0/2/2/2); drag ghost seen: false; rows still carrying draggable: 0 (must be 0 - WKWebView hijacks those)",
+    "data": {
+      "moved": {
+        "path": "workspace://Schematics/Charging Circuit/p6-01-dark-1280x800.asc",
+        "name": "p6-01-dark-1280x800.asc",
+        "kind": "file",
+        "parent": "workspace://Schematics/Charging Circuit"
+      },
+      "midFeedback": [
+        {
+          "dropTargets": 0,
+          "ghosts": 0
+        },
+        {
+          "dropTargets": 0,
+          "ghosts": 0
+        },
+        {
+          "dropTargets": 0,
+          "ghosts": 0
+        },
+        {
+          "dropTargets": 2,
+          "ghosts": 0
+        },
+        {
+          "dropTargets": 2,
+          "ghosts": 0
+        },
+        {
+          "dropTargets": 2,
+          "ghosts": 0
+        }
+      ],
+      "rowsDraggable": 0
+    }
+  },
+  {
+    "id": "P6-02",
+    "title": "explorer header icons sit at VS Code spacing",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "5 icons, glyph-edge gaps 8/8/8/8 px (worst 8, budget 8, was 12 before this pass); hit box 24x24 px (floor 24)",
+    "data": {
+      "icons": 5,
+      "gaps": [
+        8,
+        8,
+        8,
+        8
+      ],
+      "boxWidth": 24,
+      "boxHeight": 24
+    }
+  },
+  {
+    "id": "P6-03",
+    "title": "the webview no longer arbitrates the drag",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "1 window config(s), dragDropEnabled=[false] (must all be false so WKWebView stops intercepting); code listens for tauri drag-drop events: false",
+    "data": {
+      "flags": [
+        false
+      ]
+    }
+  },
+  {
+    "id": "P6-04",
+    "title": "nothing paints outside the rail's left edge",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "rail left edge at x=0; 0 descendant(s) paint left of it (was 1: .rail-active at left:-4px, landing on x=0)",
+    "data": {
+      "railLeft": 0,
+      "escapees": []
+    }
+  },
+  {
+    "id": "P6-05",
+    "title": "a tab's only dot is the unsaved dot",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": false,
+    "detail": "clean: 1 tab(s), 0 colour chip(s), 0 dot(s); after an edit: 0 chip(s), 0 dot(s). Budget: chips 0 always (was 1 per tab), dots 0 clean / 1 unsaved",
+    "data": {
+      "clean": {
+        "tabs": 1,
+        "chips": 0,
+        "dots": 0
+      },
+      "dirty": {
+        "chips": 0,
+        "dots": 0
+      }
+    }
+  },
+  {
+    "id": "P6-09",
+    "title": "the titlebar clears the traffic lights and says the document once",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": false,
+    "detail": "cluster spans x=12..521 (traffic-light inset floor 70); collides with the mode toggle at x=537: false; truncates long names: true; reads \"τp6-09-dark-1280x800.asc\"",
+    "data": {
+      "left": 12,
+      "right": 521,
+      "toggleLeft": 537,
+      "collides": false,
+      "truncating": true,
+      "text": "τp6-09-dark-1280x800.asc"
+    }
+  },
+  {
+    "id": "P6-10",
+    "title": "component hint text is aligned in one column",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "51 hint(s) across 58 palette item(s); 1 distinct left offset(s) (1160), spread 0px, budget 1px",
+    "data": {
+      "descs": 51,
+      "items": 58,
+      "distinct": [
+        1160
+      ],
+      "spread": 0
+    }
+  },
+  {
+    "id": "P6-06",
+    "title": "the ! button toggles the window and the light obeys the rule",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": false,
+    "detail": "button present: true; clean sheet health=error badge=\"3\" name=\"Diagnostics: 3 problems, this circuit will not run\"; toggle opens+closes the window: false ({\"before\":false,\"opened\":false,\"closed\":false,\"works\":false}); no-ground run health=error (must be error - it will not run); policy persists: {\"severityPolicy\":\"errors-only\"}",
+    "data": {
+      "clean": {
+        "present": true,
+        "health": "error",
+        "name": "Diagnostics: 3 problems, this circuit will not run",
+        "pressed": "false",
+        "badge": "3",
+        "windowVisible": false
+      },
+      "toggled": {
+        "before": false,
+        "opened": false,
+        "closed": false,
+        "works": false
+      },
+      "failing": {
+        "present": true,
+        "health": "error",
+        "name": "Diagnostics: 5 problems, this circuit will not run",
+        "pressed": "false",
+        "badge": "5",
+        "windowVisible": false
+      },
+      "errorsOnlyPolicy": {
+        "severityPolicy": "errors-only"
+      }
+    }
+  },
+  {
+    "id": "P6-07",
+    "title": "the rail's destinations are named, sized, and visually distinct",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "6 rail buttons [Explorer, Search, Components, Waveforms, Diagnostics: 3 problems, this circuit will not run, Settings]; unnamed 0; undersized 0; buttons sharing a glyph 0",
+    "data": {
+      "count": 6,
+      "unnamed": 0,
+      "undersized": [],
+      "duplicateGlyphs": 0,
+      "names": [
+        "Explorer",
+        "Search",
+        "Components",
+        "Waveforms",
+        "Diagnostics: 3 problems, this circuit will not run",
+        "Settings"
+      ]
+    }
+  },
+  {
+    "id": "P6-08",
+    "title": "resizing a panel tracks the pointer without a commit per sample",
+    "theme": "dark",
+    "viewport": "1280x800",
+    "pass": true,
+    "detail": "40 moves in 430ms (10.8ms/move, budget 12); 40 distinct live widths (floor 20); settled at 380px vs last live 380px",
+    "data": {
+      "widths": [
+        302,
+        304,
+        306,
+        308,
+        310,
+        312,
+        314,
+        316,
+        318,
+        320,
+        322,
+        324,
+        326,
+        328,
+        330,
+        332,
+        334,
+        336,
+        338,
+        340,
+        342,
+        344,
+        346,
+        348,
+        350,
+        352,
+        354,
+        356,
+        358,
+        360,
+        362,
+        364,
+        366,
+        368,
+        370,
+        372,
+        374,
+        376,
+        378,
+        380
+      ],
+      "elapsed": 430,
+      "distinct": 40,
+      "settled": 380
+    }
+  }
+]
