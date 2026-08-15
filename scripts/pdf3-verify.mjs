@@ -308,10 +308,18 @@ const CHECKS = [
       });
       await page.waitForTimeout(300);
 
-      const draggableSet = await page.evaluate(() => {
-        const row = document.querySelector("button.tree-file");
-        return row ? { draggable: row.draggable, attr: row.getAttribute("draggable") } : null;
-      });
+      // This check used to require `row.draggable === true` and move the row
+      // with Playwright's `dragTo`. Both assertions were about HTML5 drag and
+      // drop, and PDF-6 retired that protocol for this tree on purpose: Tauri
+      // v2's `dragDropEnabled` default let WKWebView swallow those events, so a
+      // green `dragTo` proved the app worked in Chromium's DnD engine and said
+      // nothing about the webview the user runs. See UI_UX_PDF6.md. What P3-02
+      // was always *for* - "a file can be dragged into a folder" - is unchanged,
+      // so it is now measured through a real pointer gesture, which is the one
+      // protocol both engines implement the same way.
+      const draggableRows = await page.evaluate(() =>
+        [...document.querySelectorAll("button.tree-file, button.tree-folder-row")]
+          .filter((el) => el.draggable).length);
 
       const fileRow = page.locator("button.tree-file").first();
       const folderRow = page.locator("button.tree-folder-row").filter({ hasText: "Project Storage" }).first();
@@ -319,7 +327,19 @@ const CHECKS = [
 
       let dragError = null;
       try {
-        await fileRow.dragTo(folderRow);
+        const fileBox = await fileRow.boundingBox();
+        const folderBox = await folderRow.boundingBox();
+        if (!fileBox || !folderBox) throw new Error("tree row has no box");
+        const from = { x: fileBox.x + fileBox.width / 2, y: fileBox.y + fileBox.height / 2 };
+        const to = { x: folderBox.x + folderBox.width / 2, y: folderBox.y + folderBox.height / 2 };
+        await page.mouse.move(from.x, from.y);
+        await page.mouse.down();
+        await page.mouse.move(from.x + 2, from.y + 6);
+        for (let i = 1; i <= 6; i += 1) {
+          await page.mouse.move(from.x + ((to.x - from.x) * i) / 6, from.y + ((to.y - from.y) * i) / 6);
+          await page.waitForTimeout(30);
+        }
+        await page.mouse.up();
       } catch (err) {
         dragError = err instanceof Error ? err.message : String(err);
       }
@@ -338,11 +358,12 @@ const CHECKS = [
       await shot(page, `P3-02-after-drag-${ctx.tag}`);
       const inFolder = Boolean(moved.file && /Project Storage/.test(moved.file.parent ?? ""));
       return {
-        pass: Boolean(draggableSet?.draggable) && inFolder,
-        detail: `file row draggable=${draggableSet?.draggable} (attr ${draggableSet?.attr}); `
-          + `after dragTo, "${fileName}" parent is "${moved.file?.parent ?? "GONE"}"; `
-          + `landed in Project Storage: ${inFolder}${dragError ? `; dragTo threw: ${dragError}` : ""}`,
-        data: { draggableSet, moved: moved.file, dragError },
+        pass: inFolder && draggableRows === 0,
+        detail: `after a real pointer drag, "${fileName}" parent is "${moved.file?.parent ?? "GONE"}"; `
+          + `landed in Project Storage: ${inFolder}; rows carrying the HTML5 `
+          + `draggable attribute: ${draggableRows} (must be 0 - WKWebView hijacks those)`
+          + `${dragError ? `; gesture threw: ${dragError}` : ""}`,
+        data: { draggableRows, moved: moved.file, dragError },
       };
     },
   },

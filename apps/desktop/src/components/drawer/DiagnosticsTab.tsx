@@ -237,6 +237,28 @@ function focusActionLabel(target: DiagnosticFocusTarget): string {
     : `Focus net ${target.label ?? target.netId}`;
 }
 
+const ORIGIN_LABEL: Record<DiagnosticOrigin, string> = {
+  run: "Run",
+  import: "Import",
+  circuit: "Circuit",
+};
+
+/**
+ * The "where" a compiler puts after the colon, in the terms this app has.
+ *
+ * A file and a line number do not exist here, so the most specific true answer
+ * is the part or the net; failing that, which stage reported it. Never blank,
+ * because a problem list where some rows say where they are and others say
+ * nothing reads as broken rather than as terse.
+ */
+function rowLocation(row: DiagnosticRow): string {
+  const target = row.issue ? focusTargetFor(row.issue) : undefined;
+  if (target?.kind === "component") return target.reference;
+  if (target?.kind === "net") return `net ${target.label ?? target.netId}`;
+  if (row.issue?.reference) return row.issue.reference;
+  return ORIGIN_LABEL[row.origin];
+}
+
 export function BottomPanel({
   result,
   isRunning = false,
@@ -244,6 +266,9 @@ export function BottomPanel({
   issues = [],
   onSelectComponent,
   onFocusDiagnostic,
+  open,
+  onOpenChange,
+  severityPolicy,
 }: {
   mode?: "schematic" | "simulator";
   /**

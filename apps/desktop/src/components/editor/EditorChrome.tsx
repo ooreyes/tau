@@ -230,6 +230,10 @@ export function EditorTabs({
             role="tab"
             aria-selected={active}
             tabIndex={0}
+            /* Recovers the full name when the label is ellipsised. It cannot
+               change the accessible name: a tab names itself from its content,
+               and title is only the fallback for content that has none. */
+            title={tab.title}
             onClick={() => onSelectTab(tab.id)}
             onDoubleClick={(event) => {
               event.preventDefault();
@@ -245,7 +249,6 @@ export function EditorTabs({
               }
             }}
           >
-            <i className={active ? "amber" : "blue"} />
             {renamingId === tab.id ? (
               <input
                 className="editor-tab-rename"
@@ -265,26 +268,45 @@ export function EditorTabs({
                   }
                 }}
               />
-            ) : tab.title.replace(/\.sim$/i, "")}
-            {tab.dirty && (
-              <span
-                className="tab-dirty-indicator"
-                role="img"
-                aria-label={`${tab.title} has unsaved changes`}
-                title="Unsaved changes"
-              />
+            ) : (
+              /* Its own element so a long sheet name can be truncated instead
+                 of pushing the `+` off the strip; the tab's title attribute is
+                 what recovers the full name when it is. */
+              <span className="tab-title">{tab.title.replace(/\.sim$/i, "")}</span>
             )}
-            <button
-              type="button"
-              aria-label={`Close ${tab.title}`}
-              className="tab-close"
-              onClick={(event) => {
-                event.stopPropagation();
-                onCloseTab(tab.id);
-              }}
-            >
-              <X size={12} strokeWidth={1.8} aria-hidden="true" />
-            </button>
+            {/*
+              One slot, two marks, never both at once (PDF6-05). The review asked
+              for "only a dot to show when they haven't been saved", so the dot
+              and the close button are stacked in a single 24px cell: the dot is
+              what the tab shows at rest, and hovering or keyboard-focusing the
+              tab trades it for the x. That is the VS Code / Xcode reading, and
+              it is what keeps an unsaved tab from carrying a dot AND an x.
+
+              The close button comes FIRST in the DOM on purpose: it lets the
+              stylesheet hide the dot from a keyboard-focused x with a plain
+              sibling selector. Both children occupy the same grid cell, so DOM
+              order here is paint order, not layout order.
+            */}
+            <span className="tab-slot">
+              <button
+                type="button"
+                aria-label={`Close ${tab.title}`}
+                className="tab-close"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCloseTab(tab.id);
+                }}
+              >
+                <X size={12} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+              {tab.dirty && (
+                <span
+                  className="tab-dirty-indicator"
+                  role="img"
+                  aria-label={`${tab.title} has unsaved changes`}
+                />
+              )}
+            </span>
           </div>
         );
       })}
