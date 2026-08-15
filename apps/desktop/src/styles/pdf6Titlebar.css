@@ -115,18 +115,25 @@
   line-height: 1.35;
 }
 
-/* Unsaved, said once. The same 6px --accent dot as the tab strip's own
-   indicator, so one state has one appearance across the window, and `flex:
-   none` after the name means it cannot be truncated away - which is exactly
-   what happened while it was a character inside the name. Neutral --accent
-   rather than a status hue: DESIGN_SYSTEM 0 keeps saturated colour for
-   measurements and for the run lamp at the other end of this bar. */
+/* Unsaved, said once. The same 6px dot as the tab strip's own indicator, so one
+   state has one appearance across the window, and `flex: none` after the name
+   means it cannot be truncated away - which is exactly what happened while it
+   was a character inside the name.
+
+   `currentColor`, matching `.editor-tab .tab-dirty-indicator`. This was
+   `var(--accent)` on the reasoning that accent is Tau's neutral emphasis and
+   DESIGN_SYSTEM 0 keeps saturated colour for measurements and the run lamp. But
+   in the light theme `--accent` IS precision blue, so the titlebar grew a blue
+   dot in the same pass that removed the tab strip's - and item 5's whole
+   objection was "There shouldnt be that blue dot". Two surfaces reporting one
+   state must not disagree about what it looks like; ink is the answer for both,
+   because an unsaved marker is a fact about the file, not a measurement. */
 .titlebar-left .pdf6-doc-state {
   flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: currentColor;
   pointer-events: auto;
   cursor: default;
 }

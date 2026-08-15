@@ -619,7 +619,12 @@ describe("titlebar document identity", () => {
     for (const [declaration, value] of PDF6_CSS.matchAll(
       /(?:^|[;{\s])(?:color|background|font-size|font-family):\s*([^;]+);/g,
     )) {
-      expect(value, declaration).toMatch(/var\(--/);
+      // `currentColor` passes: it is not a raw value, it is "whatever token the
+      // inherited ink already resolves to". The unsaved dot uses it so the
+      // titlebar and the tab strip cannot disagree about one state - as they did
+      // when this was `var(--accent)`, which is precision blue in the light
+      // theme, i.e. the blue dot item 5 asked to remove.
+      expect(value, declaration).toMatch(/var\(--|^currentColor$/i);
     }
   });
 });
