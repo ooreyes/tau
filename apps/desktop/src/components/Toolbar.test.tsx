@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { isTitlebarControlTarget, Toolbar } from "./Toolbar";
+import { describeTitlebarDocument, isTitlebarControlTarget, Toolbar } from "./Toolbar";
 import {
   createTitlebarGestureMachine,
   handleTitlebarDoubleClick,
@@ -459,5 +459,193 @@ describe("run readiness ink", () => {
       ).toBe(false);
       cleanup();
     }
+  });
+});
+
+/**
+ * PDF6 item 9: the header's top-left corner.
+ *
+ * The review called this cluster messy, and the structure is why: a Greek
+ * logomark, a wordmark repeating the app name the Dock already shows, a
+ * monospace file name two type steps below both of them, and an unsaved state
+ * that existed only as a bullet App concatenated onto the file name. These tests
+ * pin the hierarchy that replaced it - one document, one subordinate mark, one
+ * labelled state - plus the two things the old structure got wrong that are not
+ * visible in a screenshot: the state could be truncated away, and the lockup
+ * refused to shrink, so a long name reached under the mode toggle instead of
+ * ellipsising.
+ *
+ * Declarations are read back out of the stylesheet rather than restated, the way
+ * styles/pdf4Chrome.css.test.ts does it.
+ */
+describe("titlebar document identity", () => {
+  const APP_CSS = readFileSync(join(__dirname, "..", "App.css"), "utf8");
+  const PDF6_CSS = readFileSync(join(__dirname, "..", "styles", "pdf6Titlebar.css"), "utf8");
+
+  /** The body of the rule whose selector is exactly `selector`. */
+  function ruleBody(selector: string): string {
+    const start = PDF6_CSS.indexOf(`${selector} {`);
+    expect(start, `${selector} is missing from pdf6Titlebar.css`).toBeGreaterThan(-1);
+    const bodyStart = PDF6_CSS.indexOf("{", start) + 1;
+    return PDF6_CSS.slice(bodyStart, PDF6_CSS.indexOf("}\n", bodyStart));
+  }
+
+  const cluster = () => document.querySelector(".titlebar-left") as HTMLElement;
+  const name = () => document.querySelector(".brand-file") as HTMLElement;
+
+  it("names the document, not the app, and keeps the extension as its own run", () => {
+    const { container } = render(<Toolbar {...baseProps} title="USB-C Cable.asc" />);
+
+    // The wordmark is retired; nothing may depend on that text node.
+    expect(container.querySelector(".brand-name")).toBeNull();
+    expect(screen.queryByText("tau")).toBeNull();
+
+    // `.brand-file` stays the document-name hook (App.workspace.test.tsx reads
+    // the whole name off it), and the extension is a separate, smaller run.
+    expect(name().textContent).toBe("USB-C Cable.asc");
+    expect(name().querySelector(".pdf6-doc-stem")?.textContent).toBe("USB-C Cable");
+    expect(name().querySelector(".pdf6-doc-ext")?.textContent).toBe(".asc");
+    expect(ruleBody(".titlebar-left .pdf6-doc-name")).toContain("font-size: var(--fs-title)");
+    expect(ruleBody(".titlebar-left .pdf6-doc-ext")).toContain("font-size: var(--fs-caption)");
+
+    // The one surviving mark is decoration, and quieter than the document.
+    const mark = container.querySelector(".pdf6-doc-mark") as HTMLElement;
+    expect(mark.getAttribute("aria-hidden")).toBe("true");
+    expect(ruleBody(".titlebar-left .pdf6-doc-mark")).toContain("color: var(--muted)");
+    expect(ruleBody(".titlebar-left .pdf6-doc-name")).toContain("color: var(--text)");
+  });
+
+  it("exposes the unsaved state exactly once, with an accessible name", () => {
+    const { rerender } = render(<Toolbar {...baseProps} title="USB-C Cable.asc" />);
+    expect(screen.queryByRole("img", { name: "Unsaved changes" })).toBeNull();
+    expect(document.querySelectorAll(".pdf6-doc-state")).toHaveLength(0);
+
+    rerender(<Toolbar {...baseProps} title="USB-C Cable.asc" dirty />);
+    const marker = screen.getByRole("img", { name: "Unsaved changes" });
+    expect(document.querySelectorAll(".pdf6-doc-state")).toHaveLength(1);
+    // Outside the name's truncating run, and carrying no text of its own: the
+    // state is an element with a label now, not punctuation inside a file name.
+    expect(marker.closest(".brand-file")).toBeNull();
+    expect(marker.textContent).toBe("");
+    expect(name().textContent).toBe("USB-C Cable.asc");
+    expect(cluster().textContent).not.toContain("•");
+  });
+
+  it("reads the dirty state App still concatenates onto the title", () => {
+    render(<Toolbar {...baseProps} title="USB-C Cable.asc •" />);
+
+    expect(screen.getByRole("img", { name: "Unsaved changes" })).toBeTruthy();
+    expect(name().textContent).toBe("USB-C Cable.asc");
+    expect(cluster().textContent).not.toContain("•");
+  });
+
+  it("truncates a long document name instead of reaching under the mode toggle", () => {
+    render(<Toolbar {...baseProps} title="Buck converter 25V to 5V synchronous rev C.asc" dirty />);
+
+    const stem = ruleBody(".titlebar-left .pdf6-doc-stem");
+    expect(stem).toContain("min-width: 0");
+    expect(stem).toContain("overflow: hidden");
+    expect(stem).toContain("white-space: nowrap");
+    expect(stem).toContain("text-overflow: ellipsis");
+
+    // The ellipsis can only fire if the lockup is allowed to shrink, and
+    // App.css pins the legacy one at flex-shrink: 0.
+    expect(APP_CSS).toMatch(/\.brand \{[^}]*flex-shrink: 0/);
+    const brand = ruleBody(".titlebar-left .brand");
+    expect(brand).toContain("min-width: 0");
+    expect(brand).toContain("flex: 0 1 auto");
+
+    // What must survive truncation: the file type, and the unsaved state.
+    expect(ruleBody(".titlebar-left .pdf6-doc-ext")).toContain("flex: none");
+    expect(ruleBody(".titlebar-left .pdf6-doc-state")).toContain("flex: none");
+    expect(screen.getByRole("img", { name: "Unsaved changes" }).closest(".pdf6-doc-stem")).toBeNull();
+    expect(document.querySelector(".pdf6-doc-ext")?.textContent).toBe(".asc");
+  });
+
+  it("treats a project root or a prompt as context rather than a document", () => {
+    const { rerender } = render(<Toolbar {...baseProps} title="Open a project" />);
+    expect(name().getAttribute("data-doc")).toBe("context");
+    expect(document.querySelector(".pdf6-doc-ext")).toBeNull();
+    expect(ruleBody('.titlebar-left .pdf6-doc-name[data-doc="context"]')).toContain("color: var(--muted)");
+
+    rerender(<Toolbar {...baseProps} title="buck.asc" />);
+    expect(name().getAttribute("data-doc")).toBe("file");
+  });
+
+  it("keeps one optical row and out-specifies App.css rather than trusting import order", () => {
+    // Import order is invisible from here, so every override has to win on
+    // specificity instead. `.titlebar-left` in front of each selector is that.
+    const selectors = [...PDF6_CSS.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{/g)].map(
+      (match) => match[1].trim(),
+    );
+    expect(selectors.length).toBeGreaterThan(5);
+    for (const selector of selectors) {
+      expect(selector.startsWith(".titlebar-left"), `${selector} does not out-specify App.css`).toBe(true);
+    }
+
+    // One row, optically centred - not the baseline stack that made the old
+    // cluster ride high against the traffic lights.
+    expect(ruleBody(".titlebar-left .brand")).toContain("align-items: center");
+    expect(APP_CSS).toMatch(/\.brand \{[^}]*align-items: baseline/);
+    expect(ruleBody(".titlebar-left .pdf6-doc-name")).toContain("align-items: baseline");
+  });
+
+  it("keeps the drag surface, and still drags the window by the document name", async () => {
+    nativeWindow.startDragging.mockClear();
+    const { container } = render(<Toolbar {...baseProps} title="USB-C Cable.asc" dirty />);
+
+    expect(container.querySelector(".titlebar-drag-region")).toBeTruthy();
+    for (const selector of [".titlebar-left", ".mode-toggle", ".titlebar-right"]) {
+      expect(container.querySelector(selector)?.getAttribute("data-tauri-drag-region")).toBe("false");
+    }
+
+    // The name is hit-testable so a truncated name can be recovered from its
+    // tooltip, but it is not a control, so the header's gesture machine still
+    // owns a press on it.
+    const label = container.querySelector(".pdf6-doc-name") as HTMLElement;
+    expect(label.getAttribute("title")).toBe("USB-C Cable.asc");
+    expect(ruleBody(".titlebar-left .pdf6-doc-name")).toContain("pointer-events: auto");
+    expect(isTitlebarControlTarget(label)).toBe(false);
+
+    fireEvent.mouseDown(label, { button: 0, detail: 1, clientX: 120, clientY: 12 });
+    fireEvent.mouseMove(window, { clientX: 220, clientY: 60 });
+    await waitFor(() => expect(nativeWindow.startDragging).toHaveBeenCalledOnce());
+    fireEvent.mouseUp(window);
+  });
+
+  it("spends no colour or type outside the token system", () => {
+    expect(PDF6_CSS).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(PDF6_CSS).not.toMatch(/\b(?:rgba?|hsla?|color-mix)\(/);
+    for (const [declaration, value] of PDF6_CSS.matchAll(
+      /(?:^|[;{\s])(?:color|background|font-size|font-family):\s*([^;]+);/g,
+    )) {
+      expect(value, declaration).toMatch(/var\(--/);
+    }
+  });
+});
+
+describe("describeTitlebarDocument", () => {
+  it("reads the bullet App concatenates today, and lets an explicit flag win", () => {
+    expect(describeTitlebarDocument("USB-C Cable.asc •")).toEqual({
+      name: "USB-C Cable.asc",
+      stem: "USB-C Cable",
+      extension: ".asc",
+      dirty: true,
+    });
+    expect(describeTitlebarDocument("USB-C Cable.asc •", false).dirty).toBe(false);
+    expect(describeTitlebarDocument("buck.sim", true).dirty).toBe(true);
+    expect(describeTitlebarDocument("buck.sim").dirty).toBe(false);
+  });
+
+  it("splits only a real file suffix, so a folder name stays whole", () => {
+    expect(describeTitlebarDocument("v2.1 revision boards")).toMatchObject({
+      stem: "v2.1 revision boards",
+      extension: "",
+    });
+    expect(describeTitlebarDocument("Open a project")).toMatchObject({ stem: "Open a project", extension: "" });
+    // A dotfile-shaped name is a whole name, not an extension with nothing
+    // in front of it.
+    expect(describeTitlebarDocument(".asc")).toMatchObject({ stem: ".asc", extension: "" });
+    expect(describeTitlebarDocument("archive.tar.gz")).toMatchObject({ stem: "archive.tar", extension: ".gz" });
   });
 });

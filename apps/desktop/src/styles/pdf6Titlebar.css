@@ -5,3 +5,128 @@
  * lines, shared by every surface): each lane owns exactly one stylesheet and
  * overrides what it must, which is why these passes can run in parallel.
  */
+
+/* ── The document identity cluster ───────────────────────────────────────────
+ *
+ * What was wrong: four competing type treatments inside ~200px - a 17px accent
+ * τ, a 17px `tau` wordmark, a 10px monospace file name in --faint, and a bullet
+ * that App concatenated onto that name - with the least useful thing set
+ * loudest and the document set quietest. An inverted hierarchy reads as
+ * unconsidered no matter how carefully each piece is drawn.
+ *
+ * The cluster now states one thing, in one hierarchy: the file name is the
+ * primary type, the app mark is a whisper before it, and the extension is
+ * treated the way this design language treats a unit - attached to the value, a
+ * step down in size, dimmer (DESIGN_SYSTEM 2.1/2.2). Every value below is a
+ * token; the only raw lengths are the 6px dot, which matches the tab strip's
+ * indicator, and the two line-heights that keep descenders out of the clip.
+ *
+ * Every selector is written with `.titlebar-left` in front of it on purpose.
+ * App.css's legacy `.brand` rules are single-class, so out-specifying them means
+ * these overrides do not silently depend on stylesheet import order.
+ */
+
+.titlebar-left {
+  /* One lockup, so App.css's --sp-4 gap here separated nothing. The rhythm
+     inside the cluster is the cluster's own. */
+  gap: 0;
+}
+
+.titlebar-left .brand {
+  min-width: 0;
+  /* App.css pins the legacy lockup at `flex-shrink: 0`, which is what let a
+     long file name grow past this grid cell and reach under the mode toggle:
+     the name's own `text-overflow` can never fire while its parent refuses to
+     shrink. */
+  flex: 0 1 auto;
+  /* Baseline alignment across a 17px glyph and a 10px readout is what made the
+     old cluster ride high. Everything here sits on one optical row - the same
+     row as the mode toggle and Run, deliberately NOT the traffic lights' higher
+     row, because three stair-stepped rows in a 44px bar reads worse than one
+     honest one. The horizontal relationship to the lights is already right:
+     App.css insets the header to 78px, which is Apple's own --sp-3 gap after
+     the last light, and this cluster adds no inset of its own at either width. */
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0;
+}
+
+/* The mark earns its place as the cluster's left anchor and nothing more: with
+   `titleBarStyle: "Overlay"` and `hiddenTitle` there is no proxy icon, so
+   without it the header would begin with text floating 78px into the bar. Sized
+   and inked to stay clearly under the document name. */
+.titlebar-left .pdf6-doc-mark {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: normal;
+}
+
+.titlebar-left .pdf6-doc-name {
+  min-width: 0;
+  flex: 0 1 auto;
+  display: flex;
+  /* The extension is a smaller run inside the same word, so those two share a
+     baseline while the cluster around them shares a centre. */
+  align-items: baseline;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  /* `.mono-num` tracked this by -0.02em and App.css by +0.02em; both were
+     tracking meant for a fixed-pitch face. SF Pro at 13px needs neither. */
+  letter-spacing: normal;
+  /* Hit-testing back on inside a cluster App.css makes drag-through, so a
+     truncated name can still be read from its tooltip. The header's own capture
+     handlers own the drag gesture, not this element, so pressing the title
+     still moves the window. */
+  pointer-events: auto;
+  cursor: default;
+  user-select: none;
+}
+
+/* A project root or a prompt ("Open a project") is context, not a document, so
+   it does not get the document's ink. */
+.titlebar-left .pdf6-doc-name[data-doc="context"] {
+  color: var(--muted);
+  font-weight: 510;
+}
+
+.titlebar-left .pdf6-doc-stem {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* Room for descenders inside the clipping box. */
+  line-height: 1.35;
+}
+
+/* The unit of a file name. Held outside the ellipsis (`flex: none`), so a
+   truncated name still says what kind of document it is. */
+.titlebar-left .pdf6-doc-ext {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* Unsaved, said once. The same 6px --accent dot as the tab strip's own
+   indicator, so one state has one appearance across the window, and `flex:
+   none` after the name means it cannot be truncated away - which is exactly
+   what happened while it was a character inside the name. Neutral --accent
+   rather than a status hue: DESIGN_SYSTEM 0 keeps saturated colour for
+   measurements and for the run lamp at the other end of this bar. */
+.titlebar-left .pdf6-doc-state {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  pointer-events: auto;
+  cursor: default;
+}

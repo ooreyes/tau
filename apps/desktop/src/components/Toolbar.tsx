@@ -37,6 +37,15 @@ interface ToolbarProps {
    */
   liveRunning?: boolean;
   title: string;
+  /**
+   * The active document has edits that are not on disk.
+   *
+   * Optional because App still says this by concatenating a bullet onto
+   * `title` (`activeDirty ? `${documentTitle} •` : …`). `describeTitlebarDocument`
+   * reads that suffix back off, so the header is correct with or without this
+   * prop; passing it explicitly is what lets the concatenation retire.
+   */
+  dirty?: boolean;
   assistantOpen: boolean;
   projectOpen?: boolean;
   schematicOpen?: boolean;
@@ -56,6 +65,55 @@ export interface ToolbarRunOutcome {
 const ICON = { size: 13, strokeWidth: 1.6 } as const;
 const TITLEBAR_GESTURE_SURFACE = ".titlebar-drag-region";
 
+/** The bullet App appends to a dirty document's title today. */
+const LEGACY_DIRTY_MARKER = "•";
+/**
+ * A real file suffix, so the split does not fire on the last dot of a folder
+ * name like `v2.1 revision boards` - the header shows a project root as well
+ * as a document.
+ */
+const FILE_EXTENSION = /\.[A-Za-z0-9]{1,8}$/;
+
+export interface TitlebarDocument {
+  /** The document's name with no state decoration: what is on disk. */
+  name: string;
+  stem: string;
+  /** The leading dot included, or empty when the title is not a file. */
+  extension: string;
+  dirty: boolean;
+}
+
+/**
+ * What the header's top-left corner is actually about: which document this
+ * window is.
+ *
+ * Two things are separated here that used to be one string. The unsaved state
+ * arrives concatenated onto the name, which is why the marker used to be a
+ * character sharing the file name's truncating text run - a long name silently
+ * ellipsised away the one piece of state a user cannot afford to lose, and no
+ * screen reader had a name for it. An explicit `dirty` flag wins over the
+ * suffix so the caller can stop concatenating without a second change here.
+ *
+ * The extension is split off the stem because it is the name's unit: set a step
+ * down and dimmer (see `styles/pdf6Titlebar.css`), and held outside the
+ * ellipsis, so a truncated `USB-C Cable rev…` still says `.asc`.
+ */
+export function describeTitlebarDocument(title: string, dirty?: boolean): TitlebarDocument {
+  const trimmed = title.trim();
+  const marked = trimmed.endsWith(LEGACY_DIRTY_MARKER);
+  const name = (marked ? trimmed.slice(0, -LEGACY_DIRTY_MARKER.length) : trimmed).trim();
+  const suffix = FILE_EXTENSION.exec(name);
+  // `index > 0` keeps a dotfile-shaped name whole: `.asc` is the whole name,
+  // not an extension with nothing in front of it.
+  const extension = suffix && suffix.index > 0 ? suffix[0] : "";
+  return {
+    name,
+    stem: extension ? name.slice(0, -extension.length) : name,
+    extension,
+    dirty: dirty ?? marked,
+  };
+}
+
 export function isTitlebarControlTarget(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;
   if (!element) return false;
@@ -63,7 +121,8 @@ export function isTitlebarControlTarget(target: EventTarget | null): boolean {
   return Boolean(element.closest("button, a, input, select, textarea, [role=button], .mode-toggle"));
 }
 
-export function Toolbar({ mode, result, outcome = null, runState, isRunning, liveRunning = false, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant }: ToolbarProps) {
+export function Toolbar({ mode, result, outcome = null, runState, isRunning, liveRunning = false, title, dirty, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant }: ToolbarProps) {
+  const doc = describeTitlebarDocument(title, dirty);
   const titlebarGestureRef = useRef<ReturnType<typeof createTitlebarGestureMachine> | null>(null);
   const titlebarGesture = titlebarGestureRef.current ?? (titlebarGestureRef.current = createTitlebarGestureMachine());
   const isSimulator = mode === "simulator";
@@ -225,11 +284,46 @@ export function Toolbar({ mode, result, outcome = null, runState, isRunning, liv
         onDoubleClick={handleTitlebarDoubleClickCapture}
         onClick={handleTitlebarClickCapture}
       />
+      {/*
+       * The document, not the app.
+       *
+       * This corner is the window's document identity. The app said its own
+       * name three times here - a τ logomark, a `tau` wordmark, and the Dock
+       * icon behind them - while the file that the window is actually about was
+       * the smallest, faintest thing in the cluster, with its unsaved state
+       * riding along as a bullet inside its own text. The wordmark is gone
+       * (main.tsx already deleted the native strip for saying `Tau` twice), one
+       * mark stays as the cluster's left anchor because `hiddenTitle` leaves no
+       * proxy icon, and the state is one labelled element that cannot be
+       * truncated. Type, ink, and spacing all live in styles/pdf6Titlebar.css.
+       */}
       <div className="titlebar-left" data-tauri-drag-region="false">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">τ</span>
-          <span className="brand-name">tau</span>
-          <span className="brand-file mono-num">{title}</span>
+          <span className="pdf6-doc-mark" aria-hidden="true">τ</span>
+          {/* `.brand-file` is kept as a hook: App.workspace.test.tsx reads the
+              document name off this exact class. `title` is the only way back
+              to a name the header had to truncate. */}
+          <span
+            className="brand-file pdf6-doc-name"
+            data-doc={doc.extension ? "file" : "context"}
+            title={doc.name}
+          >
+            <span className="pdf6-doc-stem">{doc.stem}</span>
+            {doc.extension ? <span className="pdf6-doc-ext">{doc.extension}</span> : null}
+          </span>
+          {doc.dirty ? (
+            /* The same 6px dot the tab strip uses for the same state
+               (`.tab-dirty-indicator`), so one state has one appearance. It is
+               an image with a name rather than punctuation, because "there is a
+               bullet after the file name" is not something a screen reader can
+               be expected to interpret. */
+            <span
+              className="pdf6-doc-state"
+              role="img"
+              aria-label="Unsaved changes"
+              title="Unsaved changes. Press ⌘S to save."
+            />
+          ) : null}
         </div>
       </div>
 
