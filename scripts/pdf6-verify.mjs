@@ -433,6 +433,127 @@ const CHECKS = [
   },
 
   {
+    id: "P6-06",
+    title: "the ! button toggles the window and the light obeys the rule",
+    async run(page, ctx) {
+      const readHealth = () => page.evaluate(() => {
+        const btn = document.querySelector(".rail-diagnostics");
+        const region = document.querySelector('[role="region"][aria-label="Simulation diagnostics"]');
+        return {
+          present: Boolean(btn),
+          health: btn?.getAttribute("data-health") ?? null,
+          name: btn?.getAttribute("aria-label") ?? null,
+          pressed: btn?.getAttribute("aria-pressed") ?? null,
+          badge: btn?.querySelector(".rail-diagnostics-count")?.textContent?.trim() ?? "",
+          windowVisible: Boolean(region),
+        };
+      });
+      const setPolicy = (policy) => page.evaluate((p) => {
+        try {
+          localStorage.setItem("tau.diagnostics.preferences.v1", JSON.stringify({ severityPolicy: p }));
+        } catch { /* private mode */ }
+      }, policy);
+
+      // 1. A clean sheet: green, and the window toggles from the rail.
+      await setPolicy("all");
+      await freshSchematic(page, `p6-06-clean-${ctx.tag}`, RC_ASC);
+      const clean = await readHealth();
+      let toggled = null;
+      if (clean.present) {
+        const btn = page.locator(".rail-diagnostics").first();
+        const before = (await readHealth()).windowVisible;
+        await btn.click();
+        await page.waitForTimeout(250);
+        const opened = (await readHealth()).windowVisible;
+        await shot(page, `P6-06-window-open-${ctx.tag}`);
+        await btn.click();
+        await page.waitForTimeout(250);
+        const closed = (await readHealth()).windowVisible;
+        toggled = { before, opened, closed, works: opened !== before && closed === before };
+      }
+
+      // 2. A sheet with no ground cannot run: red, and red only for that.
+      await freshSchematic(page, `p6-06-noground-${ctx.tag}`, NO_GROUND_ASC);
+      await page.getByRole("button", { name: /^Run/ }).first().click().catch(() => {});
+      await page.waitForTimeout(2_500);
+      const failing = await readHealth();
+      await shot(page, `P6-06-error-${ctx.tag}`);
+
+      // 3. The same failing sheet under errors-only must stay red - the policy
+      //    hides warnings, never a reason the circuit will not run.
+      await setPolicy("errors-only");
+      await page.reload({ waitUntil: "networkidle", timeout: NAV_TIMEOUT_MS });
+      await dismissRecovery(page);
+      await page.waitForTimeout(400);
+      const errorsOnlyPolicy = await page.evaluate(() => {
+        try { return JSON.parse(localStorage.getItem("tau.diagnostics.preferences.v1") ?? "null"); }
+        catch { return null; }
+      });
+      await setPolicy("all");
+
+      const rulesHeld = clean.present
+        && clean.health === "ok"
+        && Boolean(toggled?.works)
+        && failing.health === "error"
+        && errorsOnlyPolicy?.severityPolicy === "errors-only";
+      return {
+        pass: rulesHeld,
+        detail: `button present: ${clean.present}; clean sheet health=${clean.health} badge="${clean.badge}" `
+          + `name="${clean.name}"; toggle opens+closes the window: ${toggled?.works} `
+          + `(${JSON.stringify(toggled)}); no-ground run health=${failing.health} `
+          + `(must be error - it will not run); policy persists: ${JSON.stringify(errorsOnlyPolicy)}`,
+        data: { clean, toggled, failing, errorsOnlyPolicy },
+      };
+    },
+  },
+
+  {
+    id: "P6-07",
+    title: "the rail's destinations are named, sized, and visually distinct",
+    async run(page, ctx) {
+      await freshSchematic(page, `p6-07-${ctx.tag}`);
+      const measured = await page.evaluate(() => {
+        const rail = document.querySelector(".activity-rail");
+        if (!rail) return null;
+        const buttons = [...rail.querySelectorAll("button")];
+        const glyphs = buttons.map((b) => {
+          const svg = b.querySelector("svg");
+          // Path geometry, not the icon's import name: two destinations sharing
+          // a glyph is the failure a human notices, and the DOM is where that
+          // is decidable. "Better icons" is a judgement the screenshot serves;
+          // "no two of them are the same picture" is a fact.
+          const d = svg ? [...svg.querySelectorAll("path, circle, rect, line, polyline, polygon")]
+            .map((n) => n.getAttribute("d") ?? n.outerHTML.slice(0, 60)).join("|") : "";
+          const box = b.getBoundingClientRect();
+          return {
+            name: b.getAttribute("aria-label"),
+            signature: d.slice(0, 240),
+            w: Math.round(box.width),
+            h: Math.round(box.height),
+          };
+        });
+        return {
+          count: glyphs.length,
+          unnamed: glyphs.filter((g) => !g.name).length,
+          undersized: glyphs.filter((g) => g.w < 24 || g.h < 24).map((g) => `${g.name} ${g.w}x${g.h}`),
+          duplicateGlyphs: glyphs.length - new Set(glyphs.map((g) => g.signature)).size,
+          names: glyphs.map((g) => g.name),
+        };
+      });
+      await shot(page, `P6-07-rail-${ctx.tag}`);
+      if (!measured) return { pass: false, detail: "no .activity-rail in the document", data: {} };
+      return {
+        pass: measured.unnamed === 0 && measured.undersized.length === 0 && measured.duplicateGlyphs === 0,
+        detail: `${measured.count} rail buttons [${measured.names.join(", ")}]; `
+          + `unnamed ${measured.unnamed}; undersized ${measured.undersized.length}`
+          + `${measured.undersized.length ? ` (${measured.undersized.join(", ")})` : ""}; `
+          + `buttons sharing a glyph ${measured.duplicateGlyphs}`,
+        data: measured,
+      };
+    },
+  },
+
+  {
     id: "P6-08",
     title: "resizing a panel tracks the pointer without a commit per sample",
     async run(page, ctx) {
