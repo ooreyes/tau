@@ -455,7 +455,7 @@ describe("the rail's diagnostics lamp", () => {
     // position; this asserts the instruction instead, and asserts the two things
     // that placement must not cost - the lamp stays out of the foot, and Settings
     // stays the last stop for the keyboard.
-    const buttons = [...rail.querySelectorAll("button")];
+    const buttons = [...rail.querySelectorAll<HTMLElement>("button")];
     const waveforms = screen.getByRole("button", { name: "Waveforms" });
     expect(buttons[buttons.indexOf(waveforms) + 1], "the lamp is not the key under Waveforms").toBe(lamp);
     expect(lamp.closest(".rail-foot")).toBeNull();
