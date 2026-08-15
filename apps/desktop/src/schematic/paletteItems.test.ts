@@ -71,6 +71,50 @@ describe("EveryCircuit palette presets", () => {
     }
   });
 
+  /**
+   * PDF6 item 10 - "look through the components and make sure every needed one
+   * has it".
+   *
+   * The hint column was half-populated, so it read as unfinished rather than as
+   * a decision. These two tests make the decision explicit and keep it: a part
+   * added to the catalog with no hint fails the first one, and it can only be
+   * waived by naming it here, next to the reason.
+   */
+  const HINTLESS_ROWS: Record<string, string> = {
+    // Their names are already the whole part; a hint could only repeat them.
+    resistor: "a resistor is a resistor",
+    capacitor: "a capacitor is a capacitor",
+    inductor: "an inductor is an inductor",
+    polarizedCapacitor: "\"Polarized Cap\" already names the variant",
+    njf: "the name spells jfet, and n vs p is the name too",
+    pjf: "the name spells jfet, and n vs p is the name too",
+    // A part number is a complete identity, and the honest thing to add - that
+    // this is Tau's behavioral model rather than a vendor macromodel - belongs
+    // where there is room to say which, i.e. the inspector's model list.
+    timer555: "the name is the part number",
+  };
+
+  it("gives every browse row a hint unless its name is already complete", () => {
+    const bare = allPaletteItems()
+      .filter((item) => (item.desc ?? "").trim() === "")
+      .map((item) => item.id);
+    expect(bare.sort()).toEqual(Object.keys(HINTLESS_ROWS).sort());
+  });
+
+  it("keeps every hint inside the rail's one line and its terse voice", () => {
+    for (const item of allPaletteItems()) {
+      const desc = item.desc;
+      if (desc === undefined) continue;
+      // One line, no wrap: CatalogEntry.desc documents ~15 characters.
+      expect(desc.length, `${item.id} hint length`).toBeLessThanOrEqual(15);
+      expect(desc.trim(), `${item.id} hint padding`).toBe(desc);
+      // A phrase, not a sentence: no leading capital and no full stop. Internal
+      // capitals are allowed only because a unit symbol has to be right ("0 V").
+      expect(desc[0], `${item.id} hint case`).toBe(desc[0]?.toLowerCase());
+      expect(/[.!]$/.test(desc), `${item.id} hint punctuation`).toBe(false);
+    }
+  });
+
   it("emits NAND with inverted primary Q levels", () => {
     const spec = parseDigitalGate("nand");
     expect(spec.fn).toBe("and");

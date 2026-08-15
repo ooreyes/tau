@@ -5,3 +5,93 @@
  * lines, shared by every surface): each lane owns exactly one stylesheet and
  * overrides what it must, which is why these passes can run in parallel.
  */
+
+/* ── Item 10: one column for every hint ───────────────────────────────────────
+ *
+ * The report: "This text needs to be aligned". The hints staggered because each
+ * row is its OWN grid and the keycap column was `auto`: a row with a hotkey
+ * badge spent ~24px on that track, a row without spent nothing, and the two
+ * fractional columns beside it divided a different remainder in each case. At
+ * the rail's default 264px that put the hint of a row with a hotkey about 9px
+ * left of the row above it - a column that never lines up, all the way down.
+ * Rows with no hint at all made it worse: with only three children, the keycap
+ * fell into the HINT's track and sat wherever that track happened to end.
+ *
+ * The fix is to stop deriving the geometry from a row's contents. Every row now
+ * gets the same four tracks, the two that hold text-of-known-length are fixed,
+ * and each child is placed in its track by name rather than by counting
+ * siblings. The name column keeps its `56px` floor from App.css and stays the
+ * one that absorbs a wider rail, because the name is the row's value and the
+ * hint is its whisper.
+ */
+.palette-list {
+  /* Both derived from the type they hold, at the sizes App.css sets:
+     - hint: the fifteen-character budget `CatalogEntry.desc` documents, at
+       --fs-caption (10px). "normally closed" is the longest one shipped.
+     - keycap: the widest badge in the rail is "F4" - --fs-micro (9px) mono,
+       plus the 5px padding and hairline of the shared `.palette-key` recipe. */
+  --pdf6-hint-col: 80px;
+  --pdf6-key-col: 24px;
+}
+
+.palette-item {
+  grid-template-columns:
+    22px
+    minmax(56px, 1fr)
+    minmax(0, var(--pdf6-hint-col))
+    var(--pdf6-key-col);
+}
+
+.palette-icon {
+  grid-column: 1;
+}
+
+.palette-name {
+  grid-column: 2;
+}
+
+.palette-desc {
+  grid-column: 3;
+}
+
+.palette-key {
+  grid-column: 4;
+}
+
+/* App.css drops the hint below this container width, where there is no room for
+   a name and a hint both. Mirror its three-track shape - and move the keycap
+   with it, or an explicit `grid-column: 4` above would open a fifth, implicit
+   track and push the badge off the row. */
+@container palette-list (max-width: 220px) {
+  .palette-item {
+    grid-template-columns: 22px minmax(0, 1fr) var(--pdf6-key-col);
+  }
+
+  .palette-key {
+    grid-column: 3;
+  }
+}
+
+/* ── Item 8: nothing eases behind a dragged panel edge ─────────────────────────
+ *
+ * The report: "the sliding the component window and the magnifying and home
+ * tool bar feels incredibly laggy". Most of that was React render pressure and
+ * is fixed in `components/panelResize.tsx`. This is the rest of it.
+ *
+ * The zoom / fit cluster is positioned from `--stage-rail-inset`, the parts
+ * rail's live width, so its offset is a MEASUREMENT of another surface rather
+ * than a state of its own - and App.css transitioned it. A 120ms ease on a value
+ * the pointer changes every sample is a control that is always behind and never
+ * arrives, and it restarts on every sample, so it cannot converge until the drag
+ * stops. The rail has no width transition of its own (it mounts and unmounts),
+ * so with this off the two edges finally agree frame for frame.
+ *
+ * This is the rule App.css already applies to the results drawer docked right -
+ * "No transition: the width is a live drag, and animating it would make the
+ * divider lag the pointer" - reaching the one piece of chrome that missed it.
+ * DESIGN_SYSTEM.md §3 excludes layout properties like `right` from animation in
+ * any case; the honest amount of motion for "sit clear of that panel" is none.
+ */
+.view-controls {
+  transition: none;
+}

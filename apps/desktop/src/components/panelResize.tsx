@@ -84,13 +84,106 @@ export function savePanelWidth(storageKey: string, width: number): void {
 /** Keyboard step for the separator (WAI-ARIA window-splitter pattern). */
 const KEY_STEP = 16;
 
+/** The one dimension a drag changes, per the edge that carries the handle. */
+type DragAxis = "width" | "height";
+
+/** An inline declaration a drag repaints itself, without going through React. */
+interface LiveSizeWrite {
+  style: CSSStyleDeclaration;
+  property: string;
+}
+
+/**
+ * The inline declarations that are painting `size` for the panel this handle
+ * belongs to, or nothing if they cannot be identified with certainty.
+ *
+ * Why this exists: the drag used to call `setState` on every `pointermove`, so
+ * every pixel of a resize re-rendered the panel and everything downstream of it
+ * - which on the schematic tab includes the canvas subtree. At a 1000 Hz mouse
+ * that is render work the frame budget cannot absorb, and the panel edge, plus
+ * the zoom cluster anchored to it, visibly trail the pointer. The cure is for
+ * the gesture to write the pixels itself and commit React state once, on
+ * release.
+ *
+ * Which pixels, though? A hook is handed a *separator*, not a panel, and each
+ * caller applies the size its own way (an inline `width`, a custom property its
+ * stylesheet consumes, a clamp of its own on top). So the target is identified
+ * by AGREEMENT rather than by guessing: the handle's parent qualifies only if
+ * the size it is painting right now is exactly the size this hook believes it
+ * has. Two consequences are the point of doing it that way:
+ *
+ * - The analysis-pane divider is a *sibling* of the panes it splits, not a child
+ *   of one, and its parent (the stage) carries no inline width. Nothing is
+ *   adopted, so that gesture keeps the old per-sample commit instead of
+ *   resizing the stage.
+ * - A rail rendered narrower than this hook remembers - a responsive ceiling is
+ *   biting - also fails to agree, and likewise keeps the old path. A live write
+ *   can therefore never bypass a clamp the caller applies on the way out.
+ *
+ * Ancestors are then scanned for inline CUSTOM PROPERTIES holding that same
+ * size, because a caller can publish its width as well as apply it: App
+ * publishes the parts rail as `--stage-rail-inset` on the stage, and the
+ * floating zoom cluster is positioned from that. Keeping it in step for the
+ * length of the drag is the difference between the cluster tracking the rail's
+ * edge and the cluster jumping when the pointer is finally released.
+ */
+function collectLiveSizeWrites(handle: HTMLElement, axis: DragAxis, size: number): LiveSizeWrite[] {
+  const panel = handle.parentElement;
+  const px = `${size}px`;
+  if (!panel || panel.style.getPropertyValue(axis).trim() !== px) return [];
+  const writes: LiveSizeWrite[] = [{ style: panel.style, property: axis }];
+  const root = panel.ownerDocument.documentElement;
+  for (let node = panel.parentElement; node && node !== root; node = node.parentElement) {
+    const { style } = node;
+    for (let index = 0; index < style.length; index += 1) {
+      const property = style.item(index);
+      if (property.startsWith("--") && style.getPropertyValue(property).trim() === px) {
+        writes.push({ style, property });
+      }
+    }
+  }
+  return writes;
+}
+
+/**
+ * The stop the LAYOUT is enforcing, which is not always the config's.
+ *
+ * `PanelWidthConfig` carries static bounds; several callers hand the separator a
+ * tighter, responsive maximum (`componentsRailMaxWidth`, `resolveAnalysisPane`,
+ * the drawer's measured host height) and re-clamp the size they render with.
+ * That number is already published on the separator for screen readers, so the
+ * live write reads it from there and the dragged edge stops where the panel is
+ * actually going to stop - instead of following the pointer past the wall and
+ * snapping back on release. Deliberately bounds the PAINT only: what the hook
+ * stores and persists stays exactly what it was before, because the callers
+ * above correct that themselves and their tests pin it.
+ */
+function livePaintBounds(handle: HTMLElement, config: PanelWidthConfig): { min: number; max: number } {
+  const published = (attribute: string, fallback: number): number => {
+    const value = Number(handle.getAttribute(attribute));
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  };
+  return {
+    min: Math.max(config.minWidth, published("aria-valuemin", config.minWidth)),
+    max: Math.min(config.maxWidth, published("aria-valuemax", config.maxWidth)),
+  };
+}
+
 export function usePanelWidth(config: PanelWidthConfig) {
-  const [width, setWidth] = useState(() => loadPanelWidth(config));
+  const [committedWidth, setCommittedWidth] = useState(() => loadPanelWidth(config));
   const [dragging, setDragging] = useState(false);
   const configRef = useRef(config);
   configRef.current = config;
-  const widthRef = useRef(width);
-  widthRef.current = width;
+  // True only while a drag owns the size, i.e. while it is painting the DOM
+  // itself and React state is deliberately being left behind.
+  const livePaintRef = useRef(false);
+  // The size on screen. Normally that is the committed state; during a live
+  // drag this ref is ahead of it, and a render caused by anything ELSE mid-drag
+  // (a running simulation, a streaming answer) must read the size the panel is
+  // actually wearing rather than stamp the stale committed value back over it.
+  const widthRef = useRef(committedWidth);
+  if (!livePaintRef.current) widthRef.current = committedWidth;
+  const width = widthRef.current;
   // Pointer moves/up events are listened for on `window`, rather than the
   // narrow separator, so a fast drag remains responsive after leaving the
   // handle. Keep their disposer in a ref because a panel can disappear while
@@ -108,7 +201,7 @@ export function usePanelWidth(config: PanelWidthConfig) {
     const cfg = configRef.current;
     const clamped = clampPanelWidth(next, cfg.minWidth, cfg.maxWidth);
     widthRef.current = clamped;
-    setWidth(clamped);
+    setCommittedWidth(clamped);
     return clamped;
   }, []);
 
@@ -132,29 +225,66 @@ export function usePanelWidth(config: PanelWidthConfig) {
       const target = event.currentTarget;
       const startPos = vertical ? event.clientY : event.clientX;
       const startWidth = widthRef.current;
+      const live = collectLiveSizeWrites(target, vertical ? "height" : "width", startWidth);
+      const bounds = livePaintBounds(target, cfg);
       try {
         target.setPointerCapture(event.pointerId);
       } catch {
         // jsdom / older engines without pointer capture - window listeners
         // below still receive the moves.
       }
+      livePaintRef.current = live.length > 0;
       setDragging(true);
+      /**
+       * Paint the live size, at most once per distinct pixel.
+       *
+       * Deliberately NOT deferred to `requestAnimationFrame`. What made the drag
+       * expensive was the React render per pointer sample, and that is gone; what
+       * is left is a handful of `setProperty` calls that only INVALIDATE layout -
+       * nothing in this handler reads geometry back, so the browser already
+       * coalesces the whole burst into one reflow before the next paint. Gating
+       * them behind a frame would buy microseconds of style work and cost every
+       * frame's first sample up to a frame of latency, which is the lag this unit
+       * exists to remove. Skipping a repeat pixel is the part that is actually
+       * worth doing: a 1000 Hz pointer moving slowly reports the same rounded
+       * size many times over.
+       */
+      let painted = startWidth;
+      const paint = (size: number) => {
+        const next = clampPanelWidth(size, bounds.min, bounds.max);
+        if (next === painted) return;
+        painted = next;
+        const px = `${next}px`;
+        for (const write of live) write.style.setProperty(write.property, px);
+      };
       const onMove = (e: PointerEvent) => {
         const pos = vertical ? e.clientY : e.clientX;
         // Same "toward the panel narrows, away widens" convention as the
         // horizontal case, generalized to whichever edge carries the handle.
         const delta = (cfg.edge === "left" || cfg.edge === "top") ? startPos - pos : pos - startPos;
-        applyWidth(startWidth + delta);
+        if (!livePaintRef.current) {
+          // No live channel on this surface: keep the original per-sample
+          // commit, which is correct, just as expensive as it always was.
+          applyWidth(startWidth + delta);
+          return;
+        }
+        widthRef.current = clampPanelWidth(startWidth + delta, cfg.minWidth, cfg.maxWidth);
+        paint(widthRef.current);
       };
       const onUp = () => {
         stopDrag();
         setDragging(false);
-        savePanelWidth(cfg.storageKey, widthRef.current);
+        // The gesture's ONE React commit. `widthRef` already holds the size on
+        // screen (a live drag never touched state), and `applyWidth` re-clamps
+        // and stores it; on the fallback path it is the number state already
+        // has, so React bails out of the render and it costs nothing.
+        savePanelWidth(cfg.storageKey, applyWidth(widthRef.current));
       };
       const stopDrag = () => {
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
+        livePaintRef.current = false;
         if (stopDragRef.current === stopDrag) stopDragRef.current = null;
       };
       window.addEventListener("pointermove", onMove);
