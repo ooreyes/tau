@@ -5681,17 +5681,12 @@ body {
   padding-left: 22px;
 }
 
-.editor-tab i {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--r-2xs);
-  flex: none;
-}
-.editor-tab i.blue { background: var(--trace-cyan); }
-.editor-tab i.amber {
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
-}
+/* The editor tab's leading colour chip (`.editor-tab i`, `.blue`, `.amber`)
+   was deleted here, not merely overridden: PDF-6 item 5 removed the element
+   from EditorTabs entirely ("There shouldnt be that blue dot only a dot to
+   show when they haven't been saved"), so these rules matched nothing. They
+   were also chrome's one use of a `--trace-*` hue, which DESIGN_SYSTEM.md §0
+   reserves for waveform traces. */
 .tree-file.active {
   color: var(--text);
   background: var(--overlay-hover);
