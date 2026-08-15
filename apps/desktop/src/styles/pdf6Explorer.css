@@ -38,6 +38,55 @@
   height: var(--control-hit-compact);
 }
 
+/* --- PDF7-03: the caption yields, the controls do not ----------------------
+ *
+ * "I prefer the buttons to surive over the name sicne the project root name is
+ * below it anyways."
+ *
+ * The pixel decision lives in ShellPanels.tsx (`explorerHeaderLayout`), which
+ * publishes it as `data-title-yielded` on `.explorer-head`. Everything below is
+ * the paint for that one state. See the PDF7-03 block in that file for why the
+ * caption goes whole rather than shrinking to an ellipsis.
+ */
+
+/* The caption, unpainted.
+ *
+ * `display: none` and not a screen-reader clip, and the difference is not
+ * cosmetic. Every sr-only recipe is `overflow: hidden` around text wider than
+ * its box, and `scripts/pdf3-verify.mjs` reads `name.scrollWidth >
+ * name.clientWidth` as "the caption is truncated" - so a clipped caption here
+ * would report the very defect this pass removes. Removing the box answers that
+ * probe with 0 > 0 instead, which is what actually happened. ShellPanels re-
+ * announces the name from a sibling so nothing is lost to a screen reader. */
+.explorer-root-name[data-yielded] {
+  display: none;
+}
+
+/* With the caption out of the flow the header has exactly two items left, and
+ * App.css's `justify-content: space-between` would throw them at opposite ends -
+ * the icon group hard against the left edge and the ⋯ 60px away on the right.
+ * That is PDF6-02's "these options need to be closer together theyre too far
+ * apart" complaint in a new costume, reintroduced by the fix for a later item.
+ *
+ * Right-aligned with the gap collapsed, the six controls are one 24px-pitch
+ * strip - the same 8px between every pair of glyph edges the five already had,
+ * with the ⋯ now reading as the group's own sixth control rather than as
+ * something stranded across the row. Right, not left, because a pane header's
+ * actions sit right in VS Code, Xcode and Finder, and because the empty pixels
+ * then land where the caption was rather than in the middle of the strip. */
+.explorer-head[data-title-yielded] {
+  gap: 0;
+  justify-content: flex-end;
+}
+
+/* explorerTree.css gives the ⋯ 2px on top of the flex gap so a subpixel layout
+ * cannot round its clear of the root name under 8px. There is no root name to be
+ * clear of in this state, and keeping the 2px would put the ⋯ 10px from the
+ * collapse glyph while every other pair in the strip sits at 8px. */
+.explorer-head[data-title-yielded] .explorer-overflow-trigger {
+  margin-left: 0;
+}
+
 /* --- PDF6-01: a pointer drag needs the affordances the native one gave away --
  *
  * Tree rows are no longer `draggable` (see ShellPanels.tsx: that attribute is

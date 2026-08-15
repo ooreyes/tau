@@ -7,12 +7,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import {
   EXPLORER_DRAG_AUTO_EXPAND_MS,
   EXPLORER_DRAG_THRESHOLD,
+  EXPLORER_ICON_SIZE,
   EXPLORER_PANEL_WIDTH,
   ExplorerPanel,
   explorerHeaderLayout,
   explorerPrimaryActionCount,
   treeRowIndent,
 } from "./ShellPanels";
+import { SHELL } from "./shellContract";
 import { useProject } from "../store/useProject";
 
 /** jsdom evaluates no stylesheet, so the rules this lane owns are asserted as
@@ -1134,6 +1136,20 @@ describe("PDF6-01 interop - a synthesised HTML5 drag still moves a node", () => 
 });
 
 /**
+ * Ink width of the default "SCHEMATICS" caption, measured off the evidence shot
+ * rather than derived from the constant under test: in
+ * screenshots/pdf3-report/img-002-003.png (2x) the caption's lit columns run
+ * 22-164, and the ⋯ glyph fixes the scale at 2, so 71 CSS px. An assertion
+ * against EXPLORER_ROOT_NAME_MIN itself would be circular; this number comes
+ * from outside the code.
+ *
+ * At module scope because two blocks need it now. P3-04A used it to prove the
+ * caption was never squeezed below its own ink; PDF7-03 uses the same number as
+ * the bar the caption must clear to be painted at all.
+ */
+const CAPTION_INK_PX = 71;
+
+/**
  * P3-04A. "There is ample space to show the settings… we should be able to see
  * them at a smaller window size as long as it has decent space from the text of
  * the folder name it should be able to dynamically adjust."
@@ -1151,16 +1167,6 @@ describe("P3-04A - the overflow trigger must survive every width", () => {
     stubExplorerWidth(width);
     return renderExplorer();
   };
-
-  /**
-   * Ink width of the default "SCHEMATICS" caption, measured off the evidence
-   * shot rather than derived from the constant under test: in
-   * screenshots/pdf3-report/img-002-003.png (2x) the caption's lit columns run
-   * 22-164, and the ⋯ glyph fixes the scale at 2, so 71 CSS px. An assertion
-   * against EXPLORER_ROOT_NAME_MIN itself would be circular; this number comes
-   * from outside the code.
-   */
-  const CAPTION_INK_PX = 71;
 
   it("always renders the overflow trigger, at the narrowest width and the widest", () => {
     for (const width of [EXPLORER_PANEL_WIDTH.minWidth, 208, 226, EXPLORER_PANEL_WIDTH.maxWidth]) {
@@ -1189,30 +1195,67 @@ describe("P3-04A - the overflow trigger must survive every width", () => {
     expect(unconditional).toMatch(/\.explorer-overflow-trigger\s*\{[^}]*margin-left:\s*2px/);
   });
 
-  it("drops primary icons one at a time as the panel narrows, and never below zero", () => {
+  it("still drops primary icons one at a time, but no longer at any width the panel can reach", () => {
+    /*
+     * Re-expected by PDF7-03, not repaired. The function's SHAPE is what this
+     * case was always for - monotonic in width, one icon at a time, never below
+     * zero - and none of that moved. What moved is where the shape bites: the
+     * caption is no longer charged before the icons, so the whole action strip
+     * fits at the panel's own 168px floor and the degradation is only reachable
+     * at widths `EXPLORER_PANEL_WIDTH` forbids. The assertion this replaces read
+     * `< 5` at that floor, which IS the "the caption wins the tie" rule item 3
+     * asked us to reverse: "I prefer the buttons to surive over the name".
+     */
     const counts = [168, 190, 212, 226, 300, 420].map((w) => explorerPrimaryActionCount(w, 5));
     // Monotonic in width, saturating at the five actions that exist.
     for (let i = 1; i < counts.length; i += 1) expect(counts[i]).toBeGreaterThanOrEqual(counts[i - 1]);
     expect(counts[counts.length - 1]).toBe(5);
-    expect(explorerPrimaryActionCount(EXPLORER_PANEL_WIDTH.minWidth, 5)).toBeLessThan(5);
-    expect(explorerPrimaryActionCount(EXPLORER_PANEL_WIDTH.minWidth, 5)).toBeGreaterThan(0);
+    // Every width a hand can drag the panel to keeps every icon, floor included.
+    expect(explorerPrimaryActionCount(EXPLORER_PANEL_WIDTH.minWidth, 5)).toBe(5);
+    // Below the floor - unreachable in the app, but the arithmetic still has to
+    // be sane - icons leave one at a time and the count never goes negative.
+    for (let width = 40; width < EXPLORER_PANEL_WIDTH.minWidth; width += 1) {
+      const count = explorerPrimaryActionCount(width, 5);
+      expect(count, `negative icon count at ${width}px`).toBeGreaterThanOrEqual(0);
+      expect(
+        count - explorerPrimaryActionCount(width - 1, 5),
+        `count jumped by more than one at ${width}px`,
+      ).toBeLessThanOrEqual(1);
+    }
     expect(explorerPrimaryActionCount(40, 5)).toBe(0);
   });
 
-  it("keeps the ⋯ at least 8px clear of the root name at 168, 208, 226 and 420px", () => {
-    // The contract's numbers. 208 is the width UI_UX_PDF3.md calls the
-    // explorer's minWidth; the real floor is EXPLORER_PANEL_WIDTH.minWidth =
-    // 168 (208 is COMPONENTS_RAIL_WIDTH.minWidth), so both are checked.
+  it("keeps the ⋯ at least 8px clear of the root name wherever the name is painted, and never overflows", () => {
+    /*
+     * Re-expected by PDF7-03. The ≥8px clear is still the contract and is still
+     * re-measured natively by scripts/pdf3-verify.mjs - but it is a claim ABOUT A
+     * PAINTED CAPTION, and at three of these four widths there is no longer one
+     * to be clear of. The invariant that has to hold at every width is the other
+     * thing the old assertion stood in for: the header does not overflow. That
+     * used to be provable from `rootNameWidth >= CAPTION_INK_PX`, because the
+     * caption was the row's only flexible item; now that the caption can be
+     * absent, `slack >= 0` is the honest form of the same statement.
+     *
+     * 208 is the width UI_UX_PDF3.md calls the explorer's minWidth; the real
+     * floor is EXPLORER_PANEL_WIDTH.minWidth = 168 (208 is
+     * COMPONENTS_RAIL_WIDTH.minWidth), so both are checked.
+     */
     for (const width of [EXPLORER_PANEL_WIDTH.minWidth, 208, EXPLORER_PANEL_WIDTH.defaultWidth, EXPLORER_PANEL_WIDTH.maxWidth]) {
       const layout = explorerHeaderLayout(width, 5);
+      expect(layout.slack, `the header overflows at ${width}px`).toBeGreaterThanOrEqual(0);
+      // Item 3's ask, at every width the panel supports: the buttons survive.
+      expect(layout.visibleActions, `icons at ${width}px`).toBe(5);
+      if (!layout.titleVisible) {
+        // No box at all, so no ink and nothing for an ellipsis to live in.
+        expect(layout.rootNameWidth, `an unpainted caption still claims a box at ${width}px`).toBe(0);
+        continue;
+      }
       expect(layout.overflowGap, `⋯ clear of the root name at ${width}px`).toBeGreaterThanOrEqual(8);
-      // The root name is the only flexible item, so it absorbing at least its
-      // reserve is exactly "the header does not overflow and the ⋯ is not the
-      // casualty" - the failure mode img-002-003 shows the other side of.
+      // Painted means painted whole - at or above the caption's measured ink,
+      // never the "SCHEMATI…" the P3-04A verify pass was raised over.
       expect(layout.rootNameWidth, `root name box at ${width}px`).toBeGreaterThanOrEqual(CAPTION_INK_PX);
-      expect(layout.visibleActions, `icons at ${width}px`).toBeGreaterThan(0);
       expect(
-        layout.rootNameWidth + layout.visibleActions * 22 + 8 * 2 + 24,
+        layout.rootNameWidth + layout.visibleActions * EXPLORER_ICON_SIZE + 8 * 2 + 24,
         `header demand at ${width}px`,
       ).toBeLessThanOrEqual(layout.innerWidth);
     }
@@ -1228,26 +1271,31 @@ describe("P3-04A - the overflow trigger must survive every width", () => {
   });
 
   it("puts icons back in the shipped-default header without squeezing the caption to an ellipsis", () => {
-    // The 'ample space' complaint: at 226px the header used to be a bare
-    // `SCHEMATICS ⋯`. It is not, any more - but the fix must not overshoot into
-    // the failure on the other side. 226px cannot hold the caption, five 22px
-    // icons, the ⋯ and two 8px gaps (18 + 71 + 8 + 110 + 8 + 24 = 239 > 226),
-    // so the honest answer at the default is four icons and an intact name; the
-    // fifth is one ⋯ click away. Charging the caption only 56px approved all
-    // five here and rendered "SCHEMATI…".
+    /*
+     * The 'ample space' complaint, and then item 3's correction of the answer.
+     * At 226px the header was once a bare `SCHEMATICS ⋯`; P3-04A gave it four
+     * icons and kept the caption whole, on the reading that the caption wins the
+     * tie (226px cannot hold the caption, five 24px icons, the ⋯ and two 8px
+     * gaps: 18 + 72 + 8 + 120 + 8 + 26 = 252 > 226). Item 3 says the caption
+     * does NOT win it - "the project root name is below it anyways" - so the
+     * honest answer at the shipped default is now all FIVE icons and no caption.
+     *
+     * Re-expected, not repaired: this case still guards the same failure, a
+     * caption squeezed to "SCHEMATI…". That is now impossible by construction
+     * rather than by reserving 72px off the top of the row.
+     */
     const { container } = renderAtWidth(EXPLORER_PANEL_WIDTH.defaultWidth);
     const shown = [...container.querySelectorAll(".explorer-primary-actions button")]
       .map((b) => b.getAttribute("aria-label"));
-    expect(shown.length).toBeGreaterThan(1);
+    expect(shown).toHaveLength(5);
     expect(shown[0]).toBe("New schematic file");
     expect(screen.getByRole("button", { name: "More explorer actions" })).toBeTruthy();
 
     const layout = explorerHeaderLayout(EXPLORER_PANEL_WIDTH.defaultWidth, 5);
     expect(layout.visibleActions).toBe(shown.length);
-    expect(
-      layout.rootNameWidth,
-      "the SCHEMATICS caption is being truncated to make room for an icon",
-    ).toBeGreaterThanOrEqual(CAPTION_INK_PX);
+    expect(layout.titleVisible, "226px cannot hold five icons, the ⋯ and a whole caption").toBe(false);
+    expect(layout.rootNameWidth, "an unpainted caption must not keep a box to truncate into").toBe(0);
+    expect(container.querySelector(".explorer-root-name")?.getAttribute("data-yielded")).toBe("true");
   });
 
   it("restores the fifth icon as soon as the panel is wide enough to hold it honestly", () => {
@@ -1282,8 +1330,16 @@ describe("P3-04A - the overflow trigger must survive every width", () => {
      * survives any change to the constants behind it.
      */
     let fifthIconAt = 0;
-    let previous = 0;
-    for (let width = 100; width <= 600; width += 1) {
+    /*
+     * Seeded from the width BEFORE the scan rather than from 0. It used to be
+     * safe to assume a 100px header showed no icons at all, because the caption's
+     * 72px was taken off the top; PDF7-03 spends that on icons, so the ramp now
+     * starts below 100 and a hardcoded 0 would report the scan's own first step
+     * as a jump of two.
+     */
+    const SCAN_FROM = 100;
+    let previous = explorerPrimaryActionCount(SCAN_FROM - 1, 5);
+    for (let width = SCAN_FROM; width <= 600; width += 1) {
       const count = explorerPrimaryActionCount(width, 5);
       expect(count - previous, `count jumped by more than one at ${width}px`).toBeLessThanOrEqual(1);
       expect(count, `count went backwards at ${width}px`).toBeGreaterThanOrEqual(previous);
@@ -1292,21 +1348,40 @@ describe("P3-04A - the overflow trigger must survive every width", () => {
     }
     expect(fifthIconAt, "no width in 100-600px shows all five icons").toBeGreaterThan(0);
     expect(explorerPrimaryActionCount(fifthIconAt - 1, 5)).toBe(4);
-    // And the shipped default is deliberately BELOW it - that is the fix for the
-    // truncated caption, not an accident.
-    expect(EXPLORER_PANEL_WIDTH.defaultWidth).toBeLessThan(fifthIconAt);
+    /*
+     * …and after PDF7-03 that width is at or below the panel's own floor, so the
+     * shipped default sits ABOVE it. This is the assertion the inversion turned
+     * around: it used to read `defaultWidth < fifthIconAt`, i.e. "the shipped
+     * default deliberately shows four, to keep the caption whole".
+     */
+    expect(fifthIconAt).toBeLessThanOrEqual(EXPLORER_PANEL_WIDTH.minWidth);
+    expect(EXPLORER_PANEL_WIDTH.defaultWidth).toBeGreaterThan(fifthIconAt);
   });
 
-  it("keeps every dropped action reachable from the ⋯ menu at the narrowest width", async () => {
+  it("keeps every action reachable from the ⋯ menu at the narrowest width, now that none is dropped there", async () => {
+    /*
+     * Re-expected by PDF7-03. Nothing is dropped at the floor any more - five
+     * 24px icons plus the ⋯ come to 144px of the 150px a 168px panel's header
+     * has - so the ⋯ has stopped being where a control goes to hide. That is the
+     * "the ⋯ is the fallback of last resort, not the first move" half of item 3.
+     * The menu still has to carry all five: it is what a keyboard reader uses,
+     * and what a narrower floor would fall back to.
+     */
     const { container } = renderAtWidth(EXPLORER_PANEL_WIDTH.minWidth);
     const shown = [...container.querySelectorAll(".explorer-primary-actions button")]
       .map((b) => b.getAttribute("aria-label"));
-    expect(shown.length).toBeLessThan(5);
-    // Least-essential-first: every icon is 22px wide, so the contract's
-    // "widest-first" degenerates to a priority order, and New schematic file -
-    // the reason the header exists - is the last one standing.
-    expect(shown[0]).toBe("New schematic file");
-    expect(shown).not.toContain("Collapse folders in explorer");
+    // Still ordered most- to least-essential, so a future narrower floor drops
+    // Collapse before New schematic file - the order is just no longer exercised
+    // by any width the panel supports.
+    expect(shown).toEqual([
+      "New schematic file",
+      "New folder",
+      "Import circuit",
+      "Refresh explorer",
+      "Collapse folders in explorer",
+    ]);
+    // Collapse is the icon the old budget dropped FIRST at this width.
+    expect(shown).toContain("Collapse folders in explorer");
 
     fireEvent.pointerDown(screen.getByRole("button", { name: "More explorer actions" }), { button: 0, ctrlKey: false });
     await screen.findByRole("menu");
@@ -1368,21 +1443,294 @@ describe("PDF6-02 - the explorer header actions must read as one group", () => {
 
   it("keeps EXPLORER_ICON_SIZE mirroring the stylesheet, or the overflow menu mis-counts", () => {
     /*
-     * The budget that decides how many icons render is computed from a constant
-     * in ShellPanels.tsx that mirrors the CSS box. It is private, so it is
-     * RECOVERED from the exported layout rather than restated: two widths whose
-     * icon counts differ share the same header gaps and the same overflow
-     * clearance, so those cancel in the difference and the box is what is left.
+     * The budget that decides how many icons render is computed from
+     * EXPLORER_ICON_SIZE, which mirrors the CSS box; the two drifting apart is
+     * how the header mis-counts and overflows.
+     *
+     * This case used to RECOVER the constant from the difference between two
+     * widths' `overflowGap`, because it was private. PDF7-03 exported it, and
+     * that is not a convenience: the recovery divided by `wide.visibleActions -
+     * narrow.visibleActions`, and now that the whole strip fits at the panel's
+     * own floor, that difference is zero for every pair of widths the panel
+     * supports. Holding the constant against the token directly is the stronger
+     * check anyway - the stylesheet is the external source, and nothing in the
+     * comparison is derived from the thing under test.
      */
-    const boxMatch = /--control-hit-compact:\s*(\d+(?:\.\d+)?)px/.exec(appCss())!;
-    const box = Number.parseFloat(boxMatch[1]);
+    const boxMatch = /--control-hit-compact:\s*(\d+(?:\.\d+)?)px/.exec(appCss());
+    expect(boxMatch, "App.css no longer defines --control-hit-compact").toBeTruthy();
+    const box = Number.parseFloat(boxMatch![1]);
+    expect(EXPLORER_ICON_SIZE, "EXPLORER_ICON_SIZE no longer mirrors the stylesheet's box").toBe(box);
 
-    const wide = explorerHeaderLayout(EXPLORER_PANEL_WIDTH.maxWidth, 5);
-    const narrow = explorerHeaderLayout(EXPLORER_PANEL_WIDTH.minWidth, 5);
-    expect(narrow.visibleActions, "the narrow case must still show an icon").toBeGreaterThan(0);
-    expect(wide.visibleActions).toBeGreaterThan(narrow.visibleActions);
+    // …and the budget really is spending that box: one more action costs the
+    // header exactly one box, whichever side of the row you measure it from.
+    const four = explorerHeaderLayout(EXPLORER_PANEL_WIDTH.maxWidth, 4);
+    const five = explorerHeaderLayout(EXPLORER_PANEL_WIDTH.maxWidth, 5);
+    expect(five.visibleActions - four.visibleActions).toBe(1);
+    expect(five.overflowGap - four.overflowGap).toBe(box);
+    expect(four.rootNameWidth - five.rootNameWidth).toBe(box);
+  });
+});
 
-    const mirrored = (wide.overflowGap - narrow.overflowGap) / (wide.visibleActions - narrow.visibleActions);
-    expect(mirrored, "EXPLORER_ICON_SIZE no longer mirrors the stylesheet's box").toBe(box);
+/**
+ * PDF7-03. "I prefer the buttons to surive over the name sicne the project root
+ * name is below it anyways."
+ *
+ * P3-04A, above, decided the same tie the other way round: EXPLORER_ROOT_NAME_MIN
+ * came off the top of the row and the icons divided whatever survived, so
+ * narrowing the panel put WORKING CONTROLS behind the ⋯ in order to protect a
+ * caption the reader can read again 34px lower, in the project root row. The
+ * budget is inverted here - the action cluster is charged first, and the caption
+ * gets the remainder: painted whole if it clears its own measured ink, not
+ * painted at all if it does not.
+ *
+ * Every case below fails on the pre-inversion code, which is the point. At the
+ * 168px floor that code rendered ONE icon and a whole caption; at the shipped
+ * 226px default, four icons and a whole caption.
+ */
+describe("PDF7-03 - the header's buttons outlive its caption", () => {
+  const renderAtWidth = (width: number) => {
+    stubExplorerWidth(width);
+    return renderExplorer();
+  };
+
+  /** Every primary action, most- to least-essential, by accessible name. */
+  const ACTION_LABELS = [
+    "New schematic file",
+    "New folder",
+    "Import circuit",
+    "Refresh explorer",
+    "Collapse folders in explorer",
+  ];
+
+  /**
+   * Widths a hand can actually drag the panel to: the floor, the shipped
+   * default, one pixel either side of the caption's boundary, and the ceiling.
+   */
+  const EVERY_WIDTH = [
+    EXPLORER_PANEL_WIDTH.minWidth,
+    180,
+    208,
+    EXPLORER_PANEL_WIDTH.defaultWidth,
+    251,
+    252,
+    300,
+    360,
+    EXPLORER_PANEL_WIDTH.maxWidth,
+  ];
+
+  it("keeps all five actions in the header at a narrow panel, and yields the caption instead", () => {
+    /*
+     * 226px is the width the panel SHIPS at, so this is the default header
+     * rather than an edge case: pre-inversion it drew four icons and a whole
+     * "SCHEMATICS", with the fifth behind the ⋯ to buy the caption its 72px.
+     */
+    const { container } = renderAtWidth(EXPLORER_PANEL_WIDTH.defaultWidth);
+
+    const shown = [...container.querySelectorAll(".explorer-primary-actions button")]
+      .map((b) => b.getAttribute("aria-label"));
+    expect(shown, "an action left the header to make room for the caption").toEqual(ACTION_LABELS);
+    for (const name of ACTION_LABELS) expect(screen.getByRole("button", { name })).toBeTruthy();
+
+    // …and the thing that gave way is the caption, marked as having yielded
+    // rather than left to shrink into an ellipsis.
+    expect(container.querySelector(".explorer-root-name")?.getAttribute("data-yielded")).toBe("true");
+    expect(container.querySelector(".explorer-head")?.getAttribute("data-title-yielded")).toBe("true");
+
+    /*
+     * The stylesheet's half of the same claim. `display: none` is why there is
+     * no box to render an ellipsis into; the collapsed gap and the right-aligned
+     * row are why the two survivors do not end up at opposite ends of the header
+     * once `justify-content: space-between` has only them to work with - which
+     * would be PDF6-02's "too far apart" complaint reintroduced by this fix.
+     */
+    const css = pdf6ExplorerCss();
+    expect(declaration(css, ".explorer-root-name[data-yielded]", "display")).toBe("none");
+    expect(declaration(css, ".explorer-head[data-title-yielded]", "gap")).toBe("0");
+    expect(declaration(css, ".explorer-head[data-title-yielded]", "justify-content")).toBe("flex-end");
+  });
+
+  it("shows the caption and every action once the panel is wide enough for both", () => {
+    const { container } = renderAtWidth(EXPLORER_PANEL_WIDTH.maxWidth);
+    const rootName = useProject.getState().rootName!;
+
+    const caption = container.querySelector<HTMLElement>(".explorer-root-name")!;
+    expect(caption.getAttribute("data-yielded"), "the caption yields at a width that can hold it").toBeNull();
+    expect(caption.textContent).toBe(rootName);
+    expect(container.querySelector(".explorer-head")?.getAttribute("data-title-yielded")).toBeNull();
+    expect(container.querySelectorAll(".explorer-primary-actions button")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "More explorer actions" })).toBeTruthy();
+
+    // Present is not enough: the caption has room to be READ - at or above the
+    // ink measured off the evidence shot - with the ⋯ still 8px clear of it.
+    const layout = explorerHeaderLayout(EXPLORER_PANEL_WIDTH.maxWidth, 5);
+    expect(layout.titleVisible).toBe(true);
+    expect(layout.rootNameWidth).toBeGreaterThanOrEqual(CAPTION_INK_PX);
+    expect(layout.overflowGap).toBeGreaterThanOrEqual(8);
+  });
+
+  it("never paints an abbreviated caption - it is whole, or it is absent", () => {
+    /*
+     * The justification for choosing "disappear" over "truncate", stated as a
+     * property rather than a preference. An ellipsised caption spends the same
+     * pixels as a whole one and answers a question the project root row answers
+     * completely one row below; it is also the exact ink P3-04A's verify pass was
+     * raised over ("SCHEMATI…"). So the yield is binary, and the boundary is the
+     * caption's own measured ink rather than an invented minimum.
+     */
+    let paintedAt = 0;
+    let previouslyVisible = false;
+    for (let width = EXPLORER_PANEL_WIDTH.minWidth; width <= EXPLORER_PANEL_WIDTH.maxWidth; width += 1) {
+      const layout = explorerHeaderLayout(width, 5);
+      if (layout.titleVisible) {
+        expect(layout.rootNameWidth, `caption box at ${width}px`).toBeGreaterThanOrEqual(CAPTION_INK_PX);
+        if (paintedAt === 0) paintedAt = width;
+      } else {
+        expect(layout.rootNameWidth, `an unpainted caption keeps a box at ${width}px`).toBe(0);
+      }
+      // One transition, one direction: a wider panel never takes the caption
+      // away again, which is what makes the reflow predictable under the hand.
+      expect(!previouslyVisible || layout.titleVisible, `the caption was lost at ${width}px`).toBe(true);
+      // And the row never overflows on either side of that transition.
+      expect(layout.slack, `the header overflows at ${width}px`).toBeGreaterThanOrEqual(0);
+      previouslyVisible = layout.titleVisible;
+    }
+
+    expect(paintedAt, "the caption is painted at no width the panel supports").toBeGreaterThan(0);
+    // One pixel narrower and the header cannot give the caption its ink, so it
+    // gives it nothing at all rather than most of it.
+    expect(explorerHeaderLayout(paintedAt - 1, 5).titleVisible).toBe(false);
+    expect(explorerHeaderLayout(paintedAt - 1, 5).visibleActions).toBe(5);
+    // The consequence a human notices: the caption is back a short drag past the
+    // shipped default, not at it.
+    expect(paintedAt).toBeGreaterThan(EXPLORER_PANEL_WIDTH.defaultWidth);
+  });
+
+  it("keeps the explorer's accessible name, and the project's, at every width", () => {
+    /*
+     * The caption's ink is negotiable; what a screen reader hears is not.
+     *
+     * The landmark's name lives on the `<aside>` (shellContract's SHELL.explorer)
+     * and never depended on the caption - checked here anyway, because "the
+     * visible text goes" is exactly the change that tends to take an accessible
+     * name with it. The caption WAS the header's only statement of which project
+     * is open, so when it stops being painted the name is re-announced from an
+     * sr-only sibling: the panel reads the same at 168px as at 420px even though
+     * it plainly does not look the same.
+     *
+     * `.explorer-root-name` itself also has to survive at every width, with its
+     * text intact - scripts/pdf3-verify.mjs finds the caption by that class and
+     * reads its metrics, and a missing element there is reported as a broken
+     * header rather than as a yielded one.
+     */
+    for (const width of EVERY_WIDTH) {
+      const { container, unmount } = renderAtWidth(width);
+      const rootName = useProject.getState().rootName!;
+
+      expect(
+        screen.getByRole(SHELL.explorer.role, { name: SHELL.explorer.name }),
+        `the explorer landmark is unnamed at ${width}px`,
+      ).toBeTruthy();
+      expect(
+        container.querySelector(".explorer-root-name")?.textContent,
+        `the caption element lost the project name at ${width}px`,
+      ).toBe(rootName);
+
+      // Spoken exactly once, painted or not: either the caption carries the
+      // project name or its sr-only stand-in does - never both, never neither.
+      const spoken = [...container.querySelectorAll<HTMLElement>(".explorer-head > span")]
+        .filter((span) => span.getAttribute("data-yielded") === null)
+        .map((span) => span.textContent);
+      expect(spoken, `header identity at ${width}px`).toEqual([rootName]);
+
+      unmount();
+    }
+  });
+
+  it("holds every hit target at 24px and PDF6-02's glyph spacing, in both header states", () => {
+    /*
+     * The inversion moves controls INTO a narrow header, which is precisely the
+     * pressure that tempts a smaller box. WCAG 2.2 SC 2.5.8's floor is 24px,
+     * App.css names it `--control-hit-compact`, PDF6-02 put the group on that box
+     * with `gap: 0` - i.e. 8px between adjacent glyph edges, VS Code's number -
+     * and this pass changes neither.
+     */
+    const css = pdf6ExplorerCss();
+    const box = Number.parseFloat(/--control-hit-compact:\s*(\d+(?:\.\d+)?)px/.exec(appCss())![1]);
+    expect(box, "a header action is under WCAG 2.2 SC 2.5.8's 24px floor").toBeGreaterThanOrEqual(24);
+    expect(EXPLORER_ICON_SIZE).toBe(box);
+    expect(declaration(css, ".explorer-icons", "gap")).toBe("0");
+    const boxSelector = ".explorer-icons button,\n.explorer-overflow-trigger";
+    expect(declaration(css, boxSelector, "width")).toBe("var(--control-hit-compact)");
+    expect(declaration(css, boxSelector, "height")).toBe("var(--control-hit-compact)");
+
+    /*
+     * The yielded state collapses the HEAD's gap, never the group's, and drops
+     * the ⋯'s 2px clearance - so the ⋯ joins the strip at the same 8px between
+     * glyph edges instead of sitting 10px out from it. Neither rule touches a
+     * box, which is the whole reason the hit target survives the reflow.
+     */
+    expect(declaration(css, ".explorer-head[data-title-yielded]", "gap")).toBe("0");
+    expect(
+      declaration(css, ".explorer-head[data-title-yielded] .explorer-overflow-trigger", "margin-left"),
+    ).toBe("0");
+
+    for (const width of EVERY_WIDTH) {
+      const { container, unmount } = renderAtWidth(width);
+      const controls = [
+        ...container.querySelectorAll<HTMLElement>(".explorer-primary-actions button"),
+        container.querySelector<HTMLElement>(".explorer-overflow-trigger")!,
+      ];
+      // Six controls at every width: the five actions plus the ⋯, each on the
+      // same box, so `box - glyph` IS the distance a reader sees between two
+      // adjacent glyphs anywhere in the strip.
+      expect(controls, `header controls at ${width}px`).toHaveLength(6);
+      for (const control of controls) {
+        const glyph = Number.parseFloat(control.querySelector("svg")!.getAttribute("width")!);
+        expect(glyph, `glyph size at ${width}px`).toBe(16);
+        expect(box - glyph, `glyph spacing at ${width}px`).toBe(8);
+      }
+      unmount();
+    }
+  });
+
+  it("clips nothing at the 168px floor and leaves every action reachable", async () => {
+    const floor = EXPLORER_PANEL_WIDTH.minWidth;
+    const { container } = renderAtWidth(floor);
+
+    // The width the panel really laid out at, off its own inline style, so this
+    // is not asserting against the width the test asked for.
+    const panel = container.querySelector<HTMLElement>(".explorer-panel")!;
+    expect(Number.parseFloat(panel.style.width)).toBe(floor);
+
+    const layout = explorerHeaderLayout(floor, 5);
+    expect(layout.visibleActions).toBe(5);
+    expect(layout.titleVisible).toBe(false);
+    /*
+     * 10px + 8px of padding leaves 150px, and five 24px icons plus the 24px ⋯
+     * come to 144px of it. jsdom lays nothing out, so this is the arithmetic the
+     * browser will apply rather than a measurement of what it did - the same
+     * technique the rest of this header's geometry is pinned with, and the native
+     * pass re-measures it against real pixels.
+     */
+    expect(layout.innerWidth).toBe(floor - 18);
+    expect(layout.slack).toBe(layout.innerWidth - 6 * EXPLORER_ICON_SIZE);
+    expect(layout.slack, "the floor's header overflows or clips a control").toBeGreaterThanOrEqual(0);
+
+    // Every action reachable twice over at the floor: in the strip, and in the ⋯
+    // menu behind it.
+    for (const name of ACTION_LABELS) {
+      expect(screen.getByRole("button", { name }), `${name} is missing at the floor`).toBeTruthy();
+    }
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "More explorer actions" }),
+      { button: 0, ctrlKey: false },
+    );
+    await screen.findByRole("menu");
+    for (const label of ACTION_LABELS) {
+      expect(
+        screen.getByRole("menuitem", { name: label }),
+        `${label} is unreachable from the ⋯ at the floor`,
+      ).toBeTruthy();
+    }
   });
 });

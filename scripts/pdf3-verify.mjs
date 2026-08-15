@@ -467,7 +467,9 @@ const CHECKS = [
           + `, name "${m.nameText}" ${m.nameWidth}px truncated ${m.nameTruncated}`
           + `, header overflowing ${m.headOverflowing}`).join(" | ")
           + `; failing widths: ${bad.map((m) => m.asked).join(", ") || "none"} `
-          + `(⋯ must survive every width with >= 8px clear, and the root name must never be clipped to make room for it)`,
+          + `(⋯ must survive every width with >= 8px clear, and the root name must never be CLIPPED - `
+          + `PDF-7 item 3 inverted the priority, so below ~252px the caption is not painted at all `
+          + `and reports 0px/untruncated here, which is the intended state, not a clip)`,
         data: perWidth,
       };
     },

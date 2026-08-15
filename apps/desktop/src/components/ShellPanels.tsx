@@ -142,21 +142,52 @@ const TREE_INDENT_STEP = 14;
 export const treeRowIndent = (depth: number): number =>
   TREE_ROW_BASE_INDENT + depth * TREE_INDENT_STEP;
 
-/* --- P3-04A: the explorer header's pixel budget ---------------------------
- * The header used to be an all-or-nothing swap - App.css hides every primary
- * icon and reveals the ⋯ only inside `@container explorer-shell
- * (max-width: 280px)`. Since the panel ships at 226px, the shipped default hid
- * all five icons and showed a bare `SCHEMATICS ⋯` with ~186px of unused header
- * (evidence img-002-003), while every width above 280px hid the ⋯ instead and
- * left no overflow affordance at all. Both directions are now decided here, in
- * pixels, from `explorerWidth` - which is the width the panel is actually laid
- * out at (it is the inline style on `.explorer-panel`), so no ResizeObserver
- * and no post-layout measurement is needed to get the arithmetic right. */
+/* --- PDF7-03: the actions outlive the caption, not the other way round -----
+ *
+ * "I prefer the buttons to surive over the name sicne the project root name is
+ * below it anyways."
+ *
+ * P3-04A - the pass this block replaces - answered the same question in the
+ * opposite direction. It reserved EXPLORER_ROOT_NAME_MIN for the caption FIRST
+ * and spent whatever survived on icons, so narrowing the panel moved WORKING
+ * CONTROLS into the ⋯ while a caption kept its 72px. "Redundant" is the
+ * reader's own word for that caption and it is correct: the project root row
+ * sits one 34px header below it and spells the same name, with a disclosure
+ * caret and a folder icon attached. The header title is the only thing in the
+ * row that costs space and tells nobody anything the next row does not.
+ *
+ * So the order is inverted. The action cluster is charged first, the caption
+ * gets the remainder, and if the remainder is under the caption's own measured
+ * ink the caption is not painted at all.
+ *
+ * **Painted whole or not painted - never abbreviated.** The alternative was to
+ * let the caption keep shrinking and ellipsise, and both reviews that have
+ * looked at this header rejected exactly that ink: P3-04A's verify pass was
+ * raised because the shipped default rendered "SCHEMATI…". A half-name is
+ * strictly worse than no name here, because the whole name is legible 34px
+ * lower - the abbreviation costs the same pixels and answers a question that
+ * is already answered. (A genuinely long project name can still ellipsise at
+ * a width wide enough to paint the caption at all; what can no longer cause it
+ * is an icon.)
+ *
+ * The numbers this produces, and they are the point:
+ *   - 168px floor: five icons + the ⋯ = 5*24 + 24 = 144px of the 150px the
+ *     header has, so nothing is dropped and nothing is clipped at any width the
+ *     panel can be dragged to. The ⋯ is now a duplicate, not a destination.
+ *   - 226px shipped default: the same five icons, caption unpainted.
+ *   - 252px and up: the caption is back, with the five icons still there.
+ *
+ * All of it is decided here, in pixels, from `explorerWidth` - the width the
+ * panel is actually laid out at (it is the inline style on `.explorer-panel`) -
+ * so no ResizeObserver and no post-layout measurement is needed. */
 
 /** `.explorer-head` padding: 10px left + 8px right (App.css). */
 const EXPLORER_HEAD_PADDING = 18;
-/** `.explorer-head` flex gap, `var(--sp-2)`. Also the contract's minimum clear
- *  between the ⋯ and the root name, which is why nothing may narrow it. */
+/** `.explorer-head` flex gap, `var(--sp-2)`. Charged only while the caption is
+ *  painted: once it yields, `styles/pdf6Explorer.css` collapses this gap to
+ *  zero and the ⋯ becomes the action cluster's sixth 24px control. While the
+ *  caption IS painted this is also the contract's minimum clear between it and
+ *  the ⋯, which is why nothing may narrow it. */
 const EXPLORER_HEAD_GAP = 8;
 /**
  * Every header control is a `--control-hit-compact` square (`.explorer-icons
@@ -175,31 +206,45 @@ const EXPLORER_HEAD_GAP = 8;
  * the same 8px while keeping the hit target on `--control-hit-compact`, which
  * App.css names as the WCAG floor. Anything smaller would buy a few px of
  * tightness by breaking that floor. If the stylesheet's box changes this must
- * change with it, and `explorerPrimaryActionCount`'s tests pin the arithmetic
- * either way.
- */
-const EXPLORER_ICON_SIZE = 24;
-/** Extra clear left of the ⋯ on top of the flex gap. The gap alone lands
- *  exactly on the ≥8px bar, which a subpixel layout can round under. */
-const EXPLORER_OVERFLOW_CLEARANCE = 2;
-/** Narrowest the root identity may be squeezed to before an icon is dropped
- *  instead. This is the *measured* natural width of the default "SCHEMATICS"
- *  caption, not an invented minimum: in the evidence shot img-002-003 (2x) the
- *  caption's ink spans image columns 22-164, i.e. 71 CSS px at
- *  10px/650/0.06em uppercase; 72 is that plus a pixel of rounding.
+ * change with it.
  *
- *  It was 56 here first, which is 15px short of the caption it claimed to
- *  measure. The consequence was concrete and shipped-by-default: at the
- *  panel's 226px default the budget then approved all five icons, leaving the
- *  name box 58px and rendering "SCHEMATI…". The user's ask is explicitly
- *  conditional - show the icons "as long as it has decent space from the text
- *  of the folder name" - so the caption wins the tie and the least-essential
- *  icon goes to the ⋯ instead. */
+ * Exported so the geometry test can hold it against the stylesheet's token
+ * directly. It used to be private and RECOVERED from the difference between two
+ * widths' icon counts, which was only ever possible while some width the panel
+ * supports dropped an icon - and after PDF7-03 none does.
+ */
+export const EXPLORER_ICON_SIZE = 24;
+/** Extra clear left of the ⋯ on top of the flex gap. The gap alone lands
+ *  exactly on the ≥8px bar, which a subpixel layout can round under. Charged
+ *  only while the caption is painted; there is nothing for the ⋯ to be clear
+ *  of once it is not, and 2px there would put the ⋯ 10px from the collapse
+ *  glyph while every other pair in the strip sits at 8px. */
+const EXPLORER_OVERFLOW_CLEARANCE = 2;
+/**
+ * Ink the caption needs before it is worth painting at all.
+ *
+ * This is the *measured* natural width of the default "SCHEMATICS" caption, not
+ * an invented minimum: in the evidence shot img-002-003 (2x) the caption's ink
+ * spans image columns 22-164, i.e. 71 CSS px at 10px/650/0.06em uppercase; 72 is
+ * that plus a pixel of rounding.
+ *
+ * Its ROLE changed with PDF7-03 even though its value did not. Under P3-04A it
+ * was a reservation taken off the top, which is what pushed icons into the ⋯.
+ * It is now a threshold applied to what is left after the icons: at or above it
+ * the caption is painted, below it the caption is not painted at all. Same
+ * number, opposite direction, and the direction is the whole request.
+ */
 export const EXPLORER_ROOT_NAME_MIN = 72;
 
 /**
- * How many of the header's primary icon buttons fit beside the root name and
- * the always-present ⋯.
+ * How many of the header's primary icon buttons fit.
+ *
+ * Charges the action cluster's own demand and nothing else: n icons plus the
+ * always-present ⋯, packed at the group's zero gap. The caption is deliberately
+ * not charged - that is the inversion - and neither are the head's two flex
+ * gaps, because the state that needs every icon is precisely the state where
+ * the caption has left the flow and `styles/pdf6Explorer.css` has collapsed
+ * those gaps to zero.
  *
  * Fails OPEN by design: an unmeasured, zero, or non-finite width returns every
  * action. jsdom computes no layout, and a host that renders the panel without a
@@ -208,30 +253,36 @@ export const EXPLORER_ROOT_NAME_MIN = 72;
  */
 export function explorerPrimaryActionCount(explorerWidth: number, total: number): number {
   if (!Number.isFinite(explorerWidth) || explorerWidth <= 0) return total;
-  const budget = explorerWidth
-    - EXPLORER_HEAD_PADDING
-    - EXPLORER_ROOT_NAME_MIN
-    - (EXPLORER_ICON_SIZE + EXPLORER_OVERFLOW_CLEARANCE)
-    // Both gaps are charged even at a count of zero, where the icon group
-    // stops being a flex item and one gap disappears. Conservative by 8px,
-    // never optimistic - the row must not be allowed to overflow.
-    - EXPLORER_HEAD_GAP * 2;
+  const budget = explorerWidth - EXPLORER_HEAD_PADDING - EXPLORER_ICON_SIZE;
   return Math.max(0, Math.min(total, Math.floor(budget / EXPLORER_ICON_SIZE)));
 }
 
 export interface ExplorerHeaderLayout {
-  /** Inner width the three header groups share (panel width less padding). */
+  /** Inner width the header groups share (panel width less padding). */
   innerWidth: number;
   visibleActions: number;
-  /** What is left for the root-name span - the only flexible item in the row,
-   *  so this staying at or above EXPLORER_ROOT_NAME_MIN is what proves the
-   *  header does not overflow and the name is not squeezed to an ellipsis. */
+  /**
+   * Whether the caption is painted at this width - the one bit PDF7-03 added.
+   * False means the row draws the action strip alone; the name is still in the
+   * DOM and still spoken (see the header markup), it just has no ink.
+   */
+  titleVisible: boolean;
+  /** Painted width of the root-name box, or 0 once the caption has yielded.
+   *  While painted this is at or above EXPLORER_ROOT_NAME_MIN by construction,
+   *  which is what makes "painted whole, or not at all" checkable. */
   rootNameWidth: number;
-  /** Clear between the root-name box and the ⋯ trigger. P3-04A's contract is
-   *  ≥ 8px, measured natively by scripts/pdf3-verify.mjs as
-   *  `trigger.left - rootName.right`; this is the same quantity derived from
-   *  the widths that produce it. */
+  /** Clear between the root-name box and the ⋯ trigger - the gap to the icon
+   *  cluster, the cluster itself, the gap after it, and the ⋯'s own clearance.
+   *  That is the quantity scripts/pdf3-verify.mjs measures natively as
+   *  `trigger.left - rootName.right`, and P3-04A's contract is ≥ 8px. Zero once
+   *  the caption has yielded, because there is then no name box to be clear of. */
   overflowGap: number;
+  /** Header width left over once everything the row must draw has its space.
+   *  Non-negative is the no-overflow invariant, and it is the assertion that
+   *  survives both states: under P3-04A the only flexible item was the caption,
+   *  so "the name kept its reserve" doubled as "nothing overflowed". Now the
+   *  caption can be absent, and that proxy would have nothing to measure. */
+  slack: number;
 }
 
 /**
@@ -248,15 +299,28 @@ export function explorerHeaderLayout(explorerWidth: number, total: number): Expl
   const visibleActions = explorerPrimaryActionCount(explorerWidth, total);
   const innerWidth = explorerWidth - EXPLORER_HEAD_PADDING;
   const actionsWidth = visibleActions * EXPLORER_ICON_SIZE;
-  // A zero-count action group is not rendered at all, so it is not a flex item
-  // and one of the two gaps disappears with it.
-  const gaps = visibleActions > 0 ? EXPLORER_HEAD_GAP * 2 : EXPLORER_HEAD_GAP;
-  const triggerWidth = EXPLORER_ICON_SIZE + EXPLORER_OVERFLOW_CLEARANCE;
+  // What the caption WOULD get if it were painted: the row, less the icon
+  // cluster, less the ⋯ and its clearance, less the two flex gaps a three-item
+  // header pays. Compared against the caption's own ink rather than spent on
+  // it - a remainder under that bar buys an ellipsis, not a name.
+  const paintedNameWidth = innerWidth
+    - actionsWidth
+    - (EXPLORER_ICON_SIZE + EXPLORER_OVERFLOW_CLEARANCE)
+    - EXPLORER_HEAD_GAP * 2;
+  const titleVisible = paintedNameWidth >= EXPLORER_ROOT_NAME_MIN;
   return {
     innerWidth,
     visibleActions,
-    rootNameWidth: innerWidth - actionsWidth - gaps - triggerWidth,
-    overflowGap: gaps + actionsWidth + EXPLORER_OVERFLOW_CLEARANCE,
+    titleVisible,
+    rootNameWidth: titleVisible ? paintedNameWidth : 0,
+    overflowGap: titleVisible
+      ? EXPLORER_HEAD_GAP * 2 + actionsWidth + EXPLORER_OVERFLOW_CLEARANCE
+      : 0,
+    // Painted: whatever the caption has beyond its own ink. Yielded: whatever
+    // the right-aligned strip of n icons plus the ⋯ leaves at the left edge.
+    slack: titleVisible
+      ? paintedNameWidth - EXPLORER_ROOT_NAME_MIN
+      : innerWidth - (actionsWidth + EXPLORER_ICON_SIZE),
   };
 }
 
@@ -1144,10 +1208,11 @@ export function ExplorerPanel({
       <FoldVertical size={16} strokeWidth={1.6} aria-hidden="true" />
     </button>,
   ];
-  const visiblePrimaryActions = primaryActions.slice(
-    0,
-    explorerPrimaryActionCount(explorerWidth, primaryActions.length),
-  );
+  const headerLayout = explorerHeaderLayout(explorerWidth, primaryActions.length);
+  const visiblePrimaryActions = primaryActions.slice(0, headerLayout.visibleActions);
+  /** The project's identity, painted by the caption when the header can afford
+   *  it and spoken by the header either way. */
+  const rootLabel = rootName ?? "Schematics";
 
   /*
    * Derived, not stored. It changes at exactly the cadence `dropTargetPath`
@@ -1166,8 +1231,36 @@ export function ExplorerPanel({
 
   return (
     <aside className="explorer-panel" aria-label="Project explorer" style={{ width: explorerWidth }}>
-      <div className="explorer-head">
-        <span className="explorer-root-name">{rootName ?? "Schematics"}</span>
+      {/* `data-title-yielded` is what styles/pdf6Explorer.css keys the whole
+          narrow state on: the caption stops being painted, the head's flex gap
+          collapses, and the remaining two items right-align into one strip. It
+          is set from the same layout the icon count came from, so the pixels the
+          budget approved and the pixels the stylesheet lays out cannot disagree. */}
+      <div className="explorer-head" data-title-yielded={!headerLayout.titleVisible || undefined}>
+        {/* The caption. First to yield, and it yields whole: see the PDF7-03
+            block above for why an abbreviated project name is worse here than
+            no project name at all. */}
+        <span className="explorer-root-name" data-yielded={!headerLayout.titleVisible || undefined}>
+          {rootLabel}
+        </span>
+        {!headerLayout.titleVisible && (
+          /*
+            Unpainted is not unspoken. The stylesheet takes the caption out with
+            `display: none` - which also takes it out of the accessibility tree -
+            so the name is re-announced here, and the panel therefore READS
+            identically at every width even though it does not look identical.
+            A screen-reader user is not the one who asked for the pixels back.
+
+            Two nodes rather than one clipped node, deliberately. Every sr-only
+            recipe is `overflow: hidden` around text wider than its box, and
+            `scripts/pdf3-verify.mjs` asks `name.scrollWidth > name.clientWidth`
+            to catch a truncated caption - a clip here would answer yes and
+            report the exact defect this pass exists to remove. `display: none`
+            answers 0 > 0, which is the truth: there is no painted caption to
+            truncate.
+          */
+          <span className="sr-only">{rootLabel}</span>
+        )}
         {visiblePrimaryActions.length > 0 && (
           <div className="explorer-icons explorer-primary-actions" aria-label="Explorer actions">
             {visiblePrimaryActions}
