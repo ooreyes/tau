@@ -5,3 +5,194 @@
  * lines, shared by every surface): each lane owns exactly one stylesheet and
  * overrides what it must, which is why these passes can run in parallel.
  */
+
+/* ===========================================================================
+ * PDF-6 items 4 and 7 - the nav rail.
+ *
+ * Item 4 crops the rail's active button and asks for "vibecoded tell tale
+ * signs" to be removed. The sign is a light bar hanging off the button's left
+ * edge: App.css puts `.rail-active` at `left: -4px` inside a key that itself
+ * sat 4px from the rail's inner edge, so the indicator's measured x in the
+ * running app was 0 - it escaped the button entirely and landed on the window
+ * frame, where it reads as a stray glowing sliver. It is visible in three of
+ * the review's screenshots.
+ *
+ * Item 7 asks for the column as a whole to stop reading as generic. Four
+ * things were doing that, and all four are addressed below: the key was a
+ * 44px card in a 52px rail (so the key WAS the column, and the focus ring had
+ * nowhere to go), resting ink was --faint at 30% (so nothing but the selected
+ * key could be read), there was no disabled rule at all (so a dead control
+ * looked live and lit up under the pointer), and every corner used the same
+ * --r-md as a dialog.
+ *
+ * No new colour, no new shadow, no new type size: every value below is either
+ * an existing token or a length stated once at the top of the file.
+ * ======================================================================== */
+
+.activity-rail {
+  /* Stated once and consumed by the key, the group rule and the focus ring, so
+     the three cannot drift apart.
+
+     32px is not a new number: it is `--pdf4-editor-target`, the size the editor
+     tool strip already uses, so Tau's two icon strips are one size instead of
+     two. 36px wide leaves 8px of veil either side of the 52px --rail-width -
+     enough for the focus ring, and enough that the key reads as a module ON the
+     column rather than as the column itself. The rail is a veil, not a panel
+     (DESIGN_SYSTEM 1.8), and a key that fills it turns the veil back into a
+     docked sidebar. */
+  --rail-key-w: 36px;
+  --rail-key-h: 32px;
+  /* Two glyph weights, so selection is carried by weight as well as by hue and
+     survives a monochrome display. 1.5 is the weight DESIGN_SYSTEM 1.5 already
+     draws traces at. */
+  --rail-glyph: 1.5;
+  --rail-glyph-active: 1.8;
+}
+
+.rail-btn {
+  width: var(--rail-key-w);
+  height: var(--rail-key-h);
+  /* --r-sm, not --r-md. DESIGN_SYSTEM 3 assigns --r-md to buttons and cards and
+     --r-sm to inputs, keycaps and small controls, and says radius is part of
+     the hierarchy. A 32px icon key is a keycap; at --r-md and 44px square these
+     read as a stack of cards stacked in a column, which is most of what made
+     the rail look like a template. */
+  border-radius: var(--r-sm);
+  /* Resting ink moves --faint -> --muted, which frees --faint to mean disabled
+     and gives the rail a real four-tier ladder: --faint disabled, --muted
+     resting, --text hovered, --accent active. At 30% over a translucent veil
+     the whole column was mush and the only legible key was the highlighted
+     one, which is why the rail read as furniture rather than as navigation. */
+  color: var(--muted);
+}
+
+.rail-btn svg {
+  stroke-width: var(--rail-glyph);
+}
+
+/* Disabled had no rule whatsoever. Search with no project open and Components
+   and Waveforms with no schematic open were pointer-cursored, full-contrast
+   controls that brightened on hover and then did nothing. */
+.rail-btn:disabled,
+.rail-btn:disabled:hover {
+  color: var(--faint);
+  background: transparent;
+  cursor: not-allowed;
+}
+
+/* DESIGN_SYSTEM 4: a 2px --accent ring at ~50% alpha, which --accent-line is.
+   The old ring was `0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line)`: it
+   needed 8px of clearance that a 44px key in a 52px rail did not have, so it
+   ran into the veil's own edges, and its opaque --bg spacer punched a hole in
+   the translucent surface it was sitting on. One ring, inside the 8px gutter
+   the narrower key just created. */
+.rail-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-line);
+}
+
+.rail-btn.active svg {
+  stroke-width: var(--rail-glyph-active);
+}
+
+/* ---------------------------------------------------------------------------
+ * Item 4: the active index mark.
+ *
+ * The fix is not to nudge `left` to 0. The old indicator was a VS Code style
+ * bezel tab - half-rounded on one side (`border-radius: 0 2px 2px 0`, the
+ * literal shape of something sliced off by an edge) and anchored to the
+ * container. Tau's rail has no container to anchor to: it is a veil over the
+ * canvas with no border of its own, which is exactly why the tab escaped and
+ * why it looked like a glitch rather than a marker.
+ *
+ * So it becomes what an instrument would use: an index mark on the module it
+ * marks. It sits inside the key's leading edge, is vertically centred, is
+ * short enough to stay subordinate to the glyph, and its radius closes on both
+ * ends so it never reads as continuing off-screen. It is geometrically unable
+ * to leave the key, and therefore unable to reach the window frame.
+ *
+ * `inset-inline-start` is the logical spelling on purpose: the axis that broke
+ * is the leading edge, and naming it that way says the rule's intent. It
+ * cascades against App.css's physical `left` as the same property, and this
+ * file is imported later, so it wins.
+ * ------------------------------------------------------------------------ */
+.rail-active {
+  inset-inline-start: 3px;
+  /* App.css pinned this with `top: 10px; height: 24px`, sized for the old 44px
+     key - on a 32px key that alone would overflow the bottom edge. Centring
+     from the middle means the mark tracks --rail-key-h instead of restating
+     it. */
+  top: 50%;
+  width: 2px;
+  height: 14px;
+  transform: translateY(-50%);
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: none;
+}
+
+/* The group rule. 28px matched nothing else in the column - it was narrower
+   than the keys above and below it and wider than the glyphs inside them - so
+   it read as an arbitrary mark floating in the veil. Matched to the key, it
+   reads as a register boundary between two groups of keys. --sp-2
+   above and below because the gap is doing most of the separating - the
+   hairline only says where the boundary is (DESIGN_SYSTEM 4, and the
+   instrument language's "space, not boxes").
+
+   Ink is deliberately NOT restated: `--border-subtle` has to stay identical to
+   App.css's, because the foot's copy of this rule continues the status strip's
+   border-top and the two must be one line. The foot's own overrides are more
+   specific (`.rail-foot .rail-separator`), so its 100% width and 0.5px weight
+   survive everything here. */
+.rail-separator {
+  width: var(--rail-key-w);
+  margin: var(--sp-2) 0;
+}
+
+/* ===========================================================================
+ * Item 5 - the diagnostics health lamp (components/shell/DiagnosticsRailButton).
+ *
+ * Severity policy lives in lib/diagnosticsHealth and nowhere else; this is only
+ * its appearance, and only the part of it the rail owns.
+ *
+ * READ THIS BEFORE ADDING TO THIS BLOCK. `styles/pdf6Diagnostics.css` also
+ * styles these classes, and App.tsx imports it AFTER this file, so at equal
+ * specificity it is the one that ships. That is why this block is three ink
+ * declarations and nothing else: the lamp's hover and open tints, its open-state
+ * marker ink and its count badge all live there, and a second copy of them here
+ * would be dead code that reviewers would nonetheless keep in sync.
+ *
+ * The ink IS restated, deliberately, and it is guarded. The values are identical
+ * to the ones in that file, and NavRail.test.tsx reads every stylesheet App.tsx
+ * loads and fails if any shipped rule inks a health with a token from a
+ * different severity. That is the lesson DESIGN_SYSTEM 1.5 records about the
+ * trace rotation: two lists are only safe when a test enumerates both. Without
+ * this copy, the lamp would lose its colour entirely the moment the diagnostics
+ * lane's stylesheet stopped being imported.
+ *
+ * The healths are told apart by more than hue, which is the requirement:
+ *
+ *   ok      - green, and no badge, because the count is 0 and the component
+ *             renders none.
+ *   warning - the deck still runs. Amber, and a count appears.
+ *   error   - the circuit will NOT run. Red, and a count appears, and the
+ *             accessible name says "this circuit will not run" in words -
+ *             which is the signal that survives a reader who has not learned
+ *             the convention, and the one a monochrome display keeps.
+ *
+ * These carry `.rail-btn` as well as the health class so they outrank App.css's
+ * `.rail-btn:hover`, which would otherwise swap the lamp's ink for --text
+ * whenever the pointer crossed it. A lamp that stops reporting while you point
+ * at it is not a lamp.
+ * ======================================================================== */
+
+.rail-btn.rail-diagnostics--ok {
+  color: var(--diagnostic-ok);
+}
+
+.rail-btn.rail-diagnostics--warning {
+  color: var(--diagnostic-warning);
+}
+
+.rail-btn.rail-diagnostics--error {
+  color: var(--diagnostic-error);
+}

@@ -8,10 +8,17 @@
  * so the diff that alters appearance contains only the alteration.
  *
  * `ModeProps` travels with it: every field is something the rail needs.
+ *
+ * Appearance lives in `styles/pdf6Rail.css`, which is imported after App.css
+ * and therefore wins at equal specificity. Read it alongside this file: the
+ * key geometry, the four ink tiers and the active index mark are all stated
+ * there, and the reasoning for each is in that file's comments.
  */
 import type { ReactNode } from "react";
-import { Activity, CircuitBoard, FolderOpen, Search, Settings } from "lucide-react";
+import { AudioWaveform, FolderOpen, Search, Settings, Waypoints } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { DiagnosticsHealth } from "@/lib/diagnosticsHealth";
+import { DiagnosticsRailButton } from "./DiagnosticsRailButton";
 
 interface ModeProps {
   mode: "schematic" | "simulator";
@@ -29,6 +36,23 @@ interface ModeProps {
    * harnesses) and simply grows no foot.
    */
   onOpenSettings?: () => void;
+  /**
+   * The diagnostics health lamp, when a shell has diagnostics to report. Also
+   * optional, and for the same reason as `onOpenSettings`: a harness that
+   * renders the rail on its own has no severity state to hand it, and a rail
+   * that demanded one could not be rendered in isolation at all.
+   *
+   * The shape is `DiagnosticsRailButtonProps` verbatim rather than a set of
+   * loose props, because the four fields are only meaningful together - a
+   * health with no count and no toggle is not a lamp, it is a decoration.
+   */
+  diagnostics?: {
+    health: DiagnosticsHealth;
+    count: number;
+    open: boolean;
+    onToggle: () => void;
+    disabled?: boolean;
+  };
 }
 
 export function ActivityRail({
@@ -42,34 +66,69 @@ export function ActivityRail({
   onSearch,
   onFocusComponents,
   onOpenSettings,
+  diagnostics,
 }: ModeProps) {
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
       <RailButton active={mode === "schematic" && explorerOpen} label="Explorer" onClick={onFocusExplorer}>
-        <FolderOpen size={18} strokeWidth={1.6} />
+        <FolderOpen size={18} />
       </RailButton>
       <RailButton label="Search" shortcut="⌘K" onClick={onSearch} disabled={!projectOpen}>
-        <Search size={18} strokeWidth={1.6} />
+        <Search size={18} />
       </RailButton>
       <RailSeparator />
+      {/* `Waypoints` replaces `CircuitBoard`. The old glyph was a populated
+          board - a bounding rectangle with two pads and two right-angle traces
+          inside it - which is a photograph of the wrong artefact: Tau edits a
+          schematic, not a PCB. It also failed on legibility, because at 18px
+          the rectangle spends the outer 2px of the cell and the interior detail
+          lands sub-pixel, so it read as a filled square. `Waypoints` is four
+          terminals joined by an orthogonal spine with two 45-degree runs, which
+          is the drawing vocabulary of a net: junction dots and wires. Thin
+          strokes with air between them, so it survives the size. */}
       <RailButton active={partsOpen && schematicOpen} label="Components" onClick={onFocusComponents} disabled={!schematicOpen}>
-        <CircuitBoard size={18} strokeWidth={1.6} />
+        <Waypoints size={18} />
       </RailButton>
+      {/* `AudioWaveform` replaces `Activity`. `Activity` is the single-spike ECG
+          line that ships as the default "analytics" mark in every dashboard
+          template, which is precisely the generic read the review objected to,
+          and what it depicts is a one-shot event rather than a signal. This
+          glyph is one continuous stroke that crosses the mid-line four times -
+          a bounded, repeating waveform, which is what the simulator shows. Its
+          lucide name is about audio; its shape is a scope trace. */}
       <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")} disabled={!schematicOpen}>
-        <Activity size={18} strokeWidth={1.6} />
+        <AudioWaveform size={18} />
       </RailButton>
-      {onOpenSettings && (
-        /* The foot. Settings is a utility, not a destination, so it is pinned to
-           the bottom (App.css `.rail-foot`) and comes last in the tab order
-           rather than sitting among the four places you can go. The hairline
-           BELOW it is the rail's terminating rule: it lands on the same line as
-           the status strip's `border-top`, so the two read as one line across
-           the window and the rounded bottom-left corner beneath belongs to this
-           block instead of being the empty gap the review screenshotted. */
+      {(diagnostics || onOpenSettings) && (
+        /* The foot: the rail's fixed register.
+           Everything above it is a destination, and the stack of destinations
+           is variable - entries are enabled and disabled by whether a project
+           and a schematic are open, and the review itself adds and removes
+           entries. The foot is pinned with `margin-top: auto`, so it is the
+           only part of the rail that sits at a constant screen position, which
+           is what a control found by muscle memory and a lamp that must be
+           readable without being hunted for both need.
+
+           So both live here, and neither requires the other: the diagnostics
+           lamp reports state, Settings is a utility, and `<nav>` labelled
+           "Workspace sections" is not the right home for either. The lamp is
+           above the gear because health outranks configuration; the gear stays
+           last in the tab order, which App.shellContract asserts.
+
+           The hairline BELOW them is the rail's terminating rule: it lands on
+           the same line as the status strip's `border-top`, so the two read as
+           one line across the window and the rounded bottom-left corner
+           beneath belongs to this block instead of being the empty gap the
+           review screenshotted. It also puts the health lamp directly above
+           the strip that reports run state, so the two status readouts share
+           one corner of the window. */
         <div className="rail-foot">
-          <RailButton label="Settings" onClick={onOpenSettings}>
-            <Settings size={18} strokeWidth={1.6} />
-          </RailButton>
+          {diagnostics && <DiagnosticsRailButton {...diagnostics} />}
+          {onOpenSettings && (
+            <RailButton label="Settings" onClick={onOpenSettings}>
+              <Settings size={18} />
+            </RailButton>
+          )}
           <RailSeparator />
         </div>
       )}
@@ -107,7 +166,14 @@ function RailButton({
           onClick={onClick}
           disabled={disabled}
         >
+          {/* The active index mark. It is inside the button on purpose - see
+              `.rail-active` in styles/pdf6Rail.css, where the whole point is
+              that it can no longer escape the key it belongs to. */}
           {active && <span className="rail-active" />}
+          {/* No `strokeWidth` on the icons above: the stylesheet owns glyph
+              weight because it varies between the resting and active states,
+              and a second copy of the number in JSX is how the old 1.6 went
+              stale against App.css. */}
           <span className="rail-lucide" aria-hidden="true">
             {children}
           </span>
