@@ -16,6 +16,17 @@ import "./styles/resultsDrawerResize.css";
 // feature's class names had no rule at all - including the one that positions
 // the on-drawing port picker, which is why that control was invisible.
 import "./styles/sheetBlocks.css";
+/* PDF-6 remediation layers. Same one-owner-per-file discipline as the PDF-3
+ * layers above, for the same reason: the six surfaces this pass touches
+ * (explorer, tabs, rail, diagnostics, palette, titlebar) were worked in
+ * parallel, and a shared App.css edit is where parallel passes collide.
+ * Loaded last so a PDF-6 rule wins over the App.css rule it supersedes. */
+import "./styles/pdf6Explorer.css";
+import "./styles/pdf6Tabs.css";
+import "./styles/pdf6Rail.css";
+import "./styles/pdf6Diagnostics.css";
+import "./styles/pdf6Palette.css";
+import "./styles/pdf6Titlebar.css";
 import {
   canonicalProjectSheetPath,
   projectRelativeSheetPath as relativeSheetPath,

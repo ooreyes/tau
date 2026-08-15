@@ -1,0 +1,7 @@
+/* PDF6 lane stylesheet - Titlebar.
+ *
+ * Imported after App.css in App.tsx, so an equal-specificity rule here wins.
+ * This file exists so the PDF-6 remediation lanes never edit App.css (10k+
+ * lines, shared by every surface): each lane owns exactly one stylesheet and
+ * overrides what it must, which is why these passes can run in parallel.
+ */
