@@ -110,6 +110,24 @@ passed, 9 skipped, 0 failed** (4,779 at the PDF-4 checkpoint); web build clean;
 
 ### Follow-up given during the review
 
+**The errors window is gone unless the `!` is pressed.** "if the warning sign
+isnt selected then it shouldnt show the errors window i want it gone only show it
+if the user clicks on the exclamation mark." With the lamp off the schematic still
+carried a peek strip reading "NO ANALYSIS YET · Errors" over a sheet nobody had
+asked about, so the drawer now unmounts there entirely.
+
+This reverses the call made earlier in this same pass, and the reversal is the
+interesting part. The drawer had been kept mounted precisely *because* five tests
+assert the dock lists what is wrong **before** a Run (P3-14), and unmounting broke
+them. That reasoning protected the wrong thing: the guarantee is that a problem is
+never silent, not that a window is always open — and the lamp now carries it,
+always visible, coloured, counted, and saying "will not run" in words. The five
+tests reach the window through the click a reader would make; what they assert
+about its contents is unchanged. Nothing is lost in the schematic, where
+`waveforms` and `measurements` are both null and the errors surface is the
+drawer's only content. The simulator keeps its drawer (it holds the waveforms
+there) but gates its Errors tab the same way. `f430312`.
+
 **The lamp belongs under Waveforms.** It was first built into the rail's pinned
 foot, above Settings, on the argument that a health light wants a constant screen
 position. Omar's instruction on seeing it was "i imagined this button being under
