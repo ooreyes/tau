@@ -1,5 +1,55 @@
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-14 (run `pdf6-20260814-1`)**
+
+Unit: **PDF report 6 remediation - all 10 items.** Interactive session on
+`fix/pdf3-fourteen-items`, starting at `b1a4510`; `auto/ltspice-parity` is
+untouched.
+
+**Contract:** `UI_UX_PDF6.md`. **Gate:** `node scripts/pdf6-verify.mjs <label>`
+- **40/40** (ten checks × light/dark × 1280×800 and 900×600, the app's real
+minimum window). Output and screenshots in `screenshots/pdf6-verify/pdf6-full-3/`.
+
+**Source:** `~/Downloads/Untitled document (3).pdf` (5 pages, 10 numbered
+items), read visually and by text extraction on 2026-08-14.
+
+**How it was run:** six parallel lanes with disjoint file ownership - explorer,
+editor tabs, nav rail, diagnostics, palette/panels, titlebar - each owning one
+`styles/pdf6*.css` so no lane edited `App.css` (10k+ lines) or `App.tsx`. The
+lane stylesheets, their imports, and the one cross-lane contract
+(`lib/diagnosticsHealth.ts` + `shell/DiagnosticsRailButton.tsx`) landed first in
+`71de0b0`. Integration, `App.tsx` wiring, the gate, and every commit were done in
+the primary checkout.
+
+**Gates at `HEAD`:** desktop typecheck clean; **281 files / 5057 tests passed, 9
+skipped, 0 failed** (4,779 at the PDF-4 checkpoint); web build clean;
+`design-system-drift` ok; `pdf6-verify` 40/40. The Tauri dev app rebuilt and
+relaunched with `dragDropEnabled: false`, so item 1's platform fix is live in the
+running window.
+
+**Two defects found by testing the claims rather than the code**, both fixed and
+both pinned by tests that fail on the old behaviour: an inline source waveform
+(`PULSE(...)`, an `AC` spec, an `Rser=` param) was reported as an unparseable DC
+level at `severity: "error"`, so **every imported LTspice circuit with a stimulus
+source** claimed it would not run - including Tau's own RC Charging example,
+which went green the moment Run was pressed; and a new `aria-live` region inside
+the explorer un-hid the entire shell behind the Settings modal, because the
+`aria-hidden` package keeps every ancestor of a live region visible.
+
+**Not proven by the gate**, stated in `UI_UX_PDF6.md`: `dragDropEnabled` is
+asserted as configuration rather than demonstrated in WKWebView; item 7's "better
+icons" is a human judgement on the captured shots; P6-08's ms-per-move is
+reported rather than gated (two CDP round-trips per sample dominate it - the
+render-pressure claim rests on `panelResize.pdf6.test.tsx`, which counts commits);
+and item 4's source image is a tight crop, read as the protruding rail indicator.
+
+**Next step:** Omar's visual review of `screenshots/pdf6-verify/pdf6-full-3/` and
+the running app.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: BLOCKED - 2026-08-13 (run `pdf4-20260813-1`)**
 
 Unit: **PDF report 4 remediation - 20 UI, electrical-editor, diagnostics, and

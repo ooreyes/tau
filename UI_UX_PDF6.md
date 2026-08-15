@@ -87,5 +87,90 @@ in WKWebView and Chromium, and to stop letting the webview arbitrate.
 
 ## Results
 
-Filled in at integration — see the tables and the `scripts/pdf6-verify.mjs`
-output referenced there.
+All ten items closed. `node scripts/pdf6-verify.mjs <label>` is **40/40** —
+ten checks across light and dark at 1280×800 and at 900×600, the app's real
+minimum window. Output and screenshots: `screenshots/pdf6-verify/pdf6-full-3/`.
+
+| # | Measured after | Was |
+| --- | --- | --- |
+| 1 | a real pointer drag moves the file into the folder, and the drop target is highlighted mid-gesture (samples 0/0/0/2/2/2), with a drag label following the cursor | moved silently on the pointer path, lit nothing, and did nothing at all in the packaged app |
+| 2 | glyph-edge gaps **8/8/8/8 px**, hit boxes 24×24 | 12 px gaps, 28 px boxes |
+| 3 | `dragDropEnabled: false`; no tree row carries `draggable`; nothing subscribes to Tauri's drop events | Tauri's default `true`, plus rows that were native drag sources |
+| 4 | **0** rail descendants paint left of the rail | 1 — `.rail-active` at `left: -4px`, box measured at x = 0 |
+| 5 | 0 colour chips on any tab; 0 dots clean, exactly 1 when unsaved | a chip on every tab, and chip + dot + × together when unsaved |
+| 6 | the app's own RC example reads green with no badge before any Run; the `!` raises the window and puts it away (`peek → half → peek`); a sheet with no ground reads red; the policy persists | an "Errors" count with no traffic light, no toggle, and no policy |
+| 7 | 6 rail buttons, all named, none under 24 px, **no two sharing a glyph** | judgement is the human's on the captured shots; `CircuitBoard`→`Waypoints`, `Activity`→`AudioWaveform` |
+| 8 | 40/40 distinct live widths tracked, settling on the size last painted; **0 React commits during the moves** (was 30 for a 30-sample drag) | one React commit per `pointermove`, plus a 120 ms ease restarted on every sample |
+| 9 | first glyph at x = **78** (clears the traffic lights), no collision with the mode toggle, a long name truncates | the unsaved marker was a character inside the ellipsising filename, so a long name truncated it away |
+| 10 | 51 hints across 58 rows at **one** left offset (spread 0 px) | 10 hints at three different offsets |
+
+Repo gates at this state: desktop typecheck clean; **281 files / 5057 tests
+passed, 9 skipped, 0 failed** (4,779 at the PDF-4 checkpoint); web build clean;
+`design-system-drift` ok.
+
+### Follow-up given during the review
+
+**The lamp belongs under Waveforms.** It was first built into the rail's pinned
+foot, above Settings, on the argument that a health light wants a constant screen
+position. Omar's instruction on seeing it was "i imagined this button being under
+waveforms button", so it is now the fourth key in the destination stack. The
+original argument was also weaker than it looked: the stack above the lamp is
+fixed in length, because entries are disabled rather than removed, so its
+position is stable either way — and sitting there it reads as part of the group of
+surfaces it reports on. Settings stays pinned to the foot and last in the tab
+order. `f593e11`.
+
+### Two things found by testing the claims rather than the code
+
+**The flagship example claimed it would not run.** Proving item 6's rule — red
+only when the circuit will not run — meant checking a circuit that runs. Tau's
+own "Try RC Charging" example showed a red lamp reading *"this circuit will not
+run"*, then went green the instant Run was pressed. `vsource`'s parameter schema
+is a single DC-level number, but a source's value legitimately carries a whole
+SPICE stimulus (`PULSE(...)`, `SIN(...)`, an `AC` spec, an `Rser=` param, an
+LTspice `;` comment) because `ascImport` joins `Value` + `Value2` into one string
+and `cirImport` keeps the function verbatim. Judged as a number, every one of
+those read `DC level: Enter a finite V.` at `severity: "error"` — so **every
+imported LTspice circuit with a stimulus source** was told it would not run.
+Before this pass that was a wrong number in a count; item 6 turned it into a red
+light. The check now normalises exactly as the deck builder does and stands down
+where the emitter understands the value.
+
+**A live region un-hid the whole shell behind a modal.** The new drag
+announcement was declared with `aria-live="polite"` inside the explorer. Radix's
+modal hiding goes through the `aria-hidden` package, which deliberately keeps any
+subtree containing an `[aria-live]` element visible — including every ancestor,
+up to the app container. So with Settings open, a screen reader could still reach
+the tree, the canvas and the rail. `App.shellContract.test.tsx` caught it, and
+the base commit was checked in a worktree to confirm the failure was ours rather
+than pre-existing. `role="status"` carries implicit polite semantics, so the
+announcement survives and the attribute the hiding library keys on is gone.
+
+### What the gate does not prove
+
+- **`dragDropEnabled: false` is asserted as configuration.** Only a real Tauri
+  window can demonstrate that WKWebView has stopped swallowing the events; the
+  dev app rebuilt and relaunched with it, so the fix is live in the running
+  window, but the browser gate cannot see that far.
+- **Item 7's "better icons" is a human judgement.** The gate proves every button
+  is named, meets the 24 px target floor, and that no two destinations share a
+  glyph; whether `Waypoints` reads as *schematic* is a call on the screenshots.
+- **ms-per-move in P6-08 is reported, not gated.** Each sample costs two CDP
+  round-trips, and the same build measured 8.7 and 20.1 ms/move within one run of
+  the matrix. The render-pressure claim rests on
+  `components/panelResize.pdf6.test.tsx`, which counts React commits directly.
+- **Item 4's source image is a tight, ambiguous crop.** It was read as the
+  protruding rail indicator, which is the artefact visible in items 1, 5 and 7's
+  screenshots too. The check gates the general rule — nothing inside the rail may
+  paint outside its left edge — so it holds under either reading.
+
+### Note on the gate's own honesty
+
+Every failure `pdf6-verify.mjs` reported against the finished code was a defect
+in the **check**, not the app: a fixture with three real wiring errors used to
+test the "clean" state, an `[role="region"]` attribute selector against a
+`<section>` whose region role is implicit, a traffic-light inset measured in a
+browser that has no traffic lights, a dirtying step that silently missed, and a
+fixed tracking floor unreachable at a viewport where the panel has 6 px of room.
+They are listed in `dc00467` because a gate that can fail for its own reasons
+will eventually be believed when it does.
