@@ -13,6 +13,12 @@
 import { useEffect, useState } from "react";
 import type { RunOutcome } from "../../App";
 import type { DiagnosticFocusTarget, LiveDiagnostic } from "../../schematic/documentValidation";
+import {
+  diagnosticsSuppressedCount,
+  diagnosticsVisibleCount,
+  useDiagnosticsSeverityPolicy,
+  type DiagnosticsSeverityPolicy,
+} from "../../lib/diagnosticsHealth";
 
 /** Treat formatting-only engine/live wording changes as one diagnosis.
  * Engine output is authoritative and rendered first, so the document row is
@@ -23,6 +29,41 @@ export function diagnosticMessageKey(message: string): string {
     String.fromCharCode(letter.charCodeAt(0) + 32));
 }
 
+/**
+ * Where a row came from, which is the closest thing this app has to a
+ * compiler's "syntax vs semantics" split (the standing PDF-5 item 17).
+ *
+ * - `run`     - the engine's own output for the analysis that just ran.
+ * - `import`  - what reading the file reported, before any run.
+ * - `circuit` - the live document linter, recomputed as the schematic is edited.
+ *
+ * It is rendered, not just recorded: "R2 shorted by wire" means something
+ * different coming back from ngspice than it does from a linter that has not
+ * simulated anything.
+ */
+export type DiagnosticOrigin = "run" | "import" | "circuit";
+
+/** One line of the problem list, with its severity already decided. */
+export interface DiagnosticRow {
+  /** Stable within a render pass; used as the React key. */
+  id: string;
+  /**
+   * `error` means the deck will not run, and nothing else may claim it - the
+   * whole traffic light hangs off this field.
+   */
+  severity: "error" | "warning";
+  message: string;
+  origin: DiagnosticOrigin;
+  /** The live diagnostic behind this row, when there is one. */
+  issue?: LiveDiagnostic;
+  /**
+   * The run's own failure message, which is the one row that should interrupt a
+   * screen reader: it describes something that just happened. Live linter rows
+   * deliberately do not, or every keystroke would interrupt.
+   */
+  announce?: boolean;
+}
+
 export interface MergedDiagnostics {
   /** Engine/import messages that do not have a structured live counterpart. */
   messages: string[];
@@ -30,6 +71,20 @@ export interface MergedDiagnostics {
   liveIssues: LiveDiagnostic[];
   /** Live rows whose underlying engine result was a hard failure. */
   liveErrorKeys: Set<string>;
+  /**
+   * Every row, errors first, then warnings, each side in producer order.
+   *
+   * Added for PDF-6 item 6 so the severity split has exactly one owner. Before
+   * this, the panel re-derived "is this row an error?" inline while App counted
+   * rows without asking - which is how a red badge could open a window with
+   * nothing red in it.
+   */
+  rows: DiagnosticRow[];
+  /** Rows that stop the simulation. Drives red, and only red. */
+  errorCount: number;
+  /** Advisory rows. Never enough for red, however many there are. */
+  warningCount: number;
+  /** `errorCount + warningCount`; unchanged from before `rows` existed. */
   count: number;
   hasError: boolean;
 }
@@ -48,20 +103,31 @@ export function mergeDiagnostics(
   isRunning = false,
 ): MergedDiagnostics {
   if (isRunning) {
-    return { messages: [], liveIssues: [], liveErrorKeys: new Set(), count: 0, hasError: false };
+    return {
+      messages: [], liveIssues: [], liveErrorKeys: new Set(),
+      rows: [], errorCount: 0, warningCount: 0, count: 0, hasError: false,
+    };
   }
-  const rawMessages = [
-    ...(result && !result.ok && result.message ? [result.message] : []),
-    ...(result?.warnings ?? []),
-    ...notices,
+  // Carried as tuples rather than bare strings so a row can say where it came
+  // from without re-guessing later by comparing prose against `result.message`.
+  const rawMessages: { message: string; origin: DiagnosticOrigin; isFailure: boolean }[] = [
+    ...(result && !result.ok && result.message
+      ? [{ message: result.message, origin: "run" as const, isFailure: true }]
+      : []),
+    ...(result?.warnings ?? []).map((message) => ({
+      message, origin: "run" as const, isFailure: false,
+    })),
+    ...notices.map((message) => ({ message, origin: "import" as const, isFailure: false })),
   ];
   const messages: string[] = [];
+  const messageOrigins = new Map<string, { origin: DiagnosticOrigin; isFailure: boolean }>();
   const messageKeys = new Set<string>();
-  for (const message of rawMessages) {
-    const key = diagnosticMessageKey(message);
+  for (const entry of rawMessages) {
+    const key = diagnosticMessageKey(entry.message);
     if (!key || messageKeys.has(key)) continue;
     messageKeys.add(key);
-    messages.push(message);
+    messages.push(entry.message);
+    messageOrigins.set(key, { origin: entry.origin, isFailure: entry.isFailure });
   }
 
   const liveIssues: LiveDiagnostic[] = [];
@@ -98,10 +164,50 @@ export function mergeDiagnostics(
   for (const issue of liveIssues) {
     if (issue.severity === "error") liveErrorKeys.add(diagnosticMessageKey(issue.message));
   }
+
+  /**
+   * One pass to decide severity, then a stable partition so errors come first.
+   *
+   * The order within each half is the producer's: the run's failure, then its
+   * warnings, then the import's, then the live linter's. That keeps the engine's
+   * own verdict at the top of the list - where it was before this function grew
+   * a row model - and keeps the list from reshuffling under the reader as the
+   * live linter re-runs on every edit.
+   */
+  const errorRows: DiagnosticRow[] = [];
+  const warningRows: DiagnosticRow[] = [];
+  visibleMessages.forEach((message, index) => {
+    const key = diagnosticMessageKey(message);
+    const source = messageOrigins.get(key);
+    const isFailure = Boolean(source?.isFailure);
+    (isFailure ? errorRows : warningRows).push({
+      id: `message:${key}:${index}`,
+      severity: isFailure ? "error" : "warning",
+      message,
+      origin: source?.origin ?? "run",
+      ...(isFailure ? { announce: true } : {}),
+    });
+  });
+  for (const issue of liveIssues) {
+    const isError = issue.severity === "error"
+      || liveErrorKeys.has(diagnosticMessageKey(issue.message));
+    (isError ? errorRows : warningRows).push({
+      id: issue.id,
+      severity: isError ? "error" : "warning",
+      message: issue.message,
+      origin: "circuit",
+      issue,
+    });
+  }
+  const rows = [...errorRows, ...warningRows];
+
   return {
     messages: visibleMessages,
     liveIssues,
     liveErrorKeys,
+    rows,
+    errorCount: errorRows.length,
+    warningCount: warningRows.length,
     count: visibleMessages.length + liveIssues.length,
     hasError: Boolean(result && !result.ok) || liveErrorKeys.size > 0,
   };
