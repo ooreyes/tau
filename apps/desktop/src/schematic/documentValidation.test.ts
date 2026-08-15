@@ -631,6 +631,41 @@ describe("live schematic diagnostics (P3-14)", () => {
     expect(range.componentId).toBe("u1");
   });
 
+  it("does not call an inline source waveform an unparseable DC level", () => {
+    // The regression this pins: `vsource`'s schema is a single DC-level number,
+    // but both importers (`io/ascImport.ts`, `io/cirImport.ts`) and Tau's own RC
+    // Charging example store a whole SPICE function as the value. Judged as a
+    // number it reported "V1: DC level: Enter a finite V." at severity "error",
+    // so every imported LTspice circuit with a stimulus source was told it would
+    // not run - and once the rail's lamp existed, that was a red light on a
+    // circuit that runs clean the moment you press Run.
+    for (const value of [
+      "PULSE(0 5 0 1u 1u 10m 20m)",
+      "SIN(0 7.5 1000)",
+      "PWL(0 0 1m 5 2m 0)",
+      "EXP(0 5 1m 100u 5m 200u)",
+      "DC 5 AC 1",
+    ]) {
+      const circuit = soundCircuit();
+      circuit.components[0] = { ...circuit.components[0], value };
+      const found = find(liveSchematicDiagnostics(circuit), "bad-parameter");
+      expect(found, `${value} was reported as a bad parameter`).toBeUndefined();
+    }
+
+    // A plain level is still a number, and still checked. Without this the fix
+    // would read as "sources are exempt", which is not what it says.
+    const nonsense = soundCircuit();
+    nonsense.components[0] = { ...nonsense.components[0], value: "ejejeje" };
+    expect(find(liveSchematicDiagnostics(nonsense), "bad-parameter")?.message)
+      .toBe("V1: DC level: Enter a finite V.");
+
+    // And a visibly truncated waveform must not become silence: the emitter's
+    // parser throws on it, and the DC check is what still speaks up.
+    const truncated = soundCircuit();
+    truncated.components[0] = { ...truncated.components[0], value: "PWL(0 0 1m" };
+    expect(find(liveSchematicDiagnostics(truncated), "bad-parameter")).toBeTruthy();
+  });
+
   it("flags a net label that names nothing, which extraction deliberately cannot", () => {
     const { components, wires } = soundCircuit();
     // `extractCircuit` treats a LABELLED single-pin net as connected on purpose

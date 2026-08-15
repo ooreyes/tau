@@ -1,6 +1,8 @@
 import { CATALOG_BY_KIND } from "./catalog";
 import { extractCircuit } from "./netlist";
 import { decodeParams, paramValuesValidationMessage } from "./params";
+import { parseSourceFunction, type SourceUnit } from "../engine/sourceFunction";
+import { stripAcSpec, stripLtspiceInlineComment, stripSourceModifiers } from "../engine/acSpec";
 import { simulationBlockReason } from "../simulation/simulationIntegrity";
 import { isRetiredKind, retiredKindNotice } from "./retiredKinds";
 import type {
@@ -995,6 +997,57 @@ function isIndependentSource(kind: ComponentKind): boolean {
   return entry.section === "Sources" || entry.prefix === "V" || entry.prefix === "I";
 }
 
+/**
+ * Independent sources whose `value` may be a whole inline SPICE waveform, and
+ * the unit its levels are in. `bsource` is absent on purpose: a behavioral
+ * source's value is an expression, not a waveform function, and it has its own
+ * schema and its own editor.
+ */
+const INLINE_SPEC_SOURCE_UNITS: Partial<Record<ComponentKind, SourceUnit>> = {
+  vsource: "V",
+  isource: "A",
+};
+
+/**
+ * Is this source's value something the single "DC level" number schema is not
+ * entitled to judge?
+ *
+ * The deck builder normalises a source value in four steps before reading it -
+ * strip the LTspice `;` comment, strip the `AC <mag> [phase]` stimulus, strip
+ * `key=value` instance params (`Rser=50`), then parse the residual as a
+ * transient function or a level. An imported source legitimately arrives in any
+ * of those forms, because `io/ascImport.ts` joins `Value` + `Value2` into one
+ * string. So this asks the same questions in the same order, and where the
+ * answer is "yes, the emitter understands this", the DC-number check stands
+ * down and `buildSpiceDeck`'s own refusal ("needs a valid V value") is the
+ * authority - one judge per question.
+ *
+ * What is deliberately still judged here: a bare level. `value: "ejejeje"` has
+ * no comment, no AC spec, no params and is no function, so it falls through and
+ * is still reported - which is the case PDF-5 item 15 asked for.
+ *
+ * A malformed waveform is not swallowed either: `parseSourceFunction` throws
+ * `MalformedPwlError` on a truncated `PWL(`, and returning false there lets the
+ * DC-level check report *something*. Silence on a broken value is the one
+ * outcome worse than an imperfect message.
+ */
+function sourceValueEscapesDcSchema(component: SchematicComponent): boolean {
+  const unit = INLINE_SPEC_SOURCE_UNITS[component.kind];
+  if (!unit) return false;
+  const raw = component.value.trim();
+  if (!raw) return false;
+  const withoutComment = stripLtspiceInlineComment(raw);
+  const residual = stripSourceModifiers(stripAcSpec(withoutComment));
+  // An AC stimulus, an instance param or a comment was present: the raw string
+  // is not a bare level, so the level schema cannot describe it.
+  if (residual !== raw) return true;
+  try {
+    return parseSourceFunction(residual, unit) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** What to call this part in a row: its designator, else its kind's name. */
 function partName(component: SchematicComponent): string {
   return component.label.trim() || CATALOG_BY_KIND[component.kind]?.name || component.kind;
@@ -1134,6 +1187,19 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
   // inspector commits through, so the dock cannot disagree with the field that
   // refused the keystroke.
   for (const component of components) {
+    // ...except when the value is an inline source waveform, which the DC-level
+    // schema cannot describe and must not judge. `vsource`/`isource` legitimately
+    // carry a whole SPICE function as their value - `PULSE(0 5 0 1u 1u 10m 20m)`,
+    // `SIN(...)`, `PWL(...)` - and BOTH importers produce exactly that shape
+    // (`io/ascImport.ts`'s SOURCE_KINDS_WITH_INLINE_SPEC, `io/cirImport.ts`), as
+    // does Tau's own RC Charging example. Validated as a number it read
+    // "V1: DC level: Enter a finite V." at `severity: "error"`, so every
+    // imported LTspice circuit with a stimulus source claimed it would not run -
+    // and after PDF-6 item 6 that claim is a red traffic light, on a circuit
+    // that runs. The authority is `parseSourceFunction`, the same parser the
+    // netlist emitter uses, so the dock and the deck cannot disagree about what
+    // is emittable.
+    if (sourceValueEscapesDcSchema(component)) continue;
     const message = paramValuesValidationMessage(
       component.kind,
       decodeParams(component.kind, component.value),
