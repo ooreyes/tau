@@ -48,6 +48,39 @@
   background: var(--diagnostic-error-soft);
 }
 
+/* A dead lamp has to look dead.
+ *
+ * The three rules above are `.rail-btn` + a health class + `:hover`, which is
+ * (0,3,0) - exactly the weight of pdf6Rail.css's `.rail-btn:disabled:hover`,
+ * and this sheet is imported later. So the lamp out-ranked the rail's own
+ * disabled rule: a lamp the shell had switched off still took the health tint
+ * under the pointer and still burned at full saturation, which made the one
+ * control in the column that is allowed to shout the one control that shouted
+ * while it was dead. Adding `:disabled` to the same compound takes these to
+ * (0,4,0), so the win does not depend on which file loads last, and `.active`
+ * is spelled out too because a disabled lamp can still be the open one.
+ *
+ * The neutralising is a filter rather than an ink. DESIGN_SYSTEM 0.1 wants a
+ * disabled control to drop to neutral rather than merely dim, and `grayscale(1)`
+ * does drop it there - but the ink itself must not be restated here:
+ * NavRail.test.tsx reads every stylesheet App.tsx loads and requires each
+ * `color` set on a health to be that health's own token, which is the guard
+ * that stops a warning lamp from ever being painted with the error hue. Fading
+ * the rendered result satisfies both rules at once. 0.38 is the opacity App.css
+ * already uses for a disabled icon key (`.editor-icon-btn:disabled`), so Tau's
+ * two icon strips fade alike; the grayscale is full where that rule uses 0.5,
+ * because a half-desaturated `--diagnostic-error` is still pink and a lamp that
+ * still reads as red while dead is the exact failure that clause names. The
+ * badge is inside the button and fades with it, which is the right answer: a
+ * count nobody can act on should not be the loudest thing in the rail. */
+.rail-btn.rail-diagnostics:disabled,
+.rail-btn.rail-diagnostics:disabled:hover,
+.rail-btn.rail-diagnostics:disabled.active {
+  background: transparent;
+  filter: grayscale(1);
+  opacity: 0.38;
+}
+
 /* The open-state marker in the rail gutter is `--accent` for every other
  * destination; here it tracks the health so the lit button and its marker are
  * one object rather than two colours. */
@@ -55,9 +88,46 @@
   background: currentColor;
 }
 
-/* The count, as a numeral on the glyph's shoulder. Tabular figures via
- * `.mono-num` so 1 -> 2 -> 3 does not shift the badge's width, and filled
- * rather than outlined because at 9px an outline is mush.
+/* The count, as a numeral in the corner the triangle leaves empty.
+ *
+ * The follow-up review's item 2, verbatim: "the number icon in the warning box
+ * is either too big or too obstructive. it hides the high almost." Both halves
+ * were true, and the cause was drift rather than taste. These numbers were
+ * tuned against a 44px rail key; the key is now 36x32 (`--rail-key-w/h` in
+ * pdf6Rail.css, set by the pass that made the rail a column of keycaps instead
+ * of a stack of cards). Nothing here moved with it, so at `top: 5px;
+ * right: 4px` with a 14x14 box and a 1.5px ring the badge measured 17px across
+ * on an 18px glyph, and its capsule sat squarely on the mark: in key
+ * coordinates it swallowed the apex (18, 9.2), the entire right leg
+ * (19.3, 10.0) -> (25.3, 20.5), and the interior exclamation bar. What was left
+ * of the glyph was a left leg and a base, which is a wedge, not a warning
+ * triangle - hence "hides the [triangle] almost".
+ *
+ * The fix is seating first and size second. A triangle's bounding box is empty
+ * at the top corners by construction: lucide puts the apex at the top centre
+ * and runs the legs out to the base, so the box's top-right corner holds no
+ * ink at all. A badge parked against the key's top-right corner therefore
+ * overlaps the glyph's BOX and none of its strokes - 12x12 at `top`/`right` 1px
+ * clears the right leg by 2.9px, which is 2.3px of visible gap once the 1.2px
+ * stroke is accounted for. It stays inside the key rather than moving out into
+ * the rail's 8px gutter, which is the other thing this rail has learned the
+ * hard way (item 4 of the previous report was an indicator that escaped its key
+ * and landed on the window frame).
+ *
+ * 12px is a floor, not a preference. The numeral is `--fs-micro`, already the
+ * smallest size on the type scale, and a knocked-out 9px digit needs about a
+ * 12px capsule to sit in. It does not have to grow for the clamped "9+" case
+ * either: two tabular `--fs-micro` characters measure ~10.3px, so `min-width`
+ * holds them with ~1px of bearing either side and the badge is the same 12px
+ * circle at every count it can display.
+ *
+ * `--r-sm`, not `--r-lg`: DESIGN_SYSTEM 3 assigns `--r-lg` to dialogs and
+ * sheets and `--r-sm` to small controls, and at 6px it is exactly half the
+ * badge's height, so this is a true capsule rather than a dialog radius clamped
+ * into one.
+ *
+ * Tabular figures via `.mono-num` so 1 -> 2 -> 3 does not shift the badge's
+ * width, and filled rather than outlined because at 9px an outline is mush.
  *
  * The fill is named per health below rather than taken from `currentColor`:
  * `currentColor` on this element resolves against its OWN `color`, which is the
@@ -65,21 +135,24 @@
  * would paint the badge invisible. */
 .rail-diagnostics-count {
   position: absolute;
-  top: 5px;
-  right: 4px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
+  top: 1px;
+  right: 1px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 1px;
   display: grid;
   place-items: center;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-sm);
   font-size: var(--fs-micro);
   font-weight: 650;
   line-height: 1;
   color: var(--bg);
-  /* Reads as one object with the glyph it overlaps, with no second hue: the
-     halo is the rail's own surface punched out around the badge. */
-  box-shadow: 0 0 0 1.5px var(--chrome-veil);
+  /* Reads as one object with the glyph beside it, with no second hue: the halo
+     is the rail's own surface punched out around the badge. 1px rather than
+     1.5px because the ring's job shrank with the move - it is no longer holding
+     the badge off strokes underneath it, only off the key's own hover tint and
+     the glyph's near edge - and at this seat 1.5px of it hung outside the key. */
+  box-shadow: 0 0 0 1px var(--chrome-veil);
 }
 
 .rail-diagnostics--ok .rail-diagnostics-count {

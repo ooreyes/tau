@@ -60,10 +60,23 @@ export function DiagnosticsRailButton({
           <span className="rail-lucide" aria-hidden="true">
             <TriangleAlert size={18} strokeWidth={1.6} />
           </span>
-          {/* Clamped to "9+" because the rail is 44px wide and a three-digit
-              badge would cover the glyph it annotates. The exact number stays
-              reachable: it is in the accessible name and in the tooltip, and the
-              window itself prints the untruncated count. */}
+          {/* Clamped to "9+" because the badge has to fit the empty corner of a
+              36x32 key (`--rail-key-w/h`) without touching the triangle it
+              annotates: two tabular `--fs-micro` characters hold inside the
+              12px capsule pdf6Diagnostics.css seats there, and a third would
+              widen it back over the glyph's right leg - which is exactly the
+              defect item 2 of the follow-up review reported. The comment this
+              replaces claimed a 44px rail, a width that stopped existing when
+              the rail became a column of keycaps; the badge's geometry was left
+              behind by the same edit, and that is the bug being fixed.
+
+              Clamping costs nothing a reader needs: the exact number is in the
+              accessible name and the tooltip (both `diagnosticsHealthLabel`),
+              and the window itself prints it untruncated. What the badge has to
+              carry visually is that there is a count and roughly how big it is,
+              because that is the half of the signal a reader who cannot
+              separate amber from red still gets at a glance - which is why this
+              stayed a numeral rather than becoming a dot. */}
           {count > 0 && (
             <span className="rail-diagnostics-count mono-num" aria-hidden="true">
               {count > 9 ? "9+" : count}
