@@ -119,7 +119,17 @@ export function EditorToolbar({
       <IconButton title="Sheet interface" disabled={readOnly} onClick={onOpenProjectInterface}>
         <Network size={TOOL_ICON_SIZE} strokeWidth={1.6} />
       </IconButton>
-      <div className="editor-toolbar-spacer" />
+      {/*
+        Run sits next to the hierarchy control, at Omar's direction, and the
+        spacer moved BELOW it rather than being deleted: `.transport` is
+        `flex: none` and `.editor-toolbar-spacer` is `flex: 1`, so the slack that
+        used to push the transport to the far right now falls to its right
+        instead. Ordering alone did this - no geometry changed.
+
+        It also puts the button that starts a run at the end of the run of tools
+        that prepare one (simulation setup, sheet interface), instead of stranded
+        across an empty strip from them.
+      */}
       <div
         className={`transport${canStop ? " is-cancellable" : ""}`}
         role="group"
@@ -147,6 +157,7 @@ export function EditorToolbar({
           </button>
         )}
       </div>
+      <div className="editor-toolbar-spacer" />
     </div>
   );
 }

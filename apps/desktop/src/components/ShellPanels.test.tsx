@@ -94,6 +94,29 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     expect(screen.queryByRole("button", { name: "Refine transient resolution" })).toBeNull();
   });
 
+  it("seats the transport beside the hierarchy control, with the slack to its right", () => {
+    // Omar's direction: "move this button to be next to heirarchy". The Sheet
+    // interface control is the hierarchy one - it is the Network node-tree glyph
+    // and it opens the child-sheet ports dialog. Run used to sit across a
+    // flex-1 spacer from it, at the far end of the strip.
+    //
+    // Asserted as sibling order rather than pixels, because that is what the
+    // change actually is: `.transport` is `flex: none`, the spacer is `flex: 1`,
+    // and moving the spacer after the transport is the whole diff.
+    const { container } = render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
+    const strip = container.querySelector(".editor-toolbar")!;
+    const children = [...strip.children];
+    const hierarchy = screen.getByTitle("Sheet interface");
+    const transport = container.querySelector(".transport")!;
+    const spacer = container.querySelector(".editor-toolbar-spacer")!;
+
+    expect(children.indexOf(transport)).toBe(children.indexOf(hierarchy) + 1);
+    expect(children.indexOf(spacer)).toBe(children.indexOf(transport) + 1);
+    // The spacer survives: without it the strip would distribute its slack
+    // between the tools instead of collecting it at the end.
+    expect(children[children.length - 1]).toBe(spacer);
+  });
+
   it("exposes a horizontally scrollable tool strip so Run stays reachable at the 900px floor", () => {
     // jsdom does not compute layout overflow, but the class contract is what
     // App.css keys the overflow-x:auto rule on - prove the affordance is wired.
