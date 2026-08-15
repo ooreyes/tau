@@ -3990,6 +3990,35 @@ function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
+
+      /*
+       * Save is answered BEFORE the focus guard, and that ordering is the whole
+       * fix for "sometimes CMD + S doesnt work".
+       *
+       * The guard below exists so single-letter shortcuts stay out of text
+       * entry - `r` must type an r into a value field rather than rotate the
+       * selection - and it bails on anything inside an input, a button, a tab,
+       * or a dialog. But focus lands on a button or a tab after almost any
+       * click in this app: the toolbar, a palette part, a rail key, an editor
+       * tab. So Cmd+S was being dropped in the common case, silently, and
+       * worked only while focus happened to be on the bare canvas. That reads
+       * as intermittent, which is exactly how it was reported.
+       *
+       * Cmd+S is a document command, not a text-entry key: nothing focusable
+       * here has a competing meaning for it, so it is unconditional. It stays
+       * inside this handler rather than becoming a second listener so there is
+       * still one place that decides what a keystroke means.
+       *
+       * Deliberately NOT extended to the other modified shortcuts. Cmd+Z, Cmd+C
+       * and Cmd+V must keep meaning undo/copy/paste *of the text* while a field
+       * has focus, so they stay behind the guard.
+       */
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void saveActiveToProject();
+        return;
+      }
+
       if (t?.closest("input, textarea, select, button, [role='button'], [role='tab'], [role='dialog'], [contenteditable='true']")) {
         return;
       }
@@ -4023,11 +4052,7 @@ function App() {
         });
         return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        void saveActiveToProject();
-        return;
-      }
+      // Save was answered at the top of this handler, before the focus guard.
       if (e.metaKey || e.ctrlKey) return; // leave other OS / app shortcuts alone
       // The inspector's keyboard entry point, and the reason it is a separate
       // gesture from selecting: a canvas selection deliberately does NOT move

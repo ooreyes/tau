@@ -428,6 +428,84 @@ describe("App schematic workspace tools", () => {
     });
   });
 
+  it("paints no tab strip entry while no schematic is open", async () => {
+    /*
+     * A guard, not a fix. The report says "I dont like that the tab says
+     * untitled when theres no open shcematic it should just not have a tab",
+     * and the states below are the four this suite can reach - project opened,
+     * schematic created, sheet cleared, last tab closed. None of them paints an
+     * untitled tab today, because `visibleTabs` hides a tab with no `filePath`
+     * unless it is the explicit `detached` replacement for a cleared import.
+     *
+     * What DOES leave the state carrying an untitled tab is closing the last
+     * one: `closeTab` mints a blank `untitled.sim` starter so the editor always
+     * has a document behind it. That tab is deliberately unpainted, and this
+     * test is what stops a future change to `visibleTabs` from painting it.
+     */
+    await renderOpenProject();
+    const painted = () => screen.queryAllByRole("tab").map((tab) => tab.textContent ?? "");
+
+    // A schematic IS open here - renderOpenProject creates one - so a tab is
+    // correct, and this is the control case for the assertions below.
+    expect(painted()).toHaveLength(1);
+
+    // Clearing the sheet does not close it: still one open schematic, still one
+    // tab, even though the canvas is empty and shows its placeholder card.
+    act(() => useSchematic.getState().clearSheet());
+    await waitFor(() => expect(painted()).toHaveLength(1));
+
+    // Closing it leaves no open schematic. The blank starter tab that closeTab
+    // mints must not appear, and the card must say so.
+    // Scoped to the tab's own close button: "Close Bode" in the assistant
+    // toolbar matches a bare /^Close/ too.
+    fireEvent.click(screen.getByRole("button", { name: /^Close untitled/ }));
+    await waitFor(() => expect(painted()).toEqual([]));
+    expect(screen.getByRole("region", { name: "Empty schematic" })).toBeTruthy();
+    // Deliberately not `queryByText(/untitled/)`: the close fires a polite
+    // live-region announcement naming the sheet, which is correct and would
+    // make that assertion fail for the wrong reason. The claim is about the tab
+    // strip, and `painted()` is what states it.
+  });
+
+  it("saves with Cmd+S no matter which control has focus", async () => {
+    // The reported bug: "sometimes CMD + S doesnt work". The handler bailed on
+    // any keystroke whose target was inside an input, button, tab or dialog -
+    // a guard that exists so `r` types an r instead of rotating - and focus
+    // lands on a button or a tab after almost every click in this app. So save
+    // worked only while focus happened to be on the bare canvas, which is what
+    // made it look intermittent rather than broken.
+    //
+    // Three cycles in ONE render rather than a re-render per target: the second
+    // render would meet a workspace that already holds untitled.sim, i.e. a
+    // different empty state, and the test would fail for that instead.
+    await renderOpenProject();
+    const targets: [string, () => HTMLElement][] = [
+      ["an editor tab", () => screen.getByRole("tab", { name: /untitled/ })],
+      ["a rail key", () => screen.getByRole("button", { name: "Explorer" })],
+      ["a toolbar button", () => screen.getAllByRole("button", { name: "Run simulation" })[0]],
+    ];
+
+    for (const [what, find] of targets) {
+      act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+      expect(
+        await screen.findByRole("img", { name: "untitled.sim has unsaved changes" }),
+        `precondition: the sheet is not dirty before saving from ${what}`,
+      ).toBeTruthy();
+
+      const target = find();
+      target.focus();
+      fireEvent.keyDown(target, { key: "s", metaKey: true });
+
+      await waitFor(
+        () => expect(
+          screen.queryByRole("img", { name: "untitled.sim has unsaved changes" }),
+          `Cmd+S did nothing with focus on ${what}`,
+        ).toBeNull(),
+        { timeout: 2_000 },
+      );
+    }
+  });
+
   it("asks Save / Don’t Save / Cancel before closing a dirty schematic", async () => {
     await renderOpenProject();
     act(() => useSchematic.getState().addComponent("resistor", 120, 120));
