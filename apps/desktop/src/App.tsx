@@ -1990,20 +1990,17 @@ function App() {
    * wrong with a sheet before it is ever run (P3-14), and the thing the button
    * changes is whether the reader can see it.
    *
-   * Two nonces rather than one boolean prop, matching the drawer's existing
-   * `raiseSignal` discipline: the drawer owns its own height (the user can drag
-   * it), so it takes instructions, not state. Dragging the drawer by hand can
-   * therefore leave the lamp's pressed state describing the last thing the
-   * BUTTON did rather than the drawer's current height - a known, small
-   * imprecision, and the alternative is the button fighting the drag.
+   * Closing unmounts rather than collapses, so there is no "hide" instruction to
+   * send: the window is gone. `diagnosticsRaise` remains for the one case where
+   * the drawer outlives the lamp - the simulator, where it also holds the
+   * waveforms, so pressing `!` has to raise a drawer that is already mounted and
+   * possibly peeked.
    */
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [diagnosticsRaise, setDiagnosticsRaise] = useState(0);
-  const [diagnosticsCollapse, setDiagnosticsCollapse] = useState(0);
   const toggleDiagnosticsWindow = useCallback(() => {
     setDiagnosticsOpen((open) => {
-      if (open) setDiagnosticsCollapse((n) => n + 1);
-      else setDiagnosticsRaise((n) => n + 1);
+      if (!open) setDiagnosticsRaise((n) => n + 1);
       return !open;
     });
   }, []);
@@ -4820,7 +4817,20 @@ function App() {
           * per branch would put two live landmarks under a single accessible
           * name every time the mode changed.
           */}
-        {activeProjectFile && (
+        {/*
+          * In the schematic the drawer IS the diagnostics window, so the rail's
+          * `!` decides whether it exists at all: "if the warning sign isnt
+          * selected then it shouldnt show the errors window i want it gone".
+          * Nothing is lost by unmounting it there - `waveforms` and
+          * `measurements` below are both null outside the simulator, so the
+          * errors surface is its only content, and what the reader saw with the
+          * lamp off was a peek strip reading "NO ANALYSIS YET · Errors" over a
+          * sheet they had not asked a question about.
+          *
+          * The simulator keeps its drawer unconditionally: there it also holds
+          * the waveforms and the measurements, which are not the lamp's to hide.
+          */}
+        {activeProjectFile && (mode === "simulator" || diagnosticsOpen) && (
           <ResultsDrawer
             status={analysisRunning ? "running" : activeAnalysis ? (activeAnalysis.ok ? "complete" : "error") : "idle"}
             statusLine={resultsSummary}
@@ -4831,19 +4841,19 @@ function App() {
             raiseSignal={`${resultsRaise}:${diagnosticsRaise}`}
             onCoverChange={handleDrawerCover}
             orientation={analysisSplit ? "right" : "bottom"}
-            preferredHeight={mode === "simulator" ? "half" : "peek"}
+            /* Opened by the lamp, it opens READ: a window summoned by a button
+               that arrives collapsed to a peek strip has not been shown. */
+            preferredHeight={mode === "simulator" || diagnosticsOpen ? "half" : "peek"}
             /* Pressing `!` in the simulator has to land on Errors, or the
                button "brings up" a drawer showing waveforms. */
             preferredTab={diagnosticsOpen || mode !== "simulator" ? "errors" : "waveforms"}
             errorBadge={diagnosticsBadge}
             badgeRaiseKey={diagnosticsRaiseKey}
-            collapseSignal={diagnosticsCollapse}
-            /* Always mounted. The rail's `!` raises and hides this drawer
-               (`diagnosticsRaise`/`diagnosticsCollapse` below), it does not
-               unmount the panel - because the dock's job is to list what is
-               wrong with a sheet BEFORE anyone runs it (P3-14), and a window
-               that only exists after you press a button cannot do that. */
-            errors={
+            /* The errors surface exists only while the lamp says so - in the
+               simulator too, where the drawer stays but its Errors tab does not.
+               `offered` in ResultsDrawer drops a tab whose content is null, so
+               this removes the tab rather than leaving an empty one. */
+            errors={diagnosticsOpen ? (
               <BottomPanel
                 result={activeAnalysis}
                 isRunning={analysisRunning}
@@ -4853,7 +4863,7 @@ function App() {
                 onFocusDiagnostic={focusDiagnostic}
                 severityPolicy={severityPolicy}
               />
-            }
+            ) : null}
             // P3-14: Measurements is a SIMULATOR surface. It leaked into the
             // schematic because the gate was row count alone, and leaving the
             // simulator does not invalidate the analysis — so any successful

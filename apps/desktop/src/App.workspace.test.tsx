@@ -717,6 +717,8 @@ describe("App schematic workspace tools", () => {
     expect(card.textContent).toContain("A1 (dflop)");
 
     // The dock's skip notice is still on screen while the record is here...
+    // (the dock is the lamp's window now, so open it - PDF-6.)
+    openDiagnostics();
     expect(screen.getAllByText(/Skipped A1/).length).toBeGreaterThan(0);
 
     // ...and must not outlive it. Clearing the sheet drops ascForeignSymbols,
@@ -1216,6 +1218,21 @@ const SOLVED_LOOP_WIRES = [
 const dockRows = () => [...document.querySelectorAll(".bottom-errors > *")];
 const dockText = () => document.querySelector(".bottom-errors")?.textContent ?? "";
 
+/**
+ * Summon the diagnostics window, which is what the rail's `!` is for.
+ *
+ * These tests used to read the dock straight off the screen, because in the
+ * schematic it was always mounted as a peek strip. PDF-6 made it the lamp's to
+ * open - "if the warning sign isnt selected then it shouldnt show the errors
+ * window i want it gone" - so reaching it now takes the click a reader would
+ * make. What each test asserts about the CONTENT is unchanged: the live linter
+ * still finds these problems before any Run, which is the P3-14 guarantee this
+ * describe block exists for. Only the way in is different.
+ */
+function openDiagnostics() {
+  fireEvent.click(screen.getByRole("button", { name: /^Diagnostics:/ }));
+}
+
 describe("the schematic dock is Errors only, and catches problems before Run (P3-14)", () => {
   it("stops offering Measurements in schematic mode after a run, while the simulator keeps it", async () => {
     await renderOpenProject();
@@ -1236,6 +1253,12 @@ describe("the schematic dock is Errors only, and catches problems before Run (P3
 
     fireEvent.click(screen.getByRole("button", { name: "Schematic" }));
 
+    // Open the window before asserting what is NOT in it. With the drawer
+    // unmounted (PDF-6: the lamp summons it), "no Measurements tab" would be
+    // true for the uninteresting reason that there is no drawer - and this test
+    // is about the tab not following the user back into the editor.
+    openDiagnostics();
+
     // The reported state exactly: leaving the simulator does not invalidate
     // the analysis, so before the fix the populated Measurements tab followed
     // the user back into the editor.
@@ -1253,6 +1276,7 @@ describe("the schematic dock is Errors only, and catches problems before Run (P3
   it("lists what is wrong with a lone resistor with no run at all, and the badge equals the row count", async () => {
     await renderOpenProject();
     act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+    openDiagnostics();
 
     // No Run, no analysis: this dock used to read "No analysis yet" over a
     // schematic with no ground, no source and two stranded terminals.
@@ -1301,6 +1325,7 @@ describe("the schematic dock is Errors only, and catches problems before Run (P3
       past: [],
       future: [],
     }));
+    openDiagnostics();
 
     const row = await waitFor(() => {
       const found = dockRows().find((node) => /Duplicate reference/.test(node.textContent ?? ""));
@@ -1331,6 +1356,7 @@ describe("the schematic dock is Errors only, and catches problems before Run (P3
     }));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Run simulation" })[0]);
+    openDiagnostics();
     await waitFor(() => expect(dockText()).toContain("No ground symbol found."));
 
     fireEvent.click(screen.getByRole("button", { name: "Schematic" }));

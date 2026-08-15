@@ -520,14 +520,17 @@ const CHECKS = [
         await page.waitForTimeout(400);
         const closed = await readHealth();
         toggled = {
-          before: `${before.drawerHeight}/${before.panelHeight}px`,
-          opened: `${opened.drawerHeight}/${opened.panelHeight}px`,
-          closed: `${closed.drawerHeight}/${closed.panelHeight}px`,
-          // Raised, actually taller once up, then put away again.
-          works: before.drawerHeight === "peek"
-            && opened.drawerHeight !== "peek"
-            && opened.panelHeight > before.panelHeight
-            && closed.drawerHeight === "peek",
+          before: `panel=${before.panelPresent}/${before.panelHeight}px drawer=${before.drawerHeight}`,
+          opened: `panel=${opened.panelPresent}/${opened.panelHeight}px drawer=${opened.drawerHeight}`,
+          closed: `panel=${closed.panelPresent}/${closed.panelHeight}px drawer=${closed.drawerHeight}`,
+          // Gone, then there and readable, then gone again. Presence rather than
+          // height: "if the warning sign isnt selected then it shouldnt show the
+          // errors window i want it gone" - so a collapsed-but-mounted drawer is
+          // a fail here, which is what this check used to accept.
+          works: !before.panelPresent
+            && opened.panelPresent
+            && opened.panelHeight > 0
+            && !closed.panelPresent,
         };
       }
 
@@ -561,7 +564,7 @@ const CHECKS = [
         detail: `button present: ${clean.present}; the app's own RC example reads `
           + `health=${clean.health} badge="${clean.badge}" name="${clean.name}" with no Run `
           + `(it was "error / 3 problems" until the inline-source-waveform fix); `
-          + `toggle raises and puts away the window: ${toggled?.works} `
+          + `toggle summons the window and removes it again: ${toggled?.works} `
           + `(${JSON.stringify(toggled)}); no-ground run health=${failing.health} `
           + `(must be error - it will not run); policy persists: ${JSON.stringify(errorsOnlyPolicy)}. `
           + `The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; `

@@ -20,7 +20,7 @@
  * shell contract, which is allowed, but must be deliberate and called out in
  * the commit. A stage that changes it incidentally is the signal to stop.
  */
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The same two mocks every App-level suite takes: keep the project store off
@@ -204,12 +204,29 @@ describe("shell inventory by app state", () => {
       "componentsRail",
       "assistant",
       "emptySchematic",
-      // The results drawer is present in the schematic too, collapsed to its
-      // peek strip. That is the merge: diagnostics used to be a strip welded
-      // under the editor and the plotter a column only the simulator had, so
-      // "where do I read what just happened" had two different answers.
-      "resultsDrawer",
+      // No `resultsDrawer`. In the schematic the drawer IS the diagnostics
+      // window - `waveforms` and `measurements` are null outside the simulator -
+      // and PDF-6 made that window the rail lamp's to summon: "if the warning
+      // sign isnt selected then it shouldnt show the errors window i want it
+      // gone". It used to sit here permanently as a peek strip reading
+      // "NO ANALYSIS YET · Errors" over a sheet nobody had asked about.
+      //
+      // The merge it came from is intact and still visible in the simulator,
+      // where the drawer holds the waveforms and the measurements as well, and
+      // so is not the lamp's to hide.
     ]);
+  });
+
+  it("summons the diagnostics window from the rail lamp, and puts it away again", async () => {
+    await openProject();
+    expect(isPresent(SHELL.resultsDrawer), "the drawer is up before it was asked for").toBe(false);
+
+    const lamp = screen.getByRole("button", { name: /^Diagnostics:/ });
+    fireEvent.click(lamp);
+    expect(await screen.findByRole(SHELL.resultsDrawer.role, { name: SHELL.resultsDrawer.name })).toBeTruthy();
+
+    fireEvent.click(lamp);
+    await waitFor(() => expect(isPresent(SHELL.resultsDrawer)).toBe(false));
   });
 
   it("does not mount Bode until it is opened, then renders the real assistant surface", async () => {

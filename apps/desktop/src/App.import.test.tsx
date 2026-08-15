@@ -149,9 +149,24 @@ TEXT 0 0 Left 2 !.tran 1m
     fireEvent.drop(dropZone, { dataTransfer: fileDataTransfer(fileFrom("board.cir", source)) });
 
     await screen.findByRole("tab", { name: /board\.asc/ });
-    // Diagnostics auto-expands on new issues (ShellPanels' issueSignature
-    // effect), so the warning is already on screen - clicking the header here
-    // would collapse it, not reveal it.
+
+    // An import that quietly drops a part is the one outcome not allowed here,
+    // so the signal has to exist before anyone opens anything. The diagnostics
+    // window no longer auto-expands - PDF-6 made it the rail lamp's to summon -
+    // so the always-visible carrier is the lamp.
+    //
+    // Red, not amber, and that is correct rather than an over-reaction: `mysub`
+    // is an unresolved subcircuit, which the deck refuses fail-closed, so this
+    // netlist will not run until the definition arrives. Item 6 reserves red for
+    // exactly that, and the label has to say it in words.
+    const lamp = await screen.findByRole("button", { name: /^Diagnostics:/ });
+    await waitFor(() => {
+      expect(lamp.getAttribute("data-health")).toBe("error");
+      expect(lamp.getAttribute("aria-label")).toMatch(/will not run/);
+    });
+
+    // ...and the detail is one click away, unchanged.
+    fireEvent.click(lamp);
     expect(await screen.findByText(/X1: subcircuit instance not imported/)).toBeTruthy();
   });
 

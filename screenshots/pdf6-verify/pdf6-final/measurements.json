@@ -145,7 +145,7 @@
     "theme": "light",
     "viewport": "900x600",
     "pass": true,
-    "detail": "button present: true; the app's own RC example reads health=ok badge=\"\" name=\"Diagnostics: no problems\" with no Run (it was \"error / 3 problems\" until the inline-source-waveform fix); toggle raises and puts away the window: true ({\"before\":\"peek/0px\",\"opened\":\"half/28px\",\"closed\":\"peek/0px\",\"works\":true}); no-ground run health=error (must be error - it will not run); policy persists: {\"severityPolicy\":\"errors-only\"}. The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; this check proves the wiring, not the table.",
+    "detail": "button present: true; the app's own RC example reads health=ok badge=\"\" name=\"Diagnostics: no problems\" with no Run (it was \"error / 3 problems\" until the inline-source-waveform fix); toggle summons the window and removes it again: true ({\"before\":\"panel=false/0px drawer=null\",\"opened\":\"panel=true/28px drawer=half\",\"closed\":\"panel=false/0px drawer=null\",\"works\":true}); no-ground run health=error (must be error - it will not run); policy persists: {\"severityPolicy\":\"errors-only\"}. The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; this check proves the wiring, not the table.",
     "data": {
       "clean": {
         "present": true,
@@ -153,15 +153,15 @@
         "name": "Diagnostics: no problems",
         "pressed": "false",
         "badge": "",
-        "panelPresent": true,
-        "drawerHeight": "peek",
+        "panelPresent": false,
+        "drawerHeight": null,
         "panelHeight": 0,
         "rowsHeight": 0
       },
       "toggled": {
-        "before": "peek/0px",
-        "opened": "half/28px",
-        "closed": "peek/0px",
+        "before": "panel=false/0px drawer=null",
+        "opened": "panel=true/28px drawer=half",
+        "closed": "panel=false/0px drawer=null",
         "works": true
       },
       "failing": {
@@ -170,7 +170,7 @@
         "name": "Diagnostics: 5 problems, this circuit will not run",
         "pressed": "false",
         "badge": "5",
-        "panelPresent": true,
+        "panelPresent": false,
         "drawerHeight": null,
         "panelHeight": 0,
         "rowsHeight": 0
@@ -208,7 +208,7 @@
     "theme": "light",
     "viewport": "900x600",
     "pass": true,
-    "detail": "3 distinct live widths (floor 3, from 6px of published headroom); settled at 306px vs last live 306px; 40 moves in 350ms (8.8ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
+    "detail": "3 distinct live widths (floor 3, from 6px of published headroom); settled at 306px vs last live 306px; 40 moves in 348ms (8.7ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
     "data": {
       "widths": [
         302,
@@ -252,12 +252,12 @@
         306,
         306
       ],
-      "elapsed": 350,
+      "elapsed": 348,
       "distinct": 3,
       "settled": 306,
       "headroom": 6,
       "trackingFloor": 3,
-      "perMove": 8.75
+      "perMove": 8.7
     }
   },
   {
@@ -406,7 +406,7 @@
     "theme": "light",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "button present: true; the app's own RC example reads health=ok badge=\"\" name=\"Diagnostics: no problems\" with no Run (it was \"error / 3 problems\" until the inline-source-waveform fix); toggle raises and puts away the window: true ({\"before\":\"peek/0px\",\"opened\":\"half/28px\",\"closed\":\"peek/0px\",\"works\":true}); no-ground run health=error (must be error - it will not run); policy persists: {\"severityPolicy\":\"errors-only\"}. The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; this check proves the wiring, not the table.",
+    "detail": "button present: true; the app's own RC example reads health=ok badge=\"\" name=\"Diagnostics: no problems\" with no Run (it was \"error / 3 problems\" until the inline-source-waveform fix); toggle summons the window and removes it again: true ({\"before\":\"panel=false/0px drawer=null\",\"opened\":\"panel=true/28px drawer=half\",\"closed\":\"panel=false/0px drawer=null\",\"works\":true}); no-ground run health=error (must be error - it will not run); policy persists: {\"severityPolicy\":\"errors-only\"}. The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; this check proves the wiring, not the table.",
     "data": {
       "clean": {
         "present": true,
@@ -414,15 +414,15 @@
         "name": "Diagnostics: no problems",
         "pressed": "false",
         "badge": "",
-        "panelPresent": true,
-        "drawerHeight": "peek",
+        "panelPresent": false,
+        "drawerHeight": null,
         "panelHeight": 0,
         "rowsHeight": 0
       },
       "toggled": {
-        "before": "peek/0px",
-        "opened": "half/28px",
-        "closed": "peek/0px",
+        "before": "panel=false/0px drawer=null",
+        "opened": "panel=true/28px drawer=half",
+        "closed": "panel=false/0px drawer=null",
         "works": true
       },
       "failing": {
@@ -431,7 +431,7 @@
         "name": "Diagnostics: 5 problems, this circuit will not run",
         "pressed": "false",
         "badge": "5",
-        "panelPresent": true,
+        "panelPresent": false,
         "drawerHeight": null,
         "panelHeight": 0,
         "rowsHeight": 0
@@ -469,7 +469,7 @@
     "theme": "light",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "40 distinct live widths (floor 20, from 120px of published headroom); settled at 380px vs last live 380px; 40 moves in 529ms (13.2ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
+    "detail": "40 distinct live widths (floor 20, from 120px of published headroom); settled at 380px vs last live 380px; 40 moves in 509ms (12.7ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
     "data": {
       "widths": [
         302,
@@ -513,12 +513,12 @@
         378,
         380
       ],
-      "elapsed": 529,
+      "elapsed": 509,
       "distinct": 40,
       "settled": 380,
       "headroom": 120,
       "trackingFloor": 20,
-      "perMove": 13.225
+      "perMove": 12.725
     }
   },
   {
@@ -667,7 +667,7 @@
     "theme": "dark",
     "viewport": "900x600",
     "pass": true,
-    "detail": "button present: true; the app's own RC example reads health=ok badge=\"\" name=\"Diagnostics: no problems\" with no Run (it was \"error / 3 problems\" until the inline-source-waveform fix); toggle raises and puts away the window: true ({\"before\":\"peek/0px\",\"opened\":\"half/28px\",\"closed\":\"peek/0px\",\"works\":true}); no-ground run health=error (must be error - it will not run); policy persists: {\"severityPolicy\":\"errors-only\"}. The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; this check proves the wiring, not the table.",
+    "detail": "button present: true; the app's own RC example reads health=ok badge=\"\" name=\"Diagnostics: no problems\" with no Run (it was \"error / 3 problems\" until the inline-source-waveform fix); toggle summons the window and removes it again: true ({\"before\":\"panel=false/0px drawer=null\",\"opened\":\"panel=true/28px drawer=half\",\"closed\":\"panel=false/0px drawer=null\",\"works\":true}); no-ground run health=error (must be error - it will not run); policy persists: {\"severityPolicy\":\"errors-only\"}. The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; this check proves the wiring, not the table.",
     "data": {
       "clean": {
         "present": true,
@@ -675,15 +675,15 @@
         "name": "Diagnostics: no problems",
         "pressed": "false",
         "badge": "",
-        "panelPresent": true,
-        "drawerHeight": "peek",
+        "panelPresent": false,
+        "drawerHeight": null,
         "panelHeight": 0,
         "rowsHeight": 0
       },
       "toggled": {
-        "before": "peek/0px",
-        "opened": "half/28px",
-        "closed": "peek/0px",
+        "before": "panel=false/0px drawer=null",
+        "opened": "panel=true/28px drawer=half",
+        "closed": "panel=false/0px drawer=null",
         "works": true
       },
       "failing": {
@@ -692,7 +692,7 @@
         "name": "Diagnostics: 5 problems, this circuit will not run",
         "pressed": "false",
         "badge": "5",
-        "panelPresent": true,
+        "panelPresent": false,
         "drawerHeight": null,
         "panelHeight": 0,
         "rowsHeight": 0
@@ -730,7 +730,7 @@
     "theme": "dark",
     "viewport": "900x600",
     "pass": true,
-    "detail": "3 distinct live widths (floor 3, from 6px of published headroom); settled at 306px vs last live 306px; 40 moves in 346ms (8.7ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
+    "detail": "3 distinct live widths (floor 3, from 6px of published headroom); settled at 306px vs last live 306px; 40 moves in 349ms (8.7ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
     "data": {
       "widths": [
         302,
@@ -774,12 +774,12 @@
         306,
         306
       ],
-      "elapsed": 346,
+      "elapsed": 349,
       "distinct": 3,
       "settled": 306,
       "headroom": 6,
       "trackingFloor": 3,
-      "perMove": 8.65
+      "perMove": 8.725
     }
   },
   {
@@ -928,7 +928,7 @@
     "theme": "dark",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "button present: true; the app's own RC example reads health=ok badge=\"\" name=\"Diagnostics: no problems\" with no Run (it was \"error / 3 problems\" until the inline-source-waveform fix); toggle raises and puts away the window: true ({\"before\":\"peek/0px\",\"opened\":\"half/28px\",\"closed\":\"peek/0px\",\"works\":true}); no-ground run health=error (must be error - it will not run); policy persists: {\"severityPolicy\":\"errors-only\"}. The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; this check proves the wiring, not the table.",
+    "detail": "button present: true; the app's own RC example reads health=ok badge=\"\" name=\"Diagnostics: no problems\" with no Run (it was \"error / 3 problems\" until the inline-source-waveform fix); toggle summons the window and removes it again: true ({\"before\":\"panel=false/0px drawer=null\",\"opened\":\"panel=true/28px drawer=half\",\"closed\":\"panel=false/0px drawer=null\",\"works\":true}); no-ground run health=error (must be error - it will not run); policy persists: {\"severityPolicy\":\"errors-only\"}. The severity truth table itself is unit-tested in lib/diagnosticsHealth.test.ts; this check proves the wiring, not the table.",
     "data": {
       "clean": {
         "present": true,
@@ -936,15 +936,15 @@
         "name": "Diagnostics: no problems",
         "pressed": "false",
         "badge": "",
-        "panelPresent": true,
-        "drawerHeight": "peek",
+        "panelPresent": false,
+        "drawerHeight": null,
         "panelHeight": 0,
         "rowsHeight": 0
       },
       "toggled": {
-        "before": "peek/0px",
-        "opened": "half/28px",
-        "closed": "peek/0px",
+        "before": "panel=false/0px drawer=null",
+        "opened": "panel=true/28px drawer=half",
+        "closed": "panel=false/0px drawer=null",
         "works": true
       },
       "failing": {
@@ -953,7 +953,7 @@
         "name": "Diagnostics: 5 problems, this circuit will not run",
         "pressed": "false",
         "badge": "5",
-        "panelPresent": true,
+        "panelPresent": false,
         "drawerHeight": null,
         "panelHeight": 0,
         "rowsHeight": 0
@@ -991,7 +991,7 @@
     "theme": "dark",
     "viewport": "1280x800",
     "pass": true,
-    "detail": "40 distinct live widths (floor 20, from 120px of published headroom); settled at 380px vs last live 380px; 40 moves in 498ms (12.4ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
+    "detail": "40 distinct live widths (floor 20, from 120px of published headroom); settled at 380px vs last live 380px; 40 moves in 502ms (12.6ms/move, reported not gated - two CDP round-trips per sample dominate it; backstop 60ms). Commit count is measured in panelResize.pdf6.test.tsx: 30 renders for a 30-sample drag before, 0 during after",
     "data": {
       "widths": [
         302,
@@ -1035,12 +1035,12 @@
         378,
         380
       ],
-      "elapsed": 498,
+      "elapsed": 502,
       "distinct": 40,
       "settled": 380,
       "headroom": 120,
       "trackingFloor": 20,
-      "perMove": 12.45
+      "perMove": 12.55
     }
   }
 ]
