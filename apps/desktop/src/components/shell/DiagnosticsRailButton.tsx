@@ -8,6 +8,15 @@
  *
  * Rendered by `shell/NavRail.tsx`; the colour comes from `lib/diagnosticsHealth`
  * so this component holds no severity policy of its own.
+ *
+ * The glyph does NOT change with health, and that is deliberate. The report asks
+ * for "a '!' button" whose COLOUR changes - one button the user learns the
+ * position of - so swapping in a tick for the clear state would mean the thing
+ * they are hunting for has moved or vanished exactly when they want to check
+ * that nothing is wrong. Severity therefore rides on three carriers that are not
+ * colour: the count badge (present only when there is something to read), the
+ * accessible name, and the tooltip, all of which come from
+ * `diagnosticsHealthLabel` and say "will not run" in words.
  */
 import { TriangleAlert } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -51,6 +60,10 @@ export function DiagnosticsRailButton({
           <span className="rail-lucide" aria-hidden="true">
             <TriangleAlert size={18} strokeWidth={1.6} />
           </span>
+          {/* Clamped to "9+" because the rail is 44px wide and a three-digit
+              badge would cover the glyph it annotates. The exact number stays
+              reachable: it is in the accessible name and in the tooltip, and the
+              window itself prints the untruncated count. */}
           {count > 0 && (
             <span className="rail-diagnostics-count mono-num" aria-hidden="true">
               {count > 9 ? "9+" : count}

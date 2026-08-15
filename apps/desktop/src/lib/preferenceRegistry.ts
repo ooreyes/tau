@@ -39,6 +39,7 @@
 import { aiUsage } from "./aiUsage";
 import { resetAssistantPreferences } from "./assistantPreferences";
 import { resetCloudAiConsent } from "./cloudAiConsent";
+import { resetDiagnosticsPreferences } from "./diagnosticsHealth";
 import { resetLearningPathState } from "./learningPath";
 import { resetLocalAiSetup } from "./localAiSetup";
 import { simulationPreferences } from "./simulationPreferences";
@@ -66,6 +67,15 @@ export const RESETTABLE_PREFERENCES: readonly ResettablePreference[] = [
     key: "tau.assistant.preferences.v1",
     label: "Assistant provider and model",
     reset: () => resetAssistantPreferences(),
+  },
+  {
+    // Resets to showing warnings, which is the more talkative of the two
+    // settings. Reset must never leave the app quieter than it shipped: a user
+    // who resets and then misses a warning they had chosen to hide months ago
+    // has been made worse off by a button labelled "defaults".
+    key: "tau.diagnostics.preferences.v1",
+    label: "Diagnostics light (whether warnings show)",
+    reset: () => resetDiagnosticsPreferences(),
   },
   {
     key: "tau.cloud-ai.consent.v1",

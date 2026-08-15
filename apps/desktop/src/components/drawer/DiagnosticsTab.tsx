@@ -305,25 +305,66 @@ export function BottomPanel({
    * dependency on Canvas. `onSelectComponent` remains the compatibility
    * fallback while callers migrate. */
   onFocusDiagnostic?: (target: DiagnosticFocusTarget) => void;
+  /**
+   * Controlled disclosure, so the rail's `!` button is the authority the report
+   * asks for: "when selected will bring up the error window below. If clicked
+   * again it should hide it."
+   *
+   * Optional, and that is load-bearing. `ShellPanels.test.tsx` and the results
+   * drawer both render this component with neither prop, and the uncontrolled
+   * behaviour below (auto-open on a new diagnosis, collapse when clear) is what
+   * they still get. Pass `open` and the shell owns the state instead; the
+   * internal header toggle then reports through `onOpenChange` rather than
+   * mutating a second copy, so the two affordances cannot disagree.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /**
+   * Overrides the user's stored severity policy. Only tests and previews should
+   * pass this: left alone, this panel and every other reader subscribe to the
+   * same store, which is what stops the badge and the window from disagreeing
+   * about how many rows there are.
+   */
+  severityPolicy?: DiagnosticsSeverityPolicy;
 }) {
   const merged = mergeDiagnostics(result, notices, issues, isRunning);
-  const { messages, liveIssues, liveErrorKeys } = merged;
-  const hasIssues = merged.count > 0;
+  const storedPolicy = useDiagnosticsSeverityPolicy();
+  const policy = severityPolicy ?? storedPolicy;
+  // Errors are never filtered - the policy only decides whether warnings
+  // register at all, which is the whole of "remove warning and just have red or
+  // green" in the report.
+  const rows = policy === "errors-only"
+    ? merged.rows.filter((row) => row.severity === "error")
+    : merged.rows;
+  const visibleCount = diagnosticsVisibleCount(merged, policy);
+  const suppressedCount = diagnosticsSuppressedCount(merged, policy);
+  const hasIssues = visibleCount > 0;
   const hasError = merged.hasError;
   // Import notices must surface even before the first run - "idle" only when
   // there is genuinely nothing to show.
   const isIdle = !isRunning && result === null && !hasIssues;
   const isClean = !isRunning && Boolean(result?.ok) && !hasIssues;
-  const issueSignature = [...messages, ...liveIssues.map((issue) => issue.message)].join("\u0000");
-  const [expanded, setExpanded] = useState(hasIssues);
+  const issueSignature = rows.map((row) => row.message).join("\u0000");
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(hasIssues);
+  const isControlled = open !== undefined;
 
   // New issues must never remain hidden; returning to all-clear collapses the
   // panel back to its quiet one-line status rather than keeping empty chrome.
+  // Skipped when the shell drives `open`: a component that accepts a value and
+  // then overwrites it on its own schedule is not controlled, and the rail
+  // button would appear to un-press itself the moment a row changed.
   useEffect(() => {
-    setExpanded(Boolean(issueSignature));
-  }, [issueSignature]);
+    if (isControlled) return;
+    setUncontrolledOpen(Boolean(issueSignature));
+  }, [isControlled, issueSignature]);
 
-  const panelExpanded = hasIssues && expanded;
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
+  // `open ?? uncontrolledOpen` rather than a branch on `isControlled`: the two
+  // are the same condition, and one expression cannot drift from the other.
+  const panelExpanded = hasIssues && (open ?? uncontrolledOpen);
 
   return (
     <section
@@ -343,7 +384,18 @@ export function BottomPanel({
           </span>
           <span className="bottom-panel-title">Diagnostics</span>
           <span className="bottom-panel-clear" role="status">
-            {isRunning ? "Running" : isIdle ? "No analysis yet" : "No issues"}
+            {/* The suppressed-count branch outranks both all-clear strings:
+                "No issues" (or "No analysis yet") would be a lie when the
+                policy is the only reason the list is empty. The light is still
+                green, which is what the user asked for; what it must not do is
+                pretend the warnings were never found. */}
+            {isRunning
+              ? "Running"
+              : suppressedCount > 0
+                ? `No errors · ${suppressedCount} ${suppressedCount === 1 ? "warning" : "warnings"} hidden`
+                : isIdle
+                  ? "No analysis yet"
+                  : "No issues"}
           </span>
         </div>
       ) : (
@@ -351,7 +403,7 @@ export function BottomPanel({
           type="button"
           className="bottom-panel-head"
           aria-expanded={panelExpanded}
-          onClick={() => setExpanded((value) => !value)}
+          onClick={() => setOpen(!panelExpanded)}
         >
           <svg className="bottom-panel-chevron" viewBox="0 0 12 12" aria-hidden="true">
             <path d="M2.5 4.2 6 7.8l3.5-3.6" />
@@ -370,56 +422,45 @@ export function BottomPanel({
             className={`bottom-panel-count${hasError ? "" : " warnings-only"}`}
             aria-live="polite"
           >
-            {merged.count}
+            {visibleCount}
           </span>
+          {suppressedCount > 0 && (
+            <span className="bottom-panel-suppressed">
+              {suppressedCount} {suppressedCount === 1 ? "warning" : "warnings"} hidden
+            </span>
+          )}
         </button>
       )}
       {panelExpanded && <div className="bottom-errors">
-        {messages.map((message, index) => {
-          const isErrorMessage = Boolean(result && !result.ok && result.message
-            && diagnosticMessageKey(result.message) === diagnosticMessageKey(message));
-          return (
-            <div
-              key={`${message}-${index}`}
-              className={isErrorMessage ? "error" : "warning"}
-              role={isErrorMessage ? "alert" : undefined}
-            >
+        {/* One list, errors first, built from `merged.rows` rather than from two
+            separate arrays. That ordering is decided in `mergeDiagnostics` so the
+            count and the list are derived from the same partition - a red badge
+            can no longer open a window with nothing red in it. */}
+        {rows.map((row) => {
+          const isError = row.severity === "error";
+          const body = (
+            <>
               <span className="bottom-error-glyph" aria-hidden="true">
                 <svg viewBox="0 0 12 12">
-                  {isErrorMessage ? (
+                  {isError ? (
                     <path d="m4.2 4.2 3.6 3.6m0-3.6L4.2 7.8" />
                   ) : (
                     <path d="M6 1.8 10.4 10H1.6L6 1.8Zm0 2.9v2.5M6 8.7v.1" />
                   )}
                 </svg>
               </span>
-              <span className="bottom-error-message">{message}</span>
-            </div>
-          );
-        })}
-        {/* Live document rows come AFTER the run's own, which keeps
-            `index === 0` naming the same row as before and leaves exactly one
-            `role="alert"` on the surface. */}
-        {liveIssues.map((issue) => {
-          const issueIsError = issue.severity === "error" || liveErrorKeys.has(diagnosticMessageKey(issue.message));
-          const glyph = (
-            <span className="bottom-error-glyph" aria-hidden="true">
-              <svg viewBox="0 0 12 12">
-                {issueIsError ? (
-                  <path d="m4.2 4.2 3.6 3.6m0-3.6L4.2 7.8" />
-                ) : (
-                  <path d="M6 1.8 10.4 10H1.6L6 1.8Zm0 2.9v2.5M6 8.7v.1" />
-                )}
-              </svg>
-            </span>
-          );
-          const body = (
-            <>
-              {glyph}
-              <span className="bottom-error-message">{issue.message}</span>
+              {/* Severity in words next to the glyph, because the colour is not
+                  allowed to be the only carrier (DESIGN_SYSTEM.md) and because a
+                  problem list the reader has to decode by hue is not a problem
+                  list. Errors say so; warnings say so. */}
+              <span className="bottom-error-severity">{isError ? "Error" : "Warning"}</span>
+              <span className="bottom-error-message">{row.message}</span>
+              {/* Where, in the terms this app has: the part, the net, or the
+                  stage that reported it. A compiler's `file:line`. */}
+              <span className="bottom-error-where mono-num">{rowLocation(row)}</span>
             </>
           );
-          const target = focusTargetFor(issue);
+          const target = row.issue ? focusTargetFor(row.issue) : undefined;
           const actionLabel = target ? focusActionLabel(target) : undefined;
           // A row with an explicit target is a button, so it is reachable by
           // keyboard and announces what it will focus. Document-level rows
@@ -431,19 +472,31 @@ export function BottomPanel({
             : target?.kind === "component" && onSelectComponent
               ? () => onSelectComponent(target.componentId)
               : undefined;
-          return onClick ? (
-            <button
-              key={issue.id}
-              type="button"
-              className={`${issueIsError ? "error" : "warning"} bottom-error-row bottom-error-row--actionable`}
-              aria-label={`${actionLabel}: ${issue.message}`}
-              title={actionLabel}
-              onClick={onClick}
+          if (onClick) {
+            return (
+              <button
+                key={row.id}
+                type="button"
+                className={`${isError ? "error" : "warning"} bottom-error-row bottom-error-row--actionable`}
+                aria-label={`${actionLabel}: ${row.message}`}
+                title={actionLabel}
+                onClick={onClick}
+              >
+                {body}
+              </button>
+            );
+          }
+          return (
+            <div
+              key={row.id}
+              className={`${isError ? "error" : "warning"} bottom-error-row`}
+              // Only the run's own failure interrupts a screen reader. The live
+              // linter re-runs on every keystroke, and an alert per keystroke is
+              // hostile; that row is read when the user reaches it instead.
+              role={row.announce ? "alert" : undefined}
             >
               {body}
-            </button>
-          ) : (
-            <div key={issue.id} className={`${issueIsError ? "error" : "warning"} bottom-error-row`}>{body}</div>
+            </div>
           );
         })}
       </div>}

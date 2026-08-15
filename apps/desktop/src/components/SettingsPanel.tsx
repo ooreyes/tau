@@ -1,4 +1,8 @@
 /**
+ * Small Settings-sheet controls that are too specific for the generic
+ * `settings/controls` primitives: appearance, and the diagnostics severity
+ * policy.
+ *
  * Appearance control for the Settings sheet - System / Light / Dark
  * (DESIGN_SYSTEM.md section 1). Rendered by GeneralPage.tsx
  * under the "Appearance" section.
@@ -14,6 +18,11 @@
  */
 import { useEffect, useState } from "react";
 
+import {
+  saveDiagnosticsSeverityPolicy,
+  useDiagnosticsSeverityPolicy,
+  type DiagnosticsSeverityPolicy,
+} from "../lib/diagnosticsHealth";
 import {
   THEME_CHANGE_EVENT,
   applyThemeMode,
@@ -75,6 +84,62 @@ export function ThemeControl() {
             aria-checked={mode === option.mode}
             className={`mode-btn${mode === option.mode ? " active" : ""}`}
             onClick={() => choose(option.mode)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Which severities the diagnostics light and window register (PDF-6 item 6):
+ * "The user should be able to select a setting to remove warning and just have
+ * red or green."
+ *
+ * Reuses `ThemeControl`'s segmented control verbatim - same `.settings-row` /
+ * `.mode-toggle` / `.mode-btn` classes - because it is the same kind of choice
+ * (one of a small closed set) and a second visual idiom for it would only make
+ * the sheet look assembled by different people.
+ *
+ * No local `useState`: `useDiagnosticsSeverityPolicy` is the store's own React
+ * binding, so this control cannot go stale against a "Reset to defaults" click
+ * or against a change made in another window - the failure mode `ThemeControl`
+ * needed a change listener to avoid.
+ */
+const SEVERITY_OPTIONS: { policy: DiagnosticsSeverityPolicy; label: string }[] = [
+  { policy: "all", label: "Warnings" },
+  { policy: "errors-only", label: "Errors only" },
+];
+
+export function DiagnosticsSeverityControl() {
+  const policy = useDiagnosticsSeverityPolicy();
+
+  // Says what each setting DOES to the light rather than restating the label,
+  // and names the one rule that is easy to get wrong: red means the circuit
+  // will not run, so choosing "Errors only" hides advice, never a blocker.
+  const hint = policy === "errors-only"
+    ? "Red or green only. Warnings are hidden."
+    : "Red will not run, yellow runs with advice, green is clear.";
+
+  return (
+    <div className="settings-row">
+      <div className="settings-row-copy">
+        <span className="settings-row-label">Diagnostics light</span>
+        {/* .settings-row-hint truncates rather than wraps, so this has to stay
+            short enough to read whole at the sheet's narrowest width. */}
+        <span className="settings-row-hint">{hint}</span>
+      </div>
+      <div className="mode-toggle" role="radiogroup" aria-label="Diagnostics light">
+        {SEVERITY_OPTIONS.map((option) => (
+          <button
+            key={option.policy}
+            type="button"
+            role="radio"
+            aria-checked={policy === option.policy}
+            className={`mode-btn${policy === option.policy ? " active" : ""}`}
+            onClick={() => saveDiagnosticsSeverityPolicy(option.policy)}
           >
             {option.label}
           </button>

@@ -4,4 +4,157 @@
  * This file exists so the PDF-6 remediation lanes never edit App.css (10k+
  * lines, shared by every surface): each lane owns exactly one stylesheet and
  * overrides what it must, which is why these passes can run in parallel.
+ *
+ * Colour arrives only through the tokens in App.css's :root, in both themes.
+ * A raw hex here fails scripts/design-system-drift.sh, and a value tuned
+ * against black goes invisible or garish on the light theme that ships as the
+ * default.
  */
+
+/* ------------------------------------------------------------------ *
+ * The rail's `!` health light (item 6)
+ * ------------------------------------------------------------------ */
+
+/* Hover and the pressed/open state must not wash the hue back out to
+ * `--text`/`--accent` the way App.css's `.rail-btn:hover` and `.rail-btn.active`
+ * do - the health light would then go grey exactly while being used. The base
+ * ink for the three healths lives in the rail lane's own sheet (pdf6Rail.css);
+ * only the interactive states are added here, and every selector carries its
+ * health class rather than the bare `.rail-diagnostics` so that this sheet -
+ * which loads AFTER pdf6Rail.css - cannot repaint a warning or an error lamp
+ * green at equal specificity.
+ *
+ * One accent per module: the hue is the glyph and a whisper of background, with
+ * no ring and no glow. It sits in a rail of otherwise-grey icons, so the hue is
+ * already a strong signal and a lit capsule on top of it would read as an alarm
+ * rather than as a status. Green on the clear state is a deliberate exception to
+ * "colour arrives with data": a green light IS the report that the checks ran
+ * and found nothing, which is what the user asked to see at a glance. */
+.rail-btn.rail-diagnostics--ok:hover,
+.rail-btn.rail-diagnostics--ok.active {
+  color: var(--diagnostic-ok);
+  background: var(--diagnostic-ok-soft);
+}
+
+.rail-btn.rail-diagnostics--warning:hover,
+.rail-btn.rail-diagnostics--warning.active {
+  color: var(--diagnostic-warning);
+  background: var(--diagnostic-warning-soft);
+}
+
+.rail-btn.rail-diagnostics--error:hover,
+.rail-btn.rail-diagnostics--error.active {
+  color: var(--diagnostic-error);
+  background: var(--diagnostic-error-soft);
+}
+
+/* The open-state marker in the rail gutter is `--accent` for every other
+ * destination; here it tracks the health so the lit button and its marker are
+ * one object rather than two colours. */
+.rail-diagnostics .rail-active {
+  background: currentColor;
+}
+
+/* The count, as a numeral on the glyph's shoulder. Tabular figures via
+ * `.mono-num` so 1 -> 2 -> 3 does not shift the badge's width, and filled
+ * rather than outlined because at 9px an outline is mush.
+ *
+ * The fill is named per health below rather than taken from `currentColor`:
+ * `currentColor` on this element resolves against its OWN `color`, which is the
+ * knocked-out `--bg` used for the numeral, so a `background: currentColor` here
+ * would paint the badge invisible. */
+.rail-diagnostics-count {
+  position: absolute;
+  top: 5px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-lg);
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  line-height: 1;
+  color: var(--bg);
+  /* Reads as one object with the glyph it overlaps, with no second hue: the
+     halo is the rail's own surface punched out around the badge. */
+  box-shadow: 0 0 0 1.5px var(--chrome-veil);
+}
+
+.rail-diagnostics--ok .rail-diagnostics-count {
+  background: var(--diagnostic-ok);
+}
+
+.rail-diagnostics--warning .rail-diagnostics-count {
+  background: var(--diagnostic-warning);
+}
+
+.rail-diagnostics--error .rail-diagnostics-count {
+  background: var(--diagnostic-error);
+}
+
+/* ------------------------------------------------------------------ *
+ * The diagnostics window, as a compiler's problem list (PDF-5 item 17)
+ * ------------------------------------------------------------------ */
+
+/* Four columns: glyph, severity word, message, where. Overriding the two-column
+ * grid in App.css rather than editing it, per this lane's file ownership.
+ *
+ * The severity and where columns are fixed widths, not `max-content`, because
+ * every row is its own grid - `max-content` would let each row size its own
+ * columns and the messages would start at a different x on every line, which is
+ * the one thing a scannable list cannot have. 56px holds "WARNING" at
+ * `--fs-micro` with `--tracking-wide`.
+ *
+ * `align-items: start` (App.css centres them) so a message long enough to wrap
+ * keeps its glyph, severity and location on the first line - which is what
+ * makes the left edge of the prose a straight line worth scanning. */
+.bottom-errors .error,
+.bottom-errors .warning {
+  grid-template-columns: 18px 56px minmax(0, 1fr) max-content;
+  align-items: start;
+}
+
+/* The severity tag. Two steps below the message on the type scale and set in
+ * caps with wide tracking, so it reads as a column header for its own row
+ * rather than competing with the prose it labels. */
+.bottom-error-severity {
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: currentColor;
+  white-space: nowrap;
+}
+
+/* Where the problem is: the part, the net, or the stage that reported it.
+ * Monospaced because most of these are identifiers (R1, net OUT, N003) and
+ * dimmed to `--muted` because it is the answer to the second question the
+ * reader asks, never the first. */
+.bottom-error-where {
+  justify-self: end;
+  font-size: var(--fs-micro);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.bottom-error-glyph,
+.bottom-error-severity,
+.bottom-error-where {
+  /* Optical alignment with the first line of a wrapped message. */
+  margin-top: 1px;
+}
+
+/* "3 warnings hidden" beside the count, when the errors-only policy is the
+ * reason the list is short. Quiet, but present: the alternative is a panel that
+ * silently under-reports, and this project treats a silent omission as a defect
+ * rather than as tidiness. */
+.bottom-panel-suppressed {
+  margin-left: auto;
+  font: 500 var(--fs-micro) var(--font-ui);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}

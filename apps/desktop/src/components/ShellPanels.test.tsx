@@ -2146,7 +2146,10 @@ describe("BottomPanel - errors tab states", () => {
 
     rerender(<BottomPanel result={{ ...failed, message: "timestep too small" } as AnalysisResult} />);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("alert").textContent).toBe("timestep too small");
+    // `toContain`, not `toBe`, since PDF-6 item 6: the row now carries its
+    // severity ("Error") and its origin ("Run") as text beside the message,
+    // because a problem list may not leave colour as the only signal.
+    expect(screen.getByRole("alert").textContent).toContain("timestep too small");
   });
 
   it("goes loud with an error token and a count when the run fails", () => {
@@ -2156,7 +2159,12 @@ describe("BottomPanel - errors tab states", () => {
     const count = container.querySelector(".bottom-panel-count")!;
     expect(count.textContent).toBe("2");
     expect(count.classList.contains("warnings-only")).toBe(false);
-    expect(screen.getByRole("alert").textContent).toBe("singular matrix at t=0");
+    const alert = screen.getByRole("alert");
+    // Same PDF-6 change as above: the message is now one span in a four-column
+    // row (glyph, severity word, message, where), so the row's whole text is no
+    // longer just the message.
+    expect(alert.querySelector(".bottom-error-message")!.textContent).toBe("singular matrix at t=0");
+    expect(alert.querySelector(".bottom-error-severity")!.textContent).toBe("Error");
   });
 
   it("uses the amber warnings-only badge when the run succeeded with warnings", () => {
