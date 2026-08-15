@@ -1,10 +1,22 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+/**
+ * PDF-6 item 6 checks the mode glyphs against the geometry lucide actually ships
+ * for them, and against the two marks they replace - so `CircuitBoard` and
+ * `Activity` are imported as evidence, not because the header still uses them.
+ */
+import { Activity, ChartSpline, CircuitBoard, Waypoints } from "lucide-react";
 
 import { describeTitlebarDocument, isTitlebarControlTarget, Toolbar } from "./Toolbar";
+/**
+ * The rail is rendered here for one assertion: that no glyph appears on both
+ * surfaces. Two lists of icon names would drift; two real renders cannot.
+ */
+import { ActivityRail } from "./shell/NavRail";
 import {
   createTitlebarGestureMachine,
   handleTitlebarDoubleClick,
@@ -625,6 +637,144 @@ describe("titlebar document identity", () => {
       // when this was `var(--accent)`, which is precision blue in the light
       // theme, i.e. the blue dot item 5 asked to remove.
       expect(value, declaration).toMatch(/var\(--|^currentColor$/i);
+    }
+  });
+});
+
+/**
+ * PDF-6 item 6, marked IMPORTANT: "Make sure to the replace the schematic and
+ * simulator icons at the top with the new and improved replacements".
+ *
+ * These two and the rail's two (NavRail.test.tsx) are one set, and the point of
+ * the set is that the two distinctions stop being drawn twice. This control means
+ * "which view of the circuit"; the rail means "which drawer". Before this change
+ * Schematic was a `CircuitBoard` and so was the rail's Components key, and
+ * Simulator was an `Activity` squiggle and so was the rail's Waveforms - so the
+ * last assertion here is the one that keeps them apart, and it renders both real
+ * surfaces rather than trusting a naming convention.
+ *
+ * Legibility is the other half. This is the smallest place in the app that draws
+ * a glyph - App.css sizes `.mode-btn svg` at 13px - which is why `CircuitBoard`
+ * had to go: at that size its 18-unit rectangle spans three quarters of each axis
+ * and everything inside it lands sub-pixel, so it reads as a filled square. There
+ * is no way to assert "reads as a square" from jsdom, so what is asserted is the
+ * structural cause, and the rejected glyph is rendered here to prove the check
+ * would have caught it.
+ */
+describe("the mode toggle's glyphs", () => {
+  /**
+   * Size reaches only the svg's own width/height, which the signature below
+   * ignores - the geometry inside a lucide glyph is fixed in its 24-unit box.
+   * Stated at the header's own 13px regardless, so a reader is not left
+   * wondering which size these comparisons are made at.
+   */
+  const ICON_UNDER_TEST = { size: 13 } as const;
+  const GEOMETRY = ["d", "cx", "cy", "r", "x", "y", "width", "height", "rx", "points"];
+  /** Each child element's tag and geometry: what the glyph actually draws. */
+  function signature(svg: SVGSVGElement): string {
+    return [...svg.children]
+      .map((el) => `${el.tagName}:${GEOMETRY.map((attr) => el.getAttribute(attr) ?? "").join("|")}`)
+      .join(";");
+  }
+
+  function modeGlyph(name: "Schematic" | "Simulator"): SVGSVGElement {
+    const svg = screen.getByRole("button", { name }).querySelector("svg");
+    expect(svg, `the ${name} button draws no glyph`).toBeTruthy();
+    return svg as SVGSVGElement;
+  }
+
+  /** The same picture rendered on its own, for comparison against a button. */
+  function lucide(icon: ReactElement): string {
+    const { container } = render(icon);
+    const drawn = signature(container.querySelector("svg") as SVGSVGElement);
+    cleanup();
+    return drawn;
+  }
+
+  it("draws Schematic as a net of junctions and wires, not as a populated board", () => {
+    render(<Toolbar {...baseProps} />);
+    const schematic = modeGlyph("Schematic");
+    expect(schematic.getAttribute("data-icon")).toBe("waypoints");
+    // The attribute has to name the real picture, so this is the geometry lucide
+    // ships for Waypoints: junction circles joined by orthogonal and 45-degree
+    // runs, which is how a schematic is drawn.
+    expect(signature(schematic)).toBe(lucide(<Waypoints {...ICON_UNDER_TEST} />));
+    expect(schematic.querySelectorAll("circle").length, "the net has no junctions").toBeGreaterThan(1);
+    expect(signature(schematic), "Schematic is still a PCB").not.toBe(lucide(<CircuitBoard {...ICON_UNDER_TEST} />));
+  });
+
+  it("draws Simulator as a trace on an axis, not as the stock analytics spike", () => {
+    render(<Toolbar {...baseProps} />);
+    const simulator = modeGlyph("Simulator");
+    expect(simulator.getAttribute("data-icon")).toBe("chart-spline");
+    expect(signature(simulator)).toBe(lucide(<ChartSpline {...ICON_UNDER_TEST} />));
+    // Two strokes and no more: the axis frame and the response curve on it.
+    expect([...simulator.children].map((el) => el.tagName)).toEqual(["path", "path"]);
+    expect(signature(simulator), "Simulator is still the Activity spike").not.toBe(
+      lucide(<Activity {...ICON_UNDER_TEST} />),
+    );
+  });
+
+  it("puts no rectangle in either glyph, which is how CircuitBoard ate its cell at 13px", () => {
+    render(<Toolbar {...baseProps} />);
+    // A `rect` is the only lucide primitive that can enclose the whole cell, and
+    // it is what every glyph rejected for this control has in common
+    // (CircuitBoard, Cpu, Microchip). A proxy for "the silhouette survives being
+    // small", but a load-bearing one, and cheap.
+    for (const name of ["Schematic", "Simulator"] as const) {
+      expect(modeGlyph(name).querySelectorAll("rect,polygon"), `${name} draws an enclosing box`).toHaveLength(0);
+    }
+    // The defect this protects against, measured rather than described: the
+    // rejected glyph's rect spans three quarters of each axis of a 24-unit box.
+    const board = render(<CircuitBoard {...ICON_UNDER_TEST} />).container.querySelector("rect")!;
+    expect(Number(board.getAttribute("width")) / 24).toBeGreaterThan(0.7);
+    expect(Number(board.getAttribute("height")) / 24).toBeGreaterThan(0.7);
+
+    // And the size this all has to survive is read off App.css rather than
+    // restated, so the premise stops holding the moment the toggle grows.
+    const appCss = readFileSync(join(__dirname, "..", "App.css"), "utf8");
+    const modeGlyphRule = appCss.slice(appCss.indexOf("\n.mode-btn svg {"));
+    expect(
+      Number(/width:\s*(\d+)px/.exec(modeGlyphRule)?.[1]),
+      "the toggle no longer draws at the size this reasoning assumes",
+    ).toBeLessThanOrEqual(14);
+  });
+
+  it("keeps the accessible names the rest of the suite finds these buttons by", () => {
+    // Thirteen assertions across three test files look these two up by name, and
+    // the glyphs are aria-hidden, so the label is the whole accessible name.
+    const { container } = render(<Toolbar {...baseProps} />);
+    for (const name of ["Schematic", "Simulator"] as const) {
+      const button = screen.getByRole("button", { name });
+      expect(button.classList.contains("mode-btn")).toBe(true);
+      expect(button.getAttribute("aria-label")).toBe(name);
+      expect(button.textContent).toBe(name);
+      expect(modeGlyph(name).getAttribute("aria-hidden")).toBe("true");
+    }
+    expect(container.querySelector(".mode-toggle")?.getAttribute("aria-label")).toBe("Editor mode");
+  });
+
+  it("shares no glyph with the nav rail, so each distinction is drawn in one place", () => {
+    const { container: header } = render(<Toolbar {...baseProps} />);
+    const { container: rail } = render(
+      <ActivityRail
+        mode="schematic"
+        explorerOpen
+        partsOpen={false}
+        onFocusExplorer={vi.fn()}
+        onModeChange={vi.fn()}
+        onSearch={vi.fn()}
+        onFocusComponents={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+
+    const modes = [...header.querySelectorAll<SVGSVGElement>(".mode-btn svg")].map(signature);
+    const keys = [...rail.querySelectorAll<SVGSVGElement>(".rail-btn svg")].map(signature);
+    expect(modes).toHaveLength(2);
+    expect(keys).toHaveLength(5);
+    for (const drawn of modes) {
+      expect(keys, "a mode glyph is also a rail key, so one picture means two things").not.toContain(drawn);
     }
   });
 });

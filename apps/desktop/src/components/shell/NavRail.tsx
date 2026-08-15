@@ -15,7 +15,7 @@
  * there, and the reasoning for each is in that file's comments.
  */
 import type { ReactNode } from "react";
-import { AudioWaveform, FolderOpen, Search, Settings, Waypoints } from "lucide-react";
+import { FolderOpen, Search, Settings, Toolbox } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DiagnosticsHealth } from "@/lib/diagnosticsHealth";
 import { DiagnosticsRailButton } from "./DiagnosticsRailButton";
@@ -77,27 +77,40 @@ export function ActivityRail({
         <Search size={18} />
       </RailButton>
       <RailSeparator />
-      {/* `Waypoints` replaces `CircuitBoard`. The old glyph was a populated
-          board - a bounding rectangle with two pads and two right-angle traces
-          inside it - which is a photograph of the wrong artefact: Tau edits a
-          schematic, not a PCB. It also failed on legibility, because at 18px
-          the rectangle spends the outer 2px of the cell and the interior detail
-          lands sub-pixel, so it read as a filled square. `Waypoints` is four
-          terminals joined by an orthogonal spine with two 45-degree runs, which
-          is the drawing vocabulary of a net: junction dots and wires. Thin
-          strokes with air between them, so it survives the size. */}
+      {/* `Toolbox` replaces `Waypoints`, which has not been discarded - it has
+          moved to the mode toggle, where the reasoning that was written for it
+          here actually belongs (see the block above `.mode-toggle` in
+          components/Toolbar.tsx).
+
+          The rail's five keys are five PLACES: a folder of files, a lens, a box
+          of parts, the signals you captured, a gear. None of them should be a
+          picture of the circuit, because the mode toggle at the top of the
+          window is already that, and `Waypoints` drew a net - so "Components"
+          and the toggle's "Schematic" were two controls claiming one subject.
+          `CircuitBoard` had caused exactly that collision on this same key one
+          glyph earlier, which is the tell that the mistake was the category and
+          not the drawing. A toolbox is a container you open, which is what the
+          parts palette is, and it rhymes with `FolderOpen` two keys up instead
+          of competing with the header.
+
+          It also survives 18px, which is the bar `CircuitBoard` failed here.
+          The body is 20x15 units, so it is not a square and is not read as one;
+          the handle arch breaks the top edge and carries the silhouette by
+          itself; and the interior is three straight strokes - a lid seam and
+          two latches - rather than the pads-and-traces detail that landed
+          sub-pixel. Checked rasterised at 18 device pixels as well as 36, so it
+          still reads unaided on a non-Retina display. And it is Omar's own
+          image of this key: "Im imaginging Components bring a toolbox". */}
       <RailButton active={partsOpen && schematicOpen} label="Components" onClick={onFocusComponents} disabled={!schematicOpen}>
-        <Waypoints size={18} />
+        <Toolbox size={18} data-icon="toolbox" />
       </RailButton>
-      {/* `AudioWaveform` replaces `Activity`. `Activity` is the single-spike ECG
-          line that ships as the default "analytics" mark in every dashboard
-          template, which is precisely the generic read the review objected to,
-          and what it depicts is a one-shot event rather than a signal. This
-          glyph is one continuous stroke that crosses the mid-line four times -
-          a bounded, repeating waveform, which is what the simulator shows. Its
-          lucide name is about audio; its shape is a scope trace. */}
+      {/* `AudioWaveform` is retired and nothing in lucide replaces it, so this
+          one is drawn by hand - `SineGlyph` at the foot of this file records
+          what was searched and the measurement that settled it. The short
+          version: the glyph being replaced is a square wave, and "waveforms
+          beign something more sinosodiula" is the correction. */}
       <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")} disabled={!schematicOpen}>
-        <AudioWaveform size={18} />
+        <SineGlyph />
       </RailButton>
       {/* Directly under Waveforms, at Omar's direction (PDF-6 item 6 review:
           "i imagined this button being under waveforms button").
@@ -133,6 +146,62 @@ export function ActivityRail({
 
 function RailSeparator() {
   return <span className="rail-separator" aria-hidden="true" />;
+}
+
+/**
+ * A sine, drawn here, because lucide does not have one.
+ *
+ * The set was searched before this was written, and every near miss fails on
+ * what it depicts, on legibility, or on both:
+ *
+ *   `Waves`       - three ripples, and it is water rather than a signal. It also
+ *                   does not survive the size, and that part is measurable: each
+ *                   ripple is `q2.5 2 5 0`, and a quadratic's extremum is its
+ *                   midpoint (P0 + 2C + P1)/4, so a control offset of 2 units
+ *                   produces exactly 1 unit of crest. At the rail's 18px that is
+ *                   0.75px of amplitude under a 1.125px stroke - the wave is
+ *                   thinner than the line drawing it - and rasterised at 18
+ *                   device pixels the three ripples flatten into rules.
+ *   `AudioLines`  - six bars of differing height: a level meter, not a trace.
+ *   `Activity`    - one spike. A one-shot event, and the generic dashboard mark.
+ *   `AudioWaveform` - what this replaces. Read its path: vertical runs joined by
+ *                   2-unit fillets, which is a SQUARE wave wearing rounded
+ *                   corners, and at 18px the fillet radius is 1.5px so the
+ *                   corners read square anyway. It is the thing the review was
+ *                   pointing at.
+ *
+ * So: two full cycles across x=2..22, +-5 units about the centre line at y=12.
+ * Ten units peak to peak is 7.5px at the rail's 18px, about 6.7x the resting
+ * stroke, against the 1.33x `Waves` manages. Two cycles is the fewest that reads
+ * as periodic rather than as one squiggle, and the ink stops at y=7 and y=17, so
+ * nothing touches the edge of the 24-unit box on any side - a mark that cannot
+ * collapse into a block the way an enclosing rectangle does.
+ *
+ * Only the geometry is stated here. `.rail-btn svg` in App.css already supplies
+ * the fill, the stroke source and the round caps to any svg inside a rail key,
+ * and pdf6Rail.css sets `stroke-width` from --rail-glyph / --rail-glyph-active,
+ * so this glyph gains the selected state's heavier weight for free and by the
+ * same mechanism as the lucide ones. The attributes below restate everything
+ * except that weight, so the mark is still correct if it is ever rendered
+ * outside a rail key; `stroke-width` is deliberately absent, because a second
+ * copy of that number in JSX is exactly how the old 1.6 went stale against
+ * App.css.
+ */
+function SineGlyph() {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      data-icon="sine"
+    >
+      <path d="M2 12q2.5 -10 5 0t5 0 5 0 5 0" />
+    </svg>
+  );
 }
 
 function RailButton({

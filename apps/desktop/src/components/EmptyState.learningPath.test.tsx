@@ -20,7 +20,14 @@ describe("EmptyState first-success learning path", () => {
       />,
     );
     const cta = screen.getByRole("button", { name: /Try RC Charging/i });
-    expect(cta.querySelector(".lucide-circuit-board")).toBeTruthy();
+    // `Waypoints`, not `CircuitBoard`. PDF-6 item 6 retired that glyph as the
+    // app's mark for "a schematic" on two grounds that apply here too: it draws
+    // a populated board, which is the wrong artefact for a thing Tau draws, and
+    // at button size its enclosing rectangle eats the cell while the interior
+    // detail lands sub-pixel, so it reads as a filled square. This button opens
+    // a schematic, so it takes the mark the rest of the app now uses for one.
+    expect(cta.querySelector(".lucide-waypoints")).toBeTruthy();
+    expect(cta.querySelector(".lucide-circuit-board")).toBeNull();
     expect(cta.querySelector(".lucide-sparkles")).toBeNull();
     fireEvent.click(cta);
     expect(onTryFirstSuccess).toHaveBeenCalledOnce();

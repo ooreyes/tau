@@ -1,7 +1,7 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useRef } from "react";
-import { Activity, CircuitBoard, MessageSquare } from "lucide-react";
+import { ChartSpline, MessageSquare, Waypoints } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -327,6 +327,45 @@ export function Toolbar({ mode, result, outcome = null, runState, isRunning, liv
         </div>
       </div>
 
+      {/*
+       * The pair's two glyphs are one decision, so the reasoning sits here
+       * rather than being split across the buttons.
+       *
+       * What this control means, against what the nav rail means: this one
+       * answers "which view of the circuit am I in", the rail answers "which
+       * drawer am I looking in". The two had been drawn on top of each other.
+       * Schematic was a `CircuitBoard` and so was the rail's Components key;
+       * Simulator was an `Activity` squiggle and so was the rail's Waveforms.
+       * Each distinction was being made twice, in two places, with the same
+       * marks. The rail is now five objects you open - folder, lens, toolbox,
+       * signal, gear - and this pair is the only chrome in the window that
+       * depicts the circuit itself: once as the thing you draw, once as the
+       * thing you measure. Angular and discrete against curved and continuous
+       * is that difference, and it is the same contrast the two modes are.
+       *
+       * `Waypoints` for Schematic. Four terminals joined by an orthogonal spine
+       * with two 45-degree runs: junction dots and wires, which is the drawing
+       * vocabulary of a net. It is not new to the app - it was carrying the
+       * rail's Components key, where it was drawing a circuit on a control that
+       * opens a parts palette; it is simply on the right button now. It
+       * replaces `CircuitBoard`, which is a populated PCB, and Tau edits a
+       * schematic rather than a board. That glyph also failed outright at the
+       * 13px this control renders: its 18-unit rectangle spans three quarters
+       * of each axis and the two pads and two traces inside land sub-pixel, so
+       * it reads as a filled square. Rasterised at 13 device pixels before this
+       * change, it was a grey block. `Waypoints` at the same size degrades
+       * gracefully instead - the junction rings fill in and become dots, which
+       * is what a junction is.
+       *
+       * `ChartSpline` for Simulator. An L-shaped axis with one smooth response
+       * curve on it: a picture of the surface this button switches to. Two
+       * paths, no enclosing box, and an axis is the one form that survives any
+       * size. It replaces `Activity`, the single-spike ECG line that every
+       * dashboard template ships as its "analytics" mark, which depicts a
+       * one-shot event rather than a run. The curve here is deliberately not
+       * the rail's sine: a bare periodic signal is a captured waveform, and a
+       * curve inside an axis frame is the instrument you read it on.
+       */}
       <div className="mode-toggle" aria-label="Editor mode" data-tauri-drag-region="false">
         <button
           className={`mode-btn${mode === "schematic" ? " active" : ""}`}
@@ -339,7 +378,7 @@ export function Toolbar({ mode, result, outcome = null, runState, isRunning, liv
           aria-label="Schematic"
           disabled={!projectOpen}
         >
-          <CircuitBoard {...ICON} aria-hidden="true" />
+          <Waypoints {...ICON} aria-hidden="true" data-icon="waypoints" />
           Schematic
         </button>
         <button
@@ -349,7 +388,7 @@ export function Toolbar({ mode, result, outcome = null, runState, isRunning, liv
           aria-label="Simulator"
           disabled={!schematicOpen}
         >
-          <Activity {...ICON} aria-hidden="true" />
+          <ChartSpline {...ICON} aria-hidden="true" data-icon="chart-spline" />
           Simulator
         </button>
       </div>

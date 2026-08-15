@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+/**
+ * Item 6's glyphs are checked against the geometry lucide actually ships, and
+ * against the two marks they replace, so `Waypoints`, `AudioWaveform` and
+ * `Waves` are imported here as evidence rather than because the rail uses them -
+ * it no longer does.
+ */
+import { AudioWaveform, Toolbox, Waves, Waypoints } from "lucide-react";
 
 import { diagnosticsHealthLabel, type DiagnosticsHealth } from "@/lib/diagnosticsHealth";
 import { ActivityRail } from "./NavRail";
@@ -514,5 +522,204 @@ describe("the diagnostics lamp's health states", () => {
     expect(badge, "nothing styles the diagnostics count badge").toBeTruthy();
     expect(badge).toContain("position: absolute");
     expect(badge).toContain("font-size: var(--fs-micro)");
+  });
+});
+
+/**
+ * PDF-6 item 6, marked IMPORTANT: "we need better icons. Im imaginging
+ * Components bring a toolbox, and waveforms beign something more sinosodiula".
+ *
+ * Two keys change here and two change on the mode toggle (Toolbar.test.tsx), and
+ * the four are one set. The division they encode: the toggle is the only chrome
+ * that depicts the circuit - once as drawn, once as measured - and every key in
+ * this rail is an object you open instead. That is why Components stops being a
+ * net (`Waypoints`, which moved to the toggle) and becomes a container.
+ *
+ * These assertions are deliberately about the PICTURE, not about an import name.
+ * A `data-icon` alone would pass while rendering the wrong glyph behind it, so
+ * each one is checked against the geometry lucide actually ships for that name,
+ * and the glyph being replaced is rendered here too so the test names the defect
+ * it protects against rather than asserting into the void.
+ */
+describe("the rail's glyphs", () => {
+  /** Every rail key's svg, by the accessible name of the key it sits in. */
+  function glyphs(): Record<string, SVGSVGElement> {
+    const { container } = render(
+      <ActivityRail
+        {...railProps}
+        onOpenSettings={vi.fn()}
+        diagnostics={{ health: "warning", count: 2, open: false, onToggle: vi.fn() }}
+      />,
+    );
+    const found: Record<string, SVGSVGElement> = {};
+    for (const key of container.querySelectorAll<HTMLButtonElement>(".rail-btn")) {
+      const svg = key.querySelector("svg");
+      expect(svg, `${key.getAttribute("aria-label")} draws no glyph at all`).toBeTruthy();
+      found[key.getAttribute("aria-label") as string] = svg as SVGSVGElement;
+    }
+    return found;
+  }
+
+  /**
+   * What a glyph actually draws: each child element's tag and its geometry, in
+   * document order. Two keys with the same signature are the same picture,
+   * whatever their `data-icon` claims, and a signature is what makes "this is a
+   * toolbox" fail if someone swaps the component behind the name.
+   */
+  const GEOMETRY = ["d", "cx", "cy", "r", "x", "y", "width", "height", "rx", "points"];
+  function signature(svg: SVGSVGElement): string {
+    return [...svg.children]
+      .map((el) => `${el.tagName}:${GEOMETRY.map((attr) => el.getAttribute(attr) ?? "").join("|")}`)
+      .join(";");
+  }
+
+  /** The same picture, rendered on its own, for comparison against a key. */
+  function lucide(icon: ReactElement): string {
+    const { container } = render(icon);
+    const svg = container.querySelector("svg") as SVGSVGElement;
+    const drawn = signature(svg);
+    cleanup();
+    return drawn;
+  }
+
+  /**
+   * The turning points of a quadratic ripple, in viewBox units.
+   *
+   * Parsed rather than restated, because the claim below is about the curve the
+   * app ships: only a version that reads the numbers back can fail when someone
+   * flattens it. The grammar is deliberately just the one both glyphs under test
+   * use - one `q` followed by reflected `t` segments - and a quadratic's
+   * extremum is its midpoint, (P0 + 2C + P1) / 4.
+   */
+  interface Point {
+    x: number;
+    y: number;
+  }
+  function turningPoints(d: string): { points: Point[]; end: Point } {
+    const numbers = (part: string) => [...part.matchAll(/-?\d*\.?\d+/g)].map((match) => Number(match[0]));
+    const q = d.indexOf("q");
+    const t = d.indexOf("t");
+    expect(q, `${d} is not the q/t ripple this parser reads`).toBeGreaterThan(0);
+    expect(t, `${d} has no reflected segments`).toBeGreaterThan(q);
+    const [startX, startY] = numbers(d.slice(0, q));
+    const [cx, cy, ex, ey] = numbers(d.slice(q + 1, t));
+    let from = { x: startX, y: startY };
+    let control = { x: startX + cx, y: startY + cy };
+    let to = { x: startX + ex, y: startY + ey };
+    const points = [{ x: (from.x + 2 * control.x + to.x) / 4, y: (from.y + 2 * control.y + to.y) / 4 }];
+    const rest = numbers(d.slice(t + 1));
+    for (let i = 0; i + 1 < rest.length; i += 2) {
+      from = to;
+      control = { x: 2 * from.x - control.x, y: 2 * from.y - control.y };
+      to = { x: from.x + rest[i], y: from.y + rest[i + 1] };
+      points.push({ x: (from.x + 2 * control.x + to.x) / 4, y: (from.y + 2 * control.y + to.y) / 4 });
+    }
+    return { points, end: to };
+  }
+
+  /* Derived from the shipped rules, so the measurements below track the rail
+     instead of restating it: the glyph box comes from App.css and the resting
+     and selected stroke weights from the lane stylesheet. */
+  const GLYPH_PX = Number(/width:\s*(\d+)px/.exec(ruleBody(".rail-lucide"))?.[1]);
+  const PER_UNIT = GLYPH_PX / 24;
+  const RESTING_STROKE = Number(/--rail-glyph:\s*([\d.]+)/.exec(railRule(".activity-rail"))?.[1]);
+  const ACTIVE_STROKE = Number(/--rail-glyph-active:\s*([\d.]+)/.exec(railRule(".activity-rail"))?.[1]);
+
+  it("gives Components the toolbox the review asked for, and not a relabelled net", () => {
+    const components = glyphs().Components;
+    expect(components.getAttribute("data-icon")).toBe("toolbox");
+    // The name has to match the picture, so this is the geometry lucide ships
+    // for Toolbox - it fails if the component behind the attribute is swapped.
+    expect(signature(components)).toBe(lucide(<Toolbox size={18} />));
+    // And it is no longer the glyph that collided with the toggle's Schematic.
+    expect(signature(components), "Components is still drawing a net").not.toBe(
+      lucide(<Waypoints size={18} />),
+    );
+  });
+
+  it("gives Waveforms a hand-drawn sine, because lucide ships no sine to give it", () => {
+    const waveforms = glyphs().Waveforms;
+    expect(waveforms.getAttribute("data-icon")).toBe("sine");
+    expect(waveforms.getAttribute("viewBox"), "the glyph left lucide's 24-unit box").toBe("0 0 24 24");
+    // One open stroke. Nothing closes, so there is no rectangle to eat the cell
+    // the way CircuitBoard's did on this rail before Waypoints.
+    expect([...waveforms.children].map((el) => el.tagName)).toEqual(["path"]);
+    // The square wave it replaces, named so this test says what it is for.
+    expect(signature(waveforms), "Waveforms is still AudioWaveform").not.toBe(
+      lucide(<AudioWaveform size={18} />),
+    );
+  });
+
+  it("draws a wave deep enough to read at 18px, which is what disqualified lucide's own", () => {
+    const sine = glyphs().Waveforms.querySelector("path")!.getAttribute("d")!;
+    const ys = turningPoints(sine).points.map((point) => point.y);
+
+    // Two full cycles: four turning points, alternating about the centre line.
+    // One crest and one trough is a squiggle; two of each reads as periodic.
+    expect(ys).toHaveLength(4);
+    const centre = (Math.max(...ys) + Math.min(...ys)) / 2;
+    expect(ys.map((y) => Math.sign(y - centre))).toEqual([-1, 1, -1, 1]);
+
+    // The measurement that settled the choice. A stroked curve only reads as a
+    // curve if its excursion clears the line drawing it by a wide margin, and
+    // at the rail's size a viewBox unit is a fraction of a pixel.
+    const depth = ((Math.max(...ys) - Math.min(...ys)) * PER_UNIT) / (RESTING_STROKE * PER_UNIT);
+    expect(depth, "the sine is too shallow to read at the size the rail draws it").toBeGreaterThan(4);
+
+    // ...and the floor has teeth: lucide's `Waves` is the only mark in the set
+    // that is literally a wave, and it fails this same measure. Its ripples are
+    // built with a 2-unit control offset, which a quadratic halves into 1 unit
+    // of crest - thinner than the 1.5-unit stroke on top of it.
+    const waves = render(<Waves size={18} />).container.querySelector("path")!.getAttribute("d")!;
+    const rippleYs = turningPoints(waves).points.map((point) => point.y);
+    const rippleDepth = (Math.max(...rippleYs) - Math.min(...rippleYs)) / RESTING_STROKE;
+    expect(rippleDepth, "lucide's Waves now clears the floor, so the floor is meaningless").toBeLessThan(2);
+  });
+
+  it("keeps the hand-drawn glyph inside its box and lets the stylesheet weight it", () => {
+    const waveforms = glyphs().Waveforms;
+    // Weight is the stylesheet's, exactly as it is for the lucide glyphs - the
+    // rule is asserted in "carries selection in glyph weight" above, and a
+    // second copy of the number in JSX is how the old 1.6 went stale.
+    expect(waveforms.getAttribute("stroke-width"), "the sine states its own weight").toBeNull();
+    expect(waveforms.querySelector("path")?.getAttribute("stroke-width")).toBeNull();
+    // Everything else in the stroke language is restated, so the mark is still
+    // correct if it is ever drawn outside a rail key.
+    expect(waveforms.getAttribute("fill")).toBe("none");
+    expect(waveforms.getAttribute("stroke")).toBe("currentColor");
+    expect(waveforms.getAttribute("stroke-linecap")).toBe("round");
+    expect(waveforms.getAttribute("stroke-linejoin")).toBe("round");
+
+    // No part of the ink reaches the edge of the box, at the heavier weight the
+    // selected state uses - a glyph that touches its bounds is the one that
+    // reads as a filled block when the interior detail goes sub-pixel.
+    const swing = turningPoints(waveforms.querySelector("path")!.getAttribute("d")!);
+    const bleed = ACTIVE_STROKE / 2;
+    for (const point of [...swing.points, swing.end]) {
+      expect(Math.min(point.x, point.y) - bleed, `${JSON.stringify(point)} runs off the box`).toBeGreaterThan(0);
+      expect(Math.max(point.x, point.y) + bleed, `${JSON.stringify(point)} runs off the box`).toBeLessThan(24);
+    }
+  });
+
+  it("gives no two rail keys the same picture", () => {
+    const drawn = glyphs();
+    const keys = Object.keys(drawn);
+    // Every destination, the lamp and the foot - so a duplicate cannot hide in
+    // a key this test forgot to render.
+    expect(keys.length).toBe(6);
+
+    const seen = new Map<string, string>();
+    for (const [label, svg] of Object.entries(drawn)) {
+      const drawing = signature(svg);
+      expect(seen.has(drawing), `${label} draws the same glyph as ${seen.get(drawing)}`).toBe(false);
+      seen.set(drawing, label);
+    }
+
+    // The names the changed keys carry must be unique too, or a later swap
+    // could satisfy the picture check while two keys claim one identity.
+    const named = Object.values(drawn)
+      .map((svg) => svg.getAttribute("data-icon"))
+      .filter((name): name is string => Boolean(name));
+    expect(new Set(named).size).toBe(named.length);
   });
 });

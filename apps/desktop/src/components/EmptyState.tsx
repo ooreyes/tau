@@ -1,6 +1,6 @@
 import { useRef, type ChangeEvent } from "react";
 import { BodeMascot } from "./BodeMascot";
-import { FolderOpen, FolderPlus, Import, MessageSquare, Plus, CircuitBoard, LayoutGrid } from "lucide-react";
+import { FolderOpen, FolderPlus, Import, MessageSquare, Plus, Waypoints, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
@@ -245,7 +245,7 @@ export function EmptyState({
                   route to a first result, not the card's own action. */}
               {offerFirstSuccess && (
                 <Button type="button" size="sm" variant="outline" onClick={onTryFirstSuccess}>
-                  <CircuitBoard aria-hidden="true" /> Try RC Charging
+                  <Waypoints aria-hidden="true" /> Try RC Charging
                 </Button>
               )}
               <Button type="button" size="sm" variant="outline" onClick={onAskBode}>
@@ -288,7 +288,7 @@ export function EmptyState({
               </Button>
               {offerFirstSuccess && (
                 <Button type="button" size="sm" variant="outline" onClick={onTryFirstSuccess}>
-                  <CircuitBoard aria-hidden="true" /> Try RC Charging
+                  <Waypoints aria-hidden="true" /> Try RC Charging
                 </Button>
               )}
               <Button type="button" size="sm" variant="outline" onClick={onAskBode}>
