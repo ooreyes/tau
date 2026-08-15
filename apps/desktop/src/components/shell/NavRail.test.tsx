@@ -438,7 +438,7 @@ describe("the rail's diagnostics lamp", () => {
     expect(onToggle).not.toHaveBeenCalled();
   });
 
-  it("lives in the rail's pinned foot, above Settings, which stays last in the tab order", () => {
+  it("sits directly under Waveforms, with Settings still last in the tab order", () => {
     render(
       <ActivityRail
         {...railProps}
@@ -447,19 +447,25 @@ describe("the rail's diagnostics lamp", () => {
       />,
     );
     const rail = screen.getByRole("navigation", { name: "Workspace sections" });
-    const lamp = rail.querySelector<HTMLElement>(".rail-diagnostics");
+    const lamp = rail.querySelector<HTMLElement>(".rail-diagnostics")!;
     const settings = screen.getByRole("button", { name: "Settings" });
-    // The foot is the only part of the rail at a constant screen position, which
-    // is what a health light nobody goes looking for needs.
-    expect(lamp?.closest(".rail-foot"), "the lamp is not in the rail's pinned register").toBeTruthy();
-    expect(lamp!.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Placement is Omar's call, given directly on the PDF-6 review: "i imagined
+    // this button being under waveforms button". It was first built into the
+    // pinned foot on the argument that a health lamp wants a constant screen
+    // position; this asserts the instruction instead, and asserts the two things
+    // that placement must not cost - the lamp stays out of the foot, and Settings
+    // stays the last stop for the keyboard.
     const buttons = [...rail.querySelectorAll("button")];
+    const waveforms = screen.getByRole("button", { name: "Waveforms" });
+    expect(buttons[buttons.indexOf(waveforms) + 1], "the lamp is not the key under Waveforms").toBe(lamp);
+    expect(lamp.closest(".rail-foot")).toBeNull();
     expect(buttons[buttons.length - 1]).toBe(settings);
   });
 
-  it("grows the foot for the lamp alone, so the lamp and the gear are independent", () => {
+  it("renders the lamp with no shell foot at all, so the two stay independent", () => {
     render(<ActivityRail {...railProps} diagnostics={{ health: "ok", count: 0, open: false, onToggle: vi.fn() }} />);
-    expect(lampOf("ok", 0).closest(".rail-foot")).toBeTruthy();
+    expect(lampOf("ok", 0).closest(".rail-foot")).toBeNull();
+    expect(document.querySelector(".rail-foot")).toBeNull();
     expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
   });
 });

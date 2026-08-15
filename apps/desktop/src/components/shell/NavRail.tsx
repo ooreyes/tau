@@ -99,36 +99,31 @@ export function ActivityRail({
       <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")} disabled={!schematicOpen}>
         <AudioWaveform size={18} />
       </RailButton>
-      {(diagnostics || onOpenSettings) && (
-        /* The foot: the rail's fixed register.
-           Everything above it is a destination, and the stack of destinations
-           is variable - entries are enabled and disabled by whether a project
-           and a schematic are open, and the review itself adds and removes
-           entries. The foot is pinned with `margin-top: auto`, so it is the
-           only part of the rail that sits at a constant screen position, which
-           is what a control found by muscle memory and a lamp that must be
-           readable without being hunted for both need.
+      {/* Directly under Waveforms, at Omar's direction (PDF-6 item 6 review:
+          "i imagined this button being under waveforms button").
 
-           So both live here, and neither requires the other: the diagnostics
-           lamp reports state, Settings is a utility, and `<nav>` labelled
-           "Workspace sections" is not the right home for either. The lamp is
-           above the gear because health outranks configuration; the gear stays
-           last in the tab order, which App.shellContract asserts.
+          It was first built into the foot, on the reasoning that a health lamp
+          wants a constant screen position. Sitting here instead it moves with the
+          destination stack - but the stack above it is fixed in length, entries
+          are disabled rather than removed, so in practice the position is stable
+          and it is now the fourth thing in the column rather than the last. It
+          also reads as part of the same group as the surfaces it reports on,
+          which is the argument for this placement over the tidier one. */}
+      {diagnostics && <DiagnosticsRailButton {...diagnostics} />}
+      {onOpenSettings && (
+        /* The foot: the rail's fixed register. Settings is a utility rather than
+           a destination, so it is pinned to the bottom with `margin-top: auto`
+           and comes last in the tab order, which App.shellContract asserts.
 
-           The hairline BELOW them is the rail's terminating rule: it lands on
-           the same line as the status strip's `border-top`, so the two read as
-           one line across the window and the rounded bottom-left corner
-           beneath belongs to this block instead of being the empty gap the
-           review screenshotted. It also puts the health lamp directly above
-           the strip that reports run state, so the two status readouts share
-           one corner of the window. */
+           The hairline BELOW it is the rail's terminating rule: it lands on the
+           same line as the status strip's `border-top`, so the two read as one
+           line across the window and the rounded bottom-left corner beneath
+           belongs to this block instead of being the empty gap the review
+           screenshotted. */
         <div className="rail-foot">
-          {diagnostics && <DiagnosticsRailButton {...diagnostics} />}
-          {onOpenSettings && (
-            <RailButton label="Settings" onClick={onOpenSettings}>
-              <Settings size={18} />
-            </RailButton>
-          )}
+          <RailButton label="Settings" onClick={onOpenSettings}>
+            <Settings size={18} />
+          </RailButton>
           <RailSeparator />
         </div>
       )}
