@@ -125,10 +125,15 @@ async function shootTheme(page, theme) {
   await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(outDir, `schematic-${theme}-1440x900.png`) });
 
-  // There are deliberately two Settings affordances (toolbar + activity
-  // rail). Pin this proof to the visible toolbar control instead of relying on
-  // DOM order, which can change as responsive chrome mounts/unmounts.
-  const settingsButton = page.locator('.toolbar button[aria-label="Settings"]:visible');
+  // Settings lives in the activity rail's foot. It used to also sit in the
+  // toolbar, and this proof pinned itself to that copy - so once the toolbar
+  // control was retired (PDF-4/5 moved it to the rail; see NavRail's `.rail-foot`
+  // comment), the whole §10 gate spent fifteen seconds waiting for a button that
+  // no longer exists and then threw, before it inspected a single colour. Found
+  // during PDF-6, which is not this script's pass, but a gate that cannot run is
+  // worse than one that fails: nobody reads the output of either, and only one of
+  // them looks like it is still working.
+  const settingsButton = page.locator('.activity-rail button[aria-label="Settings"]:visible');
   await settingsButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await settingsButton.click();
   await page.getByRole("dialog", { name: "Settings" }).waitFor({
