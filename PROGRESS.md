@@ -8,7 +8,7 @@ untouched.
 
 **Contract:** `UI_UX_PDF6.md`. **Gate:** `node scripts/pdf6-verify.mjs <label>`
 - **40/40** (ten checks × light/dark × 1280×800 and 900×600, the app's real
-minimum window). Output and screenshots in `screenshots/pdf6-verify/pdf6-full-3/`.
+minimum window). Output and screenshots in `screenshots/pdf6-verify/pdf6-final/`.
 
 **Source:** `~/Downloads/Untitled document (3).pdf` (5 pages, 10 numbered
 items), read visually and by text extraction on 2026-08-14.
@@ -43,7 +43,7 @@ reported rather than gated (two CDP round-trips per sample dominate it - the
 render-pressure claim rests on `panelResize.pdf6.test.tsx`, which counts commits);
 and item 4's source image is a tight crop, read as the protruding rail indicator.
 
-**Next step:** Omar's visual review of `screenshots/pdf6-verify/pdf6-full-3/` and
+**Next step:** Omar's visual review of `screenshots/pdf6-verify/pdf6-final/` and
 the running app.
 
 ---

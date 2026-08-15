@@ -89,7 +89,7 @@ in WKWebView and Chromium, and to stop letting the webview arbitrate.
 
 All ten items closed. `node scripts/pdf6-verify.mjs <label>` is **40/40** —
 ten checks across light and dark at 1280×800 and at 900×600, the app's real
-minimum window. Output and screenshots: `screenshots/pdf6-verify/pdf6-full-3/`.
+minimum window. Output and screenshots: `screenshots/pdf6-verify/pdf6-final/`.
 
 | # | Measured after | Was |
 | --- | --- | --- |
