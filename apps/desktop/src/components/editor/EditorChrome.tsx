@@ -1,10 +1,12 @@
 /**
  * Schematic editor chrome, moved out of ShellPanels.tsx.
  *
- * This module owns the editor's tool strip and tab row. The components are
- * deliberately kept as a pure relocation: their props, store reads, markup,
- * and interaction semantics remain the same so editor behavior can be
- * reviewed independently from Explorer and inspector work.
+ * This module owns the editor's tool strip and tab row. The move itself was a
+ * pure relocation - props, store reads, markup and interaction semantics were
+ * carried over unchanged - so that editor behavior could be reviewed
+ * independently from Explorer and inspector work. Both strips have since been
+ * redesigned in place: the tool strip in P3-12/P3-13, and the tab row's marks
+ * in PDF6-05 (see EditorTabs and styles/pdf6Tabs.css).
  */
 import { useRef, useState, type ReactNode } from "react";
 import {
