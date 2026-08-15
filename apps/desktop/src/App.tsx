@@ -98,6 +98,11 @@ import {
 import { EditorTabs, EditorToolbar } from "./components/editor/EditorChrome";
 import { ActivityRail } from "./components/shell/NavRail";
 import { BottomPanel, mergeDiagnostics } from "./components/drawer/DiagnosticsTab";
+import {
+  diagnosticsHealth,
+  diagnosticsVisibleCount,
+  useDiagnosticsSeverityPolicy,
+} from "./lib/diagnosticsHealth";
 import { ResultsDrawer, type DrawerCover } from "./components/drawer/ResultsDrawer";
 import { SelectionInspector } from "./components/inspector/SelectionInspector";
 import { ConfirmDialog, UnsavedChangesDialog } from "./components/ui/confirm";
@@ -1972,15 +1977,51 @@ function App() {
   );
   const dockIssues = diagnosticMerge.liveIssues;
 
+  /* The user's warning policy, read live so flipping it in Settings repaints
+     the lamp, the badge and the window together rather than after a reload. */
+  const severityPolicy = useDiagnosticsSeverityPolicy();
+  /**
+   * Whether the rail's `!` is currently showing the diagnostics window.
+   *
+   * The `!` raises and hides the results drawer on its Errors tab rather than
+   * mounting and unmounting the panel. That is what "bring up the error window
+   * below / clicked again it should hide it" means in a shell that already has
+   * one: the Errors tab has to stay mounted so the live linter can list what is
+   * wrong with a sheet before it is ever run (P3-14), and the thing the button
+   * changes is whether the reader can see it.
+   *
+   * Two nonces rather than one boolean prop, matching the drawer's existing
+   * `raiseSignal` discipline: the drawer owns its own height (the user can drag
+   * it), so it takes instructions, not state. Dragging the drawer by hand can
+   * therefore leave the lamp's pressed state describing the last thing the
+   * BUTTON did rather than the drawer's current height - a known, small
+   * imprecision, and the alternative is the button fighting the drag.
+   */
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [diagnosticsRaise, setDiagnosticsRaise] = useState(0);
+  const [diagnosticsCollapse, setDiagnosticsCollapse] = useState(0);
+  const toggleDiagnosticsWindow = useCallback(() => {
+    setDiagnosticsOpen((open) => {
+      if (open) setDiagnosticsCollapse((n) => n + 1);
+      else setDiagnosticsRaise((n) => n + 1);
+      return !open;
+    });
+  }, []);
+
+  /* PDF-6 item 6. The badge, the rail's health lamp and the diagnostics window
+     must all answer to the same policy: under `errors-only` a warning is not
+     listed, so a badge still counting it would send the reader to a window
+     that has nothing to show them. `diagnosticsVisibleCount` and
+     `diagnosticsHealth` are the one authority for both numbers. */
   const diagnosticsBadge = useMemo(() => {
     if (analysisRunning) return null;
-    const count = diagnosticMerge.count;
+    const count = diagnosticsVisibleCount(diagnosticMerge, severityPolicy);
     if (count === 0) return null;
-    const tone = diagnosticMerge.hasError
+    const tone = diagnosticsHealth(diagnosticMerge, severityPolicy) === "error"
       ? ("error" as const)
       : ("warning" as const);
     return { text: String(count), tone };
-  }, [analysisRunning, diagnosticMerge]);
+  }, [analysisRunning, diagnosticMerge, severityPolicy]);
 
   /**
    * Which part of the badge is worth raising a peeked drawer for.
@@ -4220,7 +4261,13 @@ function App() {
         runState={runState}
         isRunning={analysisRunning}
         liveRunning={liveRunning}
-        title={activeDirty ? `${documentTitle} •` : (activeProjectFile ? documentTitle : (projectRootName ?? "Open a project"))}
+        /* The unsaved state travels as a flag, not as a bullet concatenated
+           onto the title. As a character inside the string it had no
+           accessible name, inherited the filename's 10px --faint, and - the
+           actual bug - lived inside the ellipsising run, so a long document
+           name truncated the unsaved marker away. PDF-6 item 9. */
+        title={activeProjectFile ? documentTitle : (projectRootName ?? "Open a project")}
+        dirty={activeDirty}
         onModeChange={(nextMode) => {
           if (nextMode === "simulator" && !activeProjectFile) {
             showNotice("Open or create a schematic before using the simulator.");
@@ -4248,6 +4295,20 @@ function App() {
       >
         <ActivityRail
           mode={mode}
+          /* The health lamp. It sits in the rail rather than in the drawer it
+             opens, because a badge inside a closed drawer cannot tell anyone to
+             open the drawer - and this is the only surface the report asks to be
+             true at all times: green clean, amber advisory, red only when the
+             circuit will not run. */
+          diagnostics={{
+            health: diagnosticsHealth(diagnosticMerge, severityPolicy),
+            count: diagnosticsVisibleCount(diagnosticMerge, severityPolicy),
+            open: diagnosticsOpen,
+            onToggle: toggleDiagnosticsWindow,
+            /* Nothing to open onto without a schematic - the drawer itself is
+               only mounted for an open sheet. */
+            disabled: !activeProjectFile,
+          }}
           /* Settings lives in the rail's foot now, not the status bar's right
              edge: the status bar returns null in a resting schematic, which is
              exactly the state the review screenshot was taken in - so the gear
@@ -4764,13 +4825,24 @@ function App() {
             status={analysisRunning ? "running" : activeAnalysis ? (activeAnalysis.ok ? "complete" : "error") : "idle"}
             statusLine={resultsSummary}
             onStop={stopAnalysis}
-            raiseSignal={resultsRaise}
+            /* Two independent reasons to raise the drawer - a run finishing and
+               the rail's `!` - folded into the one signal the drawer reads. A
+               string, so either counter moving is a change under `Object.is`. */
+            raiseSignal={`${resultsRaise}:${diagnosticsRaise}`}
             onCoverChange={handleDrawerCover}
             orientation={analysisSplit ? "right" : "bottom"}
             preferredHeight={mode === "simulator" ? "half" : "peek"}
-            preferredTab={mode === "simulator" ? "waveforms" : "errors"}
+            /* Pressing `!` in the simulator has to land on Errors, or the
+               button "brings up" a drawer showing waveforms. */
+            preferredTab={diagnosticsOpen || mode !== "simulator" ? "errors" : "waveforms"}
             errorBadge={diagnosticsBadge}
             badgeRaiseKey={diagnosticsRaiseKey}
+            collapseSignal={diagnosticsCollapse}
+            /* Always mounted. The rail's `!` raises and hides this drawer
+               (`diagnosticsRaise`/`diagnosticsCollapse` below), it does not
+               unmount the panel - because the dock's job is to list what is
+               wrong with a sheet BEFORE anyone runs it (P3-14), and a window
+               that only exists after you press a button cannot do that. */
             errors={
               <BottomPanel
                 result={activeAnalysis}
@@ -4779,6 +4851,7 @@ function App() {
                 issues={dockIssues}
                 onSelectComponent={revealDiagnosticComponent}
                 onFocusDiagnostic={focusDiagnostic}
+                severityPolicy={severityPolicy}
               />
             }
             // P3-14: Measurements is a SIMULATOR surface. It leaked into the

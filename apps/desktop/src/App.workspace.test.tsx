@@ -413,11 +413,17 @@ describe("App schematic workspace tools", () => {
 
     act(() => useSchematic.getState().addComponent("resistor", 120, 120));
     expect(await screen.findByRole("img", { name: "untitled.sim has unsaved changes" })).toBeTruthy();
-    expect(screen.getByText("untitled.sim •")).toBeTruthy();
+    // The titlebar's marker is its own labelled indicator now, not a bullet
+    // concatenated into the filename (PDF-6 item 9): as a character in the
+    // string it had no accessible name and a long name truncated it away.
+    // Asserting the indicator - rather than the text "untitled.sim •" - is
+    // what keeps this test about the unsaved STATE being visible.
+    expect(screen.getByRole("img", { name: "Unsaved changes" })).toBeTruthy();
 
     fireEvent.keyDown(document.body, { key: "s", metaKey: true });
     await waitFor(() => {
       expect(screen.queryByRole("img", { name: "untitled.sim has unsaved changes" })).toBeNull();
+      expect(screen.queryByRole("img", { name: "Unsaved changes" })).toBeNull();
       expect(screen.getAllByText("untitled.sim").length).toBeGreaterThan(0);
     });
   });

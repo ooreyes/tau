@@ -6,7 +6,7 @@
  * where the copy can say what it costs.
  */
 import { Button } from "@/components/ui/button";
-import { ThemeControl } from "../../components/SettingsPanel";
+import { DiagnosticsSeverityControl, ThemeControl } from "../../components/SettingsPanel";
 import { clearAllUnsavedLocalState } from "../../lib/unsavedRecovery";
 import {
   simulationPreferences,
@@ -73,6 +73,11 @@ export function GeneralPage({ onNotice }: { onNotice: (message: string) => void 
             simulationPreferences.update({ alwaysShowTechnicalDetails: next })
           }
         />
+        {/* PDF-6 item 6: "The user should be able to select a setting to remove
+            warning and just have red or green." It belongs in this group rather
+            than under Appearance because it changes what Tau tells you, not how
+            the telling looks - hiding a warning is an editorial decision. */}
+        <DiagnosticsSeverityControl />
       </SettingsGroup>
 
       <SettingsGroup

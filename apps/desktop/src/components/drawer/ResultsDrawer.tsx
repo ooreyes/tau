@@ -250,6 +250,20 @@ export interface ResultsDrawerProps {
   /** Bumping this raises a collapsed drawer, e.g. when a run finishes. */
   raiseSignal?: unknown;
   /**
+   * Bumping this collapses an open drawer back to its peek strip.
+   *
+   * The mirror of `raiseSignal`, added for the rail's `!` diagnostics toggle
+   * (PDF-6 item 6): "if clicked again it should hide it" needs a way to put the
+   * drawer away, and the same signal-not-state shape is what lets the drawer go
+   * on owning its own height while the user drags it.
+   *
+   * It collapses rather than unmounting, and it does not care whether the
+   * reader had dragged the drawer to a size of their own - an explicit "hide
+   * this" is an instruction, not a heuristic, which is why it does not consult
+   * `draggedRef` the way the raise does.
+   */
+  collapseSignal?: unknown;
+  /**
    * Reports how many pixels of canvas the drawer is covering, per axis.
    *
    * Docked bottom the drawer floats rather than squeezing, so nothing in the
@@ -291,6 +305,7 @@ export function ResultsDrawer({
   badgeRaiseKey,
   orientation = "bottom",
   raiseSignal,
+  collapseSignal,
   onCoverChange,
 }: ResultsDrawerProps) {
   const panelId = useId();
@@ -438,6 +453,17 @@ export function ResultsDrawer({
     if (heightRef.current !== "peek" || draggedRef.current) return;
     applyDiscreteHeight("half");
   }, [raiseSignal, applyDiscreteHeight]);
+
+  // The hide half of the same contract. Skips its first firing for the reason
+  // the raise does: an effect keyed on a value runs at mount, and collapsing
+  // there would override the height the caller asked for.
+  const seenCollapseRef = useRef(collapseSignal);
+  useEffect(() => {
+    if (Object.is(seenCollapseRef.current, collapseSignal)) return;
+    seenCollapseRef.current = collapseSignal;
+    if (heightRef.current === "peek") return;
+    applyDiscreteHeight("peek");
+  }, [collapseSignal, applyDiscreteHeight]);
 
   /**
    * A new issue never stays hidden behind a collapsed drawer.
