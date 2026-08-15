@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent, type PointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { userFacingErrorMessage } from "../lib/errorMessage";
 import {
   ChevronRight,
@@ -158,15 +159,26 @@ const EXPLORER_HEAD_PADDING = 18;
  *  between the ⋯ and the root name, which is why nothing may narrow it. */
 const EXPLORER_HEAD_GAP = 8;
 /**
- * Every header control is a `--control-hit` square (`.explorer-icons button`).
+ * Every header control is a `--control-hit-compact` square (`.explorer-icons
+ * button`, sized in styles/pdf6Explorer.css).
  *
- * Mirrors the CSS token deliberately rather than measuring the DOM: this number
+ * Mirrors the CSS box deliberately rather than measuring the DOM: this number
  * feeds the icon budget below, which has to be computable before layout and in
- * jsdom, where no stylesheet is applied. It was 22px, which failed WCAG 2.2
- * SC 2.5.8's 24px floor; if `--control-hit` changes in App.css this must change
- * with it, and `explorerPrimaryActionCount`'s tests pin the arithmetic either way.
+ * jsdom, where no stylesheet is applied.
+ *
+ * It was 22px (under WCAG 2.2 SC 2.5.8's 24px floor), then `--control-hit`'s
+ * 28px - and 28px boxes around 16px glyphs with `gap: 0` leave ~12px of nothing
+ * between two glyph edges, which is the "these options need to be closer
+ * together theyre too far apart" report: five icons that read as five unrelated
+ * controls rather than one action group. VS Code's pane-header actions are 22px
+ * boxes 2px apart, i.e. 8px between glyph edges; a 24px box with no gap lands on
+ * the same 8px while keeping the hit target on `--control-hit-compact`, which
+ * App.css names as the WCAG floor. Anything smaller would buy a few px of
+ * tightness by breaking that floor. If the stylesheet's box changes this must
+ * change with it, and `explorerPrimaryActionCount`'s tests pin the arithmetic
+ * either way.
  */
-const EXPLORER_ICON_SIZE = 28;
+const EXPLORER_ICON_SIZE = 24;
 /** Extra clear left of the ⋯ on top of the flex gap. The gap alone lands
  *  exactly on the ≥8px bar, which a subpixel layout can round under. */
 const EXPLORER_OVERFLOW_CLEARANCE = 2;
@@ -336,6 +348,54 @@ function canMoveProjectNode(sourcePath: string, destinationDirectoryPath: string
   );
 }
 
+/**
+ * Pointer travel, in px, before a press on a tree row becomes a drag.
+ *
+ * A click has to stay a click - open the file, toggle the folder - and the
+ * rename double-click has to survive, so the gesture cannot commit on the first
+ * pointermove. VS Code's tree uses the platform drag threshold, 4-6px on macOS;
+ * 5 is the middle of that. Exported so the tests can drive one pixel either side
+ * of the boundary instead of restating a magic number.
+ */
+export const EXPLORER_DRAG_THRESHOLD = 5;
+
+/**
+ * How long a collapsed folder must be hovered mid-drag before it opens.
+ *
+ * VS Code's tree expands a hovered folder after roughly half a second, which is
+ * what makes "drop into a nested folder" one gesture instead of "drop, expand,
+ * drag again". Shorter and folders flap open as the cursor crosses them on the
+ * way somewhere else; longer and the reader concludes nesting is unreachable.
+ */
+export const EXPLORER_DRAG_AUTO_EXPAND_MS = 500;
+
+/**
+ * The folder a drop at this element means: the nearest ancestor carrying
+ * `data-project-dir-path`. A file row resolves to the directory that owns it, a
+ * folder row to itself, and anything else inside the tree - blank space, the
+ * project root row - to `.tree-list`, which publishes the project root.
+ *
+ * Encoding "nearest enclosing folder" in the DOM rather than in per-row props is
+ * what lets ONE window-level pointermove listener answer for every row, which is
+ * the whole reason the gesture below no longer needs `elementFromPoint`.
+ */
+function explorerDropDirectory(target: EventTarget | null): string | null {
+  const element = target instanceof Element ? target : null;
+  return element?.closest<HTMLElement>("[data-project-dir-path]")?.dataset.projectDirPath ?? null;
+}
+
+/** One in-flight pointer drag. Lives in a ref: the threshold check and the
+ *  destination lookup both have to be synchronous with the event, and a state
+ *  update per pointermove would re-render the whole tree at pointer frequency. */
+interface PointerDragGesture {
+  node: ProjectNode;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  /** False until the pointer has travelled EXPLORER_DRAG_THRESHOLD. */
+  dragging: boolean;
+}
+
 const PROJECT_NODE_DRAG_TYPE = "application/x-tau-project-node";
 
 function dragPayloadPath(dataTransfer: DataTransfer | null | undefined): string {
@@ -352,6 +412,13 @@ function dataTransferHasProjectNode(dataTransfer: DataTransfer | null | undefine
   if (!dataTransfer) return false;
   const types = Array.from(dataTransfer.types ?? []);
   return types.includes(PROJECT_NODE_DRAG_TYPE) || types.includes("text/plain");
+}
+
+/** An OS file drag (Finder → the tree). That is an IMPORT, never a move, and the
+ *  two must not be confused: a move highlights a destination folder and calls
+ *  `onMoveNode`, an import calls `runFileImport` and highlights nothing. */
+function dataTransferHasFiles(dataTransfer: DataTransfer | null | undefined): boolean {
+  return Array.from(dataTransfer?.types ?? []).includes("Files");
 }
 
 function findProjectNode(nodes: readonly ProjectNode[], path: string): ProjectNode | null {
@@ -464,20 +531,26 @@ export function ExplorerPanel({
   } | null>(null);
   const [renameDraft, setRenameDraft] = useState<{ node: ProjectNode; name: string } | null>(null);
   const [draggedNode, setDraggedNode] = useState<ProjectNode | null>(null);
+  /** True only for the pointer gesture, not for a synthesised HTML5 drag: it
+   *  gates the drag ghost and the tree's dragging cursor, both of which a native
+   *  drag draws for itself. */
+  const [pointerDragActive, setPointerDragActive] = useState(false);
   // Drag events can reach dragover/drop before React commits setDraggedNode.
   // Keep a synchronous source and also write the path into dataTransfer so a
   // rerender (for example, creating the destination folder) cannot lose it.
   const draggedNodeRef = useRef<ProjectNode | null>(null);
-  // True between `dragstart` and `dragend`. The pointer fallback consults it so
-  // a late `pointercancel` cannot tear down a native drag mid-flight.
-  const nativeDragActiveRef = useRef(false);
-  const pointerDragRef = useRef<{
-    node: ProjectNode;
-    pointerId: number;
-    startX: number;
-    startY: number;
-    dragging: boolean;
-  } | null>(null);
+  const pointerDragRef = useRef<PointerDragGesture | null>(null);
+  /** Removes the window listeners the live gesture installed. Held in a ref so
+   *  `endNodeDrag`, an unmount, and a handover to the native protocol can all
+   *  reach the same teardown. */
+  const dragTeardownRef = useRef<(() => void) | null>(null);
+  /** The pending hover-to-expand, keyed by the folder it is counting down for so
+   *  a move that stays inside the same row does not restart the clock. */
+  const autoExpandRef = useRef<{ path: string; timer: number } | null>(null);
+  /** Last pointer position, so the ghost can be placed the render it appears in
+   *  rather than waiting for the next move. */
+  const lastPointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
   const suppressClickPathRef = useRef<string | null>(null);
   const collapseSnapshotRef = useRef<{ rootPath: string; expanded: string[] } | null>(null);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
@@ -601,25 +674,215 @@ export function ExplorerPanel({
     }
   };
 
-  const beginNodeDrag = (event: DragEvent<HTMLElement>, node: ProjectNode) => {
-    // Now that the rows are `draggable`, the native drag is the preferred path
-    // and the pointer fallback must get out of its way. Capture was taken at
-    // pointerdown - before the engine decided to start a drag - so hand it back
-    // and forget the gesture, or `updatePointerDrag` keeps preventDefault-ing
-    // moves underneath a live native drag.
-    const pointerDrag = pointerDragRef.current;
+  /* --- PDF6-01: an internal move is a pointer gesture, not an HTML5 drag -----
+   *
+   * "The drag and drop is still not functional I cant seem to move .asc files
+   * into folders." Two mechanisms used to share these rows - `draggable` plus a
+   * pointer fallback - and in the shipped app they fought each other and both
+   * lost. Tauri v2 defaults `dragDropEnabled` to true, which installs a native
+   * drag-and-drop handler on the WKWebView that swallows HTML5 drag events; the
+   * row's `dragstart` still fired, the old `beginNodeDrag` therefore handed back
+   * pointer capture and abandoned the pointer gesture, and then neither half ever
+   * delivered a drop. src-tauri/tauri.conf.json now sets `dragDropEnabled: false`
+   * (nothing in this app listens to Tauri's own drag-drop event, so nothing is
+   * lost), and no tree row is `draggable` any more, so the only thing that can
+   * start an internal move is the pointer gesture below.
+   *
+   * Modelled on VS Code's tree drag-and-drop: a travel threshold so a click stays
+   * a click, a label that follows the cursor, the nearest enclosing FOLDER as the
+   * target, hover-to-expand, and Escape to cancel. Pointer events behave
+   * identically in WKWebView and Chromium, which is the point - the capture
+   * harness and the real app can no longer disagree about whether this works.
+   */
+
+  const cancelAutoExpand = () => {
+    const pending = autoExpandRef.current;
+    if (!pending) return;
+    window.clearTimeout(pending.timer);
+    autoExpandRef.current = null;
+  };
+
+  /**
+   * Hover a collapsed folder for EXPLORER_DRAG_AUTO_EXPAND_MS and it opens, so a
+   * nested folder is reachable without dropping and starting again.
+   *
+   * Scheduled for the folder under the pointer whether or not it is a legal
+   * destination: hovering the folder a file already lives in is not a legal drop,
+   * but opening it is exactly how the reader reaches the subfolder they were
+   * aiming at. The one exclusion is the dragged folder itself.
+   */
+  const scheduleAutoExpand = (directoryPath: string | null, sourcePath: string) => {
+    // Same folder as the pending countdown: keep counting rather than restarting,
+    // or a hand that trembles inside one row never reaches 500ms.
+    if (autoExpandRef.current?.path === directoryPath) return;
+    cancelAutoExpand();
+    if (!directoryPath || directoryPath === sourcePath) return;
+    if (useProject.getState().expanded.includes(directoryPath)) return;
+    autoExpandRef.current = {
+      path: directoryPath,
+      timer: window.setTimeout(() => {
+        autoExpandRef.current = null;
+        // Read the store at fire time, not at schedule time: half a second is
+        // long enough for a refresh - or the reader - to have opened this folder
+        // already, and `toggleExpanded` would then close it under the cursor.
+        if (!useProject.getState().expanded.includes(directoryPath)) toggleExpanded(directoryPath);
+      }, EXPLORER_DRAG_AUTO_EXPAND_MS),
+    };
+  };
+
+  /**
+   * Tear down everything a drag owns: the window listeners, the hover countdown,
+   * the ghost, the highlight. Safe to call from inside one of those listeners -
+   * removing a listener mid-dispatch is well defined.
+   */
+  const endNodeDrag = () => {
+    cancelAutoExpand();
     pointerDragRef.current = null;
-    if (pointerDrag) {
-      try {
-        event.currentTarget.releasePointerCapture?.(pointerDrag.pointerId);
-      } catch {
-        // Capture may already have been lost (engine-dependent); nothing to undo.
+    dragTeardownRef.current?.();
+    dragTeardownRef.current = null;
+    draggedNodeRef.current = null;
+    setDraggedNode(null);
+    setPointerDragActive(false);
+    setDropTargetPath(null);
+  };
+
+  /**
+   * Swallow the click the browser synthesises from this gesture's pointerup, or
+   * finishing a drag on the row it started from would also open the file.
+   *
+   * Cleared when it is consumed, and again when the next gesture starts. The
+   * previous implementation cleared it from a `setTimeout(0)`, which races the
+   * very click it exists to swallow; a gesture boundary is deterministic.
+   */
+  const suppressNextClick = (path: string) => {
+    suppressClickPathRef.current = path;
+  };
+
+  const updatePointerDrag = (event: globalThis.PointerEvent) => {
+    const gesture = pointerDragRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (!gesture.dragging) {
+      if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) < EXPLORER_DRAG_THRESHOLD) {
+        return;
       }
+      gesture.dragging = true;
+      draggedNodeRef.current = gesture.node;
+      setDraggedNode(gesture.node);
+      setPointerDragActive(true);
     }
-    nativeDragActiveRef.current = true;
+    // WebKit would otherwise turn a press-and-sweep across row text into a text
+    // selection, which kills the gesture halfway through.
+    event.preventDefault();
+    lastPointerRef.current = { x: event.clientX, y: event.clientY };
+    // Written straight to the node rather than through state: this runs at
+    // pointer frequency, and a re-render of the whole tree per frame is a cost
+    // the drag does not need to pay.
+    const ghost = dragGhostRef.current;
+    if (ghost) ghost.style.transform = `translate(${event.clientX + 12}px, ${event.clientY + 10}px)`;
+
+    const hovered = explorerDropDirectory(event.target);
+    scheduleAutoExpand(hovered, gesture.node.path);
+    // An illegal destination is not merely un-highlighted, it is not a
+    // destination: `dropTargetPath` staying null is what the ghost's no-drop
+    // marker and the tree's no-drop cursor both read.
+    setDropTargetPath(hovered && canMoveProjectNode(gesture.node.path, hovered) ? hovered : null);
+  };
+
+  const finishPointerDrag = (event: globalThis.PointerEvent) => {
+    const gesture = pointerDragRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    // Read the destination from the release point rather than from the last move:
+    // a pointerup can arrive a few px away, and on a different row. Releasing
+    // outside the tree resolves to no directory at all, which cancels.
+    const destination = explorerDropDirectory(event.target);
+    const { node, dragging } = gesture;
+    endNodeDrag();
+    // Never passed the threshold, so this was a click. Let it through untouched.
+    if (!dragging) return;
+    suppressNextClick(node.path);
+    if (destination && canMoveProjectNode(node.path, destination)) void moveNodeTo(node, destination);
+  };
+
+  const cancelPointerDragOnEscape = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    const gesture = pointerDragRef.current;
+    if (!gesture?.dragging) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // The pointer is still down, so a click on the source row is still coming.
+    // Cancelling a drag must not open the file it was carrying.
+    suppressNextClick(gesture.node.path);
+    endNodeDrag();
+  };
+
+  const beginPointerDrag = (event: PointerEvent<HTMLElement>, node: ProjectNode) => {
+    if (event.button !== 0) return;
+    // A second finger, or a gesture whose pointerup never arrived, must not leak
+    // the previous gesture's window listeners.
+    if (pointerDragRef.current) endNodeDrag();
+    // Any suppression left over from a gesture whose click never came (released
+    // outside the window) dies here rather than on a timer.
+    suppressClickPathRef.current = null;
+    const gesture: PointerDragGesture = {
+      node,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    };
+    pointerDragRef.current = gesture;
+    lastPointerRef.current = { x: event.clientX, y: event.clientY };
+
+    /*
+     * Listeners go on `window`, and pointer capture is deliberately NOT taken.
+     *
+     * Capture is what broke the previous attempt: it retargets every pointermove
+     * to the row the press started on, so the code had to ask
+     * `document.elementFromPoint` where the cursor was, and one stale answer
+     * there is a drag that moves a file while never lighting a target - which is
+     * precisely what the review saw. Uncaptured, `event.target` IS the row under
+     * the pointer, so `explorerDropDirectory` reads the destination off the DOM.
+     * Window scope is what keeps the gesture alive after the pointer leaves the
+     * row it started on, and what lets a release outside the tree cancel instead
+     * of hang.
+     */
+    const onMove = (moveEvent: globalThis.PointerEvent) => updatePointerDrag(moveEvent);
+    const onUp = (upEvent: globalThis.PointerEvent) => finishPointerDrag(upEvent);
+    const onCancel = () => endNodeDrag();
+    const onKeyDown = (keyEvent: KeyboardEvent) => cancelPointerDragOnEscape(keyEvent);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    // Capture phase: a row has focus during its own drag, and a dialog or menu
+    // that opens later must not be the one to eat the Escape that cancels.
+    window.addEventListener("keydown", onKeyDown, true);
+    dragTeardownRef.current = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  };
+
+  /**
+   * The HTML5 drag-source half, kept deliberately.
+   *
+   * No row is `draggable` any more, so no engine starts a drag here - that is
+   * what stops WKWebView hijacking the pointer gesture. What remains is the
+   * interop path: a host that synthesises the protocol (Playwright's `dragTo`,
+   * App's own tab-follows-file coverage) still moves a node, and `dataTransfer`
+   * still carries the payload a `drop` can be resolved from when React state has
+   * not committed. It shares `moveNodeTo` with the pointer path, so the store/FS
+   * move and its error handling have exactly one implementation.
+   */
+  const beginNodeDrag = (event: DragEvent<HTMLElement>, node: ProjectNode) => {
+    // Hand the gesture over completely - its window listeners go with it. That
+    // is also what makes a `pointercancel` arriving after `dragstart` (the
+    // ordering is engine-dependent) harmless instead of a mid-drag teardown:
+    // there is no longer a pointer listener to hear it.
+    endNodeDrag();
     draggedNodeRef.current = node;
     setDraggedNode(node);
-    setDropTargetPath(null);
     event.dataTransfer.effectAllowed = "move";
     // text/plain is required for WKWebView/Tauri to keep the drag alive;
     // the custom type is the authoritative payload on drop.
@@ -628,74 +891,23 @@ export function ExplorerPanel({
     event.stopPropagation();
   };
 
-  const endNodeDrag = () => {
-    nativeDragActiveRef.current = false;
-    draggedNodeRef.current = null;
-    setDraggedNode(null);
-    setDropTargetPath(null);
-  };
+  // A drag interrupted by an unmount - project switch, panel closed - must not
+  // leave window listeners or a hover countdown running behind it.
+  useEffect(() => () => {
+    dragTeardownRef.current?.();
+    const pending = autoExpandRef.current;
+    if (pending) window.clearTimeout(pending.timer);
+  }, []);
 
-  const pointerDestination = (event: PointerEvent<HTMLElement>): string | null => {
-    const target = document.elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>("[data-project-dir-path]");
-    return target?.dataset.projectDirPath ?? null;
-  };
-
-  const beginPointerDrag = (event: PointerEvent<HTMLElement>, node: ProjectNode) => {
-    if (event.button !== 0) return;
-    pointerDragRef.current = {
-      node,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      dragging: false,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-
-  const updatePointerDrag = (event: PointerEvent<HTMLElement>) => {
-    const drag = pointerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    if (!drag.dragging && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 5) {
-      drag.dragging = true;
-      draggedNodeRef.current = drag.node;
-      setDraggedNode(drag.node);
-    }
-    if (!drag.dragging) return;
-    event.preventDefault();
-    const destination = pointerDestination(event);
-    setDropTargetPath(destination && canMoveProjectNode(drag.node.path, destination) ? destination : null);
-  };
-
-  const finishPointerDrag = (event: PointerEvent<HTMLElement>) => {
-    const drag = pointerDragRef.current;
-    pointerDragRef.current = null;
-    if (!drag || drag.pointerId !== event.pointerId || !drag.dragging) return;
-    event.preventDefault();
-    event.stopPropagation();
-    suppressClickPathRef.current = drag.node.path;
-    window.setTimeout(() => {
-      if (suppressClickPathRef.current === drag.node.path) suppressClickPathRef.current = null;
-    }, 0);
-    const destination = pointerDestination(event);
-    if (destination && canMoveProjectNode(drag.node.path, destination)) {
-      void moveDraggedNode(destination);
-    } else {
-      endNodeDrag();
-    }
-  };
-
-  const cancelPointerDrag = () => {
-    pointerDragRef.current = null;
-    // Starting a native drag is itself a reason engines fire `pointercancel`,
-    // and the ordering relative to `dragstart` is engine-dependent. A cancel
-    // that lands after dragstart must not clear the source: markDropTarget
-    // would then see `source === null`, treat any dataTransfer carrying our
-    // MIME type as valid, and highlight targets canMoveProjectNode had never
-    // approved. `dragend` is what ends a native drag.
-    if (nativeDragActiveRef.current) return;
-    endNodeDrag();
-  };
+  // The ghost mounts one render after the threshold is crossed, so its first
+  // position has to be applied when it appears rather than by the move that
+  // created it. Reads refs only, so it needs no dependency on the mover.
+  useEffect(() => {
+    const ghost = dragGhostRef.current;
+    if (!ghost) return;
+    const { x, y } = lastPointerRef.current;
+    ghost.style.transform = `translate(${x + 12}px, ${y + 10}px)`;
+  }, [pointerDragActive]);
 
   const consumeSuppressedClick = (path: string): boolean => {
     if (suppressClickPathRef.current !== path) return false;
@@ -713,10 +925,13 @@ export function ExplorerPanel({
     return payloadPath ? findProjectNode(tree, payloadPath) : null;
   };
 
-  const moveDraggedNode = async (destinationDirectoryPath: string, event?: DragEvent<HTMLElement>) => {
-    const source = dragSource(event);
-    endNodeDrag();
-    if (!source || !canMoveProjectNode(source.path, destinationDirectoryPath)) return;
+  /**
+   * The one place a move is performed. Both gestures - the pointer drag and the
+   * synthesised HTML5 drag - end here, so the store/FS move, the notice, and the
+   * error handling cannot drift apart between them.
+   */
+  const moveNodeTo = async (source: ProjectNode, destinationDirectoryPath: string) => {
+    if (!canMoveProjectNode(source.path, destinationDirectoryPath)) return;
     if (!onMoveNode) {
       onNotice("Moving explorer items needs a project move action.");
       return;
@@ -731,6 +946,15 @@ export function ExplorerPanel({
     } catch (err) {
       onNotice(err instanceof Error ? err.message : `Could not move ${source.name}.`);
     }
+  };
+
+  /** Native-drag entry point: resolve the source (React state, or the payload in
+   *  `dataTransfer` when state has not committed), then delegate. */
+  const moveDraggedNode = async (destinationDirectoryPath: string, event?: DragEvent<HTMLElement>) => {
+    const source = dragSource(event);
+    endNodeDrag();
+    if (!source) return;
+    await moveNodeTo(source, destinationDirectoryPath);
   };
 
   const startNewSchematic = () => {
@@ -777,6 +1001,15 @@ export function ExplorerPanel({
     : "Collapse folders in explorer";
 
   const markDropTarget = (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => {
+    // An OS file drag is an import, not a move. It has to be accepted here - a
+    // `dragover` that does not preventDefault means no `drop` ever fires, which
+    // is half of why dropping a file from Finder onto the tree did nothing - and
+    // it must not light a folder it is not going to move anything into.
+    if (dataTransferHasFiles(event.dataTransfer)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      return;
+    }
     const source = dragSource(event);
     // During dragover, getData is empty - accept if the MIME type is present
     // or we already know the dragged node from dragstart.
@@ -859,9 +1092,10 @@ export function ExplorerPanel({
   }
 
   // Ordered most- to least-essential: the tail is what leaves the header first
-  // as the panel narrows. Every icon is exactly 22px, so P3-04A's "widest-first"
-  // has no width to sort by and becomes a priority order - "New schematic file"
-  // is the reason this header exists, "Collapse" is one menu click away.
+  // as the panel narrows. Every icon is the same EXPLORER_ICON_SIZE box, so
+  // P3-04A's "widest-first" has no width to sort by and becomes a priority order
+  // - "New schematic file" is the reason this header exists, "Collapse" is one
+  // menu click away.
   const primaryActions = [
     <button
       key="new-file"
@@ -914,6 +1148,21 @@ export function ExplorerPanel({
     0,
     explorerPrimaryActionCount(explorerWidth, primaryActions.length),
   );
+
+  /*
+   * Derived, not stored. It changes at exactly the cadence `dropTargetPath`
+   * already does - once per row the pointer crosses, not once per pixel - so
+   * holding it in state would add a second copy of the same fact and a second
+   * render to keep them agreeing.
+   */
+  const dropTargetName = dropTargetPath === null
+    ? null
+    : dropTargetPath === rootPath ? (rootName ?? "Schematics") : basename(dropTargetPath);
+  const dragStatusMessage = !pointerDragActive || !draggedNode
+    ? ""
+    : dropTargetName
+      ? `Drop ${draggedNode.name} into ${dropTargetName}.`
+      : `Moving ${draggedNode.name}. No folder under the pointer; press Escape to cancel.`;
 
   return (
     <aside className="explorer-panel" aria-label="Project explorer" style={{ width: explorerWidth }}>
@@ -971,17 +1220,84 @@ export function ExplorerPanel({
 
       <p id="explorer-drag-help" className="sr-only">
         Drag a file or folder onto another folder, or onto the visible project root row, to move it.
+        Hold over a closed folder to open it; press Escape to cancel.
       </p>
+
+      {/*
+        `aria-grabbed` is deprecated and says nothing about WHERE the item would
+        land, which is the one fact a sighted reader gets from the highlight. This
+        is that fact, spoken: the destination is named as the pointer crosses it,
+        and a pointer over nothing legal says so instead of going quiet. The row
+        keeps `aria-grabbed` as well - it is still the only per-element grab state
+        older assistive tech knows how to ask for.
+      */}
+      {/*
+        `role="status"` and NOT an explicit `aria-live` attribute, which is a
+        real constraint rather than a style preference. Radix's modal hiding goes
+        through the `aria-hidden` package, which deliberately keeps any subtree
+        containing an `[aria-live]` element visible so announcements are not
+        lost - and "the subtree" means every ancestor, up to and including the
+        app container. A live region declared here therefore un-hid the whole
+        shell behind the Settings dialog: `App.shellContract.test.tsx`'s "with
+        Settings open, the shell behind it leaves the accessibility tree" failed
+        on the explorer, and a screen reader could reach the tree, the canvas and
+        the rail while a modal was up.
+
+        `role="status"` carries an implicit `aria-live="polite"` (and
+        `aria-atomic="true"`) per ARIA, so the announcement behaviour here is
+        unchanged; only the attribute the hiding library keys on is gone. Do not
+        "helpfully" add the explicit attribute back - that test is the guard.
+      */}
+      <p className="sr-only" role="status">{dragStatusMessage}</p>
+
+      {pointerDragActive && draggedNode && createPortal(
+        /*
+          The label that follows the cursor - VS Code sets a drag image, and a
+          pointer gesture has to draw its own. Portalled to <body> because
+          `.explorer-panel` is a CSS container (`container: explorer-shell /
+          inline-size`), and layout containment makes a container the containing
+          block for `position: fixed` descendants: rendered in place, the ghost
+          would track the cursor with the panel's own origin added in.
+        */
+        <div
+          ref={dragGhostRef}
+          className="explorer-drag-ghost"
+          data-invalid={!dropTargetPath || undefined}
+          aria-hidden="true"
+        >
+          {draggedNode.kind === "dir"
+            ? <Folder size={13} strokeWidth={1.5} aria-hidden="true" />
+            : <File size={13} strokeWidth={1.5} aria-hidden="true" />}
+          <span>{draggedNode.name}</span>
+        </div>,
+        document.body,
+      )}
 
       <div
         className="tree-list"
         data-project-dir-path={rootPath}
         data-drop-target={dropTargetPath === rootPath || undefined}
+        // Drives the grabbing/no-drop cursor and suspends text selection for the
+        // duration. Three-valued on purpose: "invalid" is how the tree says "not
+        // here" without the reader having to notice that nothing is highlighted.
+        data-explorer-dragging={pointerDragActive ? (dropTargetPath ? "valid" : "invalid") : undefined}
         onDragOver={(event) => markDropTarget(event, rootPath)}
         onDragLeave={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTargetPath(null);
         }}
         onDrop={(event) => {
+          // Finder → the tree imports the file. App.tsx has had this on
+          // `.editor-shell` for a while (importDropZoneProps); the tree - the
+          // surface that looks like where files live - had nothing, so a drop
+          // here silently did nothing. `importDroppedFile` owns where the import
+          // lands, so this is not a per-folder placement.
+          const file = dataTransferHasFiles(event.dataTransfer) ? event.dataTransfer.files?.[0] : null;
+          if (file) {
+            event.preventDefault();
+            event.stopPropagation();
+            void runFileImport(file);
+            return;
+          }
           const source = dragSource(event);
           if (!source || !canMoveProjectNode(source.path, rootPath)) return;
           event.preventDefault();
@@ -994,7 +1310,7 @@ export function ExplorerPanel({
             the reader looks at first (root → its own children, which is exactly
             what img-003-005 crops) is the only one with no guide line. No
             `data-project-dir-path` here: `.tree-list` already carries it, and a
-            second copy would only give `pointerDestination`'s closest() a
+            second copy would only give `explorerDropDirectory`'s closest() a
             nearer element resolving to the same path. */}
         <div
           className="tree-dir tree-project-root-dir"
@@ -1096,9 +1412,6 @@ export function ExplorerPanel({
             onDragLeaveFolder={clearDropTarget}
             onDropFolder={(event, destination) => { void moveDraggedNode(destination, event); }}
             onPointerDragStart={beginPointerDrag}
-            onPointerDragMove={updatePointerDrag}
-            onPointerDragEnd={finishPointerDrag}
-            onPointerDragCancel={cancelPointerDrag}
             onConsumeSuppressedClick={consumeSuppressedClick}
           />
         )}
@@ -1184,9 +1497,6 @@ function ProjectTree({
   onDragLeaveFolder,
   onDropFolder,
   onPointerDragStart,
-  onPointerDragMove,
-  onPointerDragEnd,
-  onPointerDragCancel,
   onConsumeSuppressedClick,
 }: {
   nodes: ProjectNode[];
@@ -1213,10 +1523,11 @@ function ProjectTree({
   onDragOverFolder: (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => void;
   onDragLeaveFolder: () => void;
   onDropFolder: (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => void;
+  /** Only the START of the pointer gesture is a row concern. Every subsequent
+   *  move, the release, and Escape are heard on `window` by the panel, which is
+   *  what lets one listener resolve the destination from whatever row the cursor
+   *  is actually over. */
   onPointerDragStart: (event: PointerEvent<HTMLElement>, node: ProjectNode) => void;
-  onPointerDragMove: (event: PointerEvent<HTMLElement>) => void;
-  onPointerDragEnd: (event: PointerEvent<HTMLElement>) => void;
-  onPointerDragCancel: () => void;
   onConsumeSuppressedClick: (path: string) => boolean;
 }) {
   return (
@@ -1244,6 +1555,11 @@ function ProjectTree({
                 if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onDragLeaveFolder();
               }}
               onDrop={(event) => {
+                // An OS file drag belongs to the tree container's import
+                // handler. Swallowing it here (this used to stopPropagation
+                // unconditionally) is why a file dragged from Finder onto a
+                // folder row did nothing at all.
+                if (dataTransferHasFiles(event.dataTransfer)) return;
                 event.preventDefault();
                 event.stopPropagation();
                 onDropFolder(event, node.path);
@@ -1277,13 +1593,18 @@ function ProjectTree({
                     type="button"
                     className="tree-folder-row"
                     style={{ paddingLeft: treeRowIndent(depth) }}
-                    // P3-02. Without this the whole native protocol below is
-                    // dead code - a `<button>` never fires `dragstart` unless it
-                    // is draggable - and App.css's `[draggable="true"]` grab
-                    // cursor and `-webkit-user-drag: element` never match, which
-                    // is also why the row offered no affordance at all. Keep it
-                    // the literal `true` React renders for a `true` value.
-                    draggable
+                    /*
+                     * Deliberately NOT `draggable` - reversing P3-02, which set
+                     * it. `draggable` is what let WKWebView start a native drag
+                     * on this row, and with Tauri's `dragDropEnabled` default the
+                     * webview then swallowed the HTML5 events, so the native drag
+                     * never completed AND it aborted the pointer gesture on its
+                     * way past. The pointer gesture is now the only mechanism
+                     * that starts an internal move; App.css's grab cursor and
+                     * `user-select: none` moved onto the row classes in
+                     * styles/pdf6Explorer.css, since they no longer have a
+                     * `[draggable="true"]` to hang off.
+                     */
                     data-dragging={draggedPath === node.path || undefined}
                     aria-grabbed={draggedPath === node.path}
                     data-drop-target={isDropTarget || undefined}
@@ -1293,9 +1614,6 @@ function ProjectTree({
                       if (!onConsumeSuppressedClick(node.path)) onToggle(node.path);
                     }}
                     onPointerDown={(event) => onPointerDragStart(event, node)}
-                    onPointerMove={onPointerDragMove}
-                    onPointerUp={onPointerDragEnd}
-                    onPointerCancel={onPointerDragCancel}
                     onDragStart={(event) => onDragStart(event, node)}
                     onDragEnd={onDragEnd}
                     onDragOver={(event) => onDragOverFolder(event, node.path)}
@@ -1303,6 +1621,7 @@ function ProjectTree({
                       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onDragLeaveFolder();
                     }}
                     onDrop={(event) => {
+                      if (dataTransferHasFiles(event.dataTransfer)) return;
                       event.preventDefault();
                       event.stopPropagation();
                       onDropFolder(event, node.path);
@@ -1353,9 +1672,6 @@ function ProjectTree({
                   onDragLeaveFolder={onDragLeaveFolder}
                   onDropFolder={onDropFolder}
                   onPointerDragStart={onPointerDragStart}
-                  onPointerDragMove={onPointerDragMove}
-                  onPointerDragEnd={onPointerDragEnd}
-                  onPointerDragCancel={onPointerDragCancel}
                   onConsumeSuppressedClick={onConsumeSuppressedClick}
                 />
               )}
@@ -1391,8 +1707,7 @@ function ProjectTree({
                 className={`tree-file${active ? " active" : ""}`}
                 style={{ paddingLeft: treeRowIndent(depth) }}
                 aria-current={active ? "page" : undefined}
-                // P3-02, same reason as the folder row above.
-                draggable
+                // Not `draggable`, same reason as the folder row above.
                 data-dragging={draggedPath === node.path || undefined}
                 aria-grabbed={draggedPath === node.path}
                 aria-describedby="explorer-drag-help"
@@ -1401,9 +1716,6 @@ function ProjectTree({
                   if (!onConsumeSuppressedClick(node.path)) onOpenFile(node.path, node.name);
                 }}
                 onPointerDown={(event) => onPointerDragStart(event, node)}
-                onPointerMove={onPointerDragMove}
-                onPointerUp={onPointerDragEnd}
-                onPointerCancel={onPointerDragCancel}
                 onDragStart={(event) => onDragStart(event, node)}
                 onDragEnd={onDragEnd}
                 onDragOver={(event) => onDragOverFolder(event, parentDirectoryPath)}
@@ -1414,6 +1726,7 @@ function ProjectTree({
                   if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onDragLeaveFolder();
                 }}
                 onDrop={(event) => {
+                  if (dataTransferHasFiles(event.dataTransfer)) return;
                   event.preventDefault();
                   event.stopPropagation();
                   onDropFolder(event, parentDirectoryPath);

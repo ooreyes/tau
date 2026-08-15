@@ -5,6 +5,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import {
+  EXPLORER_DRAG_AUTO_EXPAND_MS,
+  EXPLORER_DRAG_THRESHOLD,
   EXPLORER_PANEL_WIDTH,
   ExplorerPanel,
   explorerHeaderLayout,
@@ -17,6 +19,71 @@ import { useProject } from "../store/useProject";
  *  source text. Same technique ShellPanels.test.tsx already uses on App.css. */
 const explorerTreeCss = (): string =>
   readFileSync(join(__dirname, "..", "styles", "explorerTree.css"), "utf8");
+const pdf6ExplorerCss = (): string =>
+  readFileSync(join(__dirname, "..", "styles", "pdf6Explorer.css"), "utf8");
+const appCss = (): string => readFileSync(join(__dirname, "..", "App.css"), "utf8");
+
+/**
+ * One declaration out of one rule, read from CSS source text - the house pattern
+ * from styles/pdf4Chrome.css.test.ts. jsdom applies no stylesheet, so the
+ * cascade cannot be measured here, only the rules that produce it.
+ */
+const declaration = (css: string, selector: string, property: string): string => {
+  const start = css.indexOf(`${selector} {`);
+  expect(start, `${selector} is missing from the stylesheet`).toBeGreaterThan(-1);
+  const body = css.slice(css.indexOf("{", start) + 1, css.indexOf("}", start));
+  const match = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`).exec(body);
+  expect(match, `${selector} declares no ${property}`).toBeTruthy();
+  return match![1].trim();
+};
+
+/**
+ * Drive the pointer gesture a hand performs: press the source row, travel past
+ * the threshold, cross each waypoint, release on the last one.
+ *
+ * `fireEvent` dispatches real bubbling events, so the panel's window listeners
+ * receive exactly what a browser delivers. Nothing here stubs
+ * `document.elementFromPoint`: the destination is resolved from `event.target`,
+ * which is why these tests can no longer pass while the shipped app aims at the
+ * wrong row - the failure mode that made the old suite green against a feature
+ * the reader could not use.
+ */
+let pointerIdSeed = 0;
+const pointerDragFrom = (row: Element) => {
+  const pointerId = (pointerIdSeed += 1);
+  let x = 20;
+  fireEvent.pointerDown(row, { pointerId, button: 0, clientX: x, clientY: 20 });
+  // One move past the threshold is what turns the press into a drag.
+  x += EXPLORER_DRAG_THRESHOLD + 1;
+  fireEvent.pointerMove(row, { pointerId, clientX: x, clientY: 20 });
+  return {
+    /** The pointer is now over `target`. */
+    over(target: Element) {
+      x += 4;
+      fireEvent.pointerMove(target, { pointerId, clientX: x, clientY: 40 });
+    },
+    release(target: Element) {
+      fireEvent.pointerUp(target, { pointerId, clientX: x, clientY: 40 });
+    },
+    /** Escape reaches the panel's capture-phase window listener from anywhere. */
+    escape() {
+      fireEvent.keyDown(document.body, { key: "Escape" });
+    },
+  };
+};
+
+const dragGhost = (): HTMLElement | null => document.querySelector<HTMLElement>(".explorer-drag-ghost");
+
+/** An OS file drag, which is an import rather than a move. `types` is what the
+ *  panel keys off, exactly as the browser reports it. */
+const fileDragStub = (file: File): DataTransfer => ({
+  types: ["Files"],
+  files: [file],
+  effectAllowed: "all",
+  dropEffect: "none",
+  setData: vi.fn(),
+  getData: vi.fn(() => ""),
+} as unknown as DataTransfer);
 
 const originalProjectActions = {
   detectCapability: useProject.getState().detectCapability,
@@ -72,6 +139,9 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  // Hover-to-expand is the one behaviour here that needs fake timers; leaving
+  // them installed would strand every later test's waitFor.
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -369,54 +439,6 @@ describe("ExplorerPanel action row", () => {
     expect(screen.queryByRole("button", { name: "Create Schematics folder" })).toBeNull();
   });
 
-  it("moves a file onto a folder through the explicit project move contract", async () => {
-    const root = useProject.getState().rootPath!;
-    const source = await useProject.getState().createSchematicFile(root, "gain.asc");
-    const folder = await useProject.getState().createFolder(root, "Filters");
-    const onMoveNode = vi.fn().mockResolvedValue(`${folder}/gain.asc`);
-    const { onNotice } = renderExplorer({ onMoveNode });
-    const fileRow = screen.getByRole("button", { name: "gain.asc" });
-    const folderRow = screen.getByRole("button", { name: "Filters" });
-    const dataTransfer = dataTransferStub();
-
-    expect(fileRow.getAttribute("aria-describedby")).toBe("explorer-drag-help");
-    expect(screen.getByText(/Drag a file or folder onto another folder/)).toBeTruthy();
-
-    fireEvent.dragStart(fileRow, { dataTransfer });
-    expect(fileRow.getAttribute("data-dragging")).toBe("true");
-    expect(fileRow.getAttribute("aria-grabbed")).toBe("true");
-    fireEvent.dragOver(folderRow, { dataTransfer });
-    expect(folderRow.getAttribute("data-drop-target")).toBe("true");
-    expect(dataTransfer.dropEffect).toBe("move");
-    fireEvent.drop(folderRow, { dataTransfer });
-
-    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
-    expect(onNotice).toHaveBeenCalledWith("Moved gain.asc");
-    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
-  });
-
-  it("uses pointer dragging in WKWebView where native HTML drag is unreliable", async () => {
-    const root = useProject.getState().rootPath!;
-    const source = await useProject.getState().createSchematicFile(root, "native.asc");
-    const folder = await useProject.getState().createFolder(root, "Native Target");
-    const onMoveNode = vi.fn().mockResolvedValue(`${folder}/native.asc`);
-    renderExplorer({ onMoveNode });
-    const fileRow = screen.getByRole("button", { name: "native.asc" });
-    const folderRow = screen.getByRole("button", { name: "Native Target" });
-    const destination = folderRow.closest<HTMLElement>("[data-project-dir-path]")!;
-    Object.defineProperty(document, "elementFromPoint", {
-      configurable: true,
-      value: vi.fn().mockReturnValue(destination),
-    });
-
-    fireEvent.pointerDown(fileRow, { pointerId: 7, button: 0, clientX: 100, clientY: 100 });
-    fireEvent.pointerMove(fileRow, { pointerId: 7, clientX: 120, clientY: 120 });
-    fireEvent.pointerUp(fileRow, { pointerId: 7, clientX: 120, clientY: 120 });
-
-    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
-    Reflect.deleteProperty(document, "elementFromPoint");
-  });
-
   it("uses the drag payload when React drag state has not committed yet", async () => {
     const root = useProject.getState().rootPath!;
     const source = await useProject.getState().createSchematicFile(root, "race.asc");
@@ -427,28 +449,230 @@ describe("ExplorerPanel action row", () => {
     dataTransfer.setData("application/x-tau-project-node", source!);
 
     // A drop backed only by dataTransfer reproduces the browser ordering where
-    // dragover/drop can precede React's setDraggedNode commit.
+    // dragover/drop can precede React's setDraggedNode commit. This is the
+    // interop half of the contract - see the PDF6-01 block below for why the
+    // rows are no longer native drag sources but these handlers stayed.
     fireEvent.drop(screen.getByRole("button", { name: "New Destination" }), { dataTransfer });
 
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
   });
+});
 
-  it("makes a failed move visible instead of silently clearing the drag", async () => {
+/**
+ * PDF6-01. "In this section the drag and drop is still not functional I cant
+ * seem to move .asc files into folders. This needs to be completely resolved."
+ * "Since VScode is forked or open source can you copy their drag and drop
+ * mechanism?"
+ *
+ * Two mechanisms used to share these rows and both lost. Tauri v2 defaults
+ * `dragDropEnabled` to true, which installs a native drag handler on the
+ * WKWebView that swallows HTML5 drag events; the `draggable` row still fired
+ * `dragstart`, which made the old code abandon its pointer gesture, and then
+ * neither half delivered a drop. And on the one path that did work - a
+ * synthesised pointer drag in Chromium - NO drop-target highlight ever appeared,
+ * so a reader watching the screen had no reason to believe the feature existed.
+ *
+ * The whole section is therefore re-expressed on VS Code's model: one pointer
+ * gesture, a travel threshold, a ghost label, the nearest enclosing folder as the
+ * target, hover-to-expand, Escape to cancel. Every behaviour the old
+ * dragStart/dragOver/drop suite asserted is asserted here through that protocol,
+ * because that protocol is what a hand now performs.
+ */
+describe("PDF6-01 - dragging a file into a folder, VS Code style", () => {
+  it("disables the Tauri handler that was swallowing the drag events", () => {
+    /*
+     * The root cause, pinned where it cannot be lost to a merge. Tauri v2's
+     * `dragDropEnabled` defaults to TRUE, and on macOS that installs a native
+     * drag-and-drop handler on the WKWebView which eats HTML5 drag events before
+     * the page sees them. Nothing in this app subscribes to Tauri's own
+     * `onDragDropEvent`, so turning it off costs nothing and is the documented
+     * remedy; leaving it on is why the shipped app moved nothing while every
+     * jsdom test passed.
+     */
+    const config = JSON.parse(
+      readFileSync(join(__dirname, "..", "..", "src-tauri", "tauri.conf.json"), "utf8"),
+    );
+    expect(config.app.windows[0].dragDropEnabled).toBe(false);
+  });
+
+  it("no longer makes a tree row a native drag source", async () => {
+    /*
+     * Reversed from P3-02 on purpose. That pass added `draggable` because
+     * without it `dragstart` can never fire - true, and beside the point: with
+     * Tauri's native handler live, a `draggable` row started a drag that could
+     * never finish AND starting it aborted the pointer gesture that could have.
+     * The literal string is still what is asserted, because App.css keys a grab
+     * cursor and `-webkit-user-drag: element` on `[draggable="true"]`; both
+     * affordances moved onto the row classes in styles/pdf6Explorer.css rather
+     * than being dropped.
+     */
     const root = useProject.getState().rootPath!;
-    await useProject.getState().createSchematicFile(root, "blocked.asc");
-    await useProject.getState().createFolder(root, "Destination");
-    const onMoveNode = vi.fn(async () => {
-      useProject.setState({ error: "A file named blocked.asc already exists in Destination." });
-      return null;
-    });
-    const { onNotice } = renderExplorer({ onMoveNode });
-    const dataTransfer = dataTransferStub();
+    await useProject.getState().createSchematicFile(root, "gain.asc");
+    await useProject.getState().createFolder(root, "Filters");
+    renderExplorer();
 
-    fireEvent.dragStart(screen.getByRole("button", { name: "blocked.asc" }), { dataTransfer });
-    fireEvent.drop(screen.getByRole("button", { name: "Destination" }), { dataTransfer });
+    expect(screen.getByRole("button", { name: "gain.asc" }).getAttribute("draggable")).not.toBe("true");
+    expect(screen.getByRole("button", { name: "Filters" }).getAttribute("draggable")).not.toBe("true");
+    expect(screen.getByRole("button", { name: /Project root/i }).getAttribute("draggable")).not.toBe("true");
 
-    await waitFor(() => expect(onNotice).toHaveBeenCalledWith("A file named blocked.asc already exists in Destination."));
-    expect(screen.getByRole("alert").textContent).toContain("already exists");
+    const css = pdf6ExplorerCss();
+    const rows = ".tree-file,\n.tree-folder-row:not(.tree-project-root-row)";
+    expect(declaration(css, rows, "cursor")).toBe("grab");
+    expect(declaration(css, rows, "user-select")).toBe("none");
+  });
+
+  it("moves a file onto a folder, and highlights that folder while the drag is in flight", async () => {
+    const root = useProject.getState().rootPath!;
+    const source = await useProject.getState().createSchematicFile(root, "gain.asc");
+    const folder = await useProject.getState().createFolder(root, "Filters");
+    const onMoveNode = vi.fn().mockResolvedValue(`${folder}/gain.asc`);
+    const { container, onNotice, onOpenAscText } = renderExplorer({ onMoveNode });
+    const fileRow = screen.getByRole("button", { name: "gain.asc" });
+    const folderRow = screen.getByRole("button", { name: "Filters" });
+    const folderDir = container.querySelector<HTMLElement>(`.tree-dir[data-project-dir-path="${folder}"]`)!;
+    const treeList = container.querySelector<HTMLElement>(".tree-list")!;
+
+    expect(fileRow.getAttribute("aria-describedby")).toBe("explorer-drag-help");
+    expect(screen.getByText(/Drag a file or folder onto another folder/)).toBeTruthy();
+
+    const drag = pointerDragFrom(fileRow);
+    expect(fileRow.getAttribute("data-dragging")).toBe("true");
+    expect(fileRow.getAttribute("aria-grabbed")).toBe("true");
+    // Not hovered yet, so nothing may claim to be a destination.
+    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+
+    drag.over(folderRow);
+    /*
+     * THE regression. The move already worked in Chromium and still read as
+     * broken because this attribute never appeared: styles/pdf6Explorer.css
+     * paints both the row and its `.tree-dir` wrapper off it, so both are
+     * asserted, and the tree says which kind of drop is under the pointer.
+     */
+    expect(folderRow.getAttribute("data-drop-target")).toBe("true");
+    expect(folderDir.getAttribute("data-drop-target")).toBe("true");
+    expect(treeList.getAttribute("data-explorer-dragging")).toBe("valid");
+    // The ghost names what is being carried, and is not marked no-drop.
+    expect(dragGhost()?.textContent).toContain("gain.asc");
+    expect(dragGhost()?.getAttribute("data-invalid")).toBeNull();
+    // …and a reader who cannot see any of that is TOLD where it would land.
+    expect(screen.getByRole("status").textContent).toBe("Drop gain.asc into Filters.");
+
+    drag.release(folderRow);
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
+    expect(onNotice).toHaveBeenCalledWith("Moved gain.asc");
+    // Nothing left lit, nothing left following the cursor.
+    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+    expect(treeList.getAttribute("data-explorer-dragging")).toBeNull();
+    expect(dragGhost()).toBeNull();
+    // The click the browser synthesises from this same press must not also open
+    // the file that was just moved.
+    fireEvent.click(fileRow);
+    expect(onOpenAscText).not.toHaveBeenCalled();
+  });
+
+  it("keeps a click a click below the drag threshold", async () => {
+    const root = useProject.getState().rootPath!;
+    const path = await useProject.getState().createSchematicFile(root, "gain.asc");
+    const folder = await useProject.getState().createFolder(root, "Filters");
+    const { onOpenAscText } = renderExplorer();
+    const fileRow = screen.getByRole("button", { name: "gain.asc" });
+
+    // A hand is never perfectly still. One pixel short of the threshold is a
+    // click, not a drag - and a rename double-click depends on the same rule.
+    fireEvent.pointerDown(fileRow, { pointerId: 90, button: 0, clientX: 30, clientY: 30 });
+    fireEvent.pointerMove(fileRow, { pointerId: 90, clientX: 30 + EXPLORER_DRAG_THRESHOLD - 1, clientY: 30 });
+    expect(dragGhost()).toBeNull();
+    expect(fileRow.getAttribute("data-dragging")).toBeNull();
+    fireEvent.pointerUp(fileRow, { pointerId: 90, clientX: 30 + EXPLORER_DRAG_THRESHOLD - 1, clientY: 30 });
+    fireEvent.click(fileRow);
+    await waitFor(() => expect(onOpenAscText).toHaveBeenCalledWith(path, "gain.asc", expect.any(String)));
+
+    // The same rule for a folder row, whose click toggles instead of opening.
+    const folderRow = screen.getByRole("button", { name: "Filters" });
+    const expandedBefore = useProject.getState().expanded.includes(folder!);
+    fireEvent.pointerDown(folderRow, { pointerId: 91, button: 0, clientX: 30, clientY: 30 });
+    fireEvent.pointerUp(folderRow, { pointerId: 91, clientX: 30, clientY: 30 });
+    fireEvent.click(folderRow);
+    expect(useProject.getState().expanded.includes(folder!)).toBe(!expandedBefore);
+  });
+
+  it("cancels on Escape mid-drag, leaving no move and no lingering highlight", async () => {
+    const root = useProject.getState().rootPath!;
+    await useProject.getState().createSchematicFile(root, "gain.asc");
+    const folder = await useProject.getState().createFolder(root, "Filters");
+    const onMoveNode = vi.fn().mockResolvedValue(`${folder}/gain.asc`);
+    const { container, onOpenAscText } = renderExplorer({ onMoveNode });
+    const fileRow = screen.getByRole("button", { name: "gain.asc" });
+    const folderRow = screen.getByRole("button", { name: "Filters" });
+    const treeList = container.querySelector<HTMLElement>(".tree-list")!;
+
+    const drag = pointerDragFrom(fileRow);
+    drag.over(folderRow);
+    expect(folderRow.getAttribute("data-drop-target")).toBe("true");
+    expect(dragGhost()).toBeTruthy();
+
+    drag.escape();
+    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+    expect(treeList.getAttribute("data-explorer-dragging")).toBeNull();
+    expect(dragGhost()).toBeNull();
+    expect(fileRow.getAttribute("data-dragging")).toBeNull();
+
+    // The pointer is still down. Neither the release nor the click it
+    // synthesises may move the file or open it.
+    drag.release(folderRow);
+    fireEvent.click(fileRow);
+    expect(onMoveNode).not.toHaveBeenCalled();
+    expect(onOpenAscText).not.toHaveBeenCalled();
+  });
+
+  it("cancels when the pointer is released outside the tree", async () => {
+    const root = useProject.getState().rootPath!;
+    await useProject.getState().createSchematicFile(root, "gain.asc");
+    const folder = await useProject.getState().createFolder(root, "Filters");
+    const onMoveNode = vi.fn().mockResolvedValue(`${folder}/gain.asc`);
+    renderExplorer({ onMoveNode });
+    const fileRow = screen.getByRole("button", { name: "gain.asc" });
+    const folderRow = screen.getByRole("button", { name: "Filters" });
+
+    const drag = pointerDragFrom(fileRow);
+    drag.over(folderRow);
+    expect(folderRow.getAttribute("data-drop-target")).toBe("true");
+    // The folder row had a dragLeave for this; a pointer gesture gets it for
+    // free, because the destination is whatever is under the pointer NOW.
+    drag.over(document.body);
+    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+    expect(dragGhost()?.getAttribute("data-invalid")).toBe("true");
+
+    drag.release(document.body);
+    expect(onMoveNode).not.toHaveBeenCalled();
+    expect(dragGhost()).toBeNull();
+  });
+
+  it("opens a collapsed folder the drag hovers, so a nested folder is one gesture", async () => {
+    const root = useProject.getState().rootPath!;
+    const outer = await useProject.getState().createFolder(root, "Analog");
+    const destination = await useProject.getState().createFolder(outer!, "Filters");
+    const source = await useProject.getState().createSchematicFile(root, "gain.asc");
+    const onMoveNode = vi.fn().mockResolvedValue(`${destination}/gain.asc`);
+    // Analog closed: without hover-to-expand, Filters cannot be reached at all
+    // without dropping the file somewhere else first.
+    act(() => { useProject.setState({ expanded: [root] }); });
+    renderExplorer({ onMoveNode });
+    expect(screen.queryByRole("button", { name: "Filters" })).toBeNull();
+
+    vi.useFakeTimers();
+    const drag = pointerDragFrom(screen.getByRole("button", { name: "gain.asc" }));
+    drag.over(screen.getByRole("button", { name: "Analog" }));
+    // Not instant: a folder merely crossed on the way somewhere else must not
+    // flap open under the cursor.
+    expect(screen.queryByRole("button", { name: "Filters" })).toBeNull();
+    act(() => { vi.advanceTimersByTime(EXPLORER_DRAG_AUTO_EXPAND_MS); });
+
+    const nestedRow = screen.getByRole("button", { name: "Filters" });
+    drag.over(nestedRow);
+    expect(nestedRow.getAttribute("data-drop-target")).toBe("true");
+    drag.release(nestedRow);
+    expect(onMoveNode).toHaveBeenCalledWith(source, destination);
   });
 
   it("supports moving a nested explorer item back to the project root", async () => {
@@ -457,17 +681,14 @@ describe("ExplorerPanel action row", () => {
     const source = await useProject.getState().createSchematicFile(folder!, "nested.asc");
     const onMoveNode = vi.fn().mockResolvedValue(`${root}/nested.asc`);
     renderExplorer({ onMoveNode });
-    const fileRow = screen.getByRole("button", { name: "nested.asc" });
     const rootTarget = screen.getByRole("button", {
       name: /Project root .+; drop files or folders here/i,
     });
-    const dataTransfer = dataTransferStub();
 
-    fireEvent.dragStart(fileRow, { dataTransfer });
-    fireEvent.dragOver(rootTarget, { dataTransfer });
+    const drag = pointerDragFrom(screen.getByRole("button", { name: "nested.asc" }));
+    drag.over(rootTarget);
     expect(rootTarget.getAttribute("data-drop-target")).toBe("true");
-    expect(dataTransfer.dropEffect).toBe("move");
-    fireEvent.drop(rootTarget, { dataTransfer });
+    drag.release(rootTarget);
 
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, root));
   });
@@ -479,29 +700,33 @@ describe("ExplorerPanel action row", () => {
     const source = await useProject.getState().createSchematicFile(root, "root-filter.asc");
     const onMoveNode = vi.fn().mockResolvedValue(`${destination}/root-filter.asc`);
     renderExplorer({ onMoveNode });
-    const dataTransfer = dataTransferStub();
 
-    fireEvent.dragStart(screen.getByRole("button", { name: "root-filter.asc" }), { dataTransfer });
-    fireEvent.dragOver(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
-    fireEvent.drop(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
+    const drag = pointerDragFrom(screen.getByRole("button", { name: "root-filter.asc" }));
+    const nested = screen.getByRole("button", { name: "Filters" });
+    drag.over(nested);
+    drag.release(nested);
 
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, destination));
   });
 
-  it("treats a drop on a file inside an expanded folder as a drop on that folder", async () => {
+  it("treats a release over a file inside an expanded folder as a drop on that folder", async () => {
     const root = useProject.getState().rootPath!;
     const led = await useProject.getState().createFolder(root, "LED");
     await useProject.getState().createSchematicFile(led!, "led.asc");
     const source = await useProject.getState().createSchematicFile(root, "driver.asc");
     const onMoveNode = vi.fn().mockResolvedValue(`${led}/driver.asc`);
-    renderExplorer({ onMoveNode });
-    const dataTransfer = dataTransferStub();
+    const { container } = renderExplorer({ onMoveNode });
+    const ledDir = container.querySelector<HTMLElement>(`.tree-dir[data-project-dir-path="${led}"]`)!;
 
-    fireEvent.dragStart(screen.getByRole("button", { name: "driver.asc" }), { dataTransfer });
-    // Users commonly release over the child file row under an expanded LED/.
-    fireEvent.dragOver(screen.getByRole("button", { name: "led.asc" }), { dataTransfer });
-    expect(dataTransfer.dropEffect).toBe("move");
-    fireEvent.drop(screen.getByRole("button", { name: "led.asc" }), { dataTransfer });
+    const drag = pointerDragFrom(screen.getByRole("button", { name: "driver.asc" }));
+    // Readers commonly release over the child file row under an expanded LED/.
+    const childRow = screen.getByRole("button", { name: "led.asc" });
+    drag.over(childRow);
+    // The child row is not a destination; the folder that owns it is, and that is
+    // what has to look like the target.
+    expect(childRow.getAttribute("data-drop-target")).toBeNull();
+    expect(ledDir.getAttribute("data-drop-target")).toBe("true");
+    drag.release(childRow);
 
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, led));
   });
@@ -514,32 +739,83 @@ describe("ExplorerPanel action row", () => {
     await useProject.getState().createSchematicFile(movingFolder!, "low-pass.asc");
     const onMoveNode = vi.fn().mockResolvedValue(`${destination}/Filters`);
     renderExplorer({ onMoveNode });
-    const dataTransfer = dataTransferStub();
 
-    fireEvent.dragStart(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
-    fireEvent.dragOver(screen.getByRole("button", { name: "Archive" }), { dataTransfer });
-    fireEvent.drop(screen.getByRole("button", { name: "Archive" }), { dataTransfer });
+    const drag = pointerDragFrom(screen.getByRole("button", { name: "Filters" }));
+    const archive = screen.getByRole("button", { name: "Archive" });
+    drag.over(archive);
+    expect(archive.getAttribute("data-drop-target")).toBe("true");
+    drag.release(archive);
 
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(movingFolder, destination));
   });
 
-  it("rejects dropping a folder into its own descendant", async () => {
+  it("refuses to highlight or move a folder into its own descendant", async () => {
     const root = useProject.getState().rootPath!;
     const parent = await useProject.getState().createFolder(root, "Parent");
     await useProject.getState().createFolder(parent!, "Child");
     const onMoveNode = vi.fn().mockResolvedValue("unused");
-    renderExplorer({ onMoveNode });
-    const parentRow = screen.getByRole("button", { name: "Parent" });
+    const { container } = renderExplorer({ onMoveNode });
+    const treeList = container.querySelector<HTMLElement>(".tree-list")!;
     const childRow = screen.getByRole("button", { name: "Child" });
-    const dataTransfer = dataTransferStub();
 
-    fireEvent.dragStart(parentRow, { dataTransfer });
-    fireEvent.dragOver(childRow, { dataTransfer });
-    expect(dataTransfer.dropEffect).toBe("none");
+    const drag = pointerDragFrom(screen.getByRole("button", { name: "Parent" }));
+    drag.over(childRow);
     expect(childRow.getAttribute("data-drop-target")).toBeNull();
-    fireEvent.drop(childRow, { dataTransfer });
+    // An illegal target is not merely un-highlighted, it says no: the tree wears
+    // the no-drop cursor and the ghost is marked.
+    expect(treeList.getAttribute("data-explorer-dragging")).toBe("invalid");
+    expect(dragGhost()?.getAttribute("data-invalid")).toBe("true");
+    expect(screen.getByRole("status").textContent).toMatch(/^Moving Parent\. No folder under the pointer/);
+    drag.release(childRow);
 
     expect(onMoveNode).not.toHaveBeenCalled();
+  });
+
+  it("refuses a drop onto the row itself and back into the folder it already lives in", async () => {
+    const root = useProject.getState().rootPath!;
+    const analog = await useProject.getState().createFolder(root, "Analog");
+    await useProject.getState().createSchematicFile(analog!, "nested.asc");
+    const onMoveNode = vi.fn().mockResolvedValue("unused");
+    const { container } = renderExplorer({ onMoveNode });
+    const treeList = container.querySelector<HTMLElement>(".tree-list")!;
+    const folderRow = screen.getByRole("button", { name: "Analog" });
+
+    // Onto itself: canMoveProjectNode's source !== destination clause.
+    const selfDrag = pointerDragFrom(folderRow);
+    selfDrag.over(folderRow);
+    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+    selfDrag.release(folderRow);
+
+    // Into its own parent: a no-op move that would still churn disk and tabs.
+    const parentDrag = pointerDragFrom(screen.getByRole("button", { name: "nested.asc" }));
+    parentDrag.over(folderRow);
+    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+    // …and the refusal does not fall back to an ancestor offering the project
+    // root instead. Lighting the root here would promise a move that the drop
+    // then refuses - which is what the bubbling native handler used to do.
+    expect(treeList.getAttribute("data-drop-target")).toBeNull();
+    parentDrag.release(folderRow);
+
+    expect(onMoveNode).not.toHaveBeenCalled();
+  });
+
+  it("makes a failed move visible instead of silently clearing the drag", async () => {
+    const root = useProject.getState().rootPath!;
+    await useProject.getState().createSchematicFile(root, "blocked.asc");
+    await useProject.getState().createFolder(root, "Destination");
+    const onMoveNode = vi.fn(async () => {
+      useProject.setState({ error: "A file named blocked.asc already exists in Destination." });
+      return null;
+    });
+    const { onNotice } = renderExplorer({ onMoveNode });
+
+    const drag = pointerDragFrom(screen.getByRole("button", { name: "blocked.asc" }));
+    const destination = screen.getByRole("button", { name: "Destination" });
+    drag.over(destination);
+    drag.release(destination);
+
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith("A file named blocked.asc already exists in Destination."));
+    expect(screen.getByRole("alert").textContent).toContain("already exists");
   });
 
   it("explains the missing persistence capability instead of faking a move", async () => {
@@ -547,13 +823,43 @@ describe("ExplorerPanel action row", () => {
     await useProject.getState().createSchematicFile(root, "gain.asc");
     await useProject.getState().createFolder(root, "Filters");
     const { onNotice } = renderExplorer();
-    const dataTransfer = dataTransferStub();
 
-    fireEvent.dragStart(screen.getByRole("button", { name: "gain.asc" }), { dataTransfer });
-    fireEvent.dragOver(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
-    fireEvent.drop(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
+    const drag = pointerDragFrom(screen.getByRole("button", { name: "gain.asc" }));
+    const folderRow = screen.getByRole("button", { name: "Filters" });
+    drag.over(folderRow);
+    drag.release(folderRow);
 
     await waitFor(() => expect(onNotice).toHaveBeenCalledWith("Moving explorer items needs a project move action."));
+  });
+
+  it("imports a file dropped onto the tree from the Finder", async () => {
+    /*
+     * The other half of "drag and drop does not work here". App.tsx has had an
+     * import drop zone on `.editor-shell` for a while; the tree - the surface
+     * that looks like where files live - had none, so a drop from Finder onto the
+     * explorer did nothing at all. It also could not have worked while Tauri's
+     * native handler was on. This is an IMPORT: it must not light a move target,
+     * and it must survive being released over a folder row, which used to
+     * stopPropagation on every drop.
+     */
+    const { onOpenAscText, container } = renderExplorer();
+    const source = "Version 4\nSHEET 1 880 680\n";
+    const bytes = new TextEncoder().encode(source);
+    const file = { name: "from-finder.asc", arrayBuffer: async () => bytes.buffer } as File;
+    const treeList = container.querySelector<HTMLElement>(".tree-list")!;
+    const dataTransfer = fileDragStub(file);
+
+    fireEvent.dragOver(treeList, { dataTransfer });
+    // Without preventDefault on dragover the browser never fires `drop` at all.
+    expect(dataTransfer.dropEffect).toBe("copy");
+    expect(treeList.getAttribute("data-drop-target")).toBeNull();
+    fireEvent.drop(treeList, { dataTransfer });
+
+    await waitFor(() => expect(onOpenAscText).toHaveBeenCalledWith(
+      expect.stringMatching(/from-finder\.asc$/),
+      "from-finder.asc",
+      source,
+    ));
   });
 });
 
@@ -724,39 +1030,27 @@ describe("P3-06 - tree rows must read as nested inside their folder", () => {
 });
 
 /**
- * P3-02. `grep -n draggable ShellPanels.tsx` returned nothing: no row set the
- * attribute, so `dragstart` could never fire in a real engine and the whole
- * native protocol - plus App.css's `[draggable="true"]` grab cursor and
- * `-webkit-user-drag: element` - was unreachable. jsdom does not gate dragstart
- * on the attribute, which is exactly why the drag tests above passed against
- * dead code; asserting the attribute string is the only teeth jsdom can give.
+ * The interop half of PDF6-01.
+ *
+ * No row is a native drag source any more, but the HTML5 drop handlers stayed:
+ * a host that synthesises the protocol still performs a move (Playwright's
+ * `dragTo`, and App.workspace.test.tsx's "the open tab follows its file" case,
+ * which drives dragStart/dragOver/drop through the real App), and `dataTransfer`
+ * is still where a drop reads its source when React state has not committed.
+ * These cases guard the seam between the two mechanisms - chiefly that starting
+ * a synthesised native drag hands the pointer gesture over cleanly, so a
+ * `pointercancel` arriving afterwards (engine-dependent ordering) cannot tear
+ * down a drag that is still in flight.
  */
-describe("P3-02 - rows must actually be draggable", () => {
-  it("marks file and folder rows draggable, and leaves the root row a drop target only", async () => {
-    const root = useProject.getState().rootPath!;
-    await useProject.getState().createSchematicFile(root, "gain.asc");
-    await useProject.getState().createFolder(root, "Filters");
-    renderExplorer();
-
-    // The literal string, not truthiness: App.css keys the grab cursor and
-    // WebKit's -webkit-user-drag on [draggable="true"], and React renders a
-    // falsy value as no attribute at all - which would silently re-break both.
-    expect(screen.getByRole("button", { name: "gain.asc" }).getAttribute("draggable")).toBe("true");
-    expect(screen.getByRole("button", { name: "Filters" }).getAttribute("draggable")).toBe("true");
-    // The root row cannot be a source: useProject.moveNode refuses source===root.
-    expect(
-      screen.getByRole("button", { name: /Project root/i }).getAttribute("draggable"),
-    ).not.toBe("true");
-  });
-
-  it("still opens a file on click, on Enter, and still opens its context menu while draggable", async () => {
+describe("PDF6-01 interop - a synthesised HTML5 drag still moves a node", () => {
+  it("still opens a file on click, on Enter, and still opens its context menu", async () => {
     const root = useProject.getState().rootPath!;
     const path = await useProject.getState().createSchematicFile(root, "gain.asc");
     const { onOpenAscText } = renderExplorer();
     const fileRow = screen.getByRole("button", { name: "gain.asc" });
 
-    // Three gestures now share this element (Radix's context menu, the pointer
-    // fallback, and the native drag). Prove the plain ones still land.
+    // Three gestures share this element (Radix's context menu, the pointer drag,
+    // and keyboard activation). Prove the plain ones still land.
     fireEvent.click(fileRow);
     await waitFor(() => expect(onOpenAscText).toHaveBeenCalledWith(path, "gain.asc", expect.any(String)));
 
@@ -779,10 +1073,11 @@ describe("P3-02 - rows must actually be draggable", () => {
     const folderRow = screen.getByRole("button", { name: "Filters" });
     const dataTransfer = dataTransferStub();
 
-    // Real ordering hazard: pointerdown takes pointer capture, then the engine
-    // decides to start a native drag and delivers pointercancel AFTER
-    // dragstart. Unguarded, cancelPointerDrag nulled the drag source mid-drag,
-    // after which markDropTarget highlighted targets it had not validated.
+    // Real ordering hazard: pointerdown starts a pointer gesture, then the host
+    // starts a native drag and delivers pointercancel AFTER dragstart. It used to
+    // null the drag source mid-drag, after which markDropTarget highlighted
+    // targets it had not validated. `beginNodeDrag` now takes the gesture's
+    // window listeners down with it, so there is nothing left to hear the cancel.
     fireEvent.pointerDown(fileRow, { pointerId: 3, button: 0, clientX: 40, clientY: 40 });
     fireEvent.dragStart(fileRow, { dataTransfer });
     fireEvent.pointerCancel(fileRow, { pointerId: 3 });
@@ -790,6 +1085,7 @@ describe("P3-02 - rows must actually be draggable", () => {
     expect(fileRow.getAttribute("data-dragging")).toBe("true");
     fireEvent.dragOver(folderRow, { dataTransfer });
     expect(folderRow.getAttribute("data-drop-target")).toBe("true");
+    expect(dataTransfer.dropEffect).toBe("move");
     fireEvent.drop(folderRow, { dataTransfer });
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
   });
@@ -812,40 +1108,6 @@ describe("P3-02 - rows must actually be draggable", () => {
     expect(childRow.getAttribute("data-drop-target")).toBeNull();
     expect(dataTransfer.dropEffect).toBe("none");
     fireEvent.drop(childRow, { dataTransfer });
-    expect(onMoveNode).not.toHaveBeenCalled();
-  });
-
-  it("refuses a drop onto the row itself and back into the folder it already lives in", async () => {
-    const root = useProject.getState().rootPath!;
-    const analog = await useProject.getState().createFolder(root, "Analog");
-    await useProject.getState().createSchematicFile(analog!, "nested.asc");
-    const onMoveNode = vi.fn().mockResolvedValue("unused");
-    const { container } = renderExplorer({ onMoveNode });
-    const treeList = container.querySelector(".tree-list")!;
-
-    // Onto itself: canMoveProjectNode's source !== destination clause.
-    const folderRow = screen.getByRole("button", { name: "Analog" });
-    const selfDrop = dataTransferStub();
-    fireEvent.dragStart(folderRow, { dataTransfer: selfDrop });
-    fireEvent.dragOver(folderRow, { dataTransfer: selfDrop });
-    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
-    expect(selfDrop.dropEffect).toBe("none");
-    fireEvent.drop(folderRow, { dataTransfer: selfDrop });
-    fireEvent.dragEnd(folderRow);
-
-    // Into its own parent: a no-op move that would still churn disk and tabs.
-    const parentDrop = dataTransferStub();
-    const nestedRow = screen.getByRole("button", { name: "nested.asc" });
-    fireEvent.dragStart(nestedRow, { dataTransfer: parentDrop });
-    fireEvent.dragOver(folderRow, { dataTransfer: parentDrop });
-    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
-    expect(parentDrop.dropEffect).toBe("none");
-    // …and the refusal does not bubble into an ancestor offering the project
-    // root instead. Lighting the root here promised a move the row's own onDrop
-    // would then refuse.
-    expect(treeList.getAttribute("data-drop-target")).toBeNull();
-    fireEvent.drop(folderRow, { dataTransfer: parentDrop });
-
     expect(onMoveNode).not.toHaveBeenCalled();
   });
 
@@ -1057,5 +1319,70 @@ describe("P3-04A - the overflow trigger must survive every width", () => {
     ]) {
       expect(screen.getByRole("menuitem", { name: label }), `${label} is unreachable`).toBeTruthy();
     }
+  });
+});
+
+/**
+ * PDF6-02. "These options need to be closer together theyre too far apart. THey
+ * should be close like VSCODE."
+ *
+ * The number the complaint is about is the distance between two adjacent GLYPHS,
+ * not between two button boxes: App.css sized `.explorer-icons button` at
+ * `--control-hit` (28px) with `gap: 0` around a 16px glyph, so 12px of empty box
+ * sat between every pair of icons and the five of them read as five unrelated
+ * controls. VS Code's pane-header actions are 22px boxes 2px apart, i.e. 8px
+ * between glyph edges.
+ *
+ * jsdom applies no stylesheet, so the box comes from the rule this lane owns and
+ * the glyph from the rendered SVG; the arithmetic between them is what the eye
+ * actually reads.
+ */
+describe("PDF6-02 - the explorer header actions must read as one group", () => {
+  it("puts the action glyphs VS Code-close without dropping a hit target below 24px", () => {
+    const css = pdf6ExplorerCss();
+    const gap = Number.parseFloat(declaration(css, ".explorer-icons", "gap"));
+    expect(gap).toBe(0);
+
+    // The box is a token, not a literal, so the WCAG floor and the box claiming
+    // to sit on it cannot drift apart in two files.
+    const boxSelector = ".explorer-icons button,\n.explorer-overflow-trigger";
+    expect(declaration(css, boxSelector, "width")).toBe("var(--control-hit-compact)");
+    expect(declaration(css, boxSelector, "height")).toBe("var(--control-hit-compact)");
+    const boxMatch = /--control-hit-compact:\s*(\d+(?:\.\d+)?)px/.exec(appCss());
+    expect(boxMatch, "App.css no longer defines --control-hit-compact").toBeTruthy();
+    const box = Number.parseFloat(boxMatch![1]);
+
+    // The glyph, off the rendered DOM rather than a second copy of the number.
+    const { container } = renderExplorer();
+    const button = container.querySelector<HTMLElement>(".explorer-primary-actions button")!;
+    const glyph = Number.parseFloat(button.querySelector("svg")!.getAttribute("width")!);
+    expect(glyph).toBe(16);
+
+    const betweenGlyphEdges = box - glyph + gap;
+    expect(betweenGlyphEdges, "header glyphs sit further apart than VS Code's").toBeLessThanOrEqual(8);
+    // The shipped value this replaces. Stated so a future widening cannot quietly
+    // restore the complaint while still satisfying the bar above.
+    expect(betweenGlyphEdges).toBeLessThan(12);
+    expect(box, "a header action is under WCAG 2.2 SC 2.5.8's 24px floor").toBeGreaterThanOrEqual(24);
+  });
+
+  it("keeps EXPLORER_ICON_SIZE mirroring the stylesheet, or the overflow menu mis-counts", () => {
+    /*
+     * The budget that decides how many icons render is computed from a constant
+     * in ShellPanels.tsx that mirrors the CSS box. It is private, so it is
+     * RECOVERED from the exported layout rather than restated: two widths whose
+     * icon counts differ share the same header gaps and the same overflow
+     * clearance, so those cancel in the difference and the box is what is left.
+     */
+    const boxMatch = /--control-hit-compact:\s*(\d+(?:\.\d+)?)px/.exec(appCss())!;
+    const box = Number.parseFloat(boxMatch[1]);
+
+    const wide = explorerHeaderLayout(EXPLORER_PANEL_WIDTH.maxWidth, 5);
+    const narrow = explorerHeaderLayout(EXPLORER_PANEL_WIDTH.minWidth, 5);
+    expect(narrow.visibleActions, "the narrow case must still show an icon").toBeGreaterThan(0);
+    expect(wide.visibleActions).toBeGreaterThan(narrow.visibleActions);
+
+    const mirrored = (wide.overflowGap - narrow.overflowGap) / (wide.visibleActions - narrow.visibleActions);
+    expect(mirrored, "EXPLORER_ICON_SIZE no longer mirrors the stylesheet's box").toBe(box);
   });
 });

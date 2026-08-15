@@ -4,4 +4,128 @@
  * This file exists so the PDF-6 remediation lanes never edit App.css (10k+
  * lines, shared by every surface): each lane owns exactly one stylesheet and
  * overrides what it must, which is why these passes can run in parallel.
+ *
+ * Colour arrives through the tokens in App.css's :root - raw hex in here fails
+ * scripts/design-system-dod.mjs.
  */
+
+/* --- PDF6-02: the header actions are one group, not five loose buttons -----
+ *
+ * "These options need to be closer together theyre too far apart. THey should be
+ * close like VSCODE."
+ *
+ * App.css sizes `.explorer-icons button` at `--control-hit` (28px) with `gap: 0`
+ * around a 16px glyph, which leaves (28-16) = 12px of empty box between two
+ * adjacent glyph edges. VS Code's pane-header actions are 22px boxes 2px apart -
+ * 8px between glyph edges - and read as a single toolbar because of it.
+ *
+ * The gap stays at zero and the BOX shrinks to `--control-hit-compact`, the 24px
+ * WCAG 2.2 SC 2.5.8 floor App.css already names for a control that cannot grow.
+ * That puts the glyphs 8px apart, matching VS Code, with no hit target under
+ * 24px and - unlike a 22px box padded back out to 24px with a `::before` - no
+ * two hit areas overlapping into each other's rows.
+ *
+ * EXPLORER_ICON_SIZE in components/ShellPanels.tsx mirrors this box for the
+ * header's icon budget, and must move with it or the overflow menu mis-counts.
+ */
+.explorer-icons {
+  gap: 0;
+}
+
+.explorer-icons button,
+.explorer-overflow-trigger {
+  width: var(--control-hit-compact);
+  height: var(--control-hit-compact);
+}
+
+/* --- PDF6-01: a pointer drag needs the affordances the native one gave away --
+ *
+ * Tree rows are no longer `draggable` (see ShellPanels.tsx: that attribute is
+ * what let WKWebView start a native drag and swallow the gesture), so App.css's
+ * `.tree-file[draggable="true"]` rule - the grab cursor and `user-select: none`
+ * - no longer matches anything. Neither is decoration: the cursor is how a row
+ * says "you can move me", and without `user-select` a press-and-sweep across row
+ * text becomes a text selection in WebKit and takes the drag with it. The
+ * project root row is excluded because it cannot be a source - `moveNode`
+ * refuses `source === root` - and a grab cursor there would promise otherwise.
+ */
+.tree-file,
+.tree-folder-row:not(.tree-project-root-row) {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* While a drag is live the whole tree is a drop surface, and it says which kind
+   it is under the pointer: "invalid" is how the tree tells a reader "not here"
+   without their having to notice that nothing lit up. */
+.tree-list[data-explorer-dragging] {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tree-list[data-explorer-dragging="invalid"] {
+  cursor: no-drop;
+}
+
+/* The regression the review actually reported: the move worked in Chromium and
+   still read as broken, because nothing changed under the cursor. App.css tints
+   the target with `--accent-soft` - 10% accent - which is indistinguishable from
+   the row's own hover state at arm's length. VS Code paints the whole target row
+   (`list.dropBackground`) and outlines it; this is the same idea in tokens, at
+   the same specificity as the App.css rule it replaces. */
+.tree-dir[data-drop-target="true"] > .tree-folder-row,
+.tree-folder-row[data-drop-target="true"] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+/* Dropping on blank space means the project root, so the container has to be as
+   legible a target as a folder row is. */
+.tree-list[data-drop-target="true"] {
+  outline-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* The label that follows the cursor - the pointer equivalent of the drag image
+   a native drag would have set. Portalled to <body> by ShellPanels, positioned
+   by writing `transform` straight to the node on each pointermove. */
+.explorer-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  /* Never a hit target. The drop destination is resolved from the element under
+     the pointer, and a label riding the cursor would BE that element - the ghost
+     would shadow every row it was meant to help you aim at. */
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  padding: 2px 8px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--panel-4);
+  box-shadow: var(--elev-pop);
+  color: var(--text);
+  font: 500 var(--fs-body) var(--font-ui);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explorer-drag-ghost svg {
+  flex: none;
+  stroke: currentColor;
+  fill: none;
+}
+
+/* Over nothing droppable. Dimmed rather than hidden: the reader still needs to
+   see what they are carrying while they hunt for somewhere to put it. */
+.explorer-drag-ghost[data-invalid] {
+  border-color: var(--border);
+  color: var(--muted);
+}
