@@ -153,8 +153,19 @@ export function EmptyState({
               bare text node after the brand would space the comma off it. */}
           <span><span className="empty-brand">Bode</span> · circuit assistant</span>
         </div>
-        {/* Three situations, three headlines. The middle one is the P3-04B fix;
-            the other two are the copy that was already correct. */}
+        {/*
+          * Four situations, four headlines, and one shape for all of them: the
+          * headline names the single next action this card has a filled button
+          * for (DESIGN_SYSTEM 4), and the paragraph under it carries the one
+          * fact about this surface that no button label can. Before item 5 the
+          * paragraphs instead listed the routes in - "Create one, open from
+          * Explorer, or ask Bode" - which restated the buttons beside them,
+          * restated the headline above them, and advertised a route that has no
+          * control (see the "Create a schematic" branch below).
+          *
+          * The import failure is the one headline that reports rather than
+          * instructs, because what happened is what the reader needs first.
+          */}
         <h1>
           {!projectOpen
             ? "Open a project folder"
@@ -165,9 +176,20 @@ export function EmptyState({
                 // all import past it - an annotation is drawn on the canvas
                 // directly under this card, so the wider claim is refuted by
                 // the sheet the reader is looking at.
-                ? "This sheet is empty: no part in the file could be imported"
+                //
+                // It no longer opens with "This sheet is empty:" either. The
+                // reader is looking at the empty sheet; at 22px in a 420px card
+                // that preamble cost a third line to say what the canvas
+                // behind it already says.
+                ? "No part in this file could be imported"
                 : "Place your first component"
-              : "Create or open a schematic"}
+              // Not "Create or open a schematic": Explorer is not a thing you
+              // open (App.tsx pins its intent to true, so it is already on the
+              // left in schematic mode), and this card has no button for
+              // opening a file - so the old headline named two actions, offered
+              // one, and made a gesture out of a panel that is already visible.
+              // The paragraph points at that panel instead.
+              : "Create a schematic"}
         </h1>
         {projectOpen && schematicOpen ? (
           <>
@@ -176,15 +198,35 @@ export function EmptyState({
                 {skippedParts.length === 1
                   ? `${skippedSummary} is the only part this file contained, and Tau has no model for it.`
                   : `${skippedSummary} came in with no Tau model, and they were all this file contained.`}
+                {/*
+                  * "this circuit will not run", not "the diagnostics below
+                  * refuse to simulate". Nothing is below: the errors window is
+                  * mounted only while the rail's lamp is lit (App.tsx gates the
+                  * drawer on `diagnosticsOpen`, which starts false), so the old
+                  * sentence sent the reader to look at empty space. This card
+                  * is now the surface carrying that fact, and it borrows the
+                  * lamp's own words for it - `diagnosticsHealthLabel` says
+                  * "this circuit will not run" - so the two agree when the
+                  * reader does open the window. The em dash went with it:
+                  * DESIGN_SYSTEM 6 keeps them out of shipped strings.
+                  */}
                 {" "}Tau keeps {skippedParts.length === 1 ? "that record" : "those records"} when you
-                save, so nothing is lost on disk — but the diagnostics below
-                refuse to simulate until {skippedParts.length === 1 ? "it is" : "they are"} replaced
+                save, so nothing is lost on disk, but this circuit will not run
+                until {skippedParts.length === 1 ? "it is" : "they are"} replaced
                 or mapped to a subcircuit.
               </p>
             ) : (
+              // Where parts come from, then the gesture - which is the half no
+              // button can carry. "Browse components" reveals the panel; only
+              // the copy can say that a part is chosen there and landed with a
+              // click on the sheet. The old "on the right" went because the
+              // rail is a summoned overlay that `resolveChrome` can withhold at
+              // narrow widths, and the trailing "or ask Bode to build the
+              // circuit for you" went because it was the Ask Bode button read
+              // aloud, over a sheet with no circuit on it yet.
               <p>
-                Pick a part from Components on the right and click the sheet to
-                place it, or ask Bode to build the circuit for you.
+                Parts come from the Components panel. Pick one there, then click
+                the sheet to place it.
               </p>
             )}
             <div className="empty-state-actions">
@@ -213,26 +255,42 @@ export function EmptyState({
           </>
         ) : projectOpen ? (
           <>
+            {/*
+              * Where the file lands, then where the ones already there are
+              * listed. Both halves replace something that could not be acted
+              * on: "Schematics live in this project" named no place the reader
+              * could look, and "open from Explorer" made a gesture out of a
+              * panel that is already open beside this card - a reader who
+              * followed it went hunting for a control that does not exist.
+              * Naming what Explorer holds keeps the route without pretending it
+              * is a button, and it stays true on a fresh folder, where the tree
+              * is one root row with nothing under it.
+              *
+              * The learning path is not mentioned. It has a button, the button
+              * says what it does, and the example's internal name for itself
+              * ("first-success") is implementation the reader should never see
+              * (DESIGN_SYSTEM 6).
+              */}
             <p>
-              Schematics live in this project. Create one, open from Explorer,
-              {offerFirstSuccess
-                ? " try the RC Charging first-success example, or ask Bode about the circuit."
-                : " or ask Bode about the circuit."}
+              Tau saves it as a file in the open project folder. Explorer lists
+              whatever that folder already holds.
             </p>
             <div className="empty-state-actions">
+              {/* New schematic keeps the filled recipe even while the learning
+                  path is on offer, because it is the action the headline names.
+                  That is the rule the open-empty-sheet card above already
+                  follows - Browse components filled, Try RC Charging outline -
+                  and the two cards used to disagree about it, so the reader
+                  learned one button shape here and a different one on the very
+                  next screen. Order follows weight for the same reason. */}
+              <Button type="button" size="sm" onClick={onNewCircuit}>
+                <Plus aria-hidden="true" /> New schematic
+              </Button>
               {offerFirstSuccess && (
-                <Button type="button" size="sm" onClick={onTryFirstSuccess}>
+                <Button type="button" size="sm" variant="outline" onClick={onTryFirstSuccess}>
                   <CircuitBoard aria-hidden="true" /> Try RC Charging
                 </Button>
               )}
-              <Button
-                type="button"
-                size="sm"
-                variant={offerFirstSuccess ? "outline" : "default"}
-                onClick={onNewCircuit}
-              >
-                <Plus aria-hidden="true" /> New schematic
-              </Button>
               <Button type="button" size="sm" variant="outline" onClick={onAskBode}>
                 <MessageSquare aria-hidden="true" /> Ask Bode
               </Button>
@@ -240,9 +298,22 @@ export function EmptyState({
           </>
         ) : (
           <>
+            {/*
+              * The first sentence is the only one on this card that was already
+              * doing work - it says why a folder is being asked for at all - so
+              * it stays. What followed it ("Open one to start, or import an
+              * existing schematic or SPICE netlist") was the two buttons under
+              * it read aloud, and it left the third, Create project, unnamed.
+              *
+              * In its place, the fact importing raises and no button label can
+              * answer: `importDroppedFile` writes a copy into the project and
+              * never touches the file the reader picked. On the screen where
+              * someone is about to hand Tau an LTspice sheet they care about,
+              * that is the sentence they need.
+              */}
             <p>
-              Tau keeps every schematic inside a project folder. Open one to start,
-              or import an existing schematic or SPICE netlist.
+              Tau keeps every schematic inside a project folder. An imported
+              circuit is copied into it and the original file is left alone.
             </p>
             <div className="empty-state-actions">
               <Button type="button" size="sm" onClick={onOpenFolder}>

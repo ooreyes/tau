@@ -65,6 +65,53 @@ describe("EmptyState first-success learning path", () => {
     expect(filled.map((b) => b.textContent?.trim())).toEqual(["Browse components"]);
   });
 
+  /**
+   * The same DESIGN_SYSTEM 4 rule the open-sheet case above pins, on the card
+   * before it. These two used to disagree: this one made "Try RC Charging" the
+   * filled control and demoted "New schematic" to outline, while the open-sheet
+   * card kept its own action filled and the example outline. A reader crossing
+   * from one to the next therefore had to relearn which button the card was
+   * actually about. The rule is the same on both now - the filled control is
+   * the action the headline names - and the order follows it.
+   */
+  it("keeps New schematic the one filled control while the learning path is on offer", () => {
+    render(
+      <EmptyState
+        projectOpen
+        onNewCircuit={vi.fn()}
+        onAskBode={vi.fn()}
+        offerFirstSuccess
+        onTryFirstSuccess={vi.fn()}
+      />,
+    );
+    const actions = [...document.querySelectorAll<HTMLButtonElement>(".empty-state-actions button")];
+    expect(actions.map((b) => b.textContent?.trim())).toEqual([
+      "New schematic",
+      "Try RC Charging",
+      "Ask Bode",
+    ]);
+    const filled = actions.filter((b) => b.className.includes("bg-primary"));
+    expect(filled.map((b) => b.textContent?.trim())).toEqual(["New schematic"]);
+  });
+
+  /**
+   * `startFirstSuccessExample` refuses without a project root ("Open or create
+   * a project folder before trying the RC example."), so offering the CTA on
+   * the no-project card would be a button whose only outcome is a notice
+   * explaining why it did nothing.
+   */
+  it("withholds the CTA when there is no project to create the example in", () => {
+    render(
+      <EmptyState
+        projectOpen={false}
+        onOpenFolder={vi.fn()}
+        offerFirstSuccess
+        onTryFirstSuccess={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Try RC Charging/i })).toBeNull();
+  });
+
   it("hides the CTA when the learning path is not offered", () => {
     render(
       <EmptyState

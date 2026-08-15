@@ -86,7 +86,11 @@ already open at 1280x800, so reusing it would close the panel the new copy just
 pointed at.
 
 The **first** `<EmptyState>` (:3737, `mode === "schematic" && !activeProjectFile`)
-must NOT get `schematicOpen`. "Create or open a schematic" is correct there.
+must NOT get `schematicOpen`. "Create a schematic" is correct there. (It read
+"Create **or open** a schematic" until PDF-6 item 5: "open from Explorer" was not
+a gesture — the panel is always open beside the card and opening a file is one
+click on a tree row — and naming three routes under two buttons broke
+DESIGN_SYSTEM §4.)
 
 No `data-parts-flash` plumbing is needed: `EmptyState` stamps the attribute on
 the enclosing `.stage` itself and clears it on `animationend` (with a 900 ms

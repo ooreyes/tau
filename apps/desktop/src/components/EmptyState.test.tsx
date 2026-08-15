@@ -255,9 +255,214 @@ describe("EmptyState inside an open, empty schematic (P3-04B)", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Open a project folder");
   });
 
+  // The heading here reads "Create a schematic" rather than the "Create or
+  // open a schematic" P3-04B left behind. Item 5 retired the "or open" half:
+  // Explorer is not a thing you open, and this card never had a button for
+  // opening a file. What this assertion is for is unchanged - the two variants
+  // must not share one headline again.
   it("keeps the 'project open, no schematic' variant on its own copy (schematicOpen defaults off)", () => {
     render(<EmptyState projectOpen onNewCircuit={vi.fn()} onAskBode={vi.fn()} />);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Create or open a schematic");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Create a schematic");
     expect(screen.getByRole("button", { name: "New schematic" })).toBeTruthy();
+  });
+});
+
+/**
+ * PDF-6 item 5: "i beliebe this text box is outdated in the contents make it
+ * have a better flow maintian consistency."
+ *
+ * Three of the four cards were describing an app that has moved:
+ *
+ * - "open from Explorer" made a gesture out of a panel that App.tsx keeps open
+ *   beside this card (`intent: { explorer: true }`), and that this card has no
+ *   button for. DESIGN_SYSTEM 4: "If the copy mentions three ways in, there are
+ *   three buttons or the copy is wrong."
+ * - "ask Bode about the circuit" named a circuit that does not exist on either
+ *   screen it appeared on. With nothing placed, Bode's own two suggestions are
+ *   "Build an RC filter" and "Build an LC tank".
+ * - "the diagnostics below refuse to simulate" pointed under a card at a window
+ *   that is now mounted only while the rail's lamp is lit (`diagnosticsOpen`
+ *   starts false), so the reader was sent to look at empty space.
+ *
+ * Every assertion below pins the replacement, so a revert to the old wording
+ * fails here rather than in a screenshot nobody reads.
+ */
+function cardCopy() {
+  const card = screen.getByRole("region", { name: "Empty schematic" });
+  const flat = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim();
+  return {
+    heading: flat(screen.getByRole("heading", { level: 1 }).textContent),
+    body: [...card.querySelectorAll("p")].map((p) => flat(p.textContent)).join(" "),
+    // The actions row only. The kicker and the hidden file input are not
+    // routes, and counting them would make "exactly these actions" untestable.
+    buttons: [...card.querySelectorAll<HTMLButtonElement>(".empty-state-actions button")]
+      .map((button) => flat(button.textContent)),
+    text: flat(card.textContent),
+  };
+}
+
+describe("EmptyState copy (PDF-6 item 5)", () => {
+  it("tells a reader with no project what an import does with their file", () => {
+    render(<EmptyState projectOpen={false} onOpenFolder={vi.fn()} />);
+    const copy = cardCopy();
+    expect(copy.heading).toBe("Open a project folder");
+    expect(copy.body).toBe(
+      "Tau keeps every schematic inside a project folder. "
+      + "An imported circuit is copied into it and the original file is left alone.",
+    );
+    // The retired half was the two buttons under it read aloud.
+    expect(copy.body).not.toMatch(/open one to start/i);
+    expect(copy.body).not.toMatch(/or import an existing/i);
+  });
+
+  /**
+   * Both withheld actions are real refusals, not oversights: the assistant
+   * panel is gated on `projectRootPath` (App.tsx), and
+   * `startFirstSuccessExample` answers with "Open or create a project folder
+   * before trying the RC example." A button for either here would be a control
+   * that cannot do its job.
+   */
+  it("offers only the actions a reader with no project can actually perform", () => {
+    render(
+      <EmptyState
+        projectOpen={false}
+        canCreateProject
+        onOpenFolder={vi.fn()}
+        onCreateProject={vi.fn()}
+        onAskBode={vi.fn()}
+        offerFirstSuccess
+        onTryFirstSuccess={vi.fn()}
+      />,
+    );
+    expect(cardCopy().buttons).toEqual(["Open folder", "Import circuit", "Create project"]);
+  });
+
+  it("drops the Create project action on a build that cannot create one", () => {
+    render(<EmptyState projectOpen={false} onOpenFolder={vi.fn()} />);
+    expect(cardCopy().buttons).toEqual(["Open folder", "Import circuit"]);
+  });
+
+  it("points a reader with a project at Explorer instead of inventing a gesture for it", () => {
+    render(<EmptyState projectOpen onNewCircuit={vi.fn()} onAskBode={vi.fn()} />);
+    const copy = cardCopy();
+    expect(copy.heading).toBe("Create a schematic");
+    expect(copy.body).toBe(
+      "Tau saves it as a file in the open project folder. "
+      + "Explorer lists whatever that folder already holds.",
+    );
+    expect(copy.body).not.toMatch(/open from Explorer/i);
+    // Named no place the reader could look, and no action they could take.
+    expect(copy.body).not.toMatch(/Schematics live in this project/i);
+    // There is no circuit on this screen to ask about.
+    expect(copy.text).not.toMatch(/ask Bode about the circuit/i);
+    expect(copy.buttons).toEqual(["New schematic", "Ask Bode"]);
+  });
+
+  it("leaves the learning path to its button, under the headline's own action", () => {
+    render(
+      <EmptyState
+        projectOpen
+        onNewCircuit={vi.fn()}
+        onAskBode={vi.fn()}
+        offerFirstSuccess
+        onTryFirstSuccess={vi.fn()}
+      />,
+    );
+    const copy = cardCopy();
+    // The paragraph does not grow a fourth route when the CTA appears.
+    expect(copy.body).toBe(
+      "Tau saves it as a file in the open project folder. "
+      + "Explorer lists whatever that folder already holds.",
+    );
+    expect(copy.buttons).toEqual(["New schematic", "Try RC Charging", "Ask Bode"]);
+  });
+
+  it("gives the empty sheet the gesture no button label can carry", () => {
+    render(<EmptyState projectOpen schematicOpen onShowParts={vi.fn()} onAskBode={vi.fn()} />);
+    const copy = cardCopy();
+    expect(copy.heading).toBe("Place your first component");
+    expect(copy.body).toBe(
+      "Parts come from the Components panel. Pick one there, then click the sheet to place it.",
+    );
+    // The rail is an overlay `resolveChrome` can withhold, so its side of the
+    // window is not a fact the copy may assert.
+    expect(copy.body).not.toMatch(/on the right/i);
+    // And the trailing clause was the Ask Bode button read aloud.
+    expect(copy.body).not.toMatch(/ask Bode/i);
+    expect(copy.buttons).toEqual(["Browse components", "Ask Bode"]);
+  });
+
+  it("stops sending a reader to a diagnostics window that is not on screen (DIAG)", () => {
+    render(
+      <EmptyState
+        projectOpen
+        schematicOpen
+        unimportedParts={["A1 (dflop)"]}
+        onShowParts={vi.fn()}
+        onAskBode={vi.fn()}
+      />,
+    );
+    const copy = cardCopy();
+    expect(copy.heading).toBe("No part in this file could be imported");
+    expect(copy.body).toBe(
+      "A1 (dflop) is the only part this file contained, and Tau has no model for it. "
+      + "Tau keeps that record when you save, so nothing is lost on disk, "
+      + "but this circuit will not run until it is replaced or mapped to a subcircuit.",
+    );
+    // Nothing is below this card until the rail lamp is pressed.
+    expect(copy.text).not.toMatch(/diagnostics/i);
+    // And the words are the lamp's own (`diagnosticsHealthLabel`), so the card
+    // and the window agree once the reader does open it.
+    expect(copy.body).toContain("this circuit will not run");
+  });
+
+  it("agrees with itself in the plural (DIAG)", () => {
+    render(
+      <EmptyState
+        projectOpen
+        schematicOpen
+        unimportedParts={["A1 (dflop)", "A2 (dflop)"]}
+        onShowParts={vi.fn()}
+        onAskBode={vi.fn()}
+      />,
+    );
+    const copy = cardCopy();
+    expect(copy.heading).toBe("No part in this file could be imported");
+    expect(copy.body).toBe(
+      "A1 (dflop), A2 (dflop) came in with no Tau model, and they were all this file contained. "
+      + "Tau keeps those records when you save, so nothing is lost on disk, "
+      + "but this circuit will not run until they are replaced or mapped to a subcircuit.",
+    );
+  });
+
+  /**
+   * DESIGN_SYSTEM 6, applied to every state at once: no exclamation marks, no
+   * em dashes in shipped strings, and never the implementation's name for a
+   * thing. "first-success" is what the code calls the RC example
+   * (`offerFirstSuccess`, `startFirstSuccessExample`), and the old copy printed
+   * it: "try the RC Charging first-success example".
+   */
+  it("holds every state to the house voice", () => {
+    const states = [
+      <EmptyState key="none" projectOpen={false} canCreateProject onOpenFolder={vi.fn()} />,
+      <EmptyState key="project" projectOpen offerFirstSuccess onNewCircuit={vi.fn()} onAskBode={vi.fn()} />,
+      <EmptyState key="sheet" projectOpen schematicOpen offerFirstSuccess onShowParts={vi.fn()} />,
+      <EmptyState
+        key="skipped"
+        projectOpen
+        schematicOpen
+        unimportedParts={["A1 (dflop)"]}
+        onShowParts={vi.fn()}
+      />,
+    ];
+    for (const state of states) {
+      const { unmount } = render(state);
+      const { text } = cardCopy();
+      expect(text).not.toMatch(/—/);
+      expect(text).not.toMatch(/!/);
+      expect(text).not.toMatch(/\bsimply\b|\bjust\b/i);
+      expect(text).not.toMatch(/first.success/i);
+      unmount();
+    }
   });
 });
