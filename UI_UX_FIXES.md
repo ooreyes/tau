@@ -47,6 +47,83 @@ tests; design-system drift; web build; both-theme screenshots at 900x600 and
 block, and the sheet-interface editor. A Sol review must return `No findings.`
 before the run can be marked done.
 
+### Final status - DONE
+
+Luna High authored every product-code change in isolated fleet worktrees. The
+orchestrator integrated `1c89b41`, `061a226`, `85b9b62`, `82b590e`, `c1f9369`,
+`a419b3e`, `e9e1f1e`, `11c92f3`, and `82b2d4f`; Sol performed read-only review
+only. Three closure cycles resolved macOS titlebar reservation, focus-ring
+clipping, proposed-versus-stored mapping copy, locale-sensitive ordering, grid
+gap accounting, child-interface drift state, and legacy-layout wording. Final
+Sol verdict: **No findings.**
+
+Chrome measured the Schematic/Simulator landmark at the exact viewport midpoint
+at desktop width and 900x600, with zero horizontal overflow. Packaged Computer
+Use verified the real Rectifier interface as `SEC1 In`, `SEC2 In`, `VBUS Out`.
+The rebuilt current package ran `USB_PSU_WALKTHROUGH/top.sim` recursively through
+ngspice and reported 363,636 samples, 119 V RMS at `VAC_IN`, 13.3 V final at
+`VBUS`, and 4.95 V final at `VUSB`. Full gates are recorded in `PROGRESS.md`.
+
+## Simulation deep review - 2026-08-24
+
+Status: **REVIEW COMPLETE; REMEDIATION NOT STARTED.** This pass used the rebuilt
+packaged app for native solver truth, Chrome for the 900x600 responsive surface,
+and a Sol `review-agent` pass for read-only code review. It intentionally made
+no simulation product changes.
+
+### Verified strengths
+
+- The simulation shell uses the same centered mode landmark, tokens, restrained
+  chrome, pane geometry, focus language, and 900x600 floor as the schematic.
+- The flagship multi-sheet supply runs without preview/flattened fallback. The
+  visible results are electrically credible and match the checked deck: 119 V
+  RMS / 60 Hz input, 13.3 V final rectified bus, and 4.95 V final USB output.
+- Solver attribution is visible as `ngspice`; the run reports net/part count,
+  elapsed time, sample count, current range, and engineering units.
+- The large-run warning is unusually good: it distinguishes solver points from
+  transferred samples, says that every plotted value is real, and tells the
+  user how to obtain full-rate output.
+
+### Findings to remediate
+
+1. **P1 - visible analysis can disagree with the global Run.** Selecting a
+   non-authored analysis such as AC and then pressing titlebar Run launches the
+   document-authored analysis (for example TRAN) but can leave the local panel
+   mode on AC. The overlay and visible pane can therefore claim AC while the
+   drawer header reports a new transient. Source:
+   `apps/desktop/src/components/SimulationPanel.tsx:444`.
+2. **P1 - component telemetry can be stale under another analysis.** The outer
+   Measurements tab is sourced from the last successful transient even during
+   and after OP/AC/DC/TF/noise/step. A completed AC sweep or failed OP can sit
+   above confident V/I/P cards from an older transient. Source:
+   `apps/desktop/src/App.tsx:4899`.
+3. **P2 - valid authored `.meas` output disappears when there is no plotted
+   trace.** The dashboard's table cards are guarded by `allTraces.length > 0`,
+   so a successful measurement-only run falls into “Nothing to plot yet.” The
+   outer Measurements tab is component telemetry and cannot recover those
+   authored results. Source: `apps/desktop/src/components/SimulationPanel.tsx:2182`.
+4. **P2 - stopped live history still claims to be live.** Follow/pan copy in the
+   live scope ignores stopped state and can say “Live” or “new samples are still
+   being solved off-screen” after the run has stopped. Source:
+   `apps/desktop/src/components/LiveScopePane.tsx:738`.
+5. **P2 - the diagnostics tab is labelled Errors even for warnings or a clean
+   state.** Native QA showed `Diagnostics: 1 warning` on the rail and `Warnings
+   1` inside the panel, while its top tab read `Errors 1`; a clean RC run exposed
+   an `Errors` tab whose body said `Diagnostics · No issues`. Source:
+   `apps/desktop/src/components/drawer/ResultsDrawer.tsx:301`.
+6. **P2 - transient peak-to-peak lacks its measurement window.** The USB output
+   card headlines `Peak-to-peak 5.12 V`, calculated across startup plus steady
+   state. That is mathematically the full-run span, not the settled output
+   ripple an engineer is likely to infer. Label it as full-run, compute against
+   the visible/cursor window, or expose a settled-window measurement. Sources:
+   `apps/desktop/src/components/EngineeringTraceReadout.tsx:79` and
+   `apps/desktop/src/simulation/engineeringTraceReadout.ts:79`.
+
+Required test gaps: selecting one analysis then invoking global Run;
+non-transient runs after transient telemetry exists; `.meas` with zero visible
+traces; stopped live scopes in follow and pan modes; warning-only/clean dynamic
+diagnostic labels; and startup-dominated versus settled-window trace readouts.
+
 ## PDF report 4 remediation - 2026-08-13
 
 The active user-directed fleet run is `pdf4-20260813-1`, building from the
