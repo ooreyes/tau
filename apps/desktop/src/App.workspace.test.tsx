@@ -992,8 +992,10 @@ describe("The modal editors are fetched only from default routes", () => {
 
     // No refusal note: nothing about this sheet's format stops it.
     expect(within(group).queryByRole("note")).toBeNull();
-    // The live control is present, and it names the act.
-    expect(within(group).getByText(/Mark the nets this sheet exposes, in order/i)).toBeTruthy();
+    // The public contract is present, and it names the real authoring act:
+    // choose existing labels in terminal order rather than inventing ports.
+    expect(within(group).getByText("Public contract")).toBeTruthy();
+    expect(within(group).getByText(/Mark existing net labels in terminal order/i)).toBeTruthy();
     // And because the sheet is empty, it says which step comes first rather than
     // presenting an empty list.
     expect(
@@ -1525,4 +1527,3 @@ describe("an open tab follows its file when the explorer moves it (P3-02, EXPLOR
     expect(useProject.getState().workspaceFiles[source]).toBeUndefined();
   });
 });
-
