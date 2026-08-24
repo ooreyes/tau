@@ -2636,6 +2636,12 @@ function ProjectSubcircuitLinkEditor({
       })
     : null;
   const drifted = drift?.kind === "drifted" ? drift : null;
+  const mappingIsStored = sheetIsLinked && drift?.kind === "in-sync";
+  const mappingNote = mappingIsStored
+    ? "The rows below are this parent block’s stored p1…pN order. Run uses this mapping exactly; direction is shown for review, not inferred."
+    : sheetIsLinked && link
+      ? `Live child interface differs from this parent’s saved p1…pN contract. The rows below are a proposed mapping; the saved order (${link.ports.join(", ")}) remains the Run contract until you adopt the change.`
+      : "Proposed mapping from the selected child sheet. Linking will store this p1…pN order on the parent; Run uses it only after the link is saved.";
 
   // A link stored before Item 14 has the historical half-split bank, so its pin
   // SIDES disagree with the child's directions even though the child never
@@ -2801,9 +2807,7 @@ function ProjectSubcircuitLinkEditor({
             </div>
           </div>
           <p className="project-sheet-mapping-note">
-            {sheetIsLinked
-              ? "The rows below are this parent block’s stored p1…pN order. Run uses this mapping exactly; direction is shown for review, not inferred."
-              : "Proposed mapping from the selected child sheet. Linking will store this p1…pN order on the parent; Run uses it only after the link is saved."}
+            {mappingNote}
           </p>
           <label className="property-field">
             <span>Sheet block name</span>
@@ -2820,10 +2824,13 @@ function ProjectSubcircuitLinkEditor({
               {`“${selectedFileName}” has no SPICE-safe default name; type one for this block.`}
             </p>
           )}
-          {/* The proposed pinout, read-only: this is the thing you used to have
-              to retype. Ordinal, name, direction and the side the direction
-              puts it on, so the drawing and this list cannot disagree. */}
-          <ol className="port-list project-sheet-pin-table" aria-label="Proposed pin order">
+          {/* The live child pinout, read-only: before linking it is a proposal;
+              for an in-sync link it is the stored order; for drift it remains
+              live/proposed while the saved parent contract stays authoritative. */}
+          <ol
+            className="port-list project-sheet-pin-table"
+            aria-label={mappingIsStored ? "Stored pin order" : "Proposed pin order"}
+          >
             {proposedPorts.map((port, index) => (
               <li key={`${index}-${port.name}`}>
                 <span className="port-index mono-num">{index + 1}</span>

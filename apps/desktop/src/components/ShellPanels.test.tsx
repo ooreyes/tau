@@ -713,6 +713,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       />,
     );
     expect(screen.getByText(/this parent block’s stored p1…pN order/i)).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Stored pin order" })).toBeTruthy();
 
     expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
       sheetPath: "child.sim",
@@ -919,6 +920,10 @@ describe("ComponentInspector - native subcircuit chooser", () => {
 
     const group = screen.getByRole("group", { name: "Sheet block" });
     expect(within(group).getByText(/reordered its connections: IN, OUT, GND -> IN, GND, OUT/)).toBeTruthy();
+    expect(within(group).getByText(/Live child interface differs from this parent’s saved p1…pN contract/i)).toBeTruthy();
+    expect(within(group).getByText(/saved order \(IN, OUT, GND\) remains the Run contract until you adopt/i)).toBeTruthy();
+    expect(within(group).getByRole("list", { name: "Proposed pin order" }).textContent)
+      .toContain("2GNDbidirright");
 
     fireEvent.click(within(group).getByRole("button", { name: "Review interface change…" }));
     const dialog = screen.getByRole("dialog");
