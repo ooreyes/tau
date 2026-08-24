@@ -1235,6 +1235,9 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     // What IS true is said instead: the picture, not the contract, is old.
     expect(within(group).getByText(/older side layout/)).toBeTruthy();
     expect(within(group).getByText(/Nothing electrical changes/)).toBeTruthy();
+    expect(within(group).getByText(/stored p1…pN order.*saved order remains authoritative for Run/i)).toBeTruthy();
+    expect(within(group).getByRole("list", { name: "Stored pin order" })).toBeTruthy();
+    expect(group.textContent).not.toContain("Live child interface differs");
     fireEvent.click(within(group).getByRole("button", { name: "Review interface change…" }));
     const dialog = screen.getByRole("dialog");
     expect(dialog.textContent).not.toContain("changed its interface");

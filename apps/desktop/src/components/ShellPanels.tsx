@@ -42,6 +42,7 @@ import { buildSubcircuitPinOverride, subcircuitBankSides, subcircuitPortSlots } 
 import {
   asciiFold,
   defaultProjectModelName,
+  hasMatchingOrderedProjectPorts,
   projectSheetInterfaceDrift,
   type PortSide,
   type ProjectInterfaceDrift,
@@ -2636,9 +2637,15 @@ function ProjectSubcircuitLinkEditor({
       })
     : null;
   const drifted = drift?.kind === "drifted" ? drift : null;
-  const mappingIsStored = sheetIsLinked && drift?.kind === "in-sync";
+  // Geometry-only drift (notably legacy pre-Item-14 half-split banks) does not
+  // change the saved node order. The live rows are the stored Run contract
+  // whenever the ordered names still match, even if the drift review offers a
+  // visual re-layout. Rename/reorder remains proposed until adoption.
+  const mappingIsStored = sheetIsLinked
+    && linkedEntry?.status === "ok"
+    && hasMatchingOrderedProjectPorts(link!.ports, linkedEntry.ports);
   const mappingNote = mappingIsStored
-    ? "The rows below are this parent block’s stored p1…pN order. Run uses this mapping exactly; direction is shown for review, not inferred."
+    ? "The rows below are this parent block’s stored p1…pN order. The saved order remains authoritative for Run; direction is shown for review, not inferred."
     : sheetIsLinked && link
       ? `Live child interface differs from this parent’s saved p1…pN contract. The rows below are a proposed mapping; the saved order (${link.ports.join(", ")}) remains the Run contract until you adopt the change.`
       : "Proposed mapping from the selected child sheet. Linking will store this p1…pN order on the parent; Run uses it only after the link is saved.";
