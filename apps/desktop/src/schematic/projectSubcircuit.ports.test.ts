@@ -58,6 +58,18 @@ describe("project sheet edge presentation", () => {
       { sheetPath: "z/top.sim", reference: "X2" },
     ]);
   });
+
+  it("orders non-ASCII paths by code point instead of the host locale", () => {
+    expect(orderedProjectSheetUses([
+      { sheetPath: "Å-power.sim", reference: "X1" },
+      { sheetPath: "z-power.sim", reference: "X1" },
+      { sheetPath: "a-power.sim", reference: "X1" },
+    ]).map((use) => use.sheetPath)).toEqual([
+      "a-power.sim",
+      "z-power.sim",
+      "Å-power.sim",
+    ]);
+  });
 });
 
 function sidesOf(directions: readonly SchematicPortDirection[]): PortSide[] {

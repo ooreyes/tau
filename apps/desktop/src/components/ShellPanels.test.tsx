@@ -674,7 +674,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
       ],
     });
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
-    render(
+    const { rerender } = render(
       <ComponentInspector
         selected={selected}
         projectFilePath="/project/root.sim"
@@ -696,9 +696,23 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     const contract = screen.getByRole("group", { name: "Parent block contract" });
     expect(contract.textContent).toContain("X1");
     expect(contract.textContent).toContain("child.sim");
-    expect(screen.getByText(/parent’s stored p1…pN order/i)).toBeTruthy();
+    expect(screen.getByText(/Proposed mapping from the selected child sheet/i)).toBeTruthy();
+    expect(screen.getByText(/only after the link is saved/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Link this sheet" }));
+
+    // The production inspector receives the updated selected component from
+    // the document store. Mirror that boundary here before checking the
+    // post-commit wording; the first assertion above is intentionally the
+    // pre-commit path.
+    rerender(
+      <ComponentInspector
+        selected={useSchematic.getState().components[0]!}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["OUT", "Out"], ["GND", "BiDir"]])]}
+      />,
+    );
+    expect(screen.getByText(/this parent block’s stored p1…pN order/i)).toBeTruthy();
 
     expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
       sheetPath: "child.sim",

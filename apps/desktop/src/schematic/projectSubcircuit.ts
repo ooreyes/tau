@@ -200,11 +200,30 @@ export interface ProjectSheetUse {
   reference: string;
 }
 
+/** Locale-independent ordering for persisted project graph presentation. */
+function compareCodePoints(left: string, right: string): number {
+  const leftPoints = [...left];
+  const rightPoints = [...right];
+  const length = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftPoint = leftPoints[index]!.codePointAt(0)!;
+    const rightPoint = rightPoints[index]!.codePointAt(0)!;
+    if (leftPoint !== rightPoint) return leftPoint - rightPoint;
+  }
+  return leftPoints.length - rightPoints.length;
+}
+
+function compareProjectText(left: string, right: string): number {
+  // Folded text preserves the project's case-insensitive path contract. The
+  // original spelling is the deterministic tie-breaker for e.g. `A`/`a`.
+  return compareCodePoints(asciiFold(left), asciiFold(right)) || compareCodePoints(left, right);
+}
+
 export function orderedProjectSheetUses(uses: readonly ProjectSheetUse[]): ProjectSheetUse[] {
   return [...uses].sort((left, right) => {
-    const path = asciiFold(left.sheetPath).localeCompare(asciiFold(right.sheetPath));
+    const path = compareProjectText(left.sheetPath, right.sheetPath);
     if (path !== 0) return path;
-    return asciiFold(left.reference).localeCompare(asciiFold(right.reference));
+    return compareProjectText(left.reference, right.reference);
   });
 }
 

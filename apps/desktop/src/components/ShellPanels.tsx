@@ -2801,7 +2801,9 @@ function ProjectSubcircuitLinkEditor({
             </div>
           </div>
           <p className="project-sheet-mapping-note">
-            The rows below are the parent’s stored p1…pN order. They are the only mapping Run uses; direction is shown for review, not inferred.
+            {sheetIsLinked
+              ? "The rows below are this parent block’s stored p1…pN order. Run uses this mapping exactly; direction is shown for review, not inferred."
+              : "Proposed mapping from the selected child sheet. Linking will store this p1…pN order on the parent; Run uses it only after the link is saved."}
           </p>
           <label className="property-field">
             <span>Sheet block name</span>
