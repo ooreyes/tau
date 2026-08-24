@@ -379,7 +379,7 @@ export function projectSheetInterfaceDrift(
 
   // A pure permutation is provable exactly, and only when nothing was added or
   // removed; anything else is reported as the positional fact it is.
-  const multiset = (names: readonly string[]) => [...names].sort().join(" ");
+  const multiset = (names: readonly string[]) => [...names].sort().join("\u0000");
   const reordered = sameLength && !namesInOrder && multiset(foldedLink) === multiset(foldedNow);
 
   const rows: ProjectInterfaceDriftRow[] = [];

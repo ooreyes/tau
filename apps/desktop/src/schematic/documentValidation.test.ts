@@ -294,6 +294,31 @@ describe("schematic document validation", () => {
     expect(() => validateSchematicDocument(bad)).toThrow(/directives\[0\] must be a string/i);
   });
 
+  it("rejects a directive carrying a real line terminator, and keeps the LTspice escape", () => {
+    // One directive is one card: `deck_lines` splits on `str::lines`, so a
+    // stored newline would expand into cards the user never reviewed.
+    for (const hostile of [
+      ".tran 1m\n.control\nshell id\n.endc",
+      ".tran 1m\r\n.include /etc/passwd",
+      ".tran 1m\rfoo",
+      ".tran 1m\u0000.control",
+    ]) {
+      const bad = validDocument();
+      (bad.directives as unknown[])[0] = hostile;
+      expect(() => validateSchematicDocument(bad)).toThrow(/directives\[0\] must be a single line/i);
+    }
+
+    // LTspice's multi-line TEXT block is the two-character escape `\n`, stored
+    // unexpanded - it must still round-trip, as must a tab-separated card.
+    const ok = validDocument();
+    (ok.directives as unknown[])[0] = ".tran 1n\\n.model D1 D(Rs=3)";
+    (ok.directives as unknown[])[1] = ".param\tRload=10k";
+    expect(validateSchematicDocument(ok).directives).toEqual([
+      ".tran 1n\\n.model D1 D(Rs=3)",
+      ".param\tRload=10k",
+    ]);
+  });
+
   it("rejects wires with fewer than two points", () => {
     const bad = validDocument();
     bad.wires[0].points = [{ x: 0, y: 0 }];

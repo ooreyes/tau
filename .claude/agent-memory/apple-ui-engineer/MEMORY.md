@@ -1,4 +1,6 @@
 - [Tau project overview](project_tau_overview.md) — stack, token system, simulator UI file map, autobuilder loop caveat
-- [Browser MCP tooling gotchas](feedback_apple_ui_engineer_browser_tooling.md) — click coordinate scale bug, scroll tool timeout workaround
+- [Browser MCP tooling gotchas](feedback_apple_ui_engineer_browser_tooling.md) — click coordinate scale bug, scroll timeout, Playwright fallback when Chrome MCP is down
 - [Preserve uncommitted fixes](feedback_preserve_uncommitted_fixes.md) — check git diff before refactors; some uncommitted work is deliberate and must survive
 - [Tau assistant column](project_tau_assistant_column.md) — AI chat column files/wiring, panelResize.tsx's new setWidth, dead "Ask Sim" CSS scaffolding it activated
+- [Palette validator flags](project_palette_validator_flags.md) — --surface/--pairs all catch what the documented commands miss; danger↔signal is deutan ΔE 1.5
+- [USB PSU walkthrough page](project_usb_psu_walkthrough.md) — reviewed doc surface with inlined tokens; ngspice is local so every number on it is re-measurable in ~6 s

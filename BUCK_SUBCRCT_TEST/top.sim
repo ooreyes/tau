@@ -1,0 +1,200 @@
+{
+  "app": "Tau",
+  "version": 1,
+  "savedAt": "2026-08-17T00:00:00.000Z",
+  "components": [
+    {
+      "id": "v1",
+      "kind": "vsource",
+      "x": 128,
+      "y": 208,
+      "rotation": 0,
+      "value": "25",
+      "label": "V1"
+    },
+    {
+      "id": "r1",
+      "kind": "resistor",
+      "x": 512,
+      "y": 208,
+      "rotation": 90,
+      "value": "330",
+      "label": "R1"
+    },
+    {
+      "id": "d1",
+      "kind": "led",
+      "x": 512,
+      "y": 304,
+      "rotation": 90,
+      "value": "LED red",
+      "label": "D1"
+    },
+    {
+      "id": "gv",
+      "kind": "ground",
+      "x": 128,
+      "y": 288,
+      "rotation": 0,
+      "value": "",
+      "label": ""
+    },
+    {
+      "id": "gd",
+      "kind": "ground",
+      "x": 512,
+      "y": 368,
+      "rotation": 0,
+      "value": "",
+      "label": ""
+    },
+    {
+      "id": "x1",
+      "kind": "subckt",
+      "x": 320,
+      "y": 176,
+      "rotation": 0,
+      "value": "Buck25to5",
+      "label": "X1",
+      "pinOverride": [
+        {
+          "id": "p1",
+          "label": "VIN",
+          "x": 272,
+          "y": 176
+        },
+        {
+          "id": "p2",
+          "label": "VOUT",
+          "x": 368,
+          "y": 176
+        }
+      ],
+      "projectSubcircuit": {
+        "sheetPath": "Buck25to5.asc",
+        "model": "Buck25to5",
+        "ports": [
+          "VIN",
+          "VOUT"
+        ]
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "t-in-a",
+      "points": [
+        {
+          "x": 128,
+          "y": 176
+        },
+        {
+          "x": 200,
+          "y": 176
+        }
+      ]
+    },
+    {
+      "id": "t-in-b",
+      "points": [
+        {
+          "x": 200,
+          "y": 176
+        },
+        {
+          "x": 272,
+          "y": 176
+        }
+      ]
+    },
+    {
+      "id": "t-out-a",
+      "points": [
+        {
+          "x": 368,
+          "y": 176
+        },
+        {
+          "x": 440,
+          "y": 176
+        }
+      ]
+    },
+    {
+      "id": "t-out-b",
+      "points": [
+        {
+          "x": 440,
+          "y": 176
+        },
+        {
+          "x": 512,
+          "y": 176
+        }
+      ]
+    },
+    {
+      "id": "t-led-a",
+      "points": [
+        {
+          "x": 512,
+          "y": 240
+        },
+        {
+          "x": 512,
+          "y": 272
+        }
+      ]
+    },
+    {
+      "id": "t-v-gnd",
+      "points": [
+        {
+          "x": 128,
+          "y": 240
+        },
+        {
+          "x": 128,
+          "y": 288
+        }
+      ]
+    },
+    {
+      "id": "t-led-gnd",
+      "points": [
+        {
+          "x": 512,
+          "y": 336
+        },
+        {
+          "x": 512,
+          "y": 368
+        }
+      ]
+    }
+  ],
+  "probes": [],
+  "netLabels": [
+    {
+      "id": "t-in",
+      "x": 200,
+      "y": 176,
+      "text": "VIN25"
+    },
+    {
+      "id": "t-out",
+      "x": 440,
+      "y": 176,
+      "text": "OUT"
+    },
+    {
+      "id": "t-leda",
+      "x": 512,
+      "y": 272,
+      "text": "LED_A"
+    }
+  ],
+  "directives": [
+    ".tran 20n 5m"
+  ]
+}

@@ -6,7 +6,10 @@ Tau generated circuit
 * Measured in ngspice on this exact deck: V(out) = 5.00316 V into 1 k,
 * 6.06 mV ripple, 5.855 V startup peak.
 *
-* Runnable as-is:  ngspice -b DECK.txt
+* Run it:  ngspice -b -r out.raw DECK.txt
+* The -r is not optional. Batch mode refuses a deck with no .print/.plot/
+* .fourier card, and Tau emits .save instead - so plain `ngspice -b DECK.txt`
+* parses the circuit and then exits with "no simulations run!".
 .options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7 rshunt=1e12 rseries=1e-3
 .subckt Buck25to5 VIN VOUT
 .model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)

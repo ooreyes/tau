@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tau: 120 V AC to 5 V USB, as three sheets</title>
+<style>
+/*
+ * DARK ONLY, deliberately, and the reason is evidence rather than taste: all
+ * five figures on this page are dark-theme captures of the app. A light
+ * document wrapped around five black plates puts the largest colour area on the
+ * page in a different theme from its own container, which is the one thing the
+ * reference plates never do (every module shares its substrate). Light-theme
+ * figures are the follow-up; until they exist this page matches them.
+ *
+ * Because there is only one theme, every token below is App.css's `:root`
+ * block, which IS the dark theme, copied value for value. Nothing is invented
+ * and no light values are guessed at.
+ *
+ * Document type scale is declared, not improvised. Tau's chrome runs at
+ * --fs-body 11px, correct for a dense instrument and wrong for 2,000 words of
+ * prose, so the reading sizes get their own named tokens and stay countable.
+ */
+:root {
+  --bg: #000000; --panel: #1c1c1e; --panel-2: #2c2c2e; --panel-3: #161617;
+  --text: #f5f5f7; --muted: rgba(235,235,245,0.6); --faint: rgba(235,235,245,0.3);
+  --border: rgba(84,84,88,0.65); --border-strong: rgba(142,142,147,0.45);
+  --border-subtle: rgba(84,84,88,0.36);
+  --accent: #d6d3ca; --accent-soft: rgba(214,211,202,0.10);
+  --signal: #e6a23c; --danger: #e6564b; --success: #4fae6b;
+  /* Trace hues. DATA ONLY: DESIGN_SYSTEM.md:27, "A trace hue may never appear
+     in chrome." Used below for exactly two drawn readouts and nothing else. */
+  --trace-green: #0CA176; --trace-red: #D86108; --trace-cyan: #3193C6;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+  --fs-micro: 9px; --fs-caption: 10px; --fs-body: 11px; --fs-label: 12px;
+  --fs-title: 13px; --fs-heading: 15px; --fs-display: 17px;
+  --tracking-wide: 0.06em;
+  --r-2xs: 2px; --r-pill: 999px;
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, "Courier New", monospace;
+
+  /* Reading scale, declared so it is auditable. */
+  --fs-doc: 14px; --fs-doc-lede: 17px; --fs-doc-h3: 15px;
+  --fs-doc-h2: 22px; --fs-doc-h1: 34px;
+  --fs-value: 28px; --fs-value-unit: 17px;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: var(--fs-doc)/1.55 var(--font-ui);
+  -webkit-font-smoothing: antialiased; letter-spacing: -0.01em;
+}
+/* One left edge for every block on the page. Prose is capped by measure, not
+   by the container, so figures and readouts get the full field. */
+.wrap { max-width: 1200px; margin: 0 auto; padding: var(--sp-8) var(--sp-6); }
+.wrap > p, .wrap > ol, .wrap > h1, .wrap > h2, .wrap > h3,
+.note > p, figcaption { max-width: 70ch; }
+code, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+code { font-size: 0.875em; }
+
+.eyebrow {
+  font-size: var(--fs-caption); letter-spacing: var(--tracking-wide);
+  text-transform: uppercase; color: var(--muted); margin: 0 0 var(--sp-3);
+}
+h1 { font-size: var(--fs-doc-h1); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 var(--sp-4); font-weight: 600; }
+/* No border-top: 32px of gap already separates the sections. */
+h2 { font-size: var(--fs-doc-h2); letter-spacing: -0.015em; margin: var(--sp-8) 0 var(--sp-3); font-weight: 600; }
+h3 { font-size: var(--fs-doc-h3); margin: var(--sp-6) 0 var(--sp-2); font-weight: 600; }
+p { margin: 0 0 var(--sp-4); }
+p.lede { font-size: var(--fs-doc-lede); color: var(--muted); line-height: 1.5; }
+.sub { color: var(--muted); }
+
+/* ── Readouts ────────────────────────────────────────────────────────────────
+ * Value, unit one step down and dimmer against it, label above in caption
+ * rank, then the scale. Unenclosed: separated by gutter, not by boxes.
+ * Every value that has a scale shows it, because a number without its scale is
+ * a number the reader cannot judge.
+ */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-6); margin: var(--sp-6) 0 var(--sp-8); }
+.tile .k {
+  display: block; font-size: var(--fs-caption); letter-spacing: var(--tracking-wide);
+  text-transform: uppercase; color: var(--muted); margin-bottom: var(--sp-1);
+}
+.tile .v {
+  display: flex; align-items: baseline; gap: var(--sp-1);
+  font: 600 var(--fs-value)/1 var(--font-mono); font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.tile .u { font: 500 var(--fs-value-unit)/1 var(--font-mono); color: var(--muted); letter-spacing: 0; }
+.tile .pm { font: 500 var(--fs-value-unit)/1 var(--font-mono); color: var(--muted); letter-spacing: 0; }
+.tile .n {
+  display: block; margin-top: var(--sp-2); font-size: var(--fs-caption);
+  color: var(--muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+}
+.tile .qual { font-style: normal; color: var(--signal); }
+/* Bounded scale: track, span, endpoint labels. */
+.scale { display: block; width: 100%; height: 6px; margin-top: var(--sp-2); }
+.ends {
+  display: flex; justify-content: space-between; margin-top: var(--sp-1);
+  font: 500 var(--fs-micro)/1.3 var(--font-mono); color: var(--muted);
+  letter-spacing: var(--tracking-wide); text-transform: uppercase;
+}
+
+/* ── The chain readout. Carries the stage voltages, which is the one thing the
+ * schematic below it does not show. No boxes, no connector glyphs: reading
+ * order carries the sequence. ───────────────────────────────────────────────── */
+.chain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-6); margin: var(--sp-6) 0; padding-bottom: var(--sp-5); border-bottom: 1px solid var(--border-subtle); }
+.chain .via { font: 500 var(--fs-micro)/1.4 var(--font-mono); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--accent); margin-top: var(--sp-2); display: block; }
+
+figure { margin: var(--sp-6) 0; }
+/* Tau's canvas is ~#0a0a0a on a #000000 substrate: 1.07:1, genuinely
+   indistinguishable, so this hairline is the sanctioned "two things would
+   otherwise merge" case. No radius: no plate rounds its content. */
+figure img { width: 100%; display: block; border: 1px solid var(--border-subtle); }
+figcaption { margin-top: var(--sp-2); font-size: var(--fs-body); color: var(--muted); }
+
+/* Code is distinguished by its face and its alignment. It needs no well. */
+pre { margin: var(--sp-4) 0; padding: 0; overflow-x: auto; font: var(--fs-label)/1.6 var(--font-mono); color: var(--text); }
+pre .cm { color: var(--muted); }
+pre b { color: var(--text); font-weight: 600; }
+
+table { width: 100%; border-collapse: collapse; margin: var(--sp-4) 0; font-size: var(--fs-title); }
+th, td { text-align: left; padding: var(--sp-2) var(--sp-3) var(--sp-2) 0; vertical-align: baseline; }
+th { font-size: var(--fs-caption); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border-subtle); }
+th.num, td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Unit in a fixed cell so the decimals line up and the unit stays subordinate. */
+td.num .tu { display: inline-block; width: 3ch; text-align: left; margin-left: var(--sp-1); font-size: var(--fs-caption); color: var(--muted); }
+td.set { color: var(--muted); }
+
+/* Hairline plus lamp plus word: the category is in the text, never in hue alone. */
+.note { border-left: 1px solid var(--c, var(--border-strong)); padding: 0 0 0 var(--sp-3); margin: var(--sp-5) 0; }
+.note .h { display: block; font-size: var(--fs-caption); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: var(--sp-1); }
+.note .h::before {
+  content: ""; display: inline-block; width: 6px; height: 6px;
+  border-radius: var(--r-pill); background: var(--c, var(--border-strong));
+  margin-right: var(--sp-2); vertical-align: 1px;
+}
+.note p:last-child { margin-bottom: 0; }
+.trap { --c: var(--danger); }
+.limit { --c: var(--signal); }
+.proof { --c: var(--success); }
+
+ol.steps { counter-reset: s; list-style: none; padding: 0; margin: var(--sp-6) 0; }
+ol.steps > li { counter-increment: s; padding: 0 0 var(--sp-5) var(--sp-8); position: relative; }
+ol.steps > li::before {
+  content: counter(s) "."; position: absolute; left: 0; top: 0;
+  font: 600 var(--fs-label)/1.55 var(--font-mono); color: var(--muted);
+}
+ol.steps > li > strong { display: block; margin-bottom: var(--sp-1); }
+footer { margin-top: var(--sp-8); padding-top: var(--sp-4); border-top: 1px solid var(--border-subtle); font-size: var(--fs-body); color: var(--muted); max-width: 70ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Tau · worked example · hierarchical subcircuits</p>
+  <h1>120&nbsp;V AC wall outlet to 5&nbsp;V USB</h1>
+  <p class="lede">
+    A complete power supply, drawn the way you would actually draw one: one sheet
+    per job, wired together on a parent sheet. The folder beside this file
+    simulates in ngspice, and every number here was measured on the deck Tau
+    generates from it.
+  </p>
+
+  <div class="tiles">
+    <div class="tile">
+      <span class="k">outlet</span>
+      <span class="v">0<span class="u">V</span><span class="pm">±170 V</span></span>
+      <svg class="scale" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="Symmetric swing, minus 170 to plus 170 volts about zero">
+        <rect x="0" y="2" width="100" height="2" fill="var(--border-subtle)"/>
+        <rect x="0" y="2" width="100" height="2" fill="var(--trace-green)" opacity="0.45"/>
+        <rect x="49.5" y="0" width="1" height="6" fill="var(--text)"/>
+      </svg>
+      <span class="ends"><i>-170 V</i><i>0</i><i>+170 V</i></span>
+      <span class="n">120.2 V RMS nominal, 119 V measured</span>
+    </div>
+    <div class="tile">
+      <span class="k">rectified bus</span>
+      <span class="v">13.4<span class="u">V</span><span class="pm">±234 mV</span></span>
+      <svg class="scale" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="13.4 volts, ripple band 13.19 to 13.66 volts within a 13 to 14 volt scale">
+        <rect x="0" y="2" width="100" height="2" fill="var(--border-subtle)"/>
+        <rect x="19" y="1" width="47" height="4" fill="var(--trace-red)"/>
+      </svg>
+      <span class="ends"><i>13 V</i><i>14 V</i></span>
+      <span class="n">3.5 % ripple at 120 Hz</span>
+    </div>
+    <div class="tile">
+      <span class="k">usb output <i class="qual">at 10 Ω only</i></span>
+      <span class="v">5.00<span class="u">V</span><span class="pm">±97 mV</span></span>
+      <svg class="scale" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="5.00 volts at 10 ohms, but 4.67 volts at 1 amp and 5.41 volts at 108 milliamps across the measured load range">
+        <rect x="0" y="2" width="100" height="2" fill="var(--border-subtle)"/>
+        <rect x="0" y="2" width="100" height="2" fill="var(--trace-cyan)" opacity="0.45"/>
+        <rect x="43.9" y="0" width="1" height="6" fill="var(--text)"/>
+      </svg>
+      <span class="ends"><i>4.67 V<br>at 935 mA</i><i>5.41 V<br>at 108 mA</i></span>
+      <span class="n">open loop: 1.9 % ripple, load dependent</span>
+    </div>
+    <div class="tile">
+      <span class="k">delivered into 10 Ω</span>
+      <span class="v">500<span class="u">mA</span></span>
+      <span class="n">2.50 W</span>
+    </div>
+  </div>
+
+  <div class="note limit">
+    <span class="h">Limit, stated before the numbers are read</span>
+    <p>
+      That third tile is the honest version of a figure this page previously
+      printed as <span class="mono">0.03 %</span> accuracy. It is not accuracy.
+      The converter is open loop, so its output is set by a fixed duty cycle and
+      moves with the load. Measured on this deck:
+      <span class="mono">5 Ω</span> gives <span class="mono">4.67 V</span>,
+      <span class="mono">10 Ω</span> gives <span class="mono">5.00 V</span>,
+      <span class="mono">20 Ω</span> gives <span class="mono">5.23 V</span>,
+      <span class="mono">50 Ω</span> gives <span class="mono">5.41 V</span>.
+      The <span class="mono">5.00 V</span> is where the tuning landed at one
+      load, not a regulation spec.
+    </p>
+  </div>
+
+  <h2>What a subcircuit is in Tau</h2>
+  <ol class="steps">
+    <li><strong>A child sheet publishes an interface.</strong>
+      It is an ordinary schematic. You label some nets, mark them as ports
+      (In, Out, BiDir), and Tau compiles the sheet into a SPICE
+      <code>.subckt</code>.</li>
+    <li><strong>A parent sheet places a block.</strong>
+      A block is a <code>subckt</code> symbol whose value is the model name and
+      whose pins are an ordered bank <code>p1…pN</code>, each labelled with one
+      of the child's port names.</li>
+    <li><strong>Order lives on the parent.</strong>
+      The child says <em>what</em> its ports are; the parent's pin bank says
+      <em>in what order</em>. That is why one child sheet can serve several
+      parents without being edited.</li>
+    <li><strong>Run resolves the links.</strong>
+      Tau emits one <code>.subckt</code> per child and wires the parent's own
+      nets into it positionally.</li>
+  </ol>
+
+  <p>The seam, straight out of <code>DECK.txt</code>:</p>
+<pre><span class="cm">.subckt Rectifier SEC1 SEC2 VBUS   ← child 1 declares its interface</span>
+<span class="cm">   … four diodes, 2200 uF, bleeder …</span>
+.ends Rectifier
+
+<span class="cm">.subckt Buck5V VIN VOUT            ← child 2 declares its interface</span>
+<span class="cm">   … switch, 220 uH, catch diode …</span>
+.ends Buck5V
+
+V1 vac_in 0 DC 0 AC 170 SIN(0 170 60)
+X1 n004 n005 <b>vbus</b> Rectifier        <span class="cm">← parent nets to SEC1 SEC2 VBUS</span>
+X2 <b>vbus</b> vusb Buck5V                <span class="cm">← parent nets to VIN  VOUT</span>
+RUSB vusb 0 10</pre>
+
+  <div class="note proof">
+    <span class="h">Proof, in one word</span>
+    <p>
+      <code>vbus</code> is the third node of <code>X1</code> and the first node
+      of <code>X2</code>. One net, two blocks: the rectifier handing its DC bus
+      to the converter across a sheet boundary. Nothing else in the project
+      asserts this; the netlist is the proof.
+    </p>
+  </div>
+
+  <h2>The three sheets</h2>
+
+  <div class="chain">
+    <div class="tile">
+      <span class="k">VAC_IN</span>
+      <span class="v">0<span class="u">V</span><span class="pm">±170 V</span></span>
+      <span class="n">outlet, 60 Hz</span>
+      <span class="via">into X1 Rectifier</span>
+    </div>
+    <div class="tile">
+      <span class="k">VBUS</span>
+      <span class="v">13.4<span class="u">V</span><span class="pm">±234 mV</span></span>
+      <span class="n">rectified, 120 Hz</span>
+      <span class="via">into X2 Buck5V</span>
+    </div>
+    <div class="tile">
+      <span class="k">VUSB</span>
+      <span class="v">5.00<span class="u">V</span><span class="pm">±97 mV</span></span>
+      <span class="n">switched, 200 kHz</span>
+      <span class="via">into RUSB 10 Ω</span>
+    </div>
+  </div>
+
+  <figure>
+    <img src="img/parent.png" alt="The parent sheet: AC source, transformer, two subcircuit blocks, USB load and LED indicator">
+    <figcaption><code>top.sim</code>, the parent. Left to right: the outlet, the
+    transformer, the two blocks, the load. The wire labels
+    <span class="mono">VAC_IN</span>, <span class="mono">VBUS</span> and
+    <span class="mono">VUSB</span> are the parent's own nets; the names inside
+    each block are the child's ports.</figcaption>
+  </figure>
+
+  <h3>Rectifier.sim, AC in and lumpy DC out</h3>
+  <p class="sub">
+    Ports <span class="mono">SEC1</span> (In), <span class="mono">SEC2</span>
+    (In), <span class="mono">VBUS</span> (Out). A full-wave bridge as two
+    vertical diode legs between a positive rail and a ground rail, a
+    <span class="mono">2200 uF</span> bulk capacitor, and a
+    <span class="mono">100 kΩ</span> bleeder across the AC inputs. Three ports,
+    so this is also the example of a block that is not simply in and out.
+  </p>
+  <figure>
+    <img src="img/rectifier.png" alt="The rectifier child sheet: four diodes, bulk capacitor, bleeder resistor, three port markers with ordinal badges">
+    <figcaption>The port markers carry ordinal badges 1, 2, 3, because the
+    contract is positional. Arrow direction shows In against Out.</figcaption>
+  </figure>
+
+  <h3>Buck5V.sim, 13 V bus in and 5 V out</h3>
+  <p class="sub">
+    Ports <span class="mono">VIN</span> (In), <span class="mono">VOUT</span>
+    (Out). A <span class="mono">200 kHz</span> switching buck: a
+    voltage-controlled switch, a catch diode, a <span class="mono">220 uH</span>
+    inductor, a <span class="mono">22 uF</span> output capacitor, and an
+    on-sheet pulse source as the gate drive.
+  </p>
+
+  <div class="tile" style="max-width: 320px; margin: var(--sp-5) 0;">
+    <span class="k">duty cycle</span>
+    <span class="v">40.8<span class="u">%</span></span>
+    <svg class="scale" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="Duty cycle 40.8 percent of a bounded 0 to 100 percent scale">
+      <rect x="0" y="2" width="100" height="2" fill="var(--border-subtle)"/>
+      <rect x="0" y="1" width="40.8" height="4" fill="var(--trace-red)"/>
+    </svg>
+    <span class="ends"><i>0</i><i>100</i></span>
+    <span class="n">t(ON) 2.04 us of 5.00 us, at 200 kHz</span>
+  </div>
+
+  <figure>
+    <img src="img/buck.png" alt="The buck converter child sheet: switch, inductor, catch diode, output capacitor, pulse source">
+    <figcaption>The gate drive lives on the sheet, so the block needs no third
+    port for it. <span class="mono">VPWM</span> reads Pulse, 0 V to 5 V.</figcaption>
+  </figure>
+
+  <h3>top.sim, the parent and the proof</h3>
+  <p class="sub">
+    The outlet (<span class="mono">170 60</span>, see the trap below),
+    <span class="mono">20 Ω</span> of primary winding resistance, a
+    <span class="mono">10:1 L1=10 k=0.99</span> transformer,
+    <span class="mono">0.5 Ω</span> per secondary winding, both blocks, a
+    <span class="mono">10 Ω</span> USB load and a red power-on LED.
+  </p>
+
+  <figure>
+    <img src="img/results.png" alt="Tau's simulator panel showing V(VAC_IN) as a 60 Hz sine with RMS 119 V, peak-to-peak 340 V, frequency 60 Hz">
+    <figcaption>Tau's own measurement panel after Run:
+    <span class="mono">V(VAC_IN)</span> is <span class="mono">119 V</span> RMS at
+    <span class="mono">60 Hz</span>, <span class="mono">363,636</span> samples
+    through ngspice in <span class="mono">14.2 s</span>. Note the app labels its
+    own axes and states peak-to-peak beside RMS.</figcaption>
+  </figure>
+
+  <h3>The bus takes 35 ms to settle, which is why the window starts at 50 ms</h3>
+  <p class="sub">
+    Cycle-mean of <span class="mono">V(VBUS)</span> across the whole run, from
+    this folder's deck. The shaded band is the 50 ms to 60 ms averaging window
+    every number on this page uses. The bus climbs from <span class="mono">5.8 V</span> at
+    <span class="mono">6 ms</span> to <span class="mono">13.5 V</span> settled, so
+    averaging from <span class="mono">t=0</span> would have reported it about
+    <span class="mono">1.5 V</span> low.
+  </p>
+  <svg viewBox="0 0 260 52" style="width:100%;max-width:680px;display:block;margin:var(--sp-4) 0;" role="img"
+       aria-label="V(VBUS) cycle mean rising from 0 to 13.5 volts over 60 milliseconds, settled by about 35 milliseconds, with the 50 to 60 millisecond averaging window shaded">
+    <rect x="215.3" y="2" width="42.7" height="42" fill="var(--accent-soft)"/>
+    <line x1="2" y1="44" x2="258" y2="44" stroke="var(--border-subtle)" stroke-width="0.5"/>
+    <polyline fill="none" stroke="var(--trace-red)" stroke-width="1.5" stroke-linejoin="round" points="2.0,44.0 10.5,43.4 19.1,39.3 27.6,27.3 36.1,14.2 44.7,8.9 53.2,8.9 61.7,8.4 70.3,6.8 78.8,6.2 87.3,6.7 95.9,6.8 104.4,6.1 112.9,5.7 121.5,6.2 130.0,6.4 138.5,5.8 147.1,5.3 155.6,5.7 164.1,6.1 172.7,5.7 181.2,5.3 189.7,5.7 198.3,6.2 206.8,5.8 215.3,5.2 223.9,5.4 232.4,5.9 240.9,5.8 249.5,5.3 258.0,5.5"/>
+    <text x="2" y="50" fill="var(--muted)" style="font:500 5px var(--font-mono);letter-spacing:0.06em">0</text>
+    <text x="215.3" y="50" fill="var(--muted)" style="font:500 5px var(--font-mono);letter-spacing:0.06em">50 MS</text>
+    <text x="243" y="50" fill="var(--muted)" style="font:500 5px var(--font-mono);letter-spacing:0.06em">60</text>
+    <text x="2" y="8" fill="var(--muted)" style="font:500 5px var(--font-mono);letter-spacing:0.06em">14 V</text>
+    <text x="222" y="8" fill="var(--text)" style="font:600 5px var(--font-mono);letter-spacing:0.06em">MEASURED</text>
+  </svg>
+
+  <h2>What a child sheet may contain</h2>
+  <p>
+    A real restriction, and knowing it before you draw saves an afternoon. A
+    child sheet compiles to a <code>.subckt</code> <em>body</em>, so every
+    device in it must map to a single ngspice card.
+  </p>
+  <h3>Allowed in a child</h3>
+  <p class="sub">ground, resistor, capacitor, polarized capacitor, inductor,
+  diode, switch, voltage source, nested blocks.</p>
+  <h3>Must stay on the parent</h3>
+  <p class="sub">transformer, LED, zener, photodiode, all transistors, op-amp,
+  comparator, potentiometer, relay, motor, AC and pulse stimulus sources.</p>
+  <p>
+    That is why the transformer sits on <code>top.sim</code> and not inside
+    <code>Rectifier.sim</code>. A transformer expands to two inductors plus a
+    <code>K</code> coupling statement, three cards, and a child sheet refuses it
+    by name:
+  </p>
+<pre>T1 (transformer) on "Rectifier.sim" is not yet supported inside a
+linked sheet. It expands to several ngspice devices, which a linked
+sheet's block body does not generate yet.</pre>
+  <p class="sub">
+    The LED is on the parent for a different reason: it needs a model library.
+  </p>
+
+  <h2>Three traps that cost real debugging time</h2>
+
+  <div class="note trap">
+    <span class="h">Trap: spell the rectifier diodes</span>
+    <p>
+      Write <code>D Is=1e-14 N=1</code> on every one. A diode placed from the
+      palette, with no LTspice provenance, compiles to Tau's ideal piecewise
+      model, and the ideal one does not converge when hard switched, which is
+      all a bridge ever does, 120 times a second.
+    </p>
+  </div>
+
+  <div class="note trap">
+    <span class="h">Trap: give the transformer L1=10</span>
+    <p>
+      Tau's default primary inductance is <span class="mono">10 mH</span>, whose
+      reactance at <span class="mono">60 Hz</span> is
+      <span class="mono">3.8 Ω</span>: effectively a dead short across the
+      outlet. At <span class="mono">10 H</span> it is
+      <span class="mono">3.8 kΩ</span>, so magnetizing current is a realistic
+      <span class="mono">32 mA</span>.
+    </p>
+  </div>
+
+  <div class="note trap">
+    <span class="h">Trap: use k=0.99, not the default</span>
+    <p>
+      Perfect coupling plus a floating secondary is a singular system. At
+      <span class="mono">0.999</span> this exact circuit dies with
+      <code>Timestep too small; trouble with node l2_intern__</code> at
+      <span class="mono">6.9 us</span>. The winding resistances and the bleeder
+      are load bearing for the same reason: they damp the secondary enough to
+      solve.
+    </p>
+  </div>
+
+  <h2>Recreate it from scratch</h2>
+  <p class="sub">Roughly fifteen minutes. Every value you need is given.</p>
+  <ol class="steps">
+    <li><strong>Open a project folder.</strong>
+      Tau keeps every schematic inside one. Use <em>Open folder</em> on the start
+      screen, or <em>Create project</em>.</li>
+    <li><strong>New schematic, save as <code>Rectifier.sim</code>.</strong>
+      Four diodes in two vertical legs between a positive rail and a ground rail,
+      each valued <code>D Is=1e-14 N=1</code>. Add a capacitor
+      <code>2200u</code> from rail to ground and a resistor <code>100k</code>
+      across the two AC input nodes.</li>
+    <li><strong>Mark the rectifier's ports.</strong>
+      Label the AC nodes <code>SEC1</code> and <code>SEC2</code> and the rail
+      <code>VBUS</code>. Open <em>Sheet interface</em> and mark them In, In, Out,
+      in that order. The footer should read
+      <em>Ready … Pinout in order: SEC1, SEC2, VBUS.</em></li>
+    <li><strong>New schematic, save as <code>Buck5V.sim</code>.</strong>
+      A switch (<code>TAU_SW</code>), a catch diode
+      <code>D Is=1e-14 N=1</code> pointing up out of ground into the switching
+      node, an inductor <code>220u</code>, a capacitor <code>22u</code> to
+      ground, and a voltage source valued
+      <code>PULSE(0 5 0 1n 1n 2.04u 5u)</code> driving the switch's control
+      pins. Label <code>VIN</code>/<code>VOUT</code>, mark them In/Out.</li>
+    <li><strong>New schematic, save as <code>top.sim</code>.</strong>
+      AC source <code>170 60</code>; resistor <code>20</code>; transformer
+      <code>10:1 L1=10 k=0.99</code>; two resistors <code>0.5</code> on the
+      secondary; resistor <code>10</code> as the USB load; resistor
+      <code>330</code> and an LED <code>LED red</code> as the indicator. Ground
+      the source return, the load and the LED.</li>
+    <li><strong>Place the two blocks.</strong>
+      Drop a <em>subckt</em> for each child, set its value to the model name
+      (<code>Rectifier</code>, <code>Buck5V</code>), point it at the child file,
+      and give it an ordered pin bank whose labels match the child's ports
+      exactly.</li>
+    <li><strong>Add the analysis and Run.</strong>
+      Directive <code>.tran 100n 60m</code>. 60 ms is about 3.6 mains cycles
+      plus the settling shown above; the 100 ns step still resolves the
+      <span class="mono">5 us</span> switching period with 50 points. At Tau's
+      default resolution the switching edges alias and you measure noise instead
+      of a converter.</li>
+  </ol>
+
+  <p>Or regenerate the folder from Tau's own writers:</p>
+<pre>WRITE_USB_PSU=1 npx vitest run --root apps/desktop \
+  src/schematic/usbPsuFolder.test.ts</pre>
+  <p class="sub">
+    The same test re-reads this folder from disk on every ordinary test run and
+    recompiles it, so if these files go stale the suite fails.
+  </p>
+
+  <h2>Measured, on the deck in this folder</h2>
+  <p class="sub">
+    Real ngspice, averaged over 50 ms to 60 ms so the mains and the bulk
+    capacitor have both settled. Ripple is peak to peak. Three significant
+    figures throughout, which is what the solver justifies: quoting
+    <span class="mono">13.4236 V</span> on a rail carrying
+    <span class="mono">469 mV</span> of ripple would claim a resolution
+    <span class="mono">4689×</span> finer than the signal's own excursion. Run it
+    with <code>ngspice -b -r out.raw DECK.txt</code>; the <code>-r</code> is not
+    optional, because batch mode refuses a deck with no
+    <code>.print</code>/<code>.plot</code> card and Tau emits <code>.save</code>.
+  </p>
+  <table>
+    <tr><th>Node</th><th class="num">Value</th><th class="num">Ripple</th><th>Note</th></tr>
+    <tr><td><code>V(VAC_IN)</code></td><td class="num set">170<span class="tu">V</span></td><td class="num set">n/a</td>
+        <td class="sub">SET, not measured: the source amplitude is exact by construction. SPICE sine amplitude is <em>peak</em>, so 170 V pk is 120.2 V RMS nominal.</td></tr>
+    <tr><td><code>V(VBUS)</code></td><td class="num">13.4<span class="tu">V</span></td><td class="num">469<span class="tu">mV</span></td>
+        <td class="sub">rectified and smoothed, ripple at 120 Hz</td></tr>
+    <tr><td><code>V(VUSB)</code></td><td class="num">5.00<span class="tu">V</span></td><td class="num">194<span class="tu">mV</span></td>
+        <td class="sub">at 10 Ω only, see the limit above</td></tr>
+    <tr><td><code>I(DON)</code></td><td class="num">9.08<span class="tu">mA</span></td><td class="num">n/a</td>
+        <td class="sub">CONDUCTING: the power-on LED is lit</td></tr>
+    <tr><td><code>I(RUSB)</code></td><td class="num">500<span class="tu">mA</span></td><td class="num">n/a</td>
+        <td class="sub">2.50 W delivered</td></tr>
+  </table>
+
+  <h2>Two honest limits</h2>
+
+  <div class="note limit">
+    <span class="h">Limit: the buck is open loop</span>
+    <p>
+      Fixed 40.8 % duty, no feedback, so it holds 5 V only at the load it was
+      tuned for. The load sweep at the top of this page is the measured extent of
+      that. A real charger measures its own output and corrects every cycle.
+      Adding the loop is the natural next exercise, and it is why this is a
+      teaching circuit rather than a design to build.
+    </p>
+  </div>
+
+  <div class="note limit">
+    <span class="h">Limit: the duty cycle was solved, not calculated</span>
+    <p>
+      Theory says <code>D = (Vout + Vf) / (Vbus + Vf)</code>, near 0.404. But
+      raising duty draws more bus current, which sags the bus, which lowers the
+      output, so the answer is a fixed point rather than a formula. The ON time
+      was swept against the real engine until <span class="mono">V(VUSB)</span>
+      reached 5 V. It came out at <span class="mono">2.04 us</span>.
+    </p>
+  </div>
+
+  <h2>A rendering bug this walkthrough found, and its fix</h2>
+  <p>
+    Drawing this project surfaced two real defects in Tau's block rendering. Both
+    are fixed; the before and after are kept because the cause is instructive.
+  </p>
+
+  <figure>
+    <img src="img/block-render-bug.png" alt="Before: the three-port Rectifier block drawn tiny with its model name outside the body, overlapping the SEC1 pin label, beside a much larger two-port Buck5V block">
+    <figcaption><strong>Before.</strong> Two blocks on one sheet, both declaring a
+    56-unit body. The three-port <code>X1</code> drew at
+    <span class="mono">28 px</span> with "Rectifier" outside the box and through
+    the <span class="mono">SEC1</span> label; the two-port <code>X2</code> drew at
+    <span class="mono">84 px</span>.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="img/block-render-fixed.png" alt="After: both blocks the same width with identical stroke and corner radius, the Rectifier model name inside its body clear of all three pin labels">
+    <figcaption><strong>After.</strong> Same width, same stroke, same radius.
+    <code>X1</code> stays taller because it genuinely has three ports, and
+    "Rectifier" sits inside its body clear of all three pin labels.</figcaption>
+  </figure>
+
+  <div class="note trap">
+    <span class="h">Cause 1: a block was scaled like an imported source symbol</span>
+    <p>
+      <code>sourceSymbolFitScale</code> exists to stretch an imported LTspice
+      source symbol onto the pin span its file declares, and it measures
+      <span class="mono">pins[0]</span> to <span class="mono">pins[1]</span> to do
+      it. That assumes the first two pins are the opposite ends of a two-terminal
+      part. A three-port block stacks two pins on one side, so the rectifier
+      measured its own <span class="mono">32</span>-unit vertical pin
+      <em>pitch</em> against the native <span class="mono">64</span>-unit
+      horizontal span and scaled itself to <span class="mono">0.5</span>, next to
+      a two-port block at <span class="mono">1.5</span>. Project blocks now
+      return <span class="mono">1</span> and let the body geometry size them;
+      imported symbols keep the old path.
+    </p>
+  </div>
+
+  <div class="note trap">
+    <span class="h">Cause 2: the model caption cleared the pin, not the pin's caption</span>
+    <p>
+      The body reserved <span class="mono">maxPinY + 12</span> of height, and the
+      model name is drawn with its <em>baseline</em> at
+      <span class="mono">minY + 8</span>. A 7px glyph box hangs about
+      <span class="mono">1.5</span> units below its own baseline, so the caption
+      occupied <span class="mono">minY + 1.5</span> to
+      <span class="mono">minY + 9.5</span> and crossed into the pin-caption band
+      the moment a pin sat off centre. The reserve is now
+      <span class="mono">maxPinY + 18</span>, derived from that inequality rather
+      than guessed. A two-port bank still floors at
+      <span class="mono">20</span>, so no block that rendered correctly changed
+      size.
+    </p>
+  </div>
+
+  <div class="note proof">
+    <span class="h">Verified, not eyeballed</span>
+    <p>
+      Both fixes carry mutation-checked tests. Reverting the scale fix fails with
+      <code>expected 0.5 to be 1</code>; reverting the height fix fails with
+      <code>expected -18.5 to be less than -20</code>, which is the 1.5-unit
+      encroachment stated above. Every caption on all three sheets was then
+      audited in the browser against every other caption, every symbol stroke and
+      every wire: zero overlaps remain, and the only contacts left are
+      sub-pixel line-box touches between a component's own reference and its
+      value, which is how the label placer stacks them by design.
+    </p>
+  </div>
+
+  <footer>
+    Tau · <code>USB_PSU_WALKTHROUGH/</code> · every sheet is <code>.sim</code>,
+    Tau's native format. This page is dark theme only, because all five figures
+    are dark-theme captures of the app; light-theme figures are the follow-up.
+    Tokens are <code>apps/desktop/src/App.css</code>'s <code>:root</code> block,
+    which is the dark theme, copied value for value. Trace hues appear in the two
+    drawn readouts and nowhere else.
+  </footer>
+</div>
+</body>
+</html>

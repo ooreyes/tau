@@ -19,6 +19,7 @@ import {
   rectsOverlap,
   rerouteMovedWires,
   routeWireSmart,
+  sourceSymbolFitScale,
   collides,
   componentAt,
   segmentIntersectsRect,
@@ -991,5 +992,51 @@ describe("A5 - a widened block body is the same box everywhere", () => {
     expect(disagreement!).toBeLessThanOrEqual(
       nativeSubcircuitBody(long).maxX + (nativeSubcircuitBody(long).maxX - nativeSubcircuitBody(short).maxX) + 24,
     );
+  });
+});
+
+/**
+ * Two project blocks on one sheet must render at the same size.
+ *
+ * `sourceSymbolFitScale` exists to scale an imported LTspice SOURCE symbol so
+ * Tau's native pin bank lands on the file's terminals, and it measures
+ * `pins[0] -> pins[1]` to do it. That assumes the first two pins are the
+ * opposite ends of a two-terminal part, which a project block need not satisfy:
+ * a 3-port block stacks two pins on one side.
+ *
+ * Measured in the browser before the fix, on one sheet, both declaring a
+ * 56-unit body: the 3-port Rectifier rendered 28px wide (scale 0.5, because
+ * SEC1 -> SEC2 is a 32-unit vertical PITCH) and the 2-port Buck5V rendered 84px
+ * (scale 1.5). Three times apart, from identical geometry.
+ */
+describe("project blocks are not scaled like imported source symbols", () => {
+  const block = (id: string, pins: { id: string; label: string; x: number; y: number }[]) => ({
+    id, kind: "subckt", x: 0, y: 0, rotation: 0, value: "M", label: id, pinOverride: pins,
+  } as unknown as SchematicComponent);
+
+  it("gives a 3-port and a 2-port block the same scale", () => {
+    const threePort = block("x1", [
+      { id: "p1", label: "SEC1", x: -48, y: -16 },
+      { id: "p2", label: "SEC2", x: -48, y: 16 },
+      { id: "p3", label: "VBUS", x: 48, y: 0 },
+    ]);
+    const twoPort = block("x2", [
+      { id: "p1", label: "VIN", x: -48, y: 0 },
+      { id: "p2", label: "VOUT", x: 48, y: 0 },
+    ]);
+    expect(sourceSymbolFitScale(threePort)).toBe(1);
+    expect(sourceSymbolFitScale(twoPort)).toBe(1);
+    expect(sourceSymbolFitScale(threePort)).toBe(sourceSymbolFitScale(twoPort));
+  });
+
+  it("still fits an imported symbol, which is what the scale is for", () => {
+    // `ltSymbolType` is what makes it file-backed rather than a project block,
+    // so it keeps the old path and its 80-unit pin span is still honoured.
+    const imported = {
+      id: "v9", kind: "vac", x: 0, y: 0, rotation: 0, value: "1 1k", label: "V9",
+      ltSymbolType: "voltage",
+      pinOverride: [{ id: "p", label: "+", x: 0, y: -40 }, { id: "n", label: "-", x: 0, y: 40 }],
+    } as unknown as SchematicComponent;
+    expect(sourceSymbolFitScale(imported)).toBeCloseTo(80 / 64, 5);
   });
 });

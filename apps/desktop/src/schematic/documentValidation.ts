@@ -125,6 +125,29 @@ function singleLineText(value: unknown, name: string, maxLength = MAX_TEXT_LENGT
   return result;
 }
 
+/**
+ * One directive is one physical SPICE card, so a stored directive must not
+ * carry a real line terminator: `deck_lines` splits the emitted netlist with
+ * `str::lines`, so an embedded newline turns one directive into extra cards
+ * that were never the ones the user reviewed.
+ *
+ * No legitimate producer stores one. LTspice encodes a multi-line TEXT block as
+ * the two-character escape `\n` (expanded by `modelLibLinesFromDirectives`, not
+ * stored expanded), `ascImport` re-joins a TEXT payload on single spaces,
+ * `cirImport` pushes one logical line at a time, and the setup dialog splits
+ * its Advanced textarea on `/\r?\n/` before storing.
+ *
+ * Deliberately narrower than `singleLineText`: tabs and other whitespace are
+ * legal here because hand-written `.cir` cards use them and they carry no
+ * card-splitting meaning. NUL is refused because the deck crosses an FFI
+ * boundary where it would truncate the card.
+ */
+function directiveText(value: unknown, name: string): string {
+  const result = text(value, name, MAX_DIRECTIVE_LENGTH);
+  if (/[\u0000\r\n]/.test(result)) fail(`${name} must be a single line.`);
+  return result;
+}
+
 function spiceNameText(value: unknown, name: string): string {
   const result = singleLineText(value, name);
   if (!result || /[\s=(){};]/.test(result)) fail(`${name} must be one SPICE name token.`);
@@ -708,7 +731,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
     wires: validatedWires,
     probes: validatedProbes,
     netLabels: validatedLabels,
-    directives: directives.map((value, index) => text(value, `directives[${index}]`, MAX_DIRECTIVE_LENGTH)),
+    directives: directives.map((value, index) => directiveText(value, `directives[${index}]`)),
     ...(textAnnotations.length > 0
       ? { textAnnotations: textAnnotations.map(textAnnotation) }
       : {}),

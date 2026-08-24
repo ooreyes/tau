@@ -167,3 +167,94 @@ export function topSheet(childPath = "Buck25to5.asc"): FixtureSheet {
   const netLabels: NetLabel[] = [{ id: "t-out", x: 440, y: 176, text: "OUT" }];
   return { components, wires, netLabels, directives: [".tran 20n 5m"] };
 }
+
+/** Series resistor that sets the LED current from the block's 5 V output. */
+export const LED_SERIES_OHMS = 330;
+
+/**
+ * The same parent, but the 5 V rail lights a red LED instead of feeding a 1 k
+ * resistor. This is the sheet a human is shown, because "5 V appears at the
+ * block's output pin" is a claim about a number, while a lit LED is a claim
+ * about a circuit: the current has to leave the child through `VOUT`, cross the
+ * boundary, and come back through ground.
+ *
+ * Why these two values:
+ *
+ *  - The value is `LED red`, spelled rather than defaulted. `ledColorFromValue`
+ *    already falls back to red, but an authored token makes
+ *    `ledHasExplicitColor` true, so the part states its own colour instead of
+ *    inheriting one. Red's typical forward drop is 2.0 V (`ledSpec.ts`).
+ *  - A palette-placed LED carries no LTspice provenance, so it compiles through
+ *    the IDEAL path, not the `TAU_LED` junction: the deck holds
+ *    `.model TAU_LED_IDEAL_2V sidiode(Ron=1m Roff=1G Vfwd=2 epsilon=10m)` and
+ *    an XSPICE `A` device with a 0 V current-sense source in series. Measured
+ *    drop is 2.0004 V, i.e. the textbook 2.0 V a student expects.
+ *  - 330 Ohm sets (4.99 - 2.0) / 330 = 9.1 mA, a normal indicator current and a
+ *    stock resistor value. It also keeps the converter in continuous conduction
+ *    with more margin than the 1 k load does: IL(min) = 9.1 - 2.35 = 6.7 mA.
+ *
+ * The load is ~1.8x the 1 k sheet's 5 mA, so `Vout` lands a little lower: the
+ * catch diode's own drop grows with the current it freewheels, and the fixed
+ * open-loop duty cannot correct for it. That is a real property of an
+ * open-loop buck, so it is measured and reported rather than tuned away. The
+ * duty is NOT retuned for this load - `PWM_VALUE` is shared with the 1 k sheet
+ * and the child is one file, so it cannot hold two duties.
+ *
+ * Measured in real ngspice on Tau's own generated deck, averaged over 4-5 ms so
+ * the startup transient is excluded:
+ *
+ * | quantity | value |
+ * |---|---|
+ * | V(VIN25) | 25.000 V |
+ * | V(OUT) | 4.99125 V (0.18 % low) |
+ * | V(LED_A) | 2.00043 V |
+ * | I(D1) | 9.06311 mA |
+ * | V(OUT) ripple, pk-pk | 6.81 mV |
+ * | V(OUT) startup peak | 5.31621 V at 198 us |
+ *
+ * `LED_A` is labelled deliberately. It is the one node that proves the LED is
+ * being driven by the child's output and not by a stray reference: it can only
+ * sit at a diode drop below `OUT`.
+ */
+export function topSheetLedLoad(childPath = "Buck25to5.asc"): FixtureSheet {
+  const components: SchematicComponent[] = [
+    part("v1", "vsource", 128, 208, "25", "V1"),
+    // Vertical load chain: rail -> R1 -> LED_A -> D1 -> ground. A two-terminal
+    // part at rotation 90 has pin `a` 32 above the origin and `b`/`k` 32 below.
+    part("r1", "resistor", 512, 208, String(LED_SERIES_OHMS), "R1", 90),
+    part("d1", "led", 512, 304, "LED red", "D1", 90),
+    part("gv", "ground", 128, 288, "", ""),
+    part("gd", "ground", 512, 368, "", ""),
+    {
+      ...part("x1", "subckt", 320, 176, "Buck25to5", "X1"),
+      pinOverride: [
+        { id: "p1", label: "VIN", x: 272, y: 176 },
+        { id: "p2", label: "VOUT", x: 368, y: 176 },
+      ],
+      projectSubcircuit: {
+        sheetPath: childPath,
+        model: "Buck25to5",
+        ports: ["VIN", "VOUT"],
+      },
+    } as SchematicComponent,
+  ];
+  const wires: SchematicWire[] = [
+    // 25 V rail, split at x=200 so the label sits on a real endpoint.
+    wire("t-in-a", [128, 176], [200, 176]),
+    wire("t-in-b", [200, 176], [272, 176]),
+    // 5 V rail out of the block, split at x=440 for the same reason.
+    wire("t-out-a", [368, 176], [440, 176]),
+    wire("t-out-b", [440, 176], [512, 176]),
+    // R1 down into the LED anode.
+    wire("t-led-a", [512, 240], [512, 272]),
+    // Returns.
+    wire("t-v-gnd", [128, 240], [128, 288]),
+    wire("t-led-gnd", [512, 336], [512, 368]),
+  ];
+  const netLabels: NetLabel[] = [
+    { id: "t-in", x: 200, y: 176, text: "VIN25" },
+    { id: "t-out", x: 440, y: 176, text: "OUT" },
+    { id: "t-leda", x: 512, y: 272, text: "LED_A" },
+  ];
+  return { components, wires, netLabels, directives: [".tran 20n 5m"] };
+}

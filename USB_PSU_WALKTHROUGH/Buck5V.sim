@@ -1,0 +1,267 @@
+{
+  "app": "Tau",
+  "version": 1,
+  "savedAt": "2026-08-17T00:00:00.000Z",
+  "components": [
+    {
+      "id": "s1",
+      "kind": "switch",
+      "x": 256,
+      "y": 128,
+      "rotation": 0,
+      "value": "TAU_SW",
+      "label": "S1"
+    },
+    {
+      "id": "l1",
+      "kind": "inductor",
+      "x": 384,
+      "y": 128,
+      "rotation": 0,
+      "value": "220u",
+      "label": "L1"
+    },
+    {
+      "id": "dc",
+      "kind": "diode",
+      "x": 320,
+      "y": 192,
+      "rotation": 270,
+      "value": "D Is=1e-14 N=1",
+      "label": "DC"
+    },
+    {
+      "id": "vpwm",
+      "kind": "vsource",
+      "x": 176,
+      "y": 208,
+      "rotation": 0,
+      "value": "PULSE(0 5 0 1n 1n 2.04u 5u)",
+      "label": "VPWM"
+    },
+    {
+      "id": "cout",
+      "kind": "capacitor",
+      "x": 480,
+      "y": 192,
+      "rotation": 90,
+      "value": "22u",
+      "label": "COUT"
+    },
+    {
+      "id": "g1",
+      "kind": "ground",
+      "x": 320,
+      "y": 256,
+      "rotation": 0,
+      "value": "",
+      "label": ""
+    },
+    {
+      "id": "g2",
+      "kind": "ground",
+      "x": 176,
+      "y": 272,
+      "rotation": 0,
+      "value": "",
+      "label": ""
+    },
+    {
+      "id": "g3",
+      "kind": "ground",
+      "x": 272,
+      "y": 256,
+      "rotation": 0,
+      "value": "",
+      "label": ""
+    },
+    {
+      "id": "g4",
+      "kind": "ground",
+      "x": 480,
+      "y": 256,
+      "rotation": 0,
+      "value": "",
+      "label": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "b-vin",
+      "points": [
+        {
+          "x": 192,
+          "y": 128
+        },
+        {
+          "x": 224,
+          "y": 128
+        }
+      ]
+    },
+    {
+      "id": "b-sw-a",
+      "points": [
+        {
+          "x": 288,
+          "y": 128
+        },
+        {
+          "x": 320,
+          "y": 128
+        }
+      ]
+    },
+    {
+      "id": "b-sw-b",
+      "points": [
+        {
+          "x": 320,
+          "y": 128
+        },
+        {
+          "x": 352,
+          "y": 128
+        }
+      ]
+    },
+    {
+      "id": "b-d-k",
+      "points": [
+        {
+          "x": 320,
+          "y": 160
+        },
+        {
+          "x": 320,
+          "y": 128
+        }
+      ]
+    },
+    {
+      "id": "b-d-a",
+      "points": [
+        {
+          "x": 320,
+          "y": 224
+        },
+        {
+          "x": 320,
+          "y": 256
+        }
+      ]
+    },
+    {
+      "id": "b-gate",
+      "points": [
+        {
+          "x": 176,
+          "y": 176
+        },
+        {
+          "x": 176,
+          "y": 160
+        },
+        {
+          "x": 240,
+          "y": 160
+        }
+      ]
+    },
+    {
+      "id": "b-pwm-gnd",
+      "points": [
+        {
+          "x": 176,
+          "y": 240
+        },
+        {
+          "x": 176,
+          "y": 272
+        }
+      ]
+    },
+    {
+      "id": "b-nc-gnd",
+      "points": [
+        {
+          "x": 272,
+          "y": 160
+        },
+        {
+          "x": 272,
+          "y": 256
+        }
+      ]
+    },
+    {
+      "id": "b-vout",
+      "points": [
+        {
+          "x": 416,
+          "y": 128
+        },
+        {
+          "x": 480,
+          "y": 128
+        }
+      ]
+    },
+    {
+      "id": "b-cout-top",
+      "points": [
+        {
+          "x": 480,
+          "y": 128
+        },
+        {
+          "x": 480,
+          "y": 160
+        }
+      ]
+    },
+    {
+      "id": "b-cout-gnd",
+      "points": [
+        {
+          "x": 480,
+          "y": 224
+        },
+        {
+          "x": 480,
+          "y": 256
+        }
+      ]
+    }
+  ],
+  "probes": [],
+  "netLabels": [
+    {
+      "id": "bl-vin",
+      "x": 192,
+      "y": 128,
+      "text": "VIN",
+      "port": "In"
+    },
+    {
+      "id": "bl-vout",
+      "x": 480,
+      "y": 128,
+      "text": "VOUT",
+      "port": "Out"
+    }
+  ],
+  "directives": [],
+  "projectPorts": [
+    {
+      "name": "VIN",
+      "labelId": "bl-vin",
+      "direction": "In"
+    },
+    {
+      "name": "VOUT",
+      "labelId": "bl-vout",
+      "direction": "Out"
+    }
+  ]
+}

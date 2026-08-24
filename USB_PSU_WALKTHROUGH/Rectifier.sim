@@ -1,0 +1,287 @@
+{
+  "app": "Tau",
+  "version": 1,
+  "savedAt": "2026-08-17T00:00:00.000Z",
+  "components": [
+    {
+      "id": "d1",
+      "kind": "diode",
+      "x": 256,
+      "y": 224,
+      "rotation": 270,
+      "value": "D Is=1e-14 N=1",
+      "label": "D1"
+    },
+    {
+      "id": "d3",
+      "kind": "diode",
+      "x": 256,
+      "y": 288,
+      "rotation": 270,
+      "value": "D Is=1e-14 N=1",
+      "label": "D3"
+    },
+    {
+      "id": "d2",
+      "kind": "diode",
+      "x": 352,
+      "y": 224,
+      "rotation": 270,
+      "value": "D Is=1e-14 N=1",
+      "label": "D2"
+    },
+    {
+      "id": "d4",
+      "kind": "diode",
+      "x": 352,
+      "y": 288,
+      "rotation": 270,
+      "value": "D Is=1e-14 N=1",
+      "label": "D4"
+    },
+    {
+      "id": "cbus",
+      "kind": "capacitor",
+      "x": 448,
+      "y": 256,
+      "rotation": 90,
+      "value": "2200u",
+      "label": "CBUS"
+    },
+    {
+      "id": "rbleed",
+      "kind": "resistor",
+      "x": 304,
+      "y": 416,
+      "rotation": 0,
+      "value": "100k",
+      "label": "RBLEED"
+    },
+    {
+      "id": "gb",
+      "kind": "ground",
+      "x": 304,
+      "y": 352,
+      "rotation": 0,
+      "value": "",
+      "label": ""
+    },
+    {
+      "id": "gc",
+      "kind": "ground",
+      "x": 448,
+      "y": 352,
+      "rotation": 0,
+      "value": "",
+      "label": ""
+    }
+  ],
+  "wires": [
+    {
+      "id": "r-sec1-in",
+      "points": [
+        {
+          "x": 160,
+          "y": 256
+        },
+        {
+          "x": 256,
+          "y": 256
+        }
+      ]
+    },
+    {
+      "id": "r-sec2-in",
+      "points": [
+        {
+          "x": 352,
+          "y": 256
+        },
+        {
+          "x": 416,
+          "y": 256
+        }
+      ]
+    },
+    {
+      "id": "r-bus-a",
+      "points": [
+        {
+          "x": 256,
+          "y": 192
+        },
+        {
+          "x": 352,
+          "y": 192
+        }
+      ]
+    },
+    {
+      "id": "r-bus-b",
+      "points": [
+        {
+          "x": 352,
+          "y": 192
+        },
+        {
+          "x": 448,
+          "y": 192
+        }
+      ]
+    },
+    {
+      "id": "r-bus-c",
+      "points": [
+        {
+          "x": 448,
+          "y": 192
+        },
+        {
+          "x": 512,
+          "y": 192
+        }
+      ]
+    },
+    {
+      "id": "r-cbus-top",
+      "points": [
+        {
+          "x": 448,
+          "y": 192
+        },
+        {
+          "x": 448,
+          "y": 224
+        }
+      ]
+    },
+    {
+      "id": "r-cbus-gnd",
+      "points": [
+        {
+          "x": 448,
+          "y": 288
+        },
+        {
+          "x": 448,
+          "y": 352
+        }
+      ]
+    },
+    {
+      "id": "r-gnd-a",
+      "points": [
+        {
+          "x": 256,
+          "y": 320
+        },
+        {
+          "x": 304,
+          "y": 320
+        }
+      ]
+    },
+    {
+      "id": "r-gnd-b",
+      "points": [
+        {
+          "x": 304,
+          "y": 320
+        },
+        {
+          "x": 352,
+          "y": 320
+        }
+      ]
+    },
+    {
+      "id": "r-gnd-c",
+      "points": [
+        {
+          "x": 304,
+          "y": 320
+        },
+        {
+          "x": 304,
+          "y": 352
+        }
+      ]
+    },
+    {
+      "id": "r-bleed-l",
+      "points": [
+        {
+          "x": 160,
+          "y": 256
+        },
+        {
+          "x": 160,
+          "y": 416
+        },
+        {
+          "x": 272,
+          "y": 416
+        }
+      ]
+    },
+    {
+      "id": "r-bleed-r",
+      "points": [
+        {
+          "x": 416,
+          "y": 256
+        },
+        {
+          "x": 416,
+          "y": 416
+        },
+        {
+          "x": 336,
+          "y": 416
+        }
+      ]
+    }
+  ],
+  "probes": [],
+  "netLabels": [
+    {
+      "id": "r-sec1",
+      "x": 160,
+      "y": 256,
+      "text": "SEC1",
+      "port": "In"
+    },
+    {
+      "id": "r-sec2",
+      "x": 416,
+      "y": 256,
+      "text": "SEC2",
+      "port": "In"
+    },
+    {
+      "id": "r-vbus",
+      "x": 512,
+      "y": 192,
+      "text": "VBUS",
+      "port": "Out"
+    }
+  ],
+  "directives": [],
+  "projectPorts": [
+    {
+      "name": "SEC1",
+      "labelId": "r-sec1",
+      "direction": "In"
+    },
+    {
+      "name": "SEC2",
+      "labelId": "r-sec2",
+      "direction": "In"
+    },
+    {
+      "name": "VBUS",
+      "labelId": "r-vbus",
+      "direction": "Out"
+    }
+  ]
+}

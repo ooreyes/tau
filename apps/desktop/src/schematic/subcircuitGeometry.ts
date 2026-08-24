@@ -184,7 +184,22 @@ export function middleEllipsisCaption(text: string, maxChars: number): string {
 export function nativeSubcircuitBody(component: SchematicComponent) {
   const pins = localSubcircuitPins(component);
   const maxPinY = Math.max(0, ...pins.map((pin) => Math.abs(pin.y)));
-  const halfHeight = Math.max(20, maxPinY + 12);
+  /**
+   * Room for the model caption ABOVE the topmost pin caption, not merely above
+   * the topmost pin.
+   *
+   * Canvas draws the model name with its BASELINE at `minY + 8`, and a 7px
+   * glyph box hangs ~1.5 units below its own baseline, so it actually occupies
+   * `minY + 1.5 .. minY + 9.5`. The old `+ 12` reserved only 8 units, which is
+   * why the two collided the moment a pin sat off-centre: a rectifier with pins
+   * at y = +/-16 drew "Rectifier" through "SEC1".
+   *
+   * Solving `minY + 9.5 + 4 <= -maxPinY - 3.5` for a 4-unit gap gives
+   * `halfHeight >= maxPinY + 17`; 18 keeps a unit spare. A 2-port bank
+   * (maxPinY = 0, and anything up to 2) still floors at 20, so no existing
+   * block changes size.
+   */
+  const halfHeight = Math.max(20, maxPinY + 18);
   const widest = (side: "left" | "right") => Math.max(
     0,
     ...pins

@@ -279,9 +279,17 @@ pub fn apply_member_to_deck(base_lines: &[String], member: &StepMember) -> Vec<S
     }
     // Insert missing param bindings and optional `.temp` just before the first
     // analysis / `.end` card so ordering stays SPICE-legal.
+    // Index 0 is the title, which is not a card and is never screened by
+    // `deck_lines`. Searching from 1 keeps an insert from landing above it and
+    // shifting that unscreened line into card position, where ngspice would
+    // interpret it. Today the title is a fixed literal from `buildSpiceDeck`,
+    // so this is not reachable - the point is that the guarantee lives here
+    // rather than depending on a caller's choice of title.
     let insert_at = out
         .iter()
-        .position(|line| {
+        .enumerate()
+        .skip(1)
+        .find(|(_, line)| {
             let bare = line
                 .trim()
                 .trim_start_matches(['.', '!'])
@@ -296,7 +304,12 @@ pub fn apply_member_to_deck(base_lines: &[String], member: &StepMember) -> Vec<S
                 || bare.starts_with("four")
                 || bare == "end"
         })
-        .unwrap_or(out.len().saturating_sub(1));
+        .map(|(index, _)| index)
+        .unwrap_or_else(|| out.len().saturating_sub(1))
+        // `max(1)` holds the floor below the title; `min(out.len())` keeps
+        // `insert` in bounds for a deck too short to have one.
+        .max(1)
+        .min(out.len());
 
     let mut injected = Vec::new();
     if let Some(temp) = member.temp {
@@ -518,6 +531,42 @@ mod tests {
         assert!(deck
             .iter()
             .any(|l| l.contains("Rload=3000") || l.contains("rload=3000")));
+    }
+
+    /// The title line is not a card and `deck_lines` never screens it, so an
+    /// insert must never land above index 0 and shift it into card position.
+    /// A title whose bare form reads like an analysis card is the case that
+    /// would otherwise select `insert_at == 0`.
+    #[test]
+    fn never_inserts_above_the_unscreened_title_line() {
+        let member = StepMember {
+            params: BTreeMap::from([("rload".into(), 3000.0)]),
+            temp: Some(27.0),
+            ..Default::default()
+        };
+        // `position` matched this title before the fix: bare form is "tran ...".
+        let hostile_title = ".tran 1n .control shell id .endc";
+        let deck = apply_member_to_deck(
+            &[
+                hostile_title.into(),
+                "R1 in out {Rload}".into(),
+                ".end".into(),
+            ],
+            &member,
+        );
+        assert_eq!(
+            deck.first().map(String::as_str),
+            Some(hostile_title),
+            "an injected card displaced the title line: {deck:?}"
+        );
+
+        // Degenerate decks must not panic on the in-bounds clamp.
+        assert!(apply_member_to_deck(&[], &member).len() <= 2);
+        let title_only = apply_member_to_deck(&["Tau generated circuit".into()], &member);
+        assert_eq!(
+            title_only.first().map(String::as_str),
+            Some("Tau generated circuit")
+        );
     }
 
     /// A `.step` source name is spliced into `alter <name>=<value>` and handed to

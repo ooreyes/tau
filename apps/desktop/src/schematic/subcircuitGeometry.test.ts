@@ -45,7 +45,48 @@ describe("native subcircuit geometry", () => {
   it("grows the body to cover long terminal banks", () => {
     const base = component();
     const withPins = { ...base, pinOverride: buildSubcircuitPinOverride(base, Array.from({ length: 9 }, (_, i) => `p${i}`)) };
-    expect(nativeSubcircuitBody(withPins)).toEqual({ minX: -28, minY: -76, maxX: 28, maxY: 76 });
+    // 64 (outermost pin) + 18. The reserve is 18 rather than 12 because the
+    // model caption's baseline sits at minY + 8 and its glyph box hangs below
+    // that; see the next test, which is what pins the number.
+    expect(nativeSubcircuitBody(withPins)).toEqual({ minX: -28, minY: -82, maxX: 28, maxY: 82 });
+  });
+
+  /**
+   * The model caption must clear the TOPMOST PIN CAPTION, not merely the
+   * topmost pin.
+   *
+   * Canvas draws the model name with its baseline at `minY + 8`, and a 7px
+   * glyph box hangs about 1.5 units below its own baseline. With the previous
+   * `maxPinY + 12` reserve, a 3-port block whose outer pins sat at y = +/-16
+   * drew its model name straight through the first pin caption: measured in the
+   * browser, "Rectifier" occupied y -26.5..-18.5 and "SEC1" -19.5..-11.5, a 1px
+   * overlap across a 10px span.
+   *
+   * Asserted as the geometric relationship rather than as a magic number, so it
+   * keeps holding if the caption metrics change.
+   */
+  it("reserves room for the model caption above the first pin caption", () => {
+    const base = component();
+    const threePort = {
+      ...base,
+      pinOverride: [
+        { id: "p1", label: "SEC1", x: base.x - 48, y: base.y - 16 },
+        { id: "p2", label: "SEC2", x: base.x - 48, y: base.y + 16 },
+        { id: "p3", label: "VBUS", x: base.x + 48, y: base.y },
+      ],
+    } as SchematicComponent;
+    const body = nativeSubcircuitBody(threePort);
+
+    const MODEL_BASELINE = body.minY + 8;   // where Canvas draws it
+    const GLYPH_DESCENT = 1.5;              // 7px mono box below its baseline
+    const CAPTION_HALF_HEIGHT = 4;          // pin caption box is ~8 units tall
+    const topPinCaptionTop = -16 - CAPTION_HALF_HEIGHT;
+
+    expect(MODEL_BASELINE + GLYPH_DESCENT).toBeLessThan(topPinCaptionTop);
+    // A two-port bank keeps its historic 20-unit half-height: no block that
+    // renders correctly today changes size.
+    const twoPort = { ...base, pinOverride: buildSubcircuitPinOverride(base, ["VIN", "VOUT"]) };
+    expect(nativeSubcircuitBody(twoPort).maxY).toBe(20);
   });
 });
 

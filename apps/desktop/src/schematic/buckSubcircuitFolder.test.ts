@@ -218,7 +218,10 @@ const DECK_NOTES = [
   "* Measured in ngspice on this exact deck: V(out) = 5.00316 V into 1 k,",
   "* 6.06 mV ripple, 5.855 V startup peak.",
   "*",
-  "* Runnable as-is:  ngspice -b DECK.txt",
+  "* Run it:  ngspice -b -r out.raw DECK.txt",
+  "* The -r is not optional. Batch mode refuses a deck with no .print/.plot/",
+  "* .fourier card, and Tau emits .save instead - so plain `ngspice -b DECK.txt`",
+  "* parses the circuit and then exits with \"no simulations run!\".",
 ];
 
 const README = `# SUBCRKT — a buck converter as a subcircuit

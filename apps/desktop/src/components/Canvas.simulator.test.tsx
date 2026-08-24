@@ -963,7 +963,17 @@ describe("Canvas - schematic selection chrome", () => {
     expect(document.querySelectorAll(".component .pin-target")).toHaveLength(5);
     expect(document.querySelectorAll(".import-pin-lead")).toHaveLength(0);
     const body = document.querySelector(".component .symbol rect")!;
-    expect(body.getAttribute("height")).toBe("88");
+    // 2 * (32 + 18): the outermost pin of a 5-pin bank sits at y = ±32, and the
+    // reserve above it is 18 rather than 12 so the model caption clears the
+    // TOPMOST PIN CAPTION and not merely the pin. Before that, this block drew
+    // its own name through its first terminal label - see
+    // subcircuitGeometry.test.ts, "reserves room for the model caption".
+    expect(body.getAttribute("height")).toBe("100");
+    // The block must not also be rescaled: a bank with pins on the same side
+    // used to drive `sourceSymbolFitScale` to 0.5. Leads stay absent either way,
+    // so assert the scale directly.
+    expect(document.querySelector(".component .symbol")!.getAttribute("transform") ?? "")
+      .not.toMatch(/scale\(/);
   });
 
   it("clears marquee and moving snap markers when a pointer gesture is canceled", () => {

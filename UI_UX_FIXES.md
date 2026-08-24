@@ -8,6 +8,45 @@ Sources:
 - `/Users/omarreyes/Downloads/Untitled document.pdf` (2 pages)
 - `/Users/omarreyes/Downloads/edits-to-fix.pdf` (7 pages)
 
+## Schematic workspace and multi-sheet projects - 2026-08-24
+
+The active user-directed fleet run is `schematic-redesign-20260824-1`. This
+section explicitly starts the `AGENTS.md` UI/UX fleet exception. The primary
+checkout on `auto/ltspice-parity` owns integration, tracking, gates, evidence,
+and the only push. Luna High workers receive unique local-only worktrees and
+disjoint implementation ownership. Sol agents perform read-only defect review
+under `/Users/omarreyes/.codex/skills/.system/review-agent/SKILL.md` and never
+patch product code.
+
+### Product contract
+
+- Keep the schematic canvas the dominant, centered work surface. Persistent
+  chrome is a restrained veil; summoned project/library surfaces must not tax
+  canvas width when dismissed.
+- Keep the Schematic/Simulator mode control geometrically centered in the
+  window, independent of document title and Run/action widths.
+- Make a project of several circuit sheets understandable as one electrical
+  system: each sheet exposes named ports, parent sheets connect those ports,
+  and the UI reveals interface order, direction/role, drift, and unresolved
+  links without silently inventing connectivity.
+- Prove the workflow with the supplied 120 VAC to rectifier to buck regulator
+  to 5 V project fixture, including the cross-sheet nets and recursive deck.
+- Stay within the established Tau language: color is measurement; tokens only;
+  SF UI plus mono engineering data; 4 px spacing; one filled primary action;
+  no saturated diagnostic banners; both themes; 900x600 first.
+- Preserve `.asc` import/export, fail-closed model behavior, undo/redo,
+  keyboard access, and non-modal canvas focus rules. Do not touch simulator UX
+  beyond inherited test/gate repair.
+
+### Evidence and gates
+
+Required proof is focused unit/integration coverage for sheet interfaces,
+hierarchy execution, Explorer and editor chrome; desktop typecheck and full
+tests; design-system drift; web build; both-theme screenshots at 900x600 and
+1440x900 showing an empty schematic, the USB power project, a selected sheet
+block, and the sheet-interface editor. A Sol review must return `No findings.`
+before the run can be marked done.
+
 ## PDF report 4 remediation - 2026-08-13
 
 The active user-directed fleet run is `pdf4-20260813-1`, building from the

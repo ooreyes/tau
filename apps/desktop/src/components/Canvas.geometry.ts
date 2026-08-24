@@ -240,6 +240,23 @@ export const symbolTransform = (rotation: number, mirrored: boolean): string =>
 export function sourceSymbolFitScale(component: SchematicComponent): number {
   const pins = component.pinOverride;
   if (!pins || pins.length < 2) return 1;
+  /**
+   * A project block is not a two-terminal symbol being fitted to an imported
+   * pin span, and measuring `pins[0] -> pins[1]` is meaningless for it:
+   * `nativeSubcircuitBody` already sizes its body from the WHOLE pin bank.
+   *
+   * It was also actively wrong. The span below assumes the first two pins are
+   * the opposite terminals of a 2-pin part. A 3-port block stacks two pins on
+   * one side, so a rectifier with SEC1 at (528,208) and SEC2 at (528,240)
+   * measured its own 32-unit vertical pin PITCH against the native 64-unit
+   * horizontal span and rendered at scale 0.5, beside a 2-port block on the
+   * same sheet at scale 1.5. Same declared 56-unit body, 3x apart on screen.
+   *
+   * An LTspice-imported subcircuit keeps the old path: it carries
+   * `ltSymbolType`, so `isNativeMultiPinSubcircuit` is false for it and its
+   * file-declared pin span is still honoured.
+   */
+  if (isNativeMultiPinSubcircuit(component)) return 1;
   const native = getLocalPins(component.kind);
   if (native.length < 2) return 1;
   const nativeSpan = Math.hypot(native[0].x - native[1].x, native[0].y - native[1].y);

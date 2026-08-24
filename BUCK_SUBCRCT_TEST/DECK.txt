@@ -1,0 +1,52 @@
+Tau generated circuit
+* The deck Tau generates from top.sim + Buck25to5.asc.
+* Written by buckLedFolder.test.ts - do not edit by hand.
+*
+* The .subckt body below was compiled from the LINKED .asc sheet. Note that
+* VIN and VOUT are the child's ports: the X1 line binds the parent's own
+* nets to them, which is the whole claim this folder exists to prove.
+*
+* Measured in ngspice on this exact deck, averaged over 4-5 ms so the
+* startup transient is excluded:
+*   V(vin25) = 25.000 V     <- into the block
+*   V(out)   =  4.99125 V   <- out of the block, 0.18 % low
+*   V(led_a) =  2.00043 V   <- red LED forward drop
+*   I(D1)    =  9.06311 mA  <- LED current
+*   ripple   =  6.81 mV pk-pk,  startup peak 5.31621 V at 198 us
+*
+* Run it:  ngspice -b -r out.raw DECK.txt
+* The -r is not optional. Batch mode refuses a deck with no .print/.plot/
+* .fourier card, and Tau emits .save instead - so plain `ngspice -b DECK.txt`
+* parses the circuit and then exits with "no simulations run!".
+.options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7 rshunt=1e12 rseries=1e-3
+.model TAU_DIODE D(Is=1e-14 N=1)
+.model TAU_LED D(Is=1e-16 N=2 Rs=10)
+.model TAU_7SEG_LED D(Is=1e-20 N=2 Rs=10)
+.model TAU_ZENER D(Is=1e-14 N=1 Bv=5.1 Ibv=1m)
+.model TAU_NMOS NMOS(Level=1 Vto=1 Kp=200u Lambda=0.02)
+.model TAU_PMOS PMOS(Level=1 Vto=-1 Kp=80u Lambda=0.02)
+.model TAU_NPN NPN(Is=1e-14 Bf=100 Vaf=100)
+.model TAU_PNP PNP(Is=1e-14 Bf=100 Vaf=100)
+.model TAU_NJF NJF(Vto=-2 Beta=1m Lambda=1e-4)
+.model TAU_PJF PJF(Vto=2 Beta=1m Lambda=1e-4)
+.model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)
+.subckt Buck25to5 VIN VOUT
+.model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)
+.model TAU_DIODE_d__tau_buck25to5_3 D(Is=1e-14 N=1)
+S__tau_Buck25to5_1 VIN __tau_buck25to5_n2 __tau_buck25to5_n1 0 TAU_SW
+L__tau_Buck25to5_2 __tau_buck25to5_n2 VOUT 0.0047
+D__tau_Buck25to5_3 0 __tau_buck25to5_n2 TAU_DIODE_d__tau_buck25to5_3
+V__tau_Buck25to5_4 __tau_buck25to5_n1 0 DC 0 PULSE(0 5 0 1e-9 1e-9 0.000001107 0.000005)
+C__tau_Buck25to5_5 VOUT 0 5e-7
+R__tau_Buck25to5_6 VOUT __tau_buck25to5_n3 100
+C__tau_Buck25to5_7 __tau_buck25to5_n3 0 0.000009999999999999999
+.ends Buck25to5
+V1 vin25 0 DC 25
+R1 out led_a 330
+A__tau_D1 led_a tau_d1_id TAU_LED_IDEAL_2V
+V__TAU_ID_D1 tau_d1_id 0 0
+X1 vin25 out Buck25to5
+.model TAU_LED_IDEAL_2V sidiode(Ron=1m Roff=1G Vfwd=2 epsilon=10m)
+.save all v__tau_id_d1#branch
+.tran 2e-8 0.005
+.end

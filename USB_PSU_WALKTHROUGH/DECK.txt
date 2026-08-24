@@ -1,0 +1,72 @@
+Tau generated circuit
+* The deck Tau generates from top.sim + Rectifier.sim + Buck5V.sim.
+* Written by usbPsuFolder.test.ts - do not edit by hand.
+*
+* Read the two X lines together - they are the whole point of the project:
+*   X1 <sec1> <sec2> <bus> Rectifier
+*   X2 <bus>  <vusb>       Buck5V
+* The third node of X1 and the first node of X2 are the SAME net. That is the
+* rectifier handing its DC bus to the converter, across a sheet boundary.
+*
+* Measured in real ngspice on this exact deck, averaged over 50-60 ms so the
+* mains and the bulk cap have both settled:
+*   V(vac_in) peak = 170.000 V    <- 120 V RMS at the outlet
+*   V(vbus)        =  13.4236 V   <- rectified, 468.9 mV of 120 Hz ripple
+*   V(vusb)        =   4.99845 V  <- 0.03 % from 5 V, 194.4 mV ripple
+*   I(DON)         =   9.08491 mA <- the power-on LED is conducting
+*   RUSB draws 499.8 mA, so the supply is delivering about 2.5 W.
+*
+* Run it:  ngspice -b -r out.raw DECK.txt
+* The -r is not optional. Batch mode refuses a deck with no .print/.plot/
+* .fourier card, and Tau emits .save instead - so plain `ngspice -b DECK.txt`
+* parses the circuit and then exits with "no simulations run!".
+.options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7 rshunt=1e12 rseries=1e-3
+.model TAU_DIODE D(Is=1e-14 N=1)
+.model TAU_LED D(Is=1e-16 N=2 Rs=10)
+.model TAU_7SEG_LED D(Is=1e-20 N=2 Rs=10)
+.model TAU_ZENER D(Is=1e-14 N=1 Bv=5.1 Ibv=1m)
+.model TAU_NMOS NMOS(Level=1 Vto=1 Kp=200u Lambda=0.02)
+.model TAU_PMOS PMOS(Level=1 Vto=-1 Kp=80u Lambda=0.02)
+.model TAU_NPN NPN(Is=1e-14 Bf=100 Vaf=100)
+.model TAU_PNP PNP(Is=1e-14 Bf=100 Vaf=100)
+.model TAU_NJF NJF(Vto=-2 Beta=1m Lambda=1e-4)
+.model TAU_PJF PJF(Vto=2 Beta=1m Lambda=1e-4)
+.model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)
+.subckt Buck5V VIN VOUT
+.model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)
+.model TAU_DIODE_d__tau_buck5v_3 D(Is=1e-14 N=1)
+S__tau_Buck5V_1 VIN __tau_buck5v_n2 __tau_buck5v_n1 0 TAU_SW
+L__tau_Buck5V_2 __tau_buck5v_n2 VOUT 0.00021999999999999998
+D__tau_Buck5V_3 0 __tau_buck5v_n2 TAU_DIODE_d__tau_buck5v_3
+V__tau_Buck5V_4 __tau_buck5v_n1 0 DC 0 PULSE(0 5 0 1e-9 1e-9 0.00000204 0.000005)
+C__tau_Buck5V_5 VOUT 0 0.000022
+.ends Buck5V
+.subckt Rectifier SEC1 SEC2 VBUS
+.model TAU_DIODE_d__tau_rectifier_1 D(Is=1e-14 N=1)
+.model TAU_DIODE_d__tau_rectifier_2 D(Is=1e-14 N=1)
+.model TAU_DIODE_d__tau_rectifier_3 D(Is=1e-14 N=1)
+.model TAU_DIODE_d__tau_rectifier_4 D(Is=1e-14 N=1)
+D__tau_Rectifier_1 SEC1 VBUS TAU_DIODE_d__tau_rectifier_1
+D__tau_Rectifier_2 0 SEC1 TAU_DIODE_d__tau_rectifier_2
+D__tau_Rectifier_3 SEC2 VBUS TAU_DIODE_d__tau_rectifier_3
+D__tau_Rectifier_4 0 SEC2 TAU_DIODE_d__tau_rectifier_4
+C__tau_Rectifier_5 VBUS 0 0.0021999999999999997
+R__tau_Rectifier_6 SEC1 SEC2 100000
+.ends Rectifier
+V1 vac_in 0 DC 0 AC 170 SIN(0 170 60)
+RP vac_in n001 20
+L_T1_p n001 0 10
+L_T1_s n002 n003 0.10000000000000002
+K_T1 L_T1_p L_T1_s 0.99
+RS1 n002 n004 0.5
+RS2 n003 n005 0.5
+RUSB vusb 0 10
+RLED vusb n006 330
+A__tau_DON n006 tau_don_id TAU_LED_IDEAL_2V
+V__TAU_ID_DON tau_don_id 0 0
+X1 n004 n005 vbus Rectifier
+X2 vbus vusb Buck5V
+.model TAU_LED_IDEAL_2V sidiode(Ron=1m Roff=1G Vfwd=2 epsilon=10m)
+.save all v__tau_id_don#branch
+.tran 1e-7 0.06
+.end

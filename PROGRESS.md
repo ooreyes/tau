@@ -1,5 +1,36 @@
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-24 (run `schematic-redesign-20260824-1`)**
+
+Unit: **Schematic workspace visual and multi-sheet project redesign.** The
+primary checkout is the orchestrator on `auto/ltspice-parity`; Luna High workers
+own all implementation in isolated local-only worktrees, and Sol reviewers use
+the read-only `review-agent` contract. Simulation UX is explicitly out of scope
+except for repairing inherited gates needed to prove the schematic change.
+
+**Source:** Omar's two attached screenshots plus `TAU_DESIGN_VISION.md`,
+`DESIGN_SYSTEM.md`, and `REDESIGN.md`. Acceptance requires a centered schematic
+mode control and canvas-first work surface; compact project hierarchy; explicit,
+reviewable sheet interfaces and cross-sheet nets; both themes at 900x600 and
+1440x900; keyboard/focus coverage; no raw colors; and a complete 120 VAC to 5 V
+multi-sheet project proof.
+
+**Baseline:** migrated the strict 82-commit fast-forward
+`fix/pdf3-fourteen-items` onto the mandated branch without discarding the dirty
+project-sheet work. Typecheck passes. Focused substrate gates pass: 7 files / 218
+tests plus Rust `step_expand` 8/8. The inherited full suite currently reports
+281 passed files, 3 failed files: two stale simulator-tab expectations and one
+machine-load-sensitive label timing assertion. These are recorded baseline debt,
+not accepted failures.
+
+**Next step:** commit the validated project substrate, create the isolated Luna
+worktrees from that exact integration commit, then run the visual-shell and
+sheet-interface lanes before Sol review.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: DONE - 2026-08-14 (run `pdf6-20260814-1`)**
 
 Unit: **PDF report 6 remediation - all 10 items.** Interactive session on
