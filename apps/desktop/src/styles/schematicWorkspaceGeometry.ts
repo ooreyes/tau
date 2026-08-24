@@ -3,6 +3,7 @@ export interface ToolbarGeometryInput {
   paddingLeft: number;
   paddingRight: number;
   modeReserve: number;
+  columnGap: number;
   titleWidth: number;
   actionsWidth: number;
 }
@@ -31,13 +32,15 @@ export function toolbarGeometry(input: ToolbarGeometryInput): ToolbarGeometry {
     paddingLeft,
     paddingRight,
     modeReserve,
+    columnGap,
     titleWidth,
     actionsWidth,
   } = input;
   const contentWidth = viewportWidth - paddingLeft - paddingRight;
   const bias = (paddingLeft - paddingRight) / 2;
-  const leftTrack = (contentWidth - modeReserve) / 2 - bias;
-  const rightTrack = (contentWidth - modeReserve) / 2 + bias;
+  const trackBudget = contentWidth - modeReserve - (columnGap * 2);
+  const leftTrack = trackBudget / 2 - bias;
+  const rightTrack = trackBudget / 2 + bias;
   const modeLeft = viewportWidth / 2 - modeReserve / 2;
   const modeRight = viewportWidth / 2 + modeReserve / 2;
   const titleLeft = paddingLeft;

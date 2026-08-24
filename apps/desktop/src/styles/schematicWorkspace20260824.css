@@ -14,10 +14,11 @@
 .toolbar {
   --schematic-mode-reserve: 224px;
   --schematic-mode-bias: 0px;
+  --schematic-mode-gap-budget: calc(var(--sp-4) + var(--sp-4));
   grid-template-columns:
-    calc((100% - var(--schematic-mode-reserve)) / 2 - var(--schematic-mode-bias))
+    calc((100% - var(--schematic-mode-reserve) - var(--schematic-mode-gap-budget)) / 2 - var(--schematic-mode-bias))
     var(--schematic-mode-reserve)
-    calc((100% - var(--schematic-mode-reserve)) / 2 + var(--schematic-mode-bias));
+    calc((100% - var(--schematic-mode-reserve) - var(--schematic-mode-gap-budget)) / 2 + var(--schematic-mode-bias));
 }
 
 .toolbar::before {

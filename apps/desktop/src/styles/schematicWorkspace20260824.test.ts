@@ -31,15 +31,21 @@ describe("schematic workspace shell geometry", () => {
         ...floor,
         paddingLeft: 78,
         paddingRight: 12,
+        columnGap: 16,
         // A long document title and the full action cluster at the minimum
         // window size, rather than idealized empty-side widths.
         titleWidth: 300,
         actionsWidth: 360,
       });
       expect(geometry.modeMidpoint).toBe(floor.viewportWidth / 2);
-      expect(geometry.leftTrack + geometry.rightTrack + floor.modeReserve).toBe(
+      expect(geometry.leftTrack + geometry.rightTrack + floor.modeReserve + (16 * 2)).toBe(
         floor.viewportWidth - 78 - 12,
       );
+      // The first/last grid gaps are part of the slot placement. This is the
+      // exact arithmetic CSS Grid applies after the 78/12 overlay padding.
+      expect(78 + geometry.leftTrack + 16).toBe(geometry.modeLeft);
+      expect(floor.viewportWidth - 12 - geometry.rightTrack - 16).toBe(geometry.modeRight);
+      expect(geometry.actionsRight).toBeLessThanOrEqual(floor.viewportWidth);
       expect(sideClustersAvoidMode(geometry, 16)).toBe(true);
     }
   });
@@ -47,7 +53,7 @@ describe("schematic workspace shell geometry", () => {
   it("reserves side lanes and shrinks the visible control at 900px", () => {
     const toolbar = rule(".toolbar");
     expect(toolbar).toContain("grid-template-columns:");
-    expect(toolbar).toContain("calc((100% - var(--schematic-mode-reserve)) / 2 - var(--schematic-mode-bias))");
+    expect(toolbar).toContain("calc((100% - var(--schematic-mode-reserve) - var(--schematic-mode-gap-budget)) / 2 - var(--schematic-mode-bias))");
     expect(toolbar).toContain("var(--schematic-mode-reserve)");
     expect(CSS).toContain("@media (max-width: 980px)");
     expect(rule(".toolbar .mode-btn")).toMatch(/min-width:\s*48px/);
