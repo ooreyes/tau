@@ -1,0 +1,70 @@
+/* Schematic workspace refinement, 2026-08-24.
+ *
+ * The title bar is persistent chrome, but the mode choice is a window-level
+ * landmark. It must not drift when a long file name, a status lamp, or the
+ * action cluster changes width. Keep this in a lane stylesheet so the
+ * schematic shell can evolve without reopening the shared App.css block.
+ */
+
+/* Reserve the control's worst-case footprint in the grid while positioning
+ * the actual control against the toolbar's border box. The reservation keeps
+ * the side clusters from flowing underneath the centred control at the
+ * 900px minimum; the absolute element makes its midpoint independent of both
+ * clusters' intrinsic widths. */
+.toolbar {
+  --schematic-mode-reserve: 224px;
+  grid-template-columns: minmax(0, 1fr) var(--schematic-mode-reserve) minmax(0, 1fr);
+}
+
+.toolbar::before {
+  content: "";
+  grid-column: 2;
+  width: var(--schematic-mode-reserve);
+  height: 1px;
+  pointer-events: none;
+}
+
+.toolbar .mode-toggle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  max-width: calc(100% - var(--sp-4));
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+}
+
+/* At the app's 900px floor, compact icon controls preserve the 24px target
+ * while giving the title and Run clusters a guaranteed lane. The visible
+ * labels are retained at comfortable widths; aria-label remains the stable
+ * accessible name in either presentation. */
+@media (max-width: 980px) {
+  .toolbar {
+    --schematic-mode-reserve: 112px;
+  }
+
+  .toolbar .mode-btn {
+    width: 48px;
+    min-width: 48px;
+    padding-inline: 8px;
+    justify-content: center;
+    gap: 0;
+    font-size: 0;
+  }
+
+  .toolbar .mode-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* At narrow widths all opening/closing surfaces are conditional in React
+ * (queryByRole is intentionally null when dismissed), so side columns cannot
+ * reserve width merely by being translated off-screen. This guard also
+ * prevents any future always-mounted summoned surface from becoming a flex
+ * item in the schematic editor. */
+.app-schematic .shell-body > .explorer-panel[aria-hidden="true"],
+.app-schematic .shell-body > .components-rail[aria-hidden="true"],
+.app-schematic .shell-body > .assistant-panel[aria-hidden="true"] {
+  display: none;
+}

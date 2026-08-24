@@ -27,6 +27,7 @@ import "./styles/pdf6Rail.css";
 import "./styles/pdf6Diagnostics.css";
 import "./styles/pdf6Palette.css";
 import "./styles/pdf6Titlebar.css";
+import "./styles/schematicWorkspace20260824.css";
 import {
   canonicalProjectSheetPath,
   projectRelativeSheetPath as relativeSheetPath,
