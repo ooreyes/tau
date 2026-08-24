@@ -13,7 +13,11 @@
  * clusters' intrinsic widths. */
 .toolbar {
   --schematic-mode-reserve: 224px;
-  grid-template-columns: minmax(0, 1fr) var(--schematic-mode-reserve) minmax(0, 1fr);
+  --schematic-mode-bias: 0px;
+  grid-template-columns:
+    calc((100% - var(--schematic-mode-reserve)) / 2 - var(--schematic-mode-bias))
+    var(--schematic-mode-reserve)
+    calc((100% - var(--schematic-mode-reserve)) / 2 + var(--schematic-mode-bias));
 }
 
 .toolbar::before {
@@ -31,7 +35,26 @@
   z-index: 2;
   max-width: calc(100% - var(--sp-4));
   transform: translate(-50%, -50%);
-  overflow: hidden;
+  /* Do not clip the mode button focus ring. Side lanes are reserved above,
+     so visible overflow cannot cover a neighboring control. */
+  overflow: visible;
+}
+
+.toolbar .titlebar-left {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.toolbar .titlebar-right {
+  grid-column: 3;
+  min-width: 0;
+}
+
+/* App.css's macOS overlay inset is intentionally asymmetric (78px left,
+ * 12px right). Shift the grid reservation left by half that difference so its
+ * reserved slot shares the absolute mode control's true window midpoint. */
+.has-overlay-titlebar .toolbar {
+  --schematic-mode-bias: 33px;
 }
 
 /* At the app's 900px floor, compact icon controls preserve the 24px target

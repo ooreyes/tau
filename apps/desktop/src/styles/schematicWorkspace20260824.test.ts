@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { sideClustersAvoidMode, toolbarGeometry } from "./schematicWorkspaceGeometry";
 
 const CSS = readFileSync(join(__dirname, "schematicWorkspace20260824.css"), "utf8")
   .replace(/\/\*[\s\S]*?\*\//g, "");
@@ -20,34 +21,48 @@ describe("schematic workspace shell geometry", () => {
     expect(mode).toMatch(/transform:\s*translate\(-50%,\s*-50%\)/);
   });
 
-  it("keeps the measured midpoint and side lanes usable at both shell floors", () => {
-    const centeredRect = (viewport: number, control: number) => ({
-      left: (viewport - control) / 2,
-      right: (viewport + control) / 2,
-      midpoint: viewport / 2,
-    });
+  it("measures true center and no title/action overlap with macOS overlay padding", () => {
     const floors = [
-      { viewport: 1440, reserve: 224 },
-      { viewport: 900, reserve: 112 },
+      { viewportWidth: 1440, modeReserve: 224 },
+      { viewportWidth: 900, modeReserve: 112 },
     ];
-    for (const { viewport, reserve } of floors) {
-      const rect = centeredRect(viewport, reserve);
-      expect(rect.left + rect.right).toBe(viewport);
-      expect((rect.left + rect.right) / 2).toBe(rect.midpoint);
-      // Each grid side retains at least the pre-redesign 260px floor, so a
-      // title or action cluster cannot be pushed under the mode control.
-      expect(rect.left).toBeGreaterThanOrEqual(260);
-      expect(viewport - rect.right).toBeGreaterThanOrEqual(260);
+    for (const floor of floors) {
+      const geometry = toolbarGeometry({
+        ...floor,
+        paddingLeft: 78,
+        paddingRight: 12,
+        // A long document title and the full action cluster at the minimum
+        // window size, rather than idealized empty-side widths.
+        titleWidth: 300,
+        actionsWidth: 360,
+      });
+      expect(geometry.modeMidpoint).toBe(floor.viewportWidth / 2);
+      expect(geometry.leftTrack + geometry.rightTrack + floor.modeReserve).toBe(
+        floor.viewportWidth - 78 - 12,
+      );
+      expect(sideClustersAvoidMode(geometry, 16)).toBe(true);
     }
   });
 
   it("reserves side lanes and shrinks the visible control at 900px", () => {
     const toolbar = rule(".toolbar");
-    expect(toolbar).toContain("grid-template-columns: minmax(0, 1fr) var(--schematic-mode-reserve) minmax(0, 1fr)");
+    expect(toolbar).toContain("grid-template-columns:");
+    expect(toolbar).toContain("calc((100% - var(--schematic-mode-reserve)) / 2 - var(--schematic-mode-bias))");
+    expect(toolbar).toContain("var(--schematic-mode-reserve)");
     expect(CSS).toContain("@media (max-width: 980px)");
     expect(rule(".toolbar .mode-btn")).toMatch(/min-width:\s*48px/);
     expect(rule(".toolbar .mode-btn")).toMatch(/font-size:\s*0/);
     expect(rule(".toolbar .mode-btn svg")).toMatch(/width:\s*16px/);
+    expect(rule(".toolbar .mode-toggle")).toMatch(/overflow:\s*visible/);
+    expect(CSS).toContain(".toolbar .titlebar-left {\n  grid-column: 1;");
+    expect(CSS).toContain(".toolbar .titlebar-right {\n  grid-column: 3;");
+    expect(CSS).toContain("--schematic-mode-bias: 33px");
+  });
+
+  it("preserves the keyboard focus indicator without clipping it", () => {
+    expect(rule(".toolbar .mode-toggle")).toMatch(/overflow:\s*visible/);
+    const appCss = readFileSync(join(__dirname, "..", "App.css"), "utf8");
+    expect(appCss).toMatch(/\.mode-btn:focus-visible\s*\{[^}]*box-shadow:/s);
   });
 
   it("keeps summoned columns out of layout when a future hidden mount is used", () => {
