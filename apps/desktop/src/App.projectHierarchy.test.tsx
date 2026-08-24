@@ -224,7 +224,7 @@ describe("App project hierarchy execution", () => {
     expect(hierarchyMocks.nativeSteppedAc).not.toHaveBeenCalled();
     expect(hierarchyMocks.previewAc).not.toHaveBeenCalled();
     expect(hierarchyMocks.nativeDecks.some((netlist) => netlist.includes(".subckt ChildModel IN OUT"))).toBe(true);
-    expect((await screen.findAllByText(/AC stimuli/i)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: "AC sweep (.ac)" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("uses the recursive deck for DC and refuses a missing native family instead of rerunning preview", async () => {
@@ -238,6 +238,7 @@ describe("App project hierarchy execution", () => {
     await waitFor(() => expect(hierarchyMocks.nativeSteppedDc).toHaveBeenCalled());
     expect(hierarchyMocks.previewDc).not.toHaveBeenCalled();
     expect(hierarchyMocks.nativeDecks.some((netlist) => netlist.includes(".subckt ChildModel IN OUT"))).toBe(true);
+    expect(screen.getByRole("tab", { name: "DC sweep (.dc)" }).getAttribute("aria-selected")).toBe("true");
     expect((await screen.findAllByText(/did not return a family|native single-deck/i)).length).toBeGreaterThan(0);
   });
 });

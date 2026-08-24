@@ -1,0 +1,134 @@
+/*
+ * Project/sheet surfaces for the 2026-08-24 schematic redesign pass.
+ *
+ * This is intentionally imported by ProjectSheetPortsDialog rather than by
+ * the application shell: the project contract owns these styles, and the
+ * simulator never inherits them. All paint is token-based so the interface
+ * remains legible in both themes without inventing status colors.
+ */
+
+.project-sheet-contract-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.project-sheet-contract-head .property-hint {
+  max-width: 52ch;
+  margin: 0;
+}
+
+.project-sheet-eyebrow {
+  margin: 0 0 var(--sp-1);
+  color: var(--text);
+  font: 600 var(--fs-label)/1.25 var(--font-ui);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.project-sheet-contract-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(4.5rem, auto));
+  gap: var(--sp-2);
+  margin: 0;
+}
+
+.project-sheet-contract-summary > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.project-sheet-contract-summary dt {
+  color: var(--muted);
+  font: 600 var(--fs-micro)/1.2 var(--font-ui);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.project-sheet-contract-summary dd {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+
+.project-sheet-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  color: var(--text);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+
+.project-sheet-section-meta {
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  font-weight: 400;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.project-sheet-link-contract {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.project-sheet-link-contract > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.project-sheet-link-contract .mono-num {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-sheet-link-arrow {
+  color: var(--muted);
+  font-size: var(--fs-body);
+  line-height: 1;
+}
+
+.project-sheet-mapping-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}
+
+.project-sheet-port-usedby-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(3ch, auto);
+  gap: var(--sp-1);
+  align-items: baseline;
+}
+
+@media (max-width: 560px) {
+  .project-sheet-contract-head {
+    grid-template-columns: 1fr;
+  }
+
+  .project-sheet-contract-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .project-sheet-link-contract {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .project-sheet-link-contract > div:last-child {
+    grid-column: 1 / -1;
+  }
+}

@@ -187,6 +187,27 @@ export function hasMatchingOrderedProjectPorts(
     asciiFold(port) === asciiFold(sheetPorts[index]?.name ?? ""));
 }
 
+/**
+ * One confirmed parent -> child edge in the open-tab project view.
+ *
+ * Parent discovery is advisory (closed sheets are intentionally not guessed),
+ * but the rows must still be stable when tabs are opened in a different order.
+ * Keeping this ordering rule next to the path/contract rules means every
+ * surface that presents the graph can use the same deterministic spelling.
+ */
+export interface ProjectSheetUse {
+  sheetPath: string;
+  reference: string;
+}
+
+export function orderedProjectSheetUses(uses: readonly ProjectSheetUse[]): ProjectSheetUse[] {
+  return [...uses].sort((left, right) => {
+    const path = asciiFold(left.sheetPath).localeCompare(asciiFold(right.sheetPath));
+    if (path !== 0) return path;
+    return asciiFold(left.reference).localeCompare(asciiFold(right.reference));
+  });
+}
+
 /* ======================================================================
  * Item 14 vocabulary: what a project sheet offers, and how a parent's
  * stored contract differs from it. Everything below is PURE and imports

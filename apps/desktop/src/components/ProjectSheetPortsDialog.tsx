@@ -18,7 +18,9 @@ import {
 } from "./ui/select";
 import { useSchematic } from "../store/useSchematic";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
+import { orderedProjectSheetUses } from "../schematic/projectSubcircuit";
 import type { ProjectSheetPort, SchematicPortDirection } from "../schematic/types";
+import "../styles/projectSheets20260824.css";
 
 const DIRECTIONS: readonly SchematicPortDirection[] = ["In", "Out", "BiDir"];
 
@@ -46,7 +48,8 @@ export interface ProjectSheetPortsEditorProps {
    * Parents that instantiate this sheet, supplied by the host (App owns the
    * sheet-interface index). Derived, never stored; `undefined` means "the host
    * has not told us", which is NOT the same claim as "nobody uses this sheet",
-   * so the row is omitted rather than asserting the latter.
+   * so the editor says that the mapping is incomplete rather than asserting
+   * the sheet is unused. A provided empty array is a confirmed empty result.
    */
   usedBy?: readonly { sheetPath: string; reference: string }[];
   /**
@@ -190,6 +193,10 @@ export function ProjectSheetPortsEditor({
    * document order, so the user recognises their net instead of trusting us.
    */
   const candidates = netLabels.filter((label) => label.text.trim().length > 0);
+  const orderedUsedBy = useMemo(
+    () => usedBy === undefined ? undefined : orderedProjectSheetUses(usedBy),
+    [usedBy],
+  );
 
   const markCandidate = (labelId: string, direction: SchematicPortDirection) => {
     const label = labelsById.get(labelId);
@@ -232,9 +239,28 @@ export function ProjectSheetPortsEditor({
 
   return (
     <div className="project-sheet-ports-editor" role="group" aria-label="Sheet interface">
-      <p className="property-hint">
-        Mark the nets this sheet exposes, in order. Each port name is its net label; Run checks this contract exactly when the sheet is linked.
-      </p>
+      <div className="project-sheet-contract-head">
+        <div>
+          <p className="project-sheet-eyebrow">Public contract</p>
+          <p className="property-hint">
+            Mark existing net labels in terminal order. A parent block receives this exact list; it never infers ports from symbols.
+          </p>
+        </div>
+        <dl className="project-sheet-contract-summary" aria-label="Sheet interface summary">
+          <div>
+            <dt>Ports</dt>
+            <dd className="mono-num">{draft.length}</dd>
+          </div>
+          <div>
+            <dt>Order</dt>
+            <dd className="mono-num">{draft.length > 0 ? `1 → ${draft.length}` : "—"}</dd>
+          </div>
+          <div>
+            <dt>Run gate</dt>
+            <dd>{problems.length > 0 ? "Refused" : draft.length > 0 ? "Ready" : "Unconfigured"}</dd>
+          </div>
+        </dl>
+      </div>
       {draft.length === 0 ? (
         <p className="property-hint" role="status">{EMPTY_INTERFACE_MESSAGE}</p>
       ) : (
@@ -376,21 +402,29 @@ export function ProjectSheetPortsEditor({
         </p>
       )}
 
-      {usedBy !== undefined && (
-        <div className="project-sheet-port-usedby" role="group" aria-label="Sheets using this one as a block">
-          {usedBy.length === 0 ? (
-            <p className="property-hint">No other sheet uses this one as a block yet.</p>
+      <div className="project-sheet-port-usedby" role="group" aria-label="Parent mapping">
+        <div className="project-sheet-section-heading">
+          <span>Parent mapping</span>
+          <span className="project-sheet-section-meta">confirmed edges only</span>
+        </div>
+        {orderedUsedBy === undefined ? (
+          <p className="property-hint">
+            Parent mapping is not fully indexed yet. Open parent sheets are reported here when discovered; a blank list is not proof that this sheet is unused.
+          </p>
+        ) : orderedUsedBy.length === 0 ? (
+          <p className="property-hint">No open parent currently instantiates this sheet. It remains available as a child sheet.</p>
           ) : (
             <ul className="project-sheet-port-usedby-list">
-              {usedBy.map((use) => (
+              {orderedUsedBy.map((use) => (
                 <li key={`${use.sheetPath}-${use.reference}`} className="mono-num">
-                  {use.sheetPath} - {use.reference}
+                  <span>{use.sheetPath}</span>
+                  <span aria-hidden="true">→</span>
+                  <span>{use.reference}</span>
                 </li>
               ))}
             </ul>
           )}
-        </div>
-      )}
+      </div>
 
       <div className="project-sheet-port-footer">
         {/* The primary route is the drawing, not this table: arm the label tool

@@ -5,6 +5,7 @@ import {
   defaultProjectModelName,
   hasMatchingOrderedProjectPorts,
   MAX_PROJECT_SUBCIRCUIT_PORTS,
+  orderedProjectSheetUses,
   projectSheetInterfaceDrift,
   projectSheetPortsValidation,
   PROJECT_SPICE_TOKEN,
@@ -44,6 +45,20 @@ function entryOf(
 function sideFor(direction: SchematicPortDirection): PortSide {
   return direction === "In" ? "left" : "right";
 }
+
+describe("project sheet edge presentation", () => {
+  it("orders confirmed parent mappings by canonical path then reference", () => {
+    expect(orderedProjectSheetUses([
+      { sheetPath: "z/top.sim", reference: "X2" },
+      { sheetPath: "a/top.sim", reference: "X9" },
+      { sheetPath: "a/top.sim", reference: "X1" },
+    ])).toEqual([
+      { sheetPath: "a/top.sim", reference: "X1" },
+      { sheetPath: "a/top.sim", reference: "X9" },
+      { sheetPath: "z/top.sim", reference: "X2" },
+    ]);
+  });
+});
 
 function sidesOf(directions: readonly SchematicPortDirection[]): PortSide[] {
   return directions.map(sideFor);

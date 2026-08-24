@@ -104,10 +104,26 @@ describe("ProjectSheetPortsEditor", () => {
   });
 
   it("shows who instantiates this sheet when the host supplies it", () => {
-    render(<ProjectSheetPortsEditor usedBy={[{ sheetPath: "converter.sim", reference: "X1" }]} />);
-    const usedBy = screen.getByRole("group", { name: "Sheets using this one as a block" });
-    expect(usedBy.textContent).toContain("converter.sim");
+    render(<ProjectSheetPortsEditor usedBy={[
+      { sheetPath: "z-top.sim", reference: "X2" },
+      { sheetPath: "a-top.sim", reference: "X9" },
+      { sheetPath: "a-top.sim", reference: "X1" },
+    ]} />);
+    const usedBy = screen.getByRole("group", { name: "Parent mapping" });
+    expect(usedBy.textContent).toContain("a-top.sim");
     expect(usedBy.textContent).toContain("X1");
+    expect([...usedBy.querySelectorAll("li")].map((row) => row.textContent)).toEqual([
+      "a-top.sim→X1",
+      "a-top.sim→X9",
+      "z-top.sim→X2",
+    ]);
+  });
+
+  it("makes the contract and unresolved parent index visible without inventing a role", () => {
+    render(<ProjectSheetPortsEditor />);
+    expect(screen.getByText("Public contract")).toBeTruthy();
+    expect(document.querySelector(".project-sheet-contract-summary")?.textContent).toContain("Unconfigured");
+    expect(screen.getByRole("group", { name: "Parent mapping" }).textContent).toContain("not fully indexed");
   });
 });
 

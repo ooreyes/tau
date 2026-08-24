@@ -102,6 +102,7 @@ import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
 import { formatEngineering, parseQuantity } from "../simulation/quantity";
 import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "@/components/ui/resizable";
+import "../styles/projectSheets20260824.css";
 
 // Keep the historical ShellPanels entry point stable while the editor chrome
 // has a module of its own. App code imports the owning module directly; older
@@ -2788,6 +2789,20 @@ function ProjectSubcircuitLinkEditor({
       )}
       {selectedEntry?.status === "ok" && (
         <>
+          <div className="project-sheet-link-contract" role="group" aria-label="Parent block contract">
+            <div>
+              <span className="project-sheet-eyebrow">Parent block</span>
+              <span className="mono-num">{component.label || component.id}</span>
+            </div>
+            <span className="project-sheet-link-arrow" aria-hidden="true">→</span>
+            <div>
+              <span className="project-sheet-eyebrow">Child sheet</span>
+              <span className="mono-num">{selectedFileName}</span>
+            </div>
+          </div>
+          <p className="project-sheet-mapping-note">
+            The rows below are the parent’s stored p1…pN order. They are the only mapping Run uses; direction is shown for review, not inferred.
+          </p>
           <label className="property-field">
             <span>Sheet block name</span>
             <input

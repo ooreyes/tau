@@ -693,6 +693,10 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     const proposed = screen.getByRole("list", { name: "Proposed pin order" });
     expect(within(proposed).getAllByRole("listitem").map((row) => row.textContent))
       .toEqual(["1INinleft", "2OUToutright", "3GNDbidirleft"]);
+    const contract = screen.getByRole("group", { name: "Parent block contract" });
+    expect(contract.textContent).toContain("X1");
+    expect(contract.textContent).toContain("child.sim");
+    expect(screen.getByText(/parent’s stored p1…pN order/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Link this sheet" }));
 
