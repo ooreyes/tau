@@ -1789,7 +1789,7 @@ impl LiveSession {
                                 } else {
                                     format!("Tau's live ngspice worker returned invalid data: {error}")
                                 }
-                            })
+                            });
                         }
                         None => {
                             let noise = text.trim().to_string();
@@ -3961,5 +3961,4 @@ R1 out 0 1k
             LIVE_MAX_SLICE_SAMPLES
         );
     }
-
 }

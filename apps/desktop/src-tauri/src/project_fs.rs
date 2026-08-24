@@ -661,11 +661,13 @@ mod tests {
             "Version 4\n",
         )
         .unwrap();
-        assert!(matches!(created, CreateProjectTextFileResult::Created { .. }));
+        assert!(matches!(
+            created,
+            CreateProjectTextFileResult::Created { .. }
+        ));
         let source = root.join("scratch.asc");
         fs::write(&source, "Version 4\n").unwrap();
         let moved = move_project_entry_inner(&root, &source, &filters, None).unwrap();
         assert!(moved.is_file());
     }
-
 }

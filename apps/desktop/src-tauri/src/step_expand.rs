@@ -608,7 +608,10 @@ mod tests {
             ".step param temp_co 1 2 1",
             ".step temp 0 50 25",
         ] {
-            assert!(parse_step_directive(good).is_some(), "rejected a real .step: {good}");
+            assert!(
+                parse_step_directive(good).is_some(),
+                "rejected a real .step: {good}"
+            );
         }
     }
 
@@ -627,5 +630,4 @@ mod tests {
             }
         }
     }
-
 }
