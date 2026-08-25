@@ -206,6 +206,12 @@ const DEFAULT_MODELS = [
   // circuit a switch appears in. Vh=0 - hysteresis costs convergence in DC.
   ".model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)",
 ];
+const TAU_OWNED_MODEL_NAMES = new Set(
+  DEFAULT_MODELS.flatMap((line) => {
+    const match = /^\.model\s+(\S+)/i.exec(line);
+    return match ? [match[1]!.toLowerCase()] : [];
+  }),
+);
 
 /**
  * Convert Tau's neutral schematic into a complete ngspice deck. Models here
@@ -611,7 +617,14 @@ export function buildSpiceDeck(
   // its actual parameters instead of a generic `TAU_*` starter. The union of
   // user-defined + emitted-standard names tells `deviceModel` which names are
   // safe to put on the device line.
-  const knownModels = new Set(userModels);
+  // DEFAULT_MODELS are emitted above whenever a matching Tau part is present.
+  // Include those Tau-owned identities in the resolver registry as well: a
+  // user-authored `TAU_SW` is an exact compatible model, not a missing vendor
+  // model that should be reported as a generic substitution.
+  const knownModels = new Set([
+    ...userModels,
+    ...(needsModels ? TAU_OWNED_MODEL_NAMES : []),
+  ]);
 
   // LTspice's csw.asy is a W device: its Value is exactly
   // `<controlling voltage source> <CSW model> [on|off]`. Validate and resolve

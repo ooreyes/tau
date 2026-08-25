@@ -21,6 +21,22 @@ describe("schematic workspace shell geometry", () => {
     expect(mode).toMatch(/transform:\s*translate\(-50%,\s*-50%\)/);
   });
 
+  it("keeps titlebar side clusters on the mode control's optical center line", () => {
+    const toolbar = rule(".toolbar");
+    expect(toolbar).toMatch(/grid-template-rows:\s*1fr/);
+    expect(rule(".toolbar .titlebar-left,\n.toolbar .titlebar-right")).toMatch(/align-self:\s*center/);
+
+    // At the packaged 900×600 floor the mode toggle is 32px tall while the
+    // Run/AI and document clusters are 28px. Centering each in the same 44px
+    // row gives the same optical midpoint, instead of the observed 9.25px
+    // downward drift from the implicit grid track.
+    const toolbarTop = 0;
+    const toolbarHeight = 44;
+    const center = toolbarTop + toolbarHeight / 2;
+    expect(toolbarTop + (toolbarHeight - 32) / 2 + 32 / 2).toBe(center);
+    expect(toolbarTop + (toolbarHeight - 28) / 2 + 28 / 2).toBe(center);
+  });
+
   it("measures true center and no title/action overlap with macOS overlay padding", () => {
     const floors = [
       { viewportWidth: 1440, modeReserve: 224 },

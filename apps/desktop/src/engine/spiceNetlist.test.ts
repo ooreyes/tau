@@ -1884,6 +1884,15 @@ describe("buildSpiceDeck", () => {
     expect(deck.circuit.warnings).toEqual([]);
   });
 
+  it("resolves Tau's authored TAU_SW starter without calling it a vendor substitution", () => {
+    const base = switchedLoad(true);
+    base.components[2] = component("switch", "S1", "TAU_SW", 0, 0);
+    base.directives = [];
+    const deck = buildSpiceDeck(base, { kind: "op" });
+    expect(deck.netlist).toMatch(/^S1 \S+ \S+ \S+ \S+ TAU_SW$/m);
+    expect(deck.netlist).toMatch(/^\.model TAU_SW SW\(/m);
+  });
+
   it("rewrites continuous negative-Vh SW to a B conductance (ngspice parity)", () => {
     const base = switchedLoad(true);
     const deck = buildSpiceDeck({

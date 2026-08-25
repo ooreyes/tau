@@ -7862,7 +7862,9 @@ button.bottom-panel-head:focus-visible {
      columns start, and `.shell-body` reserves the status bar with its own
      padding, so the wrapper's bottom edge IS the top of the status bar. */
   left: 0;
-  right: 0;
+  /* The parts library is a summoned stage overlay. Reserve its published
+     inset so the diagnostics surface never ends underneath the rail. */
+  right: var(--components-rail-inset, 0px);
   bottom: 0;
   z-index: var(--z-drawer);
   border-top: 1px solid var(--border);

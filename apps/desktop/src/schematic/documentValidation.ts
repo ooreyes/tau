@@ -983,6 +983,12 @@ export interface LiveDiagnosticsInput {
   netLabels?: readonly NetLabel[];
   ascForeignSymbols?: readonly SchematicForeignSymbol[];
   /**
+   * A linked child/interface sheet is compiled in a parent context. It may
+   * legitimately omit an independent source, and its reference node may be
+   * supplied by the parent through the public port contract.
+   */
+  isLinkedChild?: boolean;
+  /**
    * The fail-closed model/directive probe: a thunk that builds a deck and is
    * expected to THROW the engine's own refusal, which becomes one row verbatim.
    *
@@ -1121,6 +1127,7 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
   const components = input.components;
   const netLabels = input.netLabels ?? [];
   const foreignSymbols = input.ascForeignSymbols ?? [];
+  const linkedChild = input.isLinkedChild === true;
   // A sheet with no parts on it is not a broken circuit, it is an empty one.
   // Without this gate a brand-new untitled schematic opens shouting "No ground
   // symbol found." at someone who has not drawn anything yet.
@@ -1155,11 +1162,16 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
   // The netlist's own sentence, verbatim, so this row and the warning a real
   // run produces are the same string rather than two names for one problem.
   const noGround = circuit.warnings.includes("No ground symbol found.");
-  if (noGround) push({ code: "no-ground", severity: "error", message: "No ground symbol found." });
+  if (noGround) {
+    // A child can inherit its reference through a public project port. Keep
+    // this visible as an advisory (the parent compiler remains authoritative)
+    // instead of painting every interface sheet red while it is viewed alone.
+    push({ code: "no-ground", severity: linkedChild ? "warning" : "error", message: "No ground symbol found." });
+  }
 
   // ── no source ──────────────────────────────────────────────────────────
   const sources = components.filter((component) => isIndependentSource(component.kind));
-  if (sources.length === 0) {
+  if (sources.length === 0 && !linkedChild) {
     push({
       code: "no-source",
       severity: "error",

@@ -684,6 +684,15 @@ describe("results drawer resize handle - hit target", () => {
     const resolved = new RegExp(`\\${token}:\\s*(\\d+)px`).exec(appCss)?.[1];
     expect(Number(resolved)).toBeGreaterThanOrEqual(24);
   });
+
+  it("reserves the open component rail and wraps long diagnostics", () => {
+    const appCss = readFileSync(join(__dirname, "../../App.css"), "utf8");
+    const drawerRule = /\.results-drawer--dock-bottom\s*\{([^}]*)\}/s.exec(appCss)?.[1] ?? "";
+    expect(drawerRule).toContain("right: var(--components-rail-inset, 0px)");
+    const diagnosticsCss = readFileSync(join(__dirname, "../../styles/pdf6Diagnostics.css"), "utf8");
+    expect(diagnosticsCss).toContain("overflow-wrap: anywhere");
+    expect(diagnosticsCss).toContain("min-width: 0");
+  });
 });
 
 describe("results drawer - a persisted height cannot outlive the room for it", () => {

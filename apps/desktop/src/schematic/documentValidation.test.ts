@@ -610,6 +610,19 @@ describe("live schematic diagnostics (P3-14)", () => {
     }
   });
 
+  it("treats an explicit public child interface as parent-driven", () => {
+    const rows = liveSchematicDiagnostics({
+      components: [resistor()],
+      wires: [],
+      isLinkedChild: true,
+    });
+    expect(codesOf(rows)).not.toContain("no-source");
+    expect(find(rows, "no-ground")?.severity).toBe("warning");
+    // Child context only downgrades root-only assumptions; topology and model
+    // diagnostics remain live and actionable.
+    expect(codesOf(rows)).toContain("floating-pin");
+  });
+
   it("flags a source whose terminals land on one net, and names the source", () => {
     const { components, wires } = soundCircuit();
     // A wire straight from V1's + terminal to its - terminal.

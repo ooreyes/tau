@@ -258,6 +258,30 @@ describe("EditorTabs - preserved behaviour", () => {
   });
 });
 
+describe("EditorTabs - project sheet roles", () => {
+  it("labels root and child sheets in the tab and accessible description", () => {
+    renderTabs({
+      tabs: [
+        { id: "root", title: "USB_PSU.sim", sheetRole: "root" },
+        { id: "child", title: "Buck5V.sim", sheetRole: "child" },
+      ],
+      activeId: "child",
+    });
+    const [root, child] = screen.getAllByRole("tab");
+    expect(root.getAttribute("data-sheet-role")).toBe("root");
+    expect(child.getAttribute("data-sheet-role")).toBe("child");
+    expect(root.getAttribute("aria-label")).toBeNull();
+    expect(child.getAttribute("aria-label")).toBeNull();
+    expect(root.getAttribute("aria-describedby")).toBe("root-sheet-role");
+    expect(child.getAttribute("aria-describedby")).toBe("child-sheet-role");
+    expect(document.querySelector("#root-sheet-role")?.textContent).toBe("Root sheet");
+    expect(document.querySelector("#child-sheet-role")?.textContent).toBe("Child sheet");
+    expect(root.querySelector(".tab-sheet-role")?.textContent).toBe("Root");
+    expect(child.querySelector(".tab-sheet-role")?.textContent).toBe("Child");
+    expect(child.getAttribute("aria-selected")).toBe("true");
+  });
+});
+
 describe("EditorTabs - the redesigned selection reads without a chip", () => {
   beforeEach(loadProductionCss);
 

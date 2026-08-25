@@ -82,6 +82,35 @@
   text-overflow: ellipsis;
 }
 
+/* Project tabs carry one quiet role marker so a parent/root and its linked
+ * child are distinguishable before opening either. The paired off-screen
+ * description keeps the existing tab name stable for keyboard workflows while
+ * giving VoiceOver the same role context. */
+.editor-tab .tab-sheet-role {
+  flex: none;
+  color: var(--faint);
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.editor-tab.active .tab-sheet-role {
+  color: var(--muted);
+}
+
+.editor-tab .tab-sheet-role-a11y {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* One 24px cell holding both marks stacked, so the tab's width never changes
    when the dot trades places with the x. 24px is WCAG 2.2 SC 2.5.8's floor,
    which is the size App.css already gives .tab-close. */

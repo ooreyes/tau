@@ -210,7 +210,7 @@ export function EditorTabs({
   onNewCircuit,
   onHideSimulator,
 }: {
-  tabs: { id: string; title: string; dirty?: boolean }[];
+  tabs: { id: string; title: string; dirty?: boolean; sheetRole?: "root" | "child" }[];
   activeId: string;
   mode: "schematic" | "simulator";
   onSelectTab: (id: string) => void;
@@ -239,9 +239,11 @@ export function EditorTabs({
         return (
           <div
             key={tab.id}
-            className={`editor-tab${active ? " active" : ""}`}
+            className={`editor-tab${active ? " active" : ""}${tab.sheetRole ? ` editor-tab--${tab.sheetRole}` : ""}`}
             role="tab"
             aria-selected={active}
+            data-sheet-role={tab.sheetRole}
+            aria-describedby={tab.sheetRole ? `${tab.id}-sheet-role` : undefined}
             tabIndex={0}
             /* Recovers the full name when the label is ellipsised. It cannot
                change the accessible name: a tab names itself from its content,
@@ -287,6 +289,11 @@ export function EditorTabs({
                  what recovers the full name when it is. */
               <span className="tab-title">{tab.title.replace(/\.sim$/i, "")}</span>
             )}
+            {tab.sheetRole && (
+              <span className="tab-sheet-role" aria-hidden="true">
+                {tab.sheetRole === "root" ? "Root" : "Child"}
+              </span>
+            )}
             {/*
               One slot, two marks, never both at once (PDF6-05). The review asked
               for "only a dot to show when they haven't been saved", so the dot
@@ -323,6 +330,11 @@ export function EditorTabs({
           </div>
         );
       })}
+      {tabs.map((tab) => tab.sheetRole && (
+        <span key={`${tab.id}-sheet-role`} id={`${tab.id}-sheet-role`} className="tab-sheet-role-a11y">
+          {tab.sheetRole === "root" ? "Root" : "Child"} sheet
+        </span>
+      ))}
       <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>
         <Plus size={14} strokeWidth={1.6} aria-hidden="true" />
       </button>

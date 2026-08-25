@@ -1254,6 +1254,19 @@ function App() {
     && (!activeTab?.savedSignature || activeTab.savedSignature !== currentSignature),
   );
   const normalizedRoot = projectRootPath?.replace(/\\/g, "/").replace(/\/+$/, "") ?? null;
+  const childSheetPaths = useMemo(() => {
+    if (!projectRootPath) return new Set<string>();
+    const paths = new Set<string>();
+    for (const tab of tabs) {
+      const doc = tab.id === activeId ? currentDocument : tab.doc;
+      if (!doc) continue;
+      for (const component of doc.components) {
+        const linked = component.projectSubcircuit?.sheetPath;
+        if (linked) paths.add(linked);
+      }
+    }
+    return paths;
+  }, [activeId, currentDocument, projectRootPath, tabs]);
   const visibleTabs = tabs
     .filter((tab) => {
       if (!normalizedRoot) return false;
@@ -1264,9 +1277,20 @@ function App() {
       const normalizedTabPath = tab.filePath.replace(/\\/g, "/");
       return normalizedTabPath === normalizedRoot || normalizedTabPath.startsWith(`${normalizedRoot}/`);
     })
-    .map((tab) => (
-      tab.id === activeId ? { ...tab, dirty: activeDirty } : tab
-    ));
+    .map((tab) => {
+      const relative = projectRootPath && tab.filePath
+        ? relativeSheetPath(projectRootPath, tab.filePath)
+        : null;
+      const tabDocument = tab.id === activeId ? currentDocument : tab.doc;
+      const sheetRole: "root" | "child" | undefined = relative
+        ? (childSheetPaths.has(relative) || (tabDocument?.projectPorts?.length ?? 0) > 0 ? "child" : "root")
+        : undefined;
+      return {
+        ...tab,
+        ...(sheetRole ? { sheetRole } : {}),
+        ...(tab.id === activeId ? { dirty: activeDirty } : {}),
+      };
+    });
   const normalizedActivePath = activeFilePath?.replace(/\\/g, "/") ?? null;
   const activeProjectFile = Boolean(
     normalizedRoot
@@ -1870,6 +1894,10 @@ function App() {
     wires,
     netLabels,
     ascForeignSymbols,
+    // A public interface is the durable child-sheet marker. These sheets are
+    // compiled through their parent and may intentionally omit a local source
+    // (and, when the parent supplies reference, a local ground).
+    isLinkedChild: projectPorts.length > 0,
     ...(components.length <= LIVE_DECK_PROBE_MAX_COMPONENTS
       ? {
         probeDeck: () => {
@@ -1888,7 +1916,7 @@ function App() {
       : {}),
   })), [
     mode, components, wires, netLabels, ascForeignSymbols, params, directives,
-    userModelLibraryTexts, userModelLibraryNames, nativeSchematic, projectHierarchyActive,
+    userModelLibraryTexts, userModelLibraryNames, nativeSchematic, projectHierarchyActive, projectPorts,
   ]);
 
   /**
@@ -4398,9 +4426,15 @@ function App() {
           */}
         <div
           className={`workspace-column${analysisSplit ? " workspace-column--split" : ""}`}
-          style={analysisSplit
-            ? ({ "--analysis-pane-w": `${analysisPane.width}px` } as CSSProperties)
-            : undefined}
+          style={({
+            ...(analysisSplit ? { "--analysis-pane-w": `${analysisPane.width}px` } : {}),
+            // The components rail is a stage overlay. Publishing its inset on
+            // the drawer's containing block keeps diagnostics readable beside
+            // it instead of letting the rail paint over the rightmost column.
+            "--components-rail-inset": componentsColumnOpen
+              ? `${componentsRailWidth(componentsRailResize.width, componentsRailResponsiveMax)}px`
+              : "0px",
+          } as CSSProperties)}
         >
         {mode === "schematic" && !activeProjectFile && (
           <section
