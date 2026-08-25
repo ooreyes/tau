@@ -1303,7 +1303,7 @@ const SOLVED_LOOP_WIRES = [
   { id: "w3", points: [{ x: 192, y: 0 }, { x: 192, y: 160 }, { x: -128, y: 160 }] },
 ];
 
-const dockRows = () => [...document.querySelectorAll(".bottom-errors > *")];
+const dockRows = () => [...document.querySelectorAll(".bottom-errors > .bottom-error-row")];
 const dockText = () => document.querySelector(".bottom-errors")?.textContent ?? "";
 
 /**
@@ -1352,9 +1352,10 @@ describe("the schematic dock is Errors only, and catches problems before Run (P3
     // the user back into the editor.
     expect(screen.queryByRole("tab", { name: /Measurement/i })).toBeNull();
     expect(document.querySelector(".results-drawer-tabs-root")).toBeNull();
-    // ... and what is left reads as a section, not as a chooser with one
-    // choice.
-    expect(screen.getByRole("heading", { name: /Errors/ })).toBeTruthy();
+    // ... and a clean sheet reads as Diagnostics, never as a misleading
+    // Errors heading with an empty body.
+    expect(screen.getByRole("heading", { name: "Diagnostics" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /Errors/ })).toBeNull();
 
     // The guard that stops the fix being "delete the Measurements tab".
     fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
@@ -1416,7 +1417,9 @@ describe("the schematic dock is Errors only, and catches problems before Run (P3
     openDiagnostics();
 
     const row = await waitFor(() => {
-      const found = dockRows().find((node) => /Duplicate reference/.test(node.textContent ?? ""));
+      const found = dockRows().find((node) => /Duplicate reference/.test(node.textContent ?? ""))
+        ?? [...document.querySelectorAll<HTMLElement>(".bottom-error-row--actionable")]
+          .find((node) => /Duplicate reference/.test(node.getAttribute("aria-label") ?? ""));
       expect(found).toBeTruthy();
       return found as HTMLElement;
     });

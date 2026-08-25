@@ -10,7 +10,7 @@
  * Its `role="region"` and "Simulation diagnostics" accessible name are part
  * of the frozen shell contract and must survive the fold.
  */
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   ChevronDown,
   CircleAlert,
@@ -281,6 +281,9 @@ export function diagnosticSituationTitle(row: DiagnosticRow): string {
   if (/model .*not found|missing .*model|unknown model/i.test(message)) {
     return "A device model is missing";
   }
+  if (/subcircuit.*not imported|unresolved subcircuit|unknown subckt/i.test(message)) {
+    return "A referenced subcircuit is unavailable";
+  }
   if (/project hierarchy|sheet .*linked|linked .*sheet/i.test(message)) {
     return "The project hierarchy needs attention";
   }
@@ -482,7 +485,7 @@ export function BottomPanel({
           const nextStep = diagnosticNextStep(row);
           const Icon = isError ? CircleAlert : TriangleAlert;
           const technicalDetails = (
-            <details className="bottom-error-details">
+            <details className={`bottom-error-details bottom-error-details--${row.severity}`}>
               <summary>Technical details</summary>
               <code className="bottom-error-message">{row.message}</code>
             </details>
@@ -518,13 +521,12 @@ export function BottomPanel({
               : undefined;
           if (onClick) {
             return (
-              <div
+              <Fragment
                 key={row.id}
-                className={`${isError ? "error" : "warning"} bottom-error-card`}
               >
                 <button
                   type="button"
-                  className="bottom-error-row bottom-error-row--actionable"
+                  className={`${isError ? "error" : "warning"} bottom-error-row bottom-error-row--actionable`}
                   aria-label={`${actionLabel}: ${row.message}`}
                   title={actionLabel}
                   onClick={onClick}
@@ -532,7 +534,7 @@ export function BottomPanel({
                   {body}
                 </button>
                 {technicalDetails}
-              </div>
+              </Fragment>
             );
           }
           return (

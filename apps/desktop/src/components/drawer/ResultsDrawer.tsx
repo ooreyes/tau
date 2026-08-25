@@ -312,14 +312,21 @@ export function ResultsDrawer({
       : errorBadge?.tone === "warning" ? "Warnings"
         : "Issues"
   );
-  const hasDiagnostics = errors !== null && (errorBadge !== null || diagnosticsLabel !== undefined);
+  const hasDiagnosticIssues = errorBadge !== null || diagnosticsLabel !== undefined;
+  // In schematic mode the diagnostics surface is the only drawer content. A
+  // clean sheet still gets a quiet Diagnostics section, but it must never
+  // masquerade as an Errors tab or leak into the simulator beside waveforms.
+  const showCleanDiagnosticsSection = errors !== null
+    && !hasDiagnosticIssues
+    && waveforms === null
+    && measurements === null;
   const specs: TabSpec[] = [
     { value: "waveforms", label: "Waveforms", content: waveforms },
     { value: "measurements", label: "Measurements", content: measurements },
     {
       value: "errors",
-      label: resolvedDiagnosticsLabel,
-      content: hasDiagnostics ? errors : null,
+      label: hasDiagnosticIssues ? resolvedDiagnosticsLabel : "Diagnostics",
+      content: hasDiagnosticIssues || showCleanDiagnosticsSection ? errors : null,
       badge: errorBadge,
     },
   ];
