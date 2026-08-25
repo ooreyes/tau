@@ -39,9 +39,25 @@ rebuilt packaged app. Then run desktop typecheck, full tests, web build, and
 design-system drift. A Sol `review-agent` pass must return `No findings.`
 before this run can be marked done.
 
-### Status - IN PROGRESS
+### Status - DONE
 
-Worktrees and lane commits pending.
+Luna High lane commits `5e2ebd9` through `9d97501` landed on
+`auto/ltspice-parity`. Child `.sim` public ports and imported `.asc` IOPIN roles
+now prevent root-only diagnostics, while genuine failures remain fail-closed;
+the project interface index survives closed tabs, refreshes on Explorer reload,
+and avoids geometry-only rescans. Diagnostics wrap clear of the Components
+rail, `TAU_SW` resolves as an exact Tau-owned model, all three titlebar clusters
+share one optical line, tabs expose distinct ROOT/CHILD states, and the sheet
+interface is now one selection-led named-net workflow with explicit direction,
+order, and confirmed child-port-to-parent-net mappings.
+
+Chrome 900x600 geometry measured toolbar center 22 px and left/mode/right
+centers 21.75 px. Packaged Computer Use verified the clean Buck5V child,
+rail-safe diagnostic drawer, interface editor, tab roles, and X2 mappings
+`VIN in ↔ VBUS` / `VOUT out ↔ VUSB`. Desktop typecheck, 285 full-suite
+files (5,157 passed / 9 skipped), design-system drift, web build, and a fresh
+Tauri app/DMG build passed. The final Sol `review-agent` verdict: **No
+findings.**
 
 ## Schematic workspace and multi-sheet projects - 2026-08-24
 

@@ -1,6 +1,6 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-24 (run `schematic-followup-20260824-2`)**
+**Status: DONE - 2026-08-24 (run `schematic-followup-20260824-2`)**
 
 Unit: **Schematic follow-up: diagnostics, titlebar alignment, sheet interfaces,
 and sheet tabs.** The primary checkout is the orchestrator on
@@ -15,15 +15,26 @@ wrap clear of the component library; optically aligned titlebar side clusters;
 a selection-led Input/Output/Bidirectional sheet-boundary workflow with explicit
 parent-net mappings; and visibly distinct active/inactive/root/child sheet tabs.
 
-**Landed:** Pending.
+**Landed:** commits `5e2ebd9` through `9d97501`: selection-led sheet-boundary
+editing and exact parent mappings; child-aware diagnostics for `.sim` and
+`.asc` interfaces; a project-wide cached interface index; exact built-in
+`TAU_SW`; rail-safe wrapping diagnostics; aligned titlebar clusters; and
+distinct, accessible ROOT/CHILD tabs. The final index refresh also handles a
+same-path closed child changed on disk without rescanning geometry-only edits.
 
-**Proof:** Pending focused tests, Chrome 900x600 geometry, packaged Computer Use,
-full desktop gates, and Sol closure.
+**Proof:** Chrome at 900x600 measured the toolbar center at 22 px and the left,
+mode, and right titlebar clusters at 21.75 px. Packaged Computer Use proved a
+clean Buck5V child beside the Components rail, readable full-width diagnostics,
+ROOT/CHILD tabs, a selection-led interface dialog with no phantom comboboxes,
+and the X2 boundary `VIN in ↔ VBUS` / `VOUT out ↔ VUSB`. The final Sol
+`review-agent` verdict was **No findings.**
 
-**Gates:** Pending.
+**Gates:** desktop typecheck clean; full suite **285 files / 5,157 tests passed,
+9 skipped, 0 failed**; design-system drift clean; web build clean; fresh Tauri
+release produced `Tau.app` and `Tau_1.0.0_aarch64.dmg`.
 
-**Next step:** integrate the two Luna High lanes, run gates, then request a
-read-only Sol review.
+**Next step:** remediate the already-recorded deep simulation-tab review with
+the same Luna implementation / Sol review contract.
 
 ---
 
