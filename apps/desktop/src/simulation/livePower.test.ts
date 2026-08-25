@@ -11,5 +11,6 @@ describe("live power instrument", () => {
   it("derives watts from V+ - V- and current entering V+", () => {
     expect(deriveLivePower([5, 4], [0, 1], [0.2, -0.5])).toEqual([1, -1.5]);
     expect(deriveLivePower([5], [0, 0], [1])).toEqual([5]);
+    expect(deriveLivePower([0], [5], [1])).toEqual([-5]);
   });
 });

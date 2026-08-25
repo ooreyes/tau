@@ -157,6 +157,7 @@ export interface LiveScopeChannel {
   componentId?: string;
   powerRole?: "positive" | "negative" | "current";
   hidden?: boolean;
+  powerGround?: boolean;
 }
 
 export interface LiveScopePaneProps {
@@ -739,14 +740,18 @@ export function LiveScopePane({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {following ? (
+        {!running ? (
+          <span className="text-[11px] leading-4 text-muted-foreground">
+            Stopped — showing retained history; no new samples are being solved.
+          </span>
+        ) : following ? (
           <span className="text-[11px] leading-4 text-muted-foreground">
             Live — newest sample at the right edge.
           </span>
         ) : (
           <>
             <span className="text-[11px] leading-4 text-muted-foreground">
-              {`Paused at t = ${formatSeconds(geometry.visible.t1)} — new samples are still being solved off-screen.`}
+              {`Paused at t = ${formatSeconds(geometry.visible.t1)} — new samples continue solving off-screen.`}
             </span>
             {/*
               The way back is a visible, labelled button, not a keyboard secret.

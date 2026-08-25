@@ -230,6 +230,7 @@ import { RunTransport } from "./components/RunTransport";
 import { LiveScopePane } from "./components/LiveScopePane";
 import { LivePowerPane } from "./components/LivePowerPane";
 import { orientedPowerPair } from "./simulation/livePower";
+import type { AnalysisMode } from "./components/AnalysisModeRail";
 import { useLiveRun, type LiveChannelRequest } from "./components/useLiveRun";
 import { formatSeconds, type LiveRunStatus } from "./simulation/liveRun";
 import { buildSpiceDeck, unresolvedSubcktMessage } from "./engine/spiceNetlist";
@@ -437,19 +438,27 @@ export function liveScopeChannelRequests(
   ];
   const channels: LiveChannelRequest[] = [];
   const cap = Math.max(0, limit);
+  let plottedCount = 0;
   for (const group of atomicGroups) {
-    if (channels.length + group.length > cap) {
-      omitted += group.length;
+    const groupSignals = group.filter((request) => !request.powerGround).length;
+    if (plottedCount + groupSignals > cap) {
+      omitted += groupSignals;
       continue;
     }
     channels.push(...group);
+    plottedCount += groupSignals;
   }
   for (const request of orderedSingles) {
-    if (channels.length >= cap) {
+    if ("powerGround" in request && request.powerGround) {
+      channels.push(request);
+      continue;
+    }
+    if (plottedCount >= cap) {
       omitted += 1;
       continue;
     }
     channels.push(request);
+    plottedCount += 1;
   }
   return { channels, omitted };
 }
@@ -2513,8 +2522,12 @@ function App() {
       const pair = orientedPowerPair(pins);
       if (!pair) continue;
       powerVoltageChannels.push(
-        { vector: `v(${pair[0]})`, label: `V+(${component.label || component.id})`, unit: "V", componentId: component.id, powerRole: "positive", hidden: true },
-        { vector: `v(${pair[1]})`, label: `V-(${component.label || component.id})`, unit: "V", componentId: component.id, powerRole: "negative", hidden: true },
+        pair[0] === "0"
+          ? { vector: "", label: `V+(${component.label || component.id})`, unit: "V", componentId: component.id, powerRole: "positive" as const, hidden: true, powerGround: true }
+          : { vector: `v(${pair[0]})`, label: `V+(${component.label || component.id})`, unit: "V", componentId: component.id, powerRole: "positive" as const, hidden: true },
+        pair[1] === "0"
+          ? { vector: "", label: `V-(${component.label || component.id})`, unit: "V", componentId: component.id, powerRole: "negative" as const, hidden: true, powerGround: true }
+          : { vector: `v(${pair[1]})`, label: `V-(${component.label || component.id})`, unit: "V", componentId: component.id, powerRole: "negative" as const, hidden: true },
       );
     }
     const { channels, omitted } = liveScopeChannelRequests(
@@ -2528,7 +2541,8 @@ function App() {
       return;
     }
     if (omitted > 0) {
-      showNotice(`Watching ${channels.length} of ${channels.length + omitted} nets live — probe the ones you want to see.`);
+      const requestedSignalCount = channels.filter((channel) => !channel.powerGround).length;
+      showNotice(`Watching ${requestedSignalCount} of ${requestedSignalCount + omitted} requested signals live — probe the ones you want to see.`);
     }
     liveComponentsRef.current = components;
     // A new session is a new set of facts: no stop reason has been claimed for
@@ -3010,6 +3024,8 @@ function App() {
     () => pickAutoRunAnalysis(directives)?.kind ?? "tran",
     [directives],
   );
+  const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisMode>(preferredAnalysis);
+  useEffect(() => setSelectedAnalysis(preferredAnalysis), [activeId, preferredAnalysis]);
   const stepDomain = useMemo(
     () => stepAnalysisDomain(pickAutoRunAnalysis(directives)?.kind),
     [directives],
@@ -3031,8 +3047,8 @@ function App() {
     // circuit bends its running trace, an idle one re-solves the authored
     // analysis. Promising a re-run while a solve is in flight would tell the
     // reader to expect the plot to blank and restart, which it does not.
-    () => liveControlHint(circuitControls, preferredAnalysis, liveRunning),
-    [circuitControls, preferredAnalysis, liveRunning],
+    () => liveControlHint(circuitControls, selectedAnalysis === "step" ? "tran" : selectedAnalysis, liveRunning),
+    [circuitControls, selectedAnalysis, liveRunning],
   );
 
   /**
@@ -3083,23 +3099,25 @@ function App() {
     await saveActiveToProjectRef.current({ quietBlocked: true });
     setMode("simulator");
     setResultsRaise((n) => n + 1);
-    if (preferredAnalysis === "op") void runOperatingAnalysis();
-    else if (preferredAnalysis === "ac") void runAcAnalysis();
-    else if (preferredAnalysis === "dc") void runDcAnalysis();
-    else if (preferredAnalysis === "tf") void runTfAnalysis();
-    else if (preferredAnalysis === "noise") void runNoiseAnalysis_();
+    if (selectedAnalysis === "op") void runOperatingAnalysis();
+    else if (selectedAnalysis === "ac") void runAcAnalysis();
+    else if (selectedAnalysis === "dc") void runDcAnalysis();
+    else if (selectedAnalysis === "tf") void runTfAnalysis();
+    else if (selectedAnalysis === "noise") void runNoiseAnalysis_();
+    else if (selectedAnalysis === "step") void runStepAnalysis();
     else {
       confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => {
         void executeTransient(effectiveAnalysisOptions);
       });
     }
   }, [
-    preferredAnalysis,
+    selectedAnalysis,
     runOperatingAnalysis,
     runAcAnalysis,
     runDcAnalysis,
     runTfAnalysis,
     runNoiseAnalysis_,
+    runStepAnalysis,
     confirmLargeRunIfNeeded,
     effectiveAnalysisOptions,
     executeTransient,
@@ -4015,11 +4033,12 @@ function App() {
    */
   const rerunAfterActuationRef = useRef<() => void>(() => {});
   rerunAfterActuationRef.current = () => {
-    if (preferredAnalysis === "op") void runOperatingAnalysis();
-    else if (preferredAnalysis === "ac") void runAcAnalysis();
-    else if (preferredAnalysis === "dc") void runDcAnalysis();
-    else if (preferredAnalysis === "tf") void runTfAnalysis();
-    else if (preferredAnalysis === "noise") void runNoiseAnalysis_();
+    if (selectedAnalysis === "op") void runOperatingAnalysis();
+    else if (selectedAnalysis === "ac") void runAcAnalysis();
+    else if (selectedAnalysis === "dc") void runDcAnalysis();
+    else if (selectedAnalysis === "tf") void runTfAnalysis();
+    else if (selectedAnalysis === "noise") void runNoiseAnalysis_();
+    else if (selectedAnalysis === "step") void runStepAnalysis();
     else void executeTransient(lastTransientOptionsRef.current ?? effectiveAnalysisOptions);
   };
   const actuationPendingRef = useRef(false);
@@ -5264,6 +5283,8 @@ function App() {
                   <SimulationPanel
                     circuitTitle={documentTitle}
                     preferredMode={preferredAnalysis}
+                    selectedMode={selectedAnalysis}
+                    onSelectedModeChange={setSelectedAnalysis}
                     result={analysis}
                     opResult={opAnalysis}
                     acResult={acAnalysis}

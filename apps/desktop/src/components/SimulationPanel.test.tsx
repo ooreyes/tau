@@ -439,6 +439,25 @@ describe("SimulationPanel - component telemetry moved to the always-visible dock
     expect(screen.queryByRole("heading", { name: "Component measurements" })).toBeNull();
     expect(screen.queryByText("Component telemetry")).toBeNull();
   });
+
+  it("keeps authored measurements visible when a run has no plotted traces", () => {
+    renderPanel({
+      result: {
+        ok: true,
+        title: "Transient",
+        times: [0, 1],
+        traces: [],
+        currents: [],
+        stats: { netCount: 0, componentCount: 1, sampleCount: 2, stopTime: 1, stepSize: 1 },
+        warnings: [],
+        circuit: { groundNetId: null, warnings: [], nets: [], components: [] },
+      } as import("../simulation/linearTransient").AnalysisResult,
+      measurements: [{ name: "VAVG", value: 3.3 }],
+    });
+    expect(screen.getByRole("table", { name: "Measurements" })).toBeTruthy();
+    expect(screen.getByText("VAVG")).toBeTruthy();
+    expect(screen.queryByText("Nothing to plot yet")).toBeNull();
+  });
 });
 
 describe("SimulationPanel - TRAN snap-tiling dashboard grid", { timeout: 20_000 }, () => {

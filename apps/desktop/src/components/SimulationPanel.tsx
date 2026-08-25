@@ -202,6 +202,9 @@ interface SimulationPanelProps {
   circuitTitle?: string;
   /** Analysis authored first in the document; selected when this circuit opens. */
   preferredMode?: AnalysisMode;
+  /** App-owned selected mode, so global Run and the rail dispatch the same analysis. */
+  selectedMode?: AnalysisMode;
+  onSelectedModeChange?: (mode: AnalysisMode) => void;
   result: (AnalysisResult & EngineProvenance) | null;
   opResult: (OperatingPointResult & EngineProvenance) | null;
   acResult: (AcResult & EngineProvenance) | null;
@@ -304,6 +307,8 @@ const TRACE_SWATCHES = [
 export function SimulationPanel({
   circuitTitle,
   preferredMode = "tran",
+  selectedMode,
+  onSelectedModeChange,
   result,
   opResult,
   acResult,
@@ -370,7 +375,8 @@ export function SimulationPanel({
     [installedLtspiceModelLibraries, userModelLibraries],
   );
 
-  const [mode, setMode] = useState<AnalysisMode>(preferredMode);
+  const [internalMode, setInternalMode] = useState<AnalysisMode>(preferredMode);
+  const mode = selectedMode ?? internalMode;
   // Each analysis tab collapses its power-user controls behind ONE Advanced
   // disclosure, closed by default - the default view stays a calm read of
   // plots + status, not a stacked instrument panel.
@@ -448,8 +454,8 @@ export function SimulationPanel({
   // Switching circuits should reveal the analysis that its directives ask
   // for, without treating the programmatic tab change as another run.
   useEffect(() => {
-    setMode(preferredMode);
-  }, [circuitTitle, preferredMode]);
+    setInternalMode(preferredMode);
+  }, [circuitTitle, preferredMode, onSelectedModeChange]);
   // Expression traces overlaid on the AC (Bode) pane, e.g. `db(V(out))-db(V(in))`
   // for a transfer function, and on the DC pane, e.g. `V(out)-V(in)`.
   const [acExprList, setAcExprList] = useState<string[]>([]);
@@ -1164,7 +1170,8 @@ export function SimulationPanel({
   // skip cannot serve a stale answer. Pressing Run still re-runs: selecting a
   // mode means "show me this", Run means "do it again".
   const handleModeChange = (next: AnalysisMode) => {
-    setMode(next);
+    setInternalMode(next);
+    onSelectedModeChange?.(next);
     if (hasFreshResult?.(next)) return;
     if (next === "tran") void onRun();
     else if (next === "op") void onRunOperatingPoint();
@@ -2087,7 +2094,7 @@ export function WaveformPlot({
   // index next. Recomputed plainly (no memo) every render - cheap, and
   // memoizing would need `labelFor` in the deps, which closes over `success`/
   // `netLabels` and is recreated every render anyway.
-  const cardSpecs: CardSpec[] = paneLayout.map((pane) => {
+  const cardSpecs: CardSpec[] = allTraces.length > 0 ? paneLayout.map((pane) => {
     const traceId = pane.traceIds[0];
     const trace = traceId ? traceById.get(traceId) : undefined;
     return {
@@ -2095,7 +2102,7 @@ export function WaveformPlot({
       kind: "plot",
       title: trace ? labelFor(trace) : "Empty pane",
     };
-  });
+  }) : [];
   if (measurements.length > 0) cardSpecs.push({ id: "measurements", kind: "table", title: "Measurements" });
   if (fourier.length > 0) cardSpecs.push({ id: "fourier", kind: "table", title: "Fourier" });
   const cardById = new Map(cardSpecs.map((c) => [c.id, c]));
@@ -2185,7 +2192,7 @@ export function WaveformPlot({
           )}
         </div>
       )}
-      {success && allTraces.length === 0 && (
+      {success && allTraces.length === 0 && cardSpecs.length === 0 && (
         <div className="scope-empty-state">
           <ProbeIcon size={20} aria-hidden="true" />
           <strong>Nothing to plot yet</strong>
@@ -2193,7 +2200,7 @@ export function WaveformPlot({
         </div>
       )}
 
-      {allTraces.length > 0 && (
+      {reconciled.order.length > 0 && (
         <div className="plot-dashboard-grid" onPointerLeave={clearDropPreview}>
           {reconciled.order.map((id) => {
             const card = cardById.get(id);

@@ -289,6 +289,41 @@ describe("useLiveRun — the run the engine actually publishes", () => {
     expect(engine.halts).toBe(1);
   });
 
+  it("keeps a grounded power side as metadata without sending v(0) to the engine", async () => {
+    const engine = installFakeEngine(["out", "time", "v1#branch"]);
+    const { view } = mountRun();
+
+    await act(async () => {
+      await view.result.current.start({
+        netlist: RC_DECK,
+        deck: { netlist: RC_DECK },
+        channels: [
+          { vector: "v1#branch", label: "I(V1)", unit: "A", componentId: "v1", powerRole: "current" },
+          { vector: "v(out)", label: "V+(V1)", unit: "V", componentId: "v1", powerRole: "positive", hidden: true },
+          { vector: "", label: "V-(V1)", unit: "V", componentId: "v1", powerRole: "negative", hidden: true, powerGround: true },
+        ],
+      });
+    });
+
+    expect(view.result.current.channels).toEqual([
+      { index: 0, label: "I(V1)", unit: "A", componentId: "v1", powerRole: "current" },
+      { index: 1, label: "V+(V1)", unit: "V", componentId: "v1", powerRole: "positive", hidden: true },
+      { index: -1, label: "V-(V1)", unit: "V", componentId: "v1", powerRole: "negative", hidden: true, powerGround: true },
+    ]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    });
+    expect(engine.polls[0]).toEqual(["time", "v1#branch", "out"]);
+    expect(engine.polls[0]).not.toContain("");
+    expect(engine.polls[0]).not.toContain("v(0)");
+
+    await act(async () => {
+      view.result.current.stop("user");
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  });
+
   it("drops one unpublished trace out loud and keeps the rest of the run alive", async () => {
     // Sending a name the run does not publish is fatal, not partial:
     // `resolve_names` refuses the whole frame. Narrowing the poll list to the

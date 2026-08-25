@@ -25,7 +25,8 @@ export function LivePowerPane({ ring, positiveChannel, negativeChannel, currentC
   }, [status.phase]);
   const derived = useMemo(() => {
     const view = ring.snapshot();
-    const values = deriveLivePower(view.channels[positiveChannel.index] ?? [], view.channels[negativeChannel.index] ?? [], view.channels[currentChannel.index] ?? []);
+    const ground = new Float64Array(view.times.length);
+    const values = deriveLivePower(positiveChannel.powerGround ? ground : (view.channels[positiveChannel.index] ?? []), negativeChannel.powerGround ? ground : (view.channels[negativeChannel.index] ?? []), view.channels[currentChannel.index] ?? []);
     const next = new LiveSampleRing({ channelCount: 1, capacity: Math.max(1, values.length) });
     for (let index = 0; index < values.length; index += 1) next.push(view.times[index]!, [values[index]!]);
     return next;

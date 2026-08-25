@@ -15,5 +15,14 @@ describe("live scope channel allocation", () => {
 
     const complete = liveScopeChannelRequests([], new Set(), 3, triplet);
     expect(complete.channels.map((channel) => channel.unit)).toEqual(["A", "V", "V"]);
+
+    const grounded = liveScopeChannelRequests([], new Set(), 2, [
+      triplet[0]!,
+      triplet[1]!,
+      { vector: "", label: "V-(R1)", unit: "V", componentId: "r1", powerRole: "negative", hidden: true, powerGround: true },
+    ]);
+    expect(grounded.channels.filter((channel) => !channel.powerGround).map((channel) => channel.vector)).not.toContain("");
+    expect(grounded.channels).toContainEqual(expect.objectContaining({ powerRole: "negative", powerGround: true }));
+    expect(grounded.channels).toHaveLength(3);
   });
 });

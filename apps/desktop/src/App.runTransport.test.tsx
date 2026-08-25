@@ -2,6 +2,15 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
+const runAcSweepSpy = vi.hoisted(() => vi.fn());
+vi.mock("./simulation/acSweep", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./simulation/acSweep")>();
+  return { ...actual, runAcSweep: (...args: Parameters<typeof actual.runAcSweep>) => {
+    runAcSweepSpy();
+    return actual.runAcSweep(...args);
+  } };
+});
+
 // The same two mocks every App-level suite takes: keep the project store off
 // its in-memory workspace seeding, and keep the assistant's local-AI polling
 // out of a wiring test.
@@ -148,6 +157,7 @@ beforeEach(() => {
   storage.clear();
   halt.mockClear();
   alter.mockClear();
+  runAcSweepSpy.mockClear();
   onEndHook = null;
   useSchematic.getState().newCircuit();
   useProject.setState({
@@ -282,6 +292,24 @@ describe("App - the run transport's default mode", () => {
     expect(screen.getByRole("group", { name: "Run transport" }).textContent)
       .toContain(".tran 5m");
   });
+
+  it("keeps a manually selected AC rail mode when the toolbar runs again", async () => {
+    await openSimulator([".tran 5m"]);
+    fireEvent.click(screen.getByRole("button", { name: "Run simulation" }));
+    await screen.findByRole("tab", { name: /AC sweep/ });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run simulation" })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("complementary", { name: "Results" }).getAttribute("aria-busy")).toBe("false"));
+    const ac = screen.getByRole("tab", { name: /AC sweep/ });
+    expect(ac.hasAttribute("disabled")).toBe(false);
+    expect(ac.getAttribute("aria-disabled")).not.toBe("true");
+    fireEvent.mouseDown(ac, { button: 0 });
+    await waitFor(() => expect(runAcSweepSpy).toHaveBeenCalledTimes(1));
+    expect(ac.getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Run simulation" }));
+    await waitFor(() => expect(runAcSweepSpy).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("tab", { name: /AC sweep/ }).getAttribute("aria-selected")).toBe("true");
+  });
+
 });
 
 describe("App - Run becomes Stop, and leaving the simulator stops the run", () => {

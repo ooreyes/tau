@@ -582,6 +582,16 @@ describe("live scope honesty", () => {
     // The rate goes with the run: a measured rate next to a frozen trace reads
     // as a rate the circuit is still achieving.
     expect(screen.queryByText(/circuit s per s/)).toBeNull();
+    expect(screen.queryByText(/Live|still being solved|continue solving/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Go live" })).toBeNull();
+  });
+
+  it("keeps pinned stopped history explicitly historical", () => {
+    const ring = rampRing(200);
+    render(<Harness ring={ring} status={stopped(1e-3)} initialWindow={{ spanSeconds: 1e-3, anchorEndTime: 5e-4 }} />);
+    expect(screen.getByText(/Stopped — showing retained history/)).toBeTruthy();
+    expect(screen.queryByText(/Live|still being solved|continue solving/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Go live" })).toBeNull();
   });
 
   it("distinguishes each way a run can end", () => {

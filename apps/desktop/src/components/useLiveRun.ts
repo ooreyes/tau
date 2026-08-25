@@ -115,6 +115,7 @@ export interface LiveChannelRequest {
   componentId?: string;
   powerRole?: "positive" | "negative" | "current";
   hidden?: boolean;
+  powerGround?: boolean;
 }
 
 export interface LiveStartRequest {
@@ -279,7 +280,9 @@ export function useLiveRun({
 
     const horizon = runPlanHorizon(plan);
     const requested = request.channels;
-    const names = [LIVE_TIME_VECTOR, ...requested.map((channel) => channel.vector)];
+    const groundChannels = requested.filter((channel) => channel.powerGround);
+    const engineRequested = requested.filter((channel) => !channel.powerGround);
+    const names = [LIVE_TIME_VECTOR, ...engineRequested.map((channel) => channel.vector)];
     // Optimistic: the engine has not answered yet, so Run must already read
     // Stop or a slow start looks like a dead button.
     setRunning(true);
@@ -328,8 +331,8 @@ export function useLiveRun({
       resolveLiveVectorNames(names, outcome.start.vectors).unpublished.map((name) =>
         name.trim().toLowerCase()),
     );
-    const kept = requested.filter((channel) => !unpublished.has(channel.vector.trim().toLowerCase()));
-    const dropped = requested.length - kept.length;
+    const kept = engineRequested.filter((channel) => !unpublished.has(channel.vector.trim().toLowerCase()));
+    const dropped = engineRequested.length - kept.length;
     if (dropped > 0) {
       noticeRef.current(
         `${dropped} of ${requested.length} traces are not published by this run and are not plotted.`,
@@ -355,14 +358,26 @@ export function useLiveRun({
     const nextRing = new LiveSampleRing({ channelCount: kept.length });
     ringRef.current = nextRing;
     setRing(nextRing);
-    setChannels(kept.map((channel, index) => ({
+    setChannels([
+      ...kept.map((channel, index) => ({
       index,
       label: channel.label,
       ...(channel.unit === undefined ? {} : { unit: channel.unit }),
       ...(channel.componentId === undefined ? {} : { componentId: channel.componentId }),
       ...(channel.powerRole === undefined ? {} : { powerRole: channel.powerRole }),
       ...(channel.hidden === undefined ? {} : { hidden: channel.hidden }),
-    })));
+      ...(channel.powerGround === undefined ? {} : { powerGround: channel.powerGround }),
+      })),
+      ...groundChannels.map((channel) => ({
+        index: -1,
+        label: channel.label,
+        ...(channel.unit === undefined ? {} : { unit: channel.unit }),
+        ...(channel.componentId === undefined ? {} : { componentId: channel.componentId }),
+        ...(channel.powerRole === undefined ? {} : { powerRole: channel.powerRole }),
+        ...(channel.hidden === undefined ? {} : { hidden: channel.hidden }),
+        powerGround: true,
+      })),
+    ]);
     setRetention(null);
     setTimeWindow(followingWindow(DEFAULT_LIVE_SPAN_SECONDS));
     setRunKey((key) => key + 1);
