@@ -48,6 +48,8 @@ export interface ProjectSheetPortsEditorProps {
   interfaceDisabledReason?: string;
   /** Let the host close the surrounding dialog when we hand the user the drawing. */
   onRequestClose?: () => void;
+  /** Reopen the durable first-use guide without changing the stored contract. */
+  onReplayGuidance?: () => void;
 }
 
 /**
@@ -65,6 +67,7 @@ export function ProjectSheetPortsEditor({
   usedBy,
   interfaceDisabledReason,
   onRequestClose,
+  onReplayGuidance,
 }: ProjectSheetPortsEditorProps = {}) {
   const projectPorts = useSchematic((state) => state.projectPorts);
   const netLabels = useSchematic((state) => state.netLabels);
@@ -430,6 +433,11 @@ export function ProjectSheetPortsEditor({
         {/* Not a live region: the interface verdict above already announces the
             state, and two live regions on one edit read as noise. */}
         {saved && <span className="property-hint">Sheet interface saved.</span>}
+        {onReplayGuidance && (
+          <Button type="button" variant="ghost" size="sm" onClick={onReplayGuidance}>
+            Replay sheet interface guide
+          </Button>
+        )}
       </div>
       {error && <p className="property-validation-error" role="alert">{error}</p>}
     </div>
@@ -441,10 +449,11 @@ export function ProjectSheetPortsDialog({
   onOpenChange,
   usedBy,
   interfaceDisabledReason,
+  onReplayGuidance,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-} & Pick<ProjectSheetPortsEditorProps, "usedBy" | "interfaceDisabledReason">) {
+} & Pick<ProjectSheetPortsEditorProps, "usedBy" | "interfaceDisabledReason" | "onReplayGuidance">) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[700px]">
@@ -469,6 +478,7 @@ export function ProjectSheetPortsDialog({
             usedBy={usedBy}
             interfaceDisabledReason={interfaceDisabledReason}
             onRequestClose={() => onOpenChange(false)}
+            onReplayGuidance={onReplayGuidance}
           />
         </div>
         <DialogFooter>

@@ -28,6 +28,7 @@ import "./styles/pdf6Diagnostics.css";
 import "./styles/pdf6Palette.css";
 import "./styles/pdf6Titlebar.css";
 import "./styles/schematicWorkspace20260824.css";
+import "./styles/hierarchyGuidance.css";
 import {
   canonicalProjectSheetPath,
   linkedProjectSheetPaths,
@@ -58,6 +59,7 @@ import { EmptyState } from "./components/EmptyState";
 import { ProbeIcon } from "./components/editor/ToolIcons";
 import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
 import { ProjectSheetPortsDialog } from "./components/ProjectSheetPortsDialog";
+import { HierarchyGuidanceDialog } from "./components/HierarchyGuidanceDialog";
 import { UnsavedRecoveryDialog } from "./components/UnsavedRecoveryDialog";
 import {
   ExternalEditConflictDialog,
@@ -72,6 +74,7 @@ import {
   saveUnsavedRecovery,
   type UnsavedRecoverySnapshot,
 } from "./lib/unsavedRecovery";
+import { readHierarchyGuidanceState } from "./lib/hierarchyGuidance";
 import {
   classifyExternalEdit,
   diskContentFingerprint,
@@ -768,9 +771,11 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [simulationSetupOpen, setSimulationSetupOpen] = useState(false);
   const [projectSheetPortsOpen, setProjectSheetPortsOpen] = useState(false);
+  const [hierarchyGuidanceOpen, setHierarchyGuidanceOpen] = useState(false);
   const paletteMounted = useMountedOnceOpened(paletteOpen);
   const simulationSetupMounted = useMountedOnceOpened(simulationSetupOpen);
   const projectSheetPortsMounted = useMountedOnceOpened(projectSheetPortsOpen);
+  const hierarchyGuidanceMounted = useMountedOnceOpened(hierarchyGuidanceOpen);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
   const [savingCloseTab, setSavingCloseTab] = useState(false);
@@ -874,6 +879,10 @@ function App() {
   // ngspice runs outside React's lifecycle. A request version prevents a late
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
+  // React state is intentionally not used as the admission lock: two Run
+  // gestures can arrive before the first setAnalysisRunning render commits.
+  // This synchronous lease is shared by every bounded analysis entry point.
+  const boundedRunBusyRef = useRef(false);
   // Document-opening work can await sibling symbols, model libraries, or
   // filesystem writes.  A later tab switch, a new circuit, or another file is
   // a newer navigation request; a late answer from the older request has no
@@ -1386,10 +1395,53 @@ function App() {
     ),
   );
 
+  const projectHierarchyRunPrerequisite = useMemo(() => {
+    if (!projectHierarchyActive) return null;
+    if (!projectRootPath) {
+      return "Open or create a project folder before running this linked hierarchy, then save both sheets inside it.";
+    }
+    if (!activeFilePath || activeTab?.detached) {
+      return "Save this linked sheet inside the open project before running. Use Save, then Run again.";
+    }
+    if (!activeProjectFile) {
+      return "Save or reopen this linked sheet inside the open project before running.";
+    }
+    return null;
+  }, [activeFilePath, activeProjectFile, activeTab?.detached, projectHierarchyActive, projectRootPath]);
+
   const showNotice = useCallback((message: string) => {
     setNotice(message);
     toast(message, { duration: 2600 });
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
+  }, []);
+
+  const refuseProjectHierarchyRun = useCallback(() => {
+    if (!projectHierarchyRunPrerequisite) return false;
+    showNotice(projectHierarchyRunPrerequisite);
+    return true;
+  }, [projectHierarchyRunPrerequisite, showNotice]);
+
+  const beginBoundedRun = useCallback(() => {
+    if (boundedRunBusyRef.current || analysisRunning || liveRunningRef.current) {
+      showNotice(liveRunningRef.current
+        ? "A live run is using the engine. Stop it before starting another analysis."
+        : "A simulation is already running. Wait for it to finish before running again.");
+      return false;
+    }
+    boundedRunBusyRef.current = true;
+    return true;
+  }, [analysisRunning, showNotice]);
+
+  const endBoundedRun = useCallback(() => {
+    boundedRunBusyRef.current = false;
+  }, []);
+
+  const openSheetInterface = useCallback(() => {
+    if (!readHierarchyGuidanceState().completed) {
+      setHierarchyGuidanceOpen(true);
+      return;
+    }
+    setProjectSheetPortsOpen(true);
   }, []);
 
   /*
@@ -2188,6 +2240,7 @@ function App() {
   );
 
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
+    if (!beginBoundedRun()) return;
     const requestId = ++analysisRequestRef.current;
     // The span that is actually on screen, which is not always the document's.
     // A WINDOW run from the transport solves the bounds the user typed there,
@@ -2271,8 +2324,9 @@ function App() {
       // stopAnalysis fall back to the non-abortable invalidate path for a
       // run that's actually still abortable.
       if (transientAbortRef.current === controller) transientAbortRef.current = null;
+      endBoundedRun();
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive, beginBoundedRun, endBoundedRun]);
 
   // Pre-run guard (Fix 3): a step count big enough to genuinely stall the UI
   // for a while gets a confirmation instead of launching silently. Native is
@@ -2288,13 +2342,14 @@ function App() {
   }, [components, wires, netLabels]);
 
   const runAnalysis = useCallback(async () => {
+    if (refuseProjectHierarchyRun()) return;
     // Saving is attempted first, but simulation operates on the validated
     // in-memory schematic and must not be disabled by an unrelated inability
     // to rewrite cosmetic/unsupported ASC records. The save path already tells
     // the user exactly why persistence failed or was blocked.
     await saveActiveToProjectRef.current({ quietBlocked: true });
     confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => { void executeTransient(effectiveAnalysisOptions); });
-  }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded]);
+  }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded, refuseProjectHierarchyRun]);
 
   /**
    * The circuit-time span a continuous run's deck is asked for.
@@ -2325,6 +2380,7 @@ function App() {
    * does not quietly run a bounded transient instead and call it live.
    */
   const runFromTransport = useCallback(async () => {
+    if (refuseProjectHierarchyRun()) return;
     const plan = liveRun.plan;
     setResultsRaise((n) => n + 1);
     // The previous run's explanation stops describing anything the user is
@@ -2407,9 +2463,11 @@ function App() {
     assertCurrentSimulationIntegrity,
     showNotice,
     startLiveSession_,
+    refuseProjectHierarchyRun,
   ]);
 
   const runOperatingAnalysis = useCallback(async () => {
+    if (refuseProjectHierarchyRun() || !beginBoundedRun()) return;
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     beginRun("op");
@@ -2429,10 +2487,12 @@ function App() {
       setOpAnalysis({ ok: false, message: userFacingErrorMessage(error, "ngspice could not calculate the operating point."), warnings: [], engine: attemptedEngine() });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+      endBoundedRun();
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive, refuseProjectHierarchyRun, beginBoundedRun, endBoundedRun]);
 
   const runAcAnalysis = useCallback(async () => {
+    if (refuseProjectHierarchyRun() || !beginBoundedRun()) return;
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     beginRun("ac");
@@ -2494,8 +2554,9 @@ function App() {
       setAcStepFamily(null);
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+      endBoundedRun();
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, couplings, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, couplings, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive, refuseProjectHierarchyRun, beginBoundedRun, endBoundedRun]);
 
   useEffect(() => {
     setDcSetup((d) => defaultDcSetup(components, d));
@@ -2507,6 +2568,7 @@ function App() {
   // A DC sweep uses the UI setup panel, falling back to an imported `.dc`
   // directive when the document carries one from LTspice.
   const runDcAnalysis = useCallback(async () => {
+    if (refuseProjectHierarchyRun() || !beginBoundedRun()) return;
     const requestId = ++analysisRequestRef.current;
     const dc = analysesFromDirectives(directives).dc ?? dcSetup;
     setAnalysisRunning(true);
@@ -2554,10 +2616,12 @@ function App() {
       setDcStepFamily(null);
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+      endBoundedRun();
     }
-  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
+  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive, refuseProjectHierarchyRun, beginBoundedRun, endBoundedRun]);
 
   const runTfAnalysis = useCallback(async () => {
+    if (refuseProjectHierarchyRun() || !beginBoundedRun()) return;
     const requestId = ++analysisRequestRef.current;
     const tf = analysesFromDirectives(directives).tf ?? tfSetup;
     setAnalysisRunning(true);
@@ -2580,10 +2644,12 @@ function App() {
       setTfAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this transfer function."), warnings: [], engine: attemptedEngine() });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+      endBoundedRun();
     }
-  }, [components, wires, netLabels, params, directives, tfSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
+  }, [components, wires, netLabels, params, directives, tfSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive, refuseProjectHierarchyRun, beginBoundedRun, endBoundedRun]);
 
   const runNoiseAnalysis_ = useCallback(async () => {
+    if (refuseProjectHierarchyRun() || !beginBoundedRun()) return;
     const requestId = ++analysisRequestRef.current;
     const noise = analysesFromDirectives(directives).noise ?? noiseSetup;
     setAnalysisRunning(true);
@@ -2607,10 +2673,12 @@ function App() {
       setNoiseAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this noise analysis."), warnings: [], engine: attemptedEngine() });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+      endBoundedRun();
     }
-  }, [components, wires, netLabels, params, directives, noiseSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive]);
+  }, [components, wires, netLabels, params, directives, noiseSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive, refuseProjectHierarchyRun, beginBoundedRun, endBoundedRun]);
 
   const runStepAnalysis = useCallback(async () => {
+    if (refuseProjectHierarchyRun() || !beginBoundedRun()) return;
     const requestId = ++analysisRequestRef.current;
     // A configuration refusal is still the user's most recent run gesture.
     // Record it before validating specs so the header/outcome surfaces report
@@ -2626,6 +2694,7 @@ function App() {
         members: [],
         warnings: [],
       });
+      endBoundedRun();
       return;
     }
     const domain = stepAnalysisDomain(pickAutoRunAnalysis(directives)?.kind);
@@ -2815,8 +2884,9 @@ function App() {
       setStepFamily({ ok: false, message: userFacingErrorMessage(error, "Could not run this .step sweep."), members: [], warnings: [], engine: attemptedEngine() });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+      endBoundedRun();
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi, dcSetup, couplings, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, currentDocument, makeProjectDeckBuilder, projectHierarchyActive]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi, dcSetup, couplings, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, currentDocument, makeProjectDeckBuilder, projectHierarchyActive, refuseProjectHierarchyRun, beginBoundedRun, endBoundedRun]);
 
   /**
    * The analysis rail's seven run gestures, each holding the engine-lease
@@ -2911,6 +2981,7 @@ function App() {
   // LTspice users expect. Selecting a mode tab remains an explicit request to
   // run that particular mode.
   const runAndShowSimulator = useCallback(async () => {
+    if (refuseProjectHierarchyRun()) return;
     await saveActiveToProjectRef.current({ quietBlocked: true });
     setMode("simulator");
     setResultsRaise((n) => n + 1);
@@ -2934,6 +3005,7 @@ function App() {
     confirmLargeRunIfNeeded,
     effectiveAnalysisOptions,
     executeTransient,
+    refuseProjectHierarchyRun,
   ]);
 
   const stopAnalysis = useCallback(() => {
@@ -4567,7 +4639,7 @@ function App() {
             onStop={stopAnalysis}
             onClearScratchpad={() => setConfirmClearOpen(true)}
             onOpenSimulationSetup={() => setSimulationSetupOpen(true)}
-            onOpenProjectInterface={() => setProjectSheetPortsOpen(true)}
+            onOpenProjectInterface={openSheetInterface}
           />
           <EditorTabs
             tabs={visibleTabs}
@@ -5176,6 +5248,13 @@ function App() {
         )}
       </Suspense>
       <Suspense fallback={null}>
+        {hierarchyGuidanceMounted && (
+          <HierarchyGuidanceDialog
+            open={hierarchyGuidanceOpen}
+            onOpenChange={setHierarchyGuidanceOpen}
+            onStart={() => setProjectSheetPortsOpen(true)}
+          />
+        )}
         {simulationSetupMounted && (
           <SimulationSetupDialog open={simulationSetupOpen} onOpenChange={setSimulationSetupOpen} />
         )}
@@ -5185,6 +5264,10 @@ function App() {
             onOpenChange={setProjectSheetPortsOpen}
             usedBy={sheetUsedBy}
             interfaceDisabledReason={sheetInterfaceDisabledReason ?? undefined}
+            onReplayGuidance={() => {
+              setProjectSheetPortsOpen(false);
+              setHierarchyGuidanceOpen(true);
+            }}
           />
         )}
       </Suspense>

@@ -307,10 +307,12 @@ describe("EditorTabs - the redesigned selection reads without a chip", () => {
     expect(activeStyle.fontWeight).toBe(getComputedStyle(inactive).fontWeight);
   });
 
-  it("drops the per-tab vertical rule and lets the label ellipsise instead", () => {
+  it("uses bounded tab cells and lets the label ellipsise instead", () => {
     const { container } = renderTabs();
     const tab = container.querySelector(".editor-tab")!;
-    expect(getComputedStyle(tab).borderRightWidth).toBe("0px");
+    const tabRule = laneStyleRules().find((rule) => rule.selectorText === ".editor-tab");
+    expect(tabRule?.style.borderWidth).toBe("1px");
+    expect(tabRule?.style.borderStyle).toBe("solid");
 
     const title = tab.querySelector(".tab-title")!;
     const titleStyle = getComputedStyle(title);

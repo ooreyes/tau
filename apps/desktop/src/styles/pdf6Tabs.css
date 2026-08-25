@@ -28,6 +28,12 @@
  * canvas), which App.css already owns.
  */
 
+.editor-tabs {
+  gap: 2px;
+  padding: 2px var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
 .editor-tab {
   /* min-width:0 + a cap is what lets a long sheet name ellipsise rather than
      shove the `+` button off the end of the strip. */
@@ -38,7 +44,12 @@
   /* Asymmetric on purpose: the close/dot slot brings its own 24px of visual
      padding on the right, so a matching 12px there would read as a gap. */
   padding: 0 var(--sp-2) 0 var(--sp-3);
-  border-right: 0;
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--border-subtle);
+  border-bottom-color: var(--border-strong);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: var(--panel-2);
   transition:
     color var(--motion-fast) var(--spring),
     background var(--motion-fast) var(--spring);
@@ -47,6 +58,7 @@
 .editor-tab:not(.active):hover {
   color: var(--text);
   background: var(--overlay-hover-faint);
+  border-color: var(--border-strong);
 }
 
 /* DESIGN_SYSTEM 4's 2px accent ring, inset rather than outset: tab cells sit
@@ -64,6 +76,8 @@
      within a couple of percent of each other, which is exactly why the old
      design needed a coloured chip to say which tab was selected. */
   background: var(--canvas-surface);
+  border-color: var(--accent-line);
+  border-bottom-color: var(--canvas-surface);
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
@@ -88,7 +102,11 @@
  * giving VoiceOver the same role context. */
 .editor-tab .tab-sheet-role {
   flex: none;
+  padding: 1px var(--sp-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xs);
   color: var(--faint);
+  background: var(--panel-3);
   font-size: var(--fs-micro);
   font-weight: 650;
   letter-spacing: var(--tracking-wide);
@@ -97,6 +115,8 @@
 
 .editor-tab.active .tab-sheet-role {
   color: var(--muted);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
 }
 
 .editor-tabs > .tab-sheet-role-a11y {
@@ -169,6 +189,7 @@
 .editor-tab.add {
   flex: none;
   padding: 0 var(--sp-3);
+  background: var(--panel-2);
 }
 
 .editor-hide:hover {

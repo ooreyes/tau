@@ -41,6 +41,7 @@ import { resetAssistantPreferences } from "./assistantPreferences";
 import { resetCloudAiConsent } from "./cloudAiConsent";
 import { resetDiagnosticsPreferences } from "./diagnosticsHealth";
 import { resetLearningPathState } from "./learningPath";
+import { resetHierarchyGuidance } from "./hierarchyGuidance";
 import { resetLocalAiSetup } from "./localAiSetup";
 import { simulationPreferences } from "./simulationPreferences";
 import { resetThemeMode } from "./theme";
@@ -98,6 +99,11 @@ export const RESETTABLE_PREFERENCES: readonly ResettablePreference[] = [
     reset: () => {
       resetLearningPathState();
     },
+  },
+  {
+    key: "tau.hierarchy.guidance.v1",
+    label: "Project-sheet interface guide",
+    reset: () => resetHierarchyGuidance(),
   },
 ];
 

@@ -164,6 +164,14 @@ describe("ProjectSheetPortsEditor", () => {
     expect(document.querySelector(".project-sheet-contract-summary")?.textContent).toContain("Unconfigured");
     expect(screen.getByRole("group", { name: "Parent mapping" }).textContent).toContain("not fully indexed");
   });
+
+  it("offers a durable replay action without changing the stored port contract", () => {
+    const onReplay = vi.fn();
+    render(<ProjectSheetPortsEditor onReplayGuidance={onReplay} />);
+    fireEvent.click(screen.getByRole("button", { name: "Replay sheet interface guide" }));
+    expect(onReplay).toHaveBeenCalledOnce();
+    expect(useSchematic.getState().projectPorts).toEqual([]);
+  });
 });
 
 /**

@@ -1,0 +1,121 @@
+.hierarchy-guidance-dialog {
+  max-width: min(620px, calc(100vw - var(--sp-8)));
+  max-height: min(80vh, 38rem);
+  overflow-y: auto;
+}
+
+.hierarchy-guidance-kicker {
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.hierarchy-guidance-progress {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0 var(--sp-1);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.hierarchy-guidance-progress-label {
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  font-family: var(--font-mono);
+}
+
+.hierarchy-guidance-progress-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.hierarchy-guidance-progress-track span {
+  height: 3px;
+  border-radius: var(--r-xs);
+  background: var(--panel-2);
+}
+
+.hierarchy-guidance-progress-track span.is-current {
+  background: var(--accent);
+}
+
+.hierarchy-guidance-step {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-height: 15rem;
+  padding: var(--sp-4) 0 var(--sp-2);
+}
+
+.hierarchy-guidance-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-md);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.hierarchy-guidance-copy {
+  min-width: 0;
+}
+
+.hierarchy-guidance-copy h3 {
+  margin: 0 0 var(--sp-2);
+  color: var(--text);
+  font-size: var(--fs-title);
+  line-height: 1.2;
+}
+
+.hierarchy-guidance-copy p {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.hierarchy-guidance-copy .hierarchy-guidance-detail {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+
+.hierarchy-guidance-footer {
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--sp-2);
+}
+
+.hierarchy-guidance-page {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+}
+
+@media (max-width: 560px) {
+  .hierarchy-guidance-dialog {
+    max-height: calc(100vh - 60px);
+  }
+
+  .hierarchy-guidance-step {
+    min-height: 12rem;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: var(--sp-2);
+  }
+
+  .hierarchy-guidance-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .hierarchy-guidance-footer {
+    flex-wrap: wrap;
+  }
+}

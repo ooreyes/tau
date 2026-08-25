@@ -987,6 +987,14 @@ describe("The modal editors are fetched only from default routes", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Sheet interface" }));
 
+    const guide = await screen.findByRole("dialog", { name: /Build a truthful boundary between schematics/ });
+    expect(within(guide).getByText("Save the sheet inside a project")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Sheet interface" })).toBeNull();
+    for (let index = 0; index < 4; index += 1) {
+      fireEvent.click(within(guide).getByRole("button", { name: "Next" }));
+    }
+    fireEvent.click(within(guide).getByRole("button", { name: "Start with Sheet interface" }));
+
     const dialog = await screen.findByRole("dialog", { name: "Sheet interface" });
     const group = within(dialog).getByRole("group", { name: "Sheet interface" });
 
