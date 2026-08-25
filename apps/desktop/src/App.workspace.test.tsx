@@ -992,14 +992,14 @@ describe("The modal editors are fetched only from default routes", () => {
 
     // No refusal note: nothing about this sheet's format stops it.
     expect(within(group).queryByRole("note")).toBeNull();
-    // The public contract is present, and it names the real authoring act:
-    // choose existing labels in terminal order rather than inventing ports.
+    // The public contract is present, and the selection-led copy names the
+    // real authoring act without presenting a duplicate candidate form.
     expect(within(group).getByText("Public contract")).toBeTruthy();
-    expect(within(group).getByText(/Mark existing net labels in terminal order/i)).toBeTruthy();
+    expect(within(group).getByText(/Each named net appears once\. Select a row, choose its direction/i)).toBeTruthy();
     // And because the sheet is empty, it says which step comes first rather than
     // presenting an empty list.
     expect(
-      within(dialog).getByText(/no named nets yet\. Label a net first, then mark it/i),
+      within(dialog).getByText(/no inputs or outputs marked yet\. Mark a net/i),
     ).toBeTruthy();
   });
 });
