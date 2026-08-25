@@ -241,4 +241,30 @@ describe("App project hierarchy execution", () => {
     expect(screen.getByRole("tab", { name: "DC sweep (.dc)" }).getAttribute("aria-selected")).toBe("true");
     expect((await screen.findAllByText(/did not return a family|native single-deck/i)).length).toBeGreaterThan(0);
   });
+
+  it("refreshes same-path project contents with a new tree identity", async () => {
+    const rootPath = `${DEFAULT_WORKSPACE_ID}/root.sim`;
+    const childPath = `${DEFAULT_WORKSPACE_ID}/child.asc`;
+    const rootFile = { path: rootPath, name: "root.sim", contents: JSON.stringify(rootDocument("ac")), kind: "sim" as const };
+    const childFile = { path: childPath, name: "child.asc", contents: "Version 4\nSHEET 1 880 680\nFLAG 80 80 VIN\nIOPIN 80 80 In\n", kind: "asc" as const };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([rootFile, childFile]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [rootPath]: rootFile, [childPath]: childFile },
+      error: null,
+      capability: "none",
+    });
+    const firstTree = useProject.getState().tree;
+    const updatedChild = { ...childFile, contents: `${childFile.contents}IOPIN 80 80 Out\n` };
+    useProject.setState({ workspaceFiles: { [rootPath]: rootFile, [childPath]: updatedChild } });
+
+    await expect(useProject.getState().refresh()).resolves.toBe(true);
+    expect(useProject.getState().tree).not.toBe(firstTree);
+    expect(useProject.getState().tree.flatMap((node) => node.children ?? [node]).map((node) => node.path)).toEqual(
+      expect.arrayContaining([rootPath, childPath]),
+    );
+    expect(useProject.getState().workspaceFiles[childPath].contents).toContain("IOPIN 80 80 Out");
+  });
 });

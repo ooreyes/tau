@@ -1161,7 +1161,11 @@ function App() {
     })();
 
     return () => { cancelled = true; };
-  }, [projectRootPath, projectFilePathSignature, projectInterfaceScanSignature]);
+  // Keep the tree identity as an explicit refresh revision. Explorer refresh
+  // can replace file contents while preserving every path; the path signature
+  // alone must not leave the interface index stale in that case. `projectTree`
+  // changes on refresh, but ordinary schematic edits never touch it.
+  }, [projectRootPath, projectTree, projectFilePathSignature, projectInterfaceScanSignature]);
 
   /*
    * Drift per linked instance, derived from that index.
