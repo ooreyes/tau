@@ -1,0 +1,162 @@
+/* Diagnostics are instrument readouts, not banners. Keep the semantic cue
+   compact and let the title, icon, and wording carry the state together. */
+.bottom-panel {
+  max-height: 220px;
+  background: var(--panel);
+  border-top: 1px solid var(--diagnostic-line);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.bottom-panel::before {
+  background: var(--diagnostic-line);
+}
+
+.bottom-panel.has-error .bottom-errors,
+.bottom-panel.has-warning .bottom-errors {
+  background: var(--panel);
+}
+
+.bottom-panel-head {
+  background: var(--panel);
+  border-bottom-color: var(--border-subtle);
+}
+
+button.bottom-panel-head:hover {
+  background: var(--overlay-hover-faint);
+}
+
+.bottom-panel-state {
+  background: var(--panel-2);
+  box-shadow: none;
+}
+
+.bottom-errors {
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+}
+
+.bottom-errors .error,
+.bottom-errors .warning {
+  border-radius: var(--r-md);
+  border-color: var(--diagnostic-line);
+  background: var(--panel-2);
+  box-shadow: none;
+  color: var(--text);
+}
+
+.bottom-error-row,
+.bottom-error-card {
+  min-width: 0;
+}
+
+.bottom-error-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "glyph severity title"
+    "glyph where next"
+    "details details details";
+  align-items: start;
+  gap: var(--sp-1) var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  color: var(--text);
+  text-align: left;
+}
+
+.bottom-error-card {
+  padding: 0;
+}
+
+.bottom-error-card .bottom-error-row {
+  border-radius: var(--r-md);
+}
+
+.bottom-error-row--actionable {
+  cursor: pointer;
+}
+
+.bottom-error-row--actionable:hover {
+  background: var(--overlay-hover-faint);
+}
+
+.bottom-error-row--actionable:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.bottom-error-glyph {
+  grid-area: glyph;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border-color: var(--diagnostic-line);
+  background: var(--panel-3);
+}
+
+.bottom-error-severity {
+  grid-area: severity;
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+}
+
+.bottom-error-title {
+  grid-area: title;
+  min-width: 0;
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bottom-error-where {
+  grid-area: where;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  overflow-wrap: anywhere;
+}
+
+.bottom-error-next-step {
+  grid-area: next;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  overflow-wrap: anywhere;
+}
+
+.bottom-error-details {
+  grid-area: details;
+  min-width: 0;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--sp-1);
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+
+.bottom-error-details summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.bottom-error-details summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.bottom-error-details code {
+  display: block;
+  margin-top: var(--sp-1);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-error-row--actionable {
+    transition: none;
+  }
+}

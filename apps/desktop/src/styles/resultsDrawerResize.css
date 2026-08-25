@@ -5,33 +5,46 @@
  * carries the shared `PanelResizeHandle` on its top edge; everything here is
  * the geometry that handle needs in THIS dock, and nothing else.
  *
- * Why the strip sits entirely ABOVE the drawer rather than straddling its
- * border, which is the usual trick: the head row is 34px tall and its controls
- * (the stop button, the size button - `size-7`, 28px) are centred in it, so a
- * hit area tall enough to satisfy the 24px floor would overlap them by ~10px
- * and steal the top of every click. An edge resizer's cost is a band of
- * ns-resize cursor; paying it outside the drawer costs a strip of canvas that
- * was already the drawer's own shadow, and paying it inside costs two buttons.
- *
- * The visible hairline stays ON the border (bottom of the strip) so the
- * affordance appears where the edge actually is - the shared rule anchors it to
- * the top of the strip, which here would be 28px adrift.
+ * The strip sits inside the drawer's structural edge. It is transparent at
+ * rest, and the head's actual controls remain clickable above it; empty gaps
+ * still provide the full 24px pointer and keyboard target. The visible
+ * hairline stays on the drawer border, where the edge actually is.
  */
 
 .results-drawer--dock-bottom > .panel-resize-handle--top {
   /* WCAG 2.2 SC 2.5.8 is a 24px floor; --control-hit is this app's scale for
      it, so the handle tracks the scale instead of hard-coding a number. */
   height: var(--control-hit);
-  top: calc(-1 * var(--control-hit));
+  top: 0;
   bottom: auto;
-  /* The strip is outside the drawer's box, so it has to out-paint whatever the
-     mode surface has under the drawer's shadow. Same 6 the shared rule uses. */
+  /* Keep the transparent hit band above the drawer contents. */
   z-index: 6;
 }
 
 .results-drawer--dock-bottom > .panel-resize-handle--top::after {
-  top: auto;
-  bottom: 0;
+  top: 0;
+  bottom: auto;
+}
+
+/* The bottom drawer is a structural edge, not a floating card. Keep its
+   visible edge flush with the canvas; the resize strip stays inside the box
+   and keeps the full token-sized hit target. */
+.results-drawer.results-drawer--dock-bottom,
+.results-drawer.results-drawer--dock-bottom > .results-drawer-head {
+  border-radius: 0;
+}
+
+/* The handle lives inside the structural edge now. Let the head's real
+   controls remain clickable above its transparent hit band while the empty
+   gaps still route pointer input to the separator. */
+.results-drawer.results-drawer--dock-bottom > .results-drawer-head {
+  position: relative;
+  z-index: 7;
+  pointer-events: none;
+}
+
+.results-drawer.results-drawer--dock-bottom > .results-drawer-head > * {
+  pointer-events: auto;
 }
 
 /* A live drag must track the pointer. `.results-drawer--dock-bottom` animates

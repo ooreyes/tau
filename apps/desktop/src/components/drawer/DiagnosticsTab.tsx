@@ -11,6 +11,15 @@
  * of the frozen shell contract and must survive the fold.
  */
 import { useEffect, useState } from "react";
+import {
+  ChevronDown,
+  CircleAlert,
+  CircleCheck,
+  CircleX,
+  LoaderCircle,
+  Minus,
+  TriangleAlert,
+} from "lucide-react";
 import type { RunOutcome } from "../../App";
 import type { DiagnosticFocusTarget, LiveDiagnostic } from "../../schematic/documentValidation";
 import {
@@ -19,6 +28,7 @@ import {
   useDiagnosticsSeverityPolicy,
   type DiagnosticsSeverityPolicy,
 } from "../../lib/diagnosticsHealth";
+import "../../styles/diagnosticsResults.css";
 
 /** Treat formatting-only engine/live wording changes as one diagnosis.
  * Engine output is authoritative and rendered first, so the document row is
@@ -259,6 +269,44 @@ function rowLocation(row: DiagnosticRow): string {
   return ORIGIN_LABEL[row.origin];
 }
 
+/** A short situation title turns raw engine prose into a glanceable card. */
+export function diagnosticSituationTitle(row: DiagnosticRow): string {
+  const message = row.message.trim();
+  if (/timestep too small|singular matrix|convergence/i.test(message)) {
+    return "The solver could not complete the analysis";
+  }
+  if (/no ground|ground reference/i.test(message)) {
+    return "The circuit has no ground reference";
+  }
+  if (/model .*not found|missing .*model|unknown model/i.test(message)) {
+    return "A device model is missing";
+  }
+  if (/project hierarchy|sheet .*linked|linked .*sheet/i.test(message)) {
+    return "The project hierarchy needs attention";
+  }
+  const subject = row.issue?.reference ?? row.issue?.net?.label;
+  if (subject) return `${subject} needs attention`;
+  const sentence = message.split(/[.!?](?:\s|$)/, 1)[0]?.trim() || "The circuit needs attention";
+  const concise = sentence.length > 72 ? `${sentence.slice(0, 69).trimEnd()}…` : sentence;
+  // Keep the source wording recognizable without repeating it verbatim in the
+  // collapsed card and technical disclosure.
+  return concise.endsWith(".") ? `${concise} Review required` : `${concise}.`;
+}
+
+/** One concrete next step keeps a diagnostic from becoming a dead-end card. */
+export function diagnosticNextStep(row: DiagnosticRow): string {
+  const target = row.issue ? focusTargetFor(row.issue) : undefined;
+  if (target?.kind === "component") return `Inspect ${target.reference}.`;
+  if (target?.kind === "net") return `Inspect net ${target.label ?? target.netId}.`;
+  if (/no ground|ground reference/i.test(row.message)) {
+    return "Add a ground reference, then run again.";
+  }
+  if (/timestep too small|singular matrix|convergence/i.test(row.message)) {
+    return "Check the affected source and component values, then run again.";
+  }
+  return "Review the reported source, then run again.";
+}
+
 export function BottomPanel({
   result,
   isRunning = false,
@@ -374,13 +422,11 @@ export function BottomPanel({
       {isRunning || isIdle || isClean ? (
         <div className="bottom-panel-head bottom-panel-head--static">
           <span className="bottom-panel-state" aria-hidden="true">
-            <svg viewBox="0 0 12 12">
-              {isRunning
-                ? <circle cx="6" cy="6" r="3.2" />
-                : isIdle
-                  ? <path d="M3 6h6" />
-                  : <path d="M2.3 6.3 4.8 8.8 9.8 3.5" />}
-            </svg>
+            {isRunning
+              ? <LoaderCircle size={12} strokeWidth={1.8} aria-hidden="true" />
+              : isIdle
+                ? <Minus size={12} strokeWidth={1.8} aria-hidden="true" />
+                : <CircleCheck size={12} strokeWidth={1.8} aria-hidden="true" />}
           </span>
           <span className="bottom-panel-title">Diagnostics</span>
           <span className="bottom-panel-clear" role="status">
@@ -405,17 +451,11 @@ export function BottomPanel({
           aria-expanded={panelExpanded}
           onClick={() => setOpen(!panelExpanded)}
         >
-          <svg className="bottom-panel-chevron" viewBox="0 0 12 12" aria-hidden="true">
-            <path d="M2.5 4.2 6 7.8l3.5-3.6" />
-          </svg>
+          <ChevronDown className="bottom-panel-chevron" size={13} strokeWidth={1.8} aria-hidden="true" />
           <span className="bottom-panel-state" aria-hidden="true">
-            <svg viewBox="0 0 12 12">
-              {hasError ? (
-                <path d="m4.2 4.2 3.6 3.6m0-3.6L4.2 7.8" />
-              ) : (
-                <path d="M6 1.8 10.4 10H1.6L6 1.8Zm0 2.9v2.5M6 8.7v.1" />
-              )}
-            </svg>
+            {hasError
+              ? <CircleX size={12} strokeWidth={1.8} aria-hidden="true" />
+              : <TriangleAlert size={12} strokeWidth={1.8} aria-hidden="true" />}
           </span>
           <span className="bottom-panel-title">{hasError ? "Errors" : "Warnings"}</span>
           <span
@@ -438,26 +478,30 @@ export function BottomPanel({
             can no longer open a window with nothing red in it. */}
         {rows.map((row) => {
           const isError = row.severity === "error";
+          const title = diagnosticSituationTitle(row);
+          const nextStep = diagnosticNextStep(row);
+          const Icon = isError ? CircleAlert : TriangleAlert;
+          const technicalDetails = (
+            <details className="bottom-error-details">
+              <summary>Technical details</summary>
+              <code className="bottom-error-message">{row.message}</code>
+            </details>
+          );
           const body = (
             <>
               <span className="bottom-error-glyph" aria-hidden="true">
-                <svg viewBox="0 0 12 12">
-                  {isError ? (
-                    <path d="m4.2 4.2 3.6 3.6m0-3.6L4.2 7.8" />
-                  ) : (
-                    <path d="M6 1.8 10.4 10H1.6L6 1.8Zm0 2.9v2.5M6 8.7v.1" />
-                  )}
-                </svg>
+                <Icon size={12} strokeWidth={1.8} aria-hidden="true" />
               </span>
               {/* Severity in words next to the glyph, because the colour is not
                   allowed to be the only carrier (DESIGN_SYSTEM.md) and because a
                   problem list the reader has to decode by hue is not a problem
                   list. Errors say so; warnings say so. */}
               <span className="bottom-error-severity">{isError ? "Error" : "Warning"}</span>
-              <span className="bottom-error-message">{row.message}</span>
+              <span className="bottom-error-title">{title}</span>
               {/* Where, in the terms this app has: the part, the net, or the
                   stage that reported it. A compiler's `file:line`. */}
               <span className="bottom-error-where mono-num">{rowLocation(row)}</span>
+              <span className="bottom-error-next-step">Next: {nextStep}</span>
             </>
           );
           const target = row.issue ? focusTargetFor(row.issue) : undefined;
@@ -474,16 +518,21 @@ export function BottomPanel({
               : undefined;
           if (onClick) {
             return (
-              <button
+              <div
                 key={row.id}
-                type="button"
-                className={`${isError ? "error" : "warning"} bottom-error-row bottom-error-row--actionable`}
-                aria-label={`${actionLabel}: ${row.message}`}
-                title={actionLabel}
-                onClick={onClick}
+                className={`${isError ? "error" : "warning"} bottom-error-card`}
               >
-                {body}
-              </button>
+                <button
+                  type="button"
+                  className="bottom-error-row bottom-error-row--actionable"
+                  aria-label={`${actionLabel}: ${row.message}`}
+                  title={actionLabel}
+                  onClick={onClick}
+                >
+                  {body}
+                </button>
+                {technicalDetails}
+              </div>
             );
           }
           return (
@@ -496,6 +545,7 @@ export function BottomPanel({
               role={row.announce ? "alert" : undefined}
             >
               {body}
+              {technicalDetails}
             </div>
           );
         })}

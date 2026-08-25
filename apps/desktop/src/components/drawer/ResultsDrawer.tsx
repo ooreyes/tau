@@ -131,6 +131,7 @@ import {
 
 export type DrawerHeight = "peek" | "half" | "full";
 export type DrawerTab = "waveforms" | "measurements" | "errors";
+export type DiagnosticsTabLabel = "Errors" | "Warnings" | "Issues";
 /** Which edge the drawer docks to. See "Which edge it docks to" above. */
 export type DrawerOrientation = "bottom" | "right";
 
@@ -216,6 +217,13 @@ export interface ResultsDrawerProps {
   errors?: ReactNode;
   errorBadge?: TabSpec["badge"];
   /**
+   * Truthful label for the diagnostics surface. A clean run has no label and
+   * therefore no diagnostics tab; a mixed result is an issue list rather than
+   * a misleading Errors heading. The badge tone remains the compatibility
+   * fallback for callers that only know the old count contract.
+   */
+  diagnosticsLabel?: DiagnosticsTabLabel;
+  /**
    * What the current mode wants the drawer to be showing, and how big.
    *
    * Not `initial*`: the drawer keeps its own tab and height, but entering the
@@ -286,6 +294,7 @@ export function ResultsDrawer({
   measurements = null,
   errors = null,
   errorBadge = null,
+  diagnosticsLabel,
   preferredTab = "waveforms",
   preferredHeight = "half",
   badgeRaiseKey,
@@ -298,10 +307,21 @@ export function ResultsDrawer({
   const [height, setHeight] = useState<DrawerHeight>(preferredHeight);
   const [tab, setTab] = useState<DrawerTab>(preferredTab);
 
+  const resolvedDiagnosticsLabel = diagnosticsLabel ?? (
+    errorBadge?.tone === "error" ? "Errors"
+      : errorBadge?.tone === "warning" ? "Warnings"
+        : "Issues"
+  );
+  const hasDiagnostics = errors !== null && (errorBadge !== null || diagnosticsLabel !== undefined);
   const specs: TabSpec[] = [
     { value: "waveforms", label: "Waveforms", content: waveforms },
     { value: "measurements", label: "Measurements", content: measurements },
-    { value: "errors", label: "Errors", content: errors, badge: errorBadge },
+    {
+      value: "errors",
+      label: resolvedDiagnosticsLabel,
+      content: hasDiagnostics ? errors : null,
+      badge: errorBadge,
+    },
   ];
   const offered = specs.filter((spec) => spec.content !== null);
   /**

@@ -56,6 +56,7 @@ function renderDrawer(overrides: Partial<Parameters<typeof ResultsDrawer>[0]> = 
       waveforms={<button type="button">Waveform control</button>}
       measurements={<div>Measurement rows</div>}
       errors={<div>Diagnostics</div>}
+      errorBadge={{ text: "1", tone: "error" }}
       {...overrides}
     />,
   );
@@ -103,7 +104,7 @@ describe("results drawer - the readout that survives a collapse", () => {
     // long it took, and that there are two things to look at.
     expect(screen.getByRole("status").textContent).toContain("Complete");
     expect(screen.getByRole("status").textContent).toContain("3001 samples");
-    expect(screen.getByRole("tab", { name: /Errors/ }).textContent).toContain("2");
+    expect(screen.getByRole("tab", { name: /Warnings/ }).textContent).toContain("2");
   });
 
   it("offers Stop only while a run is in flight", () => {
@@ -119,7 +120,7 @@ describe("results drawer - the readout that survives a collapse", () => {
 
 describe("results drawer - heights", () => {
   it("takes its body out of the accessibility tree at peek", () => {
-    renderDrawer({ preferredHeight: "peek" });
+    renderDrawer({ preferredHeight: "peek", errorBadge: null });
     // Not `toBeVisible`, and not "is it in the DOM": a translated-off-screen
     // panel passes both and is still fully exposed to a screen reader. What
     // has to be true is that nothing in there is reachable.
@@ -129,7 +130,7 @@ describe("results drawer - heights", () => {
   });
 
   it("cycles peek to half to full and back on its one control", () => {
-    renderDrawer({ preferredHeight: "peek" });
+    renderDrawer({ preferredHeight: "peek", errorBadge: null });
     const size = () => screen.getByRole("button", { name: /^Resize results/ });
 
     expect(size().getAttribute("aria-expanded")).toBe("false");
@@ -198,7 +199,7 @@ describe("results drawer - heights", () => {
     // The count is on the Errors tab either way. Yanking someone off their
     // plots mid-run to show a warning they can already see is worse.
     expect(shownBody()).toBe("Waveform control");
-    expect(screen.getByRole("tab", { name: /Errors/ }).textContent).toContain("2");
+    expect(screen.getByRole("tab", { name: /Warnings/ }).textContent).toContain("2");
   });
 
   it("stops yanking itself open when only the live edit count moved (P3-14)", () => {
@@ -261,12 +262,48 @@ describe("results drawer - heights", () => {
 });
 
 describe("results drawer - tabs", () => {
+  it("omits diagnostics from the accessibility tree when the result is clean", () => {
+    render(
+      <ResultsDrawer
+        status="complete"
+        waveforms={<div>Plots</div>}
+        errors={<div>No issues</div>}
+      />,
+    );
+    expect(screen.queryByRole("tab", { name: /Errors|Warnings|Issues/ })).toBeNull();
+    expect(screen.queryByText("No issues")).toBeNull();
+  });
+
+  it("names warning-only and mixed diagnostics truthfully", () => {
+    const { rerender } = render(
+      <ResultsDrawer
+        status="complete"
+        waveforms={<div>Plots</div>}
+        errors={<div>Warnings</div>}
+        errorBadge={{ text: "2", tone: "warning" }}
+      />,
+    );
+    expect(screen.getByRole("tab", { name: /^Warnings/ })).toBeTruthy();
+
+    rerender(
+      <ResultsDrawer
+        status="error"
+        waveforms={<div>Plots</div>}
+        errors={<div>Issues</div>}
+        diagnosticsLabel="Issues"
+        errorBadge={{ text: "3", tone: "error" }}
+      />,
+    );
+    expect(screen.getByRole("tab", { name: /^Issues/ })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: /^Errors/ })).toBeNull();
+  });
+
   it("shows one tab per surface that has something to show", () => {
     renderDrawer();
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "Waveforms",
       "Measurements",
-      "Errors",
+      "Errors1",
     ]);
   });
 
@@ -302,14 +339,20 @@ describe("results drawer - tabs", () => {
     // Leaving the simulator drops Waveforms. A stale `tab` would leave an
     // empty body under a tab strip that no longer contains it.
     rerender(
-      <ResultsDrawer status="complete" preferredHeight="half" waveforms={null} errors={<div>Diagnostics</div>} />,
+      <ResultsDrawer
+        status="complete"
+        preferredHeight="half"
+        waveforms={null}
+        errors={<div>Diagnostics</div>}
+        errorBadge={{ text: "1", tone: "error" }}
+      />,
     );
     expect(shownBody()).toBe("Diagnostics");
     // Moved with P3-14: what is left is one surface, so the strip goes away
     // entirely rather than shrinking to a single tab. Previously
     // `getAllByRole("tab")).toHaveLength(1)`.
     expect(screen.queryAllByRole("tab")).toHaveLength(0);
-    expect(screen.getByRole("heading", { name: "Errors" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^Errors/ })).toBeTruthy();
   });
 
   it("switches body with the tab", () => {
@@ -337,7 +380,7 @@ describe("results drawer - tabs", () => {
     // the strength of that badge has to do something. It used to move the
     // underline and nothing else.
     renderDrawer({ preferredHeight: "peek" });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Errors" }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /^Errors/ }), { button: 0 });
     expect(drawer().className).toContain("results-drawer--half");
     expect(shownBody()).toBe("Diagnostics");
   });
@@ -650,7 +693,7 @@ describe("results drawer - the top edge drags", () => {
   });
 
   it("keeps the body reachable while a drag overrides a peeked height", () => {
-    renderDrawer({ preferredHeight: "peek" });
+    renderDrawer({ preferredHeight: "peek", errorBadge: null });
     stubHeight(34);
     stubHost(900);
     fireEvent.pointerDown(handle(), { button: 0, clientY: 600, pointerId: 1 });
@@ -744,7 +787,7 @@ describe("results drawer - the drag handle's edges", () => {
     // because seeding ran first and unconditionally. On a PEEKED drawer that
     // was visible: the pixel height suppressed `collapsed` and the body
     // appeared, from a context-menu click that was never a gesture at all.
-    renderDrawer({ preferredHeight: "peek" });
+    renderDrawer({ preferredHeight: "peek", errorBadge: null });
     stubHeight(34);
     stubHost(900);
     expect(shownBody()).toBe("");
@@ -795,5 +838,20 @@ describe("results drawer - the drag handle's edges", () => {
       sources.some((src) => /import\s+"[^"]*resultsDrawerResize\.css"/.test(src)),
       "resultsDrawerResize.css is not imported anywhere that ships",
     ).toBe(true);
+  });
+
+  it("keeps the bottom edge flush instead of drawing a protruding card lip", () => {
+    const css = readFileSync(join(__dirname, "../../styles/resultsDrawerResize.css"), "utf8");
+    expect(css).toMatch(/\.results-drawer\.results-drawer--dock-bottom[\s\S]*border-radius:\s*0/);
+    expect(css).toContain("top: 0;");
+    expect(css).not.toContain("top: calc(-1 * var(--control-hit))");
+    expect(css).toContain("height: var(--control-hit)");
+
+    renderDrawer({ errorBadge: null });
+    const root = drawer();
+    const handle = screen.getByRole("separator", { name: /resize results drawer/i });
+    root.getBoundingClientRect = () => ({ top: 120, bottom: 600, height: 480 } as DOMRect);
+    handle.getBoundingClientRect = () => ({ top: 120, bottom: 144, height: 24 } as DOMRect);
+    expect(handle.getBoundingClientRect().top).toBeGreaterThanOrEqual(root.getBoundingClientRect().top);
   });
 });

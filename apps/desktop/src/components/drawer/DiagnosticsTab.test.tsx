@@ -2,7 +2,13 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BottomPanel, diagnosticMessageKey, mergeDiagnostics } from "./DiagnosticsTab";
+import {
+  BottomPanel,
+  diagnosticMessageKey,
+  diagnosticNextStep,
+  diagnosticSituationTitle,
+  mergeDiagnostics,
+} from "./DiagnosticsTab";
 import type { LiveDiagnostic } from "../../schematic/documentValidation";
 
 afterEach(() => cleanup());
@@ -137,6 +143,17 @@ describe("BottomPanel controlled disclosure (PDF-6 item 6)", () => {
 });
 
 describe("BottomPanel as a problem list (PDF-5 item 17)", () => {
+  it("uses a specific situation title, icon semantics, and expandable technical detail", () => {
+    const row = mergeDiagnostics(failedRun).rows[0];
+    expect(diagnosticSituationTitle(row)).toBe("The solver could not complete the analysis");
+    expect(diagnosticNextStep(row)).toContain("run again");
+
+    render(<BottomPanel result={failedRun} />);
+    expect(screen.getByText("The solver could not complete the analysis")).toBeTruthy();
+    expect(screen.getAllByText("Technical details")).toHaveLength(2);
+    expect(document.querySelector(".lucide-circle-alert")).toBeTruthy();
+  });
+
   it("orders errors before warnings whatever order they were produced in", () => {
     // The warning is produced first here (a live row precedes the run's failure
     // in nothing but wall-clock terms), so a list that simply concatenated its
