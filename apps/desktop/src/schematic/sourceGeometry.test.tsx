@@ -8,6 +8,14 @@ import {
   SYMBOL_BODY,
   valueLooksLikeSine,
 } from "./symbols";
+import {
+  SOURCE_CURRENT_ARROW_SEGMENTS,
+  SOURCE_CURRENT_PULSE_SEGMENTS,
+  SOURCE_VOLTAGE_PULSE_SEGMENTS,
+  sourceGroupClearance,
+  sourcePolaritySegments,
+  sourceSegmentsPath,
+} from "./sourceArtworkGeometry";
 import type { ComponentKind } from "./types";
 
 const SOURCE_KINDS = ["vsource", "vac", "isource", "iac", "vpulse"] as const;
@@ -41,6 +49,33 @@ describe("independent source geometry parity", () => {
     expect(vac).toContain("data-sine-glyph");
     expect(sineDc).toContain("data-sine-glyph");
     expect(plainDc).not.toContain("data-sine-glyph");
+  });
+
+  it("keeps pulse voltage artwork clear of polarity marks at both stroke weights", () => {
+    const marks = sourcePolaritySegments(8);
+    const centerlineClearance = sourceGroupClearance(SOURCE_VOLTAGE_PULSE_SEGMENTS, [
+      ...marks.positive,
+      ...marks.negative,
+    ]);
+    expect(centerlineClearance).toBeCloseTo(Math.sqrt(29), 6);
+    expect(centerlineClearance).toBeGreaterThanOrEqual(5);
+    expect(centerlineClearance - 1.55).toBeGreaterThan(0);
+    expect(centerlineClearance - 2.35).toBeGreaterThan(0);
+    const markup = renderToStaticMarkup(<svg><ComponentSymbol kind="vpulse" /></svg>);
+    expect(markup).toContain(sourceSegmentsPath(SOURCE_VOLTAGE_PULSE_SEGMENTS));
+  });
+
+  it("keeps current pulse artwork inside its circle and clear of the arrow", () => {
+    const centerlineClearance = sourceGroupClearance(SOURCE_CURRENT_PULSE_SEGMENTS, SOURCE_CURRENT_ARROW_SEGMENTS);
+    expect(centerlineClearance).toBe(4);
+    expect(centerlineClearance).toBeGreaterThanOrEqual(4);
+    expect(centerlineClearance - 1.55).toBeGreaterThan(0);
+    expect(centerlineClearance - 2.35).toBeGreaterThan(0);
+    for (const segment of SOURCE_CURRENT_PULSE_SEGMENTS) {
+      for (const point of [segment.a, segment.b]) {
+        expect(Math.hypot(point.x, point.y)).toBeLessThanOrEqual(SOURCE_CIRCLE_R);
+      }
+    }
   });
 });
 

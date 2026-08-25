@@ -13,6 +13,13 @@ import {
   gateComPoint,
   gateInputRows,
 } from "./symbolGeometry";
+import {
+  SOURCE_CURRENT_ARROW_SEGMENTS,
+  SOURCE_CURRENT_PULSE_SEGMENTS,
+  SOURCE_VOLTAGE_PULSE_SEGMENTS,
+  sourcePolaritySegments,
+  sourceSegmentsPath,
+} from "./sourceArtworkGeometry";
 
 // The terminal geometry these symbols are drawn around now lives in
 // `symbolGeometry.ts`, so `pins.ts` - and through it the whole netlist and
@@ -333,11 +340,11 @@ function VoltageSourceOutput() {
 
 /** Terminal-reference marks for every voltage-source waveform, not just DC. */
 function SourcePolarityMarks({ side = 0 }: { side?: number }) {
-  const x = side || 0;
+  const marks = sourcePolaritySegments(side);
   return (
     <>
-      <path data-polarity-mark="positive" d={`M ${x - 4} -7 H ${x + 4} M ${x} -11 V -3`} />
-      <path data-polarity-mark="negative" d={`M ${x - 4} 8 H ${x + 4}`} />
+      <path data-polarity-mark="positive" d={sourceSegmentsPath(marks.positive)} />
+      <path data-polarity-mark="negative" d={sourceSegmentsPath(marks.negative)} />
     </>
   );
 }
@@ -1115,9 +1122,9 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
             {/* The `vpulse` train raised clear of the arrow, on the same
                 baseline `iac` uses for its sine, so the two glyphs stack
                 without touching inside the r = 15 circle. */}
-            <path data-pulse-glyph="" d="M -10 -4 L -10 -12 L -2 -12 L -2 -4 L 6 -4 L 6 -12 L 10 -12" fill="none" />
-            <path data-current-arrow="shaft" d="M 0 -1 V 8" />
-            <path data-current-arrow="head" d="M -5 4 L 0 10 L 5 4" />
+            <path data-pulse-glyph="" d={sourceSegmentsPath(SOURCE_CURRENT_PULSE_SEGMENTS)} fill="none" />
+            <path data-current-arrow="shaft" d={sourceSegmentsPath(SOURCE_CURRENT_ARROW_SEGMENTS.slice(0, 1))} />
+            <path data-current-arrow="head" d={sourceSegmentsPath(SOURCE_CURRENT_ARROW_SEGMENTS.slice(1))} />
             <line x1={0} y1={r} x2={0} y2={pin} />
           </>
         );
@@ -1161,7 +1168,7 @@ function symbolArtwork(kind: ComponentKind, value?: string, imported = false, ca
           <line x1={0} y1={-pin} x2={0} y2={-r} />
           <circle cx={0} cy={0} r={r} />
           {/* pulse train: low-high-low-high */}
-          <path data-pulse-glyph="" d="M -10 5 L -10 -5 L -2 -5 L -2 5 L 6 5 L 6 -5 L 10 -5" />
+          <path data-pulse-glyph="" d={sourceSegmentsPath(SOURCE_VOLTAGE_PULSE_SEGMENTS)} />
           <SourcePolarityMarks side={8} />
           <line x1={0} y1={r} x2={0} y2={pin} />
         </>
