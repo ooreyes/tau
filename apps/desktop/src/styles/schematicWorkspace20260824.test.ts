@@ -24,6 +24,9 @@ describe("schematic workspace shell geometry", () => {
   it("keeps titlebar side clusters on the mode control's optical center line", () => {
     const toolbar = rule(".toolbar");
     expect(toolbar).toMatch(/grid-template-rows:\s*1fr/);
+    expect(rule(".toolbar::before")).toMatch(/grid-row:\s*1/);
+    expect(rule(".toolbar .titlebar-left")).toMatch(/grid-row:\s*1/);
+    expect(rule(".toolbar .titlebar-right")).toMatch(/grid-row:\s*1/);
     expect(rule(".toolbar .titlebar-left,\n.toolbar .titlebar-right")).toMatch(/align-self:\s*center/);
 
     // At the packaged 900×600 floor the mode toggle is 32px tall while the

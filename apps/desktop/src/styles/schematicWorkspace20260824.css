@@ -28,6 +28,7 @@
 .toolbar::before {
   content: "";
   grid-column: 2;
+  grid-row: 1;
   width: var(--schematic-mode-reserve);
   height: 1px;
   pointer-events: none;
@@ -47,11 +48,13 @@
 
 .toolbar .titlebar-left {
   grid-column: 1;
+  grid-row: 1;
   min-width: 0;
 }
 
 .toolbar .titlebar-right {
   grid-column: 3;
+  grid-row: 1;
   min-width: 0;
 }
 
