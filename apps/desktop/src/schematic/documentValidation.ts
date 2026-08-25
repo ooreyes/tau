@@ -1127,7 +1127,12 @@ export function liveSchematicDiagnostics(input: LiveDiagnosticsInput): LiveDiagn
   const components = input.components;
   const netLabels = input.netLabels ?? [];
   const foreignSymbols = input.ascForeignSymbols ?? [];
-  const linkedChild = input.isLinkedChild === true;
+  // Tau-native sheets carry `projectPorts`; imported LTspice children carry
+  // the same public contract as FLAG/IOPIN metadata on their net labels.
+  // Treat either durable marker as child context when callers do not have the
+  // project-wide relationship index available yet.
+  const linkedChild = input.isLinkedChild === true
+    || netLabels.some((label) => label.port !== undefined);
   // A sheet with no parts on it is not a broken circuit, it is an empty one.
   // Without this gate a brand-new untitled schematic opens shouting "No ground
   // symbol found." at someone who has not drawn anything yet.

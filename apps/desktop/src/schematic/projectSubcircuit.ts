@@ -1,4 +1,4 @@
-import type { ProjectSheetPort, ProjectSubcircuitLink, SchematicPortDirection } from "./types";
+import type { ProjectSheetPort, ProjectSubcircuitLink, SchematicComponent, SchematicPortDirection } from "./types";
 
 /** A sheet interface larger than this is not practical to render or inspect. */
 export const MAX_PROJECT_SUBCIRCUIT_PORTS = 64;
@@ -115,6 +115,25 @@ export function projectRelativeSheetPath(projectRoot: string, candidatePath: str
   if (!candidateKey.startsWith(`${rootKey}/`)) return null;
   const relative = candidate.slice(root.length + 1);
   return canonicalProjectSheetPath(relative);
+}
+
+/**
+ * Collect linked child paths from the project documents that are available to
+ * the shell. The parent document is the authoritative relationship record;
+ * the child need not be open (or carry a Tau-only `projectPorts` array).
+ */
+export function linkedProjectSheetPaths(
+  documents: readonly { document: { components: readonly SchematicComponent[] } }[],
+): Set<string> {
+  const paths = new Set<string>();
+  for (const entry of documents) {
+    for (const component of entry.document.components) {
+      const path = component.projectSubcircuit?.sheetPath;
+      const canonical = path ? canonicalProjectSheetPath(path) : null;
+      if (canonical) paths.add(canonical);
+    }
+  }
+  return paths;
 }
 
 /** Validation result suitable for an inspector/store without throwing. */

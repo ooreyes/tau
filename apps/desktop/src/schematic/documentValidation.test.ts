@@ -623,6 +623,16 @@ describe("live schematic diagnostics (P3-14)", () => {
     expect(codesOf(rows)).toContain("floating-pin");
   });
 
+  it("treats an imported IOPIN label as a public child interface", () => {
+    const rows = liveSchematicDiagnostics({
+      components: [resistor()],
+      wires: [],
+      netLabels: [{ id: "io-vin", x: 0, y: 0, text: "VIN", port: "In" }],
+    });
+    expect(codesOf(rows)).not.toContain("no-source");
+    expect(find(rows, "no-ground")?.severity).toBe("warning");
+  });
+
   it("flags a source whose terminals land on one net, and names the source", () => {
     const { components, wires } = soundCircuit();
     // A wire straight from V1's + terminal to its - terminal.

@@ -4,6 +4,7 @@ import {
   asciiFold,
   defaultProjectModelName,
   hasMatchingOrderedProjectPorts,
+  linkedProjectSheetPaths,
   MAX_PROJECT_SUBCIRCUIT_PORTS,
   orderedProjectSheetUses,
   projectSheetInterfaceDrift,
@@ -47,6 +48,28 @@ function sideFor(direction: SchematicPortDirection): PortSide {
 }
 
 describe("project sheet edge presentation", () => {
+  it("keeps a linked child classified after its parent tab closes", () => {
+    const childPaths = linkedProjectSheetPaths([{
+      document: {
+        components: [{
+          id: "x1",
+          kind: "subckt",
+          x: 0,
+          y: 0,
+          rotation: 0,
+          value: "Buck5V",
+          label: "X1",
+          projectSubcircuit: {
+            sheetPath: "children/Buck5V.asc",
+            model: "Buck5V",
+            ports: ["VIN", "VOUT"],
+          },
+        }],
+      },
+    }]);
+    expect(childPaths).toEqual(new Set(["children/Buck5V.asc"]));
+  });
+
   it("orders confirmed parent mappings by canonical path then reference", () => {
     expect(orderedProjectSheetUses([
       { sheetPath: "z/top.sim", reference: "X2" },

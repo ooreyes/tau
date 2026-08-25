@@ -30,6 +30,7 @@ import "./styles/pdf6Titlebar.css";
 import "./styles/schematicWorkspace20260824.css";
 import {
   canonicalProjectSheetPath,
+  linkedProjectSheetPaths,
   projectRelativeSheetPath as relativeSheetPath,
   projectSheetInterfaceDrift,
   type ProjectSheetInterfaceEntry,
@@ -189,6 +190,7 @@ import {
   blankAscText,
   blankSimJson,
   isAscFile,
+  isProjectFile,
   isSimFile,
   joinPath,
   remapMovedProjectPath,
@@ -1028,11 +1030,16 @@ function App() {
    * Tauri boundary - and a memo cannot await.
    */
   const [sheetInterfaceIndex, setSheetInterfaceIndex] = useState<readonly ProjectSheetInterfaceEntry[]>([]);
+  const [projectChildSheetPaths, setProjectChildSheetPaths] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
-    if (!projectRootPath) { setSheetInterfaceIndex([]); return; }
+    if (!projectRootPath) {
+      setSheetInterfaceIndex([]);
+      setProjectChildSheetPaths(new Set());
+      return;
+    }
     let cancelled = false;
-    const readSheet = useProject.getState().readSim;
+    const readSheet = readProjectText;
 
     const entryFor = (
       absolutePath: string,
@@ -1044,26 +1051,61 @@ function App() {
       if (!sheetPath) return null;
       const fileName = basename(absolutePath);
       if (unreadable) return { sheetPath, fileName, status: "unreadable", ports: [], reason: unreadable };
-      const ports = doc?.projectPorts ?? [];
+      const explicitPorts = doc?.projectPorts ?? [];
+      const ports = explicitPorts.length > 0
+        ? explicitPorts
+        : (doc?.netLabels ?? [])
+          .filter((label) => label.port !== undefined)
+          .map((label) => ({ name: label.text, labelId: label.id, direction: label.port! }));
       return ports.length > 0
         ? { sheetPath, fileName, status: "ok", ports }
         : { sheetPath, fileName, status: "no-interface", ports: [] };
     };
 
+    const parseProjectDocument = async (path: string, raw: string): Promise<SchematicDocument> => {
+      if (isAscFile(path)) {
+        const imported = await importProjectAsc(raw, {
+          sourcePath: path,
+          rootPath: projectRootPath,
+          readText: readProjectText,
+          pathExists: projectPathExists,
+        });
+        return validateSchematicDocument({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          directives: imported.directives,
+          textAnnotations: imported.textAnnotations,
+          ascShapes: imported.shapes,
+          ascDataFlags: imported.dataFlags,
+          ascForeignSymbols: imported.foreignSymbols,
+          ascHierarchicalBlocks: imported.hierarchicalBlocks,
+          ascSheet: imported.sheet,
+          probes: [],
+          ...(imported.modelLibraries.length > 0 ? { userModelLibraries: imported.modelLibraries } : {}),
+        });
+      }
+      return validateSchematicDocument(JSON.parse(raw) as unknown);
+    };
+
     void (async () => {
       const byPath = new Map<string, ProjectSheetInterfaceEntry>();
+      const documentsByPath = new Map<string, SchematicDocument>();
       // Open tabs first; a later disk read must not overwrite them.
       for (const tab of tabsRef.current) {
-        if (!tab.filePath || !isSimFile(tab.filePath)) continue;
+        if (!tab.filePath || !isProjectFile(tab.filePath)) continue;
         const doc = tab.id === activeId ? currentDocument : tab.doc ?? null;
         const entry = entryFor(tab.filePath, doc);
-        if (entry) byPath.set(entry.sheetPath, entry);
+        if (entry) {
+          byPath.set(entry.sheetPath, entry);
+          if (doc) documentsByPath.set(entry.sheetPath, doc);
+        }
       }
       const files: string[] = [];
       const walk = (nodes: readonly ProjectNode[]) => {
         for (const node of nodes) {
           if (node.kind === "dir") { walk(node.children ?? []); continue; }
-          if (isSimFile(node.name)) files.push(node.path);
+          if (isProjectFile(node.name)) files.push(node.path);
         }
       };
       walk(projectTree);
@@ -1074,19 +1116,28 @@ function App() {
         try {
           const raw = await readSheet(path);
           if (cancelled) return;
-          const entry = entryFor(path, validateSchematicDocument(JSON.parse(raw)));
-          if (entry) byPath.set(entry.sheetPath, entry);
+          const document = await parseProjectDocument(path, raw);
+          const entry = entryFor(path, document);
+          if (entry) {
+            byPath.set(entry.sheetPath, entry);
+            documentsByPath.set(entry.sheetPath, document);
+          }
         } catch (error) {
           if (cancelled) return;
           const entry = entryFor(path, null, error instanceof Error ? error.message : "This sheet could not be read.");
           if (entry) byPath.set(entry.sheetPath, entry);
         }
       }
-      if (!cancelled) setSheetInterfaceIndex([...byPath.values()]);
+      if (!cancelled) {
+        setSheetInterfaceIndex([...byPath.values()]);
+        setProjectChildSheetPaths(linkedProjectSheetPaths(
+          [...documentsByPath.values()].map((document) => ({ document })),
+        ));
+      }
     })();
 
     return () => { cancelled = true; };
-  }, [projectRootPath, projectTree, activeId, currentDocument]);
+  }, [projectRootPath, projectTree, activeId, currentDocument, tabs]);
 
   /*
    * Drift per linked instance, derived from that index.
@@ -1256,7 +1307,7 @@ function App() {
   const normalizedRoot = projectRootPath?.replace(/\\/g, "/").replace(/\/+$/, "") ?? null;
   const childSheetPaths = useMemo(() => {
     if (!projectRootPath) return new Set<string>();
-    const paths = new Set<string>();
+    const paths = new Set(projectChildSheetPaths);
     for (const tab of tabs) {
       const doc = tab.id === activeId ? currentDocument : tab.doc;
       if (!doc) continue;
@@ -1266,7 +1317,7 @@ function App() {
       }
     }
     return paths;
-  }, [activeId, currentDocument, projectRootPath, tabs]);
+  }, [activeId, currentDocument, projectChildSheetPaths, projectRootPath, tabs]);
   const visibleTabs = tabs
     .filter((tab) => {
       if (!normalizedRoot) return false;
@@ -1283,7 +1334,13 @@ function App() {
         : null;
       const tabDocument = tab.id === activeId ? currentDocument : tab.doc;
       const sheetRole: "root" | "child" | undefined = relative
-        ? (childSheetPaths.has(relative) || (tabDocument?.projectPorts?.length ?? 0) > 0 ? "child" : "root")
+        ? (
+          childSheetPaths.has(relative)
+          || (tabDocument?.projectPorts?.length ?? 0) > 0
+          || (tabDocument?.netLabels ?? []).some((label) => label.port !== undefined)
+            ? "child"
+            : "root"
+        )
         : undefined;
       return {
         ...tab,
@@ -1897,7 +1954,13 @@ function App() {
     // A public interface is the durable child-sheet marker. These sheets are
     // compiled through their parent and may intentionally omit a local source
     // (and, when the parent supplies reference, a local ground).
-    isLinkedChild: projectPorts.length > 0,
+    isLinkedChild: projectPorts.length > 0
+      || netLabels.some((label) => label.port !== undefined)
+      || Boolean(
+        projectRootPath
+        && activeFilePath
+        && projectChildSheetPaths.has(relativeSheetPath(projectRootPath, activeFilePath) ?? ""),
+      ),
     ...(components.length <= LIVE_DECK_PROBE_MAX_COMPONENTS
       ? {
         probeDeck: () => {
@@ -1916,7 +1979,8 @@ function App() {
       : {}),
   })), [
     mode, components, wires, netLabels, ascForeignSymbols, params, directives,
-    userModelLibraryTexts, userModelLibraryNames, nativeSchematic, projectHierarchyActive, projectPorts,
+    userModelLibraryTexts, userModelLibraryNames, nativeSchematic, projectHierarchyActive,
+    projectPorts, projectRootPath, activeFilePath, projectChildSheetPaths,
   ]);
 
   /**
