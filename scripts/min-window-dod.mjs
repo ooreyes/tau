@@ -38,6 +38,13 @@ const conf = JSON.parse(readFileSync(path.join(REPO_ROOT, "apps/desktop/src-taur
 const minW = conf.app.windows[0].minWidth;
 const minH = conf.app.windows[0].minHeight;
 
+/** Only these captures intentionally show a resting schematic with no tool
+ * feedback. Simulator, dialog, command, and future tool-feedback captures must
+ * keep the status bar visible and in the viewport. */
+export function isRestingSchematicScenario(label) {
+  return /^(?:empty|schematic|hierarchy-guide)-/.test(label);
+}
+
 async function waitForServer(url, timeoutMs = 45_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -96,7 +103,7 @@ async function ensureDevServer() {
 }
 
 async function audit(page, label) {
-  return page.evaluate((label) => {
+  return page.evaluate(([label, allowMissingStatusbar]) => {
     const vw = innerWidth;
     const vh = innerHeight;
     const docEl = document.documentElement;
@@ -230,9 +237,9 @@ async function audit(page, label) {
       unreachable: unreachable.slice(0, 20),
       essentials: {
         toolbar: inView(document.querySelector(".toolbar")),
-        // StatusBar intentionally returns null in a resting schematic; when
-        // present (simulator/tool feedback), it must remain in view.
-        statusbar: !document.querySelector(".statusbar") || inView(document.querySelector(".statusbar")),
+        // StatusBar intentionally returns null only in known resting
+        // schematic captures; every expected-feedback state requires it.
+        statusbar: allowMissingStatusbar || inView(document.querySelector(".statusbar")),
         run: inView(document.querySelector('button[aria-label="Run simulation"]')),
         settings: inView(document.querySelector('button[aria-label="Settings"]')),
       },
@@ -252,7 +259,7 @@ async function audit(page, label) {
       componentsRailOpen: Boolean(document.querySelector(".components-rail")),
       dialogGeom,
     };
-  }, label);
+  }, [label, isRestingSchematicScenario(label)]);
 }
 
 /**
@@ -464,7 +471,11 @@ async function main() {
   console.log("MIN-WINDOW-DOD: ok");
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const invokedDirectly = process.argv[1]
+  && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
