@@ -1,5 +1,38 @@
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-24 (run `schematic-ship-20260824-3`)**
+
+Unit: **Schematic ship-readiness: preventive hierarchy guidance, unmistakable
+tabs, replayable first-run tutorial, and collision-free pulse-source artwork.**
+The primary checkout remains the orchestrator on `auto/ltspice-parity`; Luna
+High workers own product-code changes in isolated local-only worktrees and Sol
+is the read-only `review-agent` closer.
+
+**Source:** Omar's four attached screenshots and the established
+`TAU_DESIGN_VISION.md` / `DESIGN_SYSTEM.md` / `REDESIGN.md` language. The first
+image proves an unsaved/detached project-linked root can still reach Run and
+surface an avoidable hierarchy-prerequisite error; the second and third demand
+stronger physical tab separation; the fourth proves the VPULSE waveform and
+polarity marks collide.
+
+**Acceptance:** project hierarchy prerequisites are prevented or repaired before
+Run rather than emitted as a surprise circuit error; the hierarchy control
+opens a medium, beautiful, keyboard-accessible first-use walkthrough with clear
+steps and a persistent replay entry; ROOT/CHILD and active/inactive tabs have
+clear token-based boundaries in both themes; every independent-source waveform
+has measured artwork clearance from polarity/current marks; and the whole
+schematic surface passes minimum-window, packaged-app, regression, accessibility,
+and Sol review gates.
+
+**Landed / proof / gates:** Pending.
+
+**Next step:** claim two disjoint Luna High lanes, integrate focused commits,
+then prove the result in browser and packaged desktop builds before Sol closure.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: DONE - 2026-08-24 (run `schematic-followup-20260824-2`)**
 
 Unit: **Schematic follow-up: diagnostics, titlebar alignment, sheet interfaces,

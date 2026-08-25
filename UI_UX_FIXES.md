@@ -8,6 +8,45 @@ Sources:
 - `/Users/omarreyes/Downloads/Untitled document.pdf` (2 pages)
 - `/Users/omarreyes/Downloads/edits-to-fix.pdf` (7 pages)
 
+## Schematic ship-readiness: prevention, tutorial, tabs, and symbols - 2026-08-24
+
+The active user-directed fleet run is `schematic-ship-20260824-3`. This section
+starts the `AGENTS.md` UI/UX fleet exception. The primary checkout owns the
+tracking files, integration, gates, and only remote push. Luna High workers own
+all product-code edits in isolated local-only worktrees; Sol performs the final
+read-only review under the `review-agent` contract.
+
+### Screenshot-backed acceptance
+
+- Prevent the screenshot's detached/unsaved hierarchy-prerequisite error from
+  reaching Diagnostics as a surprise after Run. Preserve fail-closed recursive
+  compilation: Tau may guide the user to save/open/reconnect the project, but it
+  may never flatten or approximate a linked sheet.
+- The first Sheet interface gesture opens a medium walkthrough, not the editor
+  immediately. It uses calm token-based hues and a clear step/progress model to
+  teach project setup, named nets, Input/Output/Bidirectional roles and order,
+  parent block mapping, and recursive Run. It is keyboard/screen-reader usable,
+  versioned in persistence, and replayable from the hierarchy surface.
+- Tabs have visible cell boundaries and spacing at rest; selection is readable
+  without relying only on a hairline or color. ROOT/CHILD and active/inactive
+  remain distinct in both themes at 900x600 and 1440x900.
+- VPULSE/clock artwork has quantified clearance between its waveform and `+/-`
+  marks at normal and selected stroke widths. The same regression gate checks
+  every independent-source waveform/mark combination, not only the screenshot.
+
+### Required proof
+
+Focused tests cover first-use/replay/persistence/tutorial navigation,
+hierarchy-run prevention and repair copy, tab semantics/style contracts, and
+source-glyph geometry. Then run desktop typecheck and full tests,
+design-system drift, web build, both-theme/minimum-window browser inspection,
+and a fresh packaged-app Computer Use pass. A Sol `review-agent` verdict of
+`No findings.` is required before DONE.
+
+### Status - IN PROGRESS
+
+Lanes and evidence pending.
+
 ## Schematic follow-up: diagnostics, net routing, chrome, and tabs - 2026-08-24
 
 The active user-directed fleet run is `schematic-followup-20260824-2`. This
