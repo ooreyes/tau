@@ -279,6 +279,12 @@ describe("EditorTabs - project sheet roles", () => {
     expect(root.querySelector(".tab-sheet-role")?.textContent).toBe("Root");
     expect(child.querySelector(".tab-sheet-role")?.textContent).toBe("Child");
     expect(child.getAttribute("aria-selected")).toBe("true");
+
+    const roleDescriptionRule = laneStyleRules().find(
+      (rule) => rule.selectorText === ".editor-tabs > .tab-sheet-role-a11y",
+    );
+    expect(roleDescriptionRule?.style.position).toBe("absolute");
+    expect(roleDescriptionRule?.style.clip).toBe("rect(0px, 0px, 0px, 0px)");
   });
 });
 
