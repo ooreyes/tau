@@ -705,6 +705,14 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     // the document store. Mirror that boundary here before checking the
     // post-commit wording; the first assertion above is intentionally the
     // pre-commit path.
+    useSchematic.setState({
+      wires: [],
+      netLabels: [
+        { id: "parent-in", x: -48, y: -16, text: "P_IN" },
+        { id: "parent-out", x: 48, y: 0, text: "P_OUT" },
+        { id: "parent-gnd", x: -48, y: 16, text: "P_GND" },
+      ],
+    });
     rerender(
       <ComponentInspector
         selected={useSchematic.getState().components[0]!}
@@ -714,6 +722,10 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     );
     expect(screen.getByText(/this parent block’s stored p1…pN order/i)).toBeTruthy();
     expect(screen.getByRole("list", { name: "Stored pin order" })).toBeTruthy();
+    const boundary = screen.getByRole("group", { name: "Confirmed sheet boundary" });
+    expect(boundary.textContent).toContain("IN");
+    expect(boundary.textContent).toContain("P_IN");
+    expect(boundary.textContent).toContain("↔");
 
     expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
       sheetPath: "child.sim",

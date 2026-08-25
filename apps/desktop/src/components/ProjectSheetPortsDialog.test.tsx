@@ -87,6 +87,42 @@ describe("ProjectSheetPortsEditor", () => {
     expect(screen.queryByRole("button", { name: /Mark OUT as/ })).toBeNull();
   });
 
+  it("uses one selectable net row as the source of truth for exposure and direction", () => {
+    render(<ProjectSheetPortsEditor />);
+
+    const inRow = screen.getByRole("button", { name: "Select IN" });
+    fireEvent.click(inRow);
+    expect(inRow.getAttribute("aria-selected")).toBe("true");
+    expect(inRow.getAttribute("aria-pressed")).toBe("false");
+    // Choosing the electrical role is the only gesture that authors a port.
+    fireEvent.click(screen.getByRole("button", { name: "Mark IN as an output" }));
+    expect(useSchematic.getState().projectPorts).toEqual([
+      { name: "IN", labelId: "in-label", direction: "Out" },
+    ]);
+    expect(screen.getByRole("button", { name: "Deselect IN" }).getAttribute("aria-pressed")).toBe("true");
+    const both = document.querySelector<HTMLButtonElement>('button[aria-label="Set IN as bidirectional"]');
+    expect(both?.getAttribute("aria-pressed")).toBe("false");
+    // The same row offers the direction update; no second candidate/form row exists.
+    expect(document.querySelectorAll(".project-sheet-net-list > li")).toHaveLength(2);
+    fireEvent.click(both!);
+    expect(useSchematic.getState().projectPorts[0]?.direction).toBe("BiDir");
+    fireEvent.click(screen.getByRole("button", { name: "Deselect IN" }));
+    expect(useSchematic.getState().projectPorts).toEqual([]);
+  });
+
+  it("keeps keyboard focus semantics on a selected net and exposes order controls", () => {
+    render(<ProjectSheetPortsEditor />);
+    const row = screen.getByRole("button", { name: "Select OUT" });
+    row.focus();
+    expect(document.activeElement).toBe(row);
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(row.getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Mark OUT as an output" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark IN as an input" }));
+    expect(screen.getByRole("button", { name: "Move port 1 up" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Move port 1 down" }).hasAttribute("disabled")).toBe(false);
+  });
+
   it("says in plain words that nothing is marked yet", () => {
     render(<ProjectSheetPortsEditor />);
     expect(screen.getByRole("status").textContent).toBe(

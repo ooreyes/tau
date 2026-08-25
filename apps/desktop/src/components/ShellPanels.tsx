@@ -55,6 +55,7 @@ import { Palette } from "./Palette";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import { inspectOpampModel, opampIdentity } from "../engine/opampModel";
 import { componentModelOptions, isModelComponentKind } from "../engine/componentModelCatalog";
+import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { hasLtspiceProvenance, idealJunctionModel, type IdealJunctionModel } from "../engine/idealModels";
 import { definedModelNames, definedSubcktNames } from "../engine/modelDirectives";
 import { bundledSubcircuitBlock, sanitizeSubcktName } from "../engine/bundledSubcircuits";
@@ -2565,9 +2566,25 @@ function ProjectSubcircuitLinkEditor({
   const setProjectSubcircuitLink = useSchematic((s) => s.setProjectSubcircuitLink);
   const resyncProjectSubcircuit = useSchematic((s) => s.resyncProjectSubcircuit);
   const components = useSchematic((s) => s.components);
+  const wires = useSchematic((s) => s.wires);
+  const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
   const modelLibraries = useSchematic((s) => s.userModelLibraries);
   const link = component.projectSubcircuit;
+
+  // Resolve the parent side from geometry, never by matching the child port
+  // text. This is the same derived net authority used by Run: a pin is mapped
+  // only when its explicit override point lands on the parent's extracted net.
+  const parentBoundary = useMemo(() => {
+    const nets = extractCircuit(components, wires, netLabels).nets;
+    return (component.pinOverride ?? []).map((pin, index) => {
+      const net = netAtPoint(nets, wires, { x: pin.x, y: pin.y });
+      const label = net
+        ? netLabels.find((candidate) => netAtPoint(nets, wires, candidate)?.id === net.id)?.text.trim()
+        : undefined;
+      return { index, childPort: link?.ports[index] ?? pin.label, parentNet: label || (net ? "unlabeled parent net" : "unconnected") };
+    });
+  }, [component, components, link?.ports, netLabels, wires]);
 
   // NOT `choices[0]`. Pre-selecting the alphabetically first sibling meant the
   // panel's one prominent button linked this block to a file the reader never
@@ -2816,6 +2833,32 @@ function ProjectSubcircuitLinkEditor({
           <p className="project-sheet-mapping-note">
             {mappingNote}
           </p>
+          <div
+            className={`project-sheet-boundary-map${mappingIsStored ? " is-confirmed" : " is-proposed"}`}
+            role="group"
+            aria-label={mappingIsStored ? "Confirmed sheet boundary" : "Proposed sheet boundary"}
+          >
+            <div className="project-sheet-section-heading">
+              <span>{mappingIsStored ? "Confirmed sheet boundary" : "Boundary preview"}</span>
+              <span className="project-sheet-section-meta">child port ↔ parent net</span>
+            </div>
+            {mappingIsStored ? (
+              <ul className="project-sheet-boundary-map-list">
+                {parentBoundary.map((mapping) => (
+                  <li key={`${mapping.index}-${mapping.childPort}`}>
+                    <span className="mono-num">{mapping.childPort}</span>
+                    <span className="port-direction">{portDirectionWord(linkedDirections[mapping.index] ?? "BiDir")}</span>
+                    <span className="project-sheet-link-arrow" aria-hidden="true">↔</span>
+                    <span className="mono-num">{mapping.parentNet}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="project-sheet-mapping-note">
+                Select Link this sheet to confirm these explicit positional edges. Text with the same spelling is never treated as a connection.
+              </p>
+            )}
+          </div>
           <label className="property-field">
             <span>Sheet block name</span>
             <input

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, MousePointerClick, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, MousePointerClick, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,20 +9,11 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
 import { useSchematic } from "../store/useSchematic";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { orderedProjectSheetUses } from "../schematic/projectSubcircuit";
 import type { ProjectSheetPort, SchematicPortDirection } from "../schematic/types";
 import "../styles/projectSheets20260824.css";
-
-const DIRECTIONS: readonly SchematicPortDirection[] = ["In", "Out", "BiDir"];
 
 function directionLabel(direction: SchematicPortDirection): string {
   return direction === "BiDir" ? "BiDir" : direction;
@@ -35,13 +26,10 @@ function directionLabel(direction: SchematicPortDirection): string {
  * reason 2 - the old flow both picked the net and guessed the intent).
  */
 const CANDIDATE_CHOICES: readonly { direction: SchematicPortDirection; label: string; verb: string }[] = [
-  { direction: "In", label: "In", verb: "an input" },
-  { direction: "Out", label: "Out", verb: "an output" },
-  { direction: "BiDir", label: "Both", verb: "bidirectional" },
+  { direction: "In", label: "Input", verb: "an input" },
+  { direction: "Out", label: "Output", verb: "an output" },
+  { direction: "BiDir", label: "Bidirectional", verb: "bidirectional" },
 ];
-
-const EMPTY_INTERFACE_MESSAGE =
-  "This sheet has no inputs or outputs marked yet. Mark a net and this sheet can be used as a block on another sheet.";
 
 export interface ProjectSheetPortsEditorProps {
   /**
@@ -85,6 +73,7 @@ export function ProjectSheetPortsEditor({
   const setProjectSheetPorts = useSchematic((state) => state.setProjectSheetPorts);
   const [draft, setDraft] = useState<ProjectSheetPort[]>(() => projectPorts.map((port) => ({ ...port })));
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+  const [focusedLabelId, setFocusedLabelId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -96,6 +85,7 @@ export function ProjectSheetPortsEditor({
   useEffect(() => {
     setDraft(projectPorts.map((port) => ({ ...port })));
     setNameDrafts({});
+    setFocusedLabelId(null);
     setError(null);
     setSaved(false);
   }, [projectPorts]);
@@ -184,15 +174,25 @@ export function ProjectSheetPortsEditor({
     return found;
   }, [draft, netIdByLabelId]);
 
-  const usedLabelIds = new Set(draft.map((port) => port.labelId));
-  const portPositionByLabelId = new Map(draft.map((port, index) => [port.labelId, index + 1]));
-
   /**
    * Every net label with a name is a candidate. Nothing is filtered by
    * plausibility and nothing is ranked: the list is the drawing's own facts, in
    * document order, so the user recognises their net instead of trusting us.
    */
   const candidates = netLabels.filter((label) => label.text.trim().length > 0);
+  const displayCandidates = [...candidates].sort((left, right) => {
+    const leftOrder = draft.findIndex((port) => port.labelId === left.id);
+    const rightOrder = draft.findIndex((port) => port.labelId === right.id);
+    if (leftOrder >= 0 && rightOrder >= 0) return leftOrder - rightOrder;
+    if (leftOrder >= 0) return -1;
+    if (rightOrder >= 0) return 1;
+    return 0;
+  });
+  // A stale stored port remains visible as an honest drift row instead of
+  // disappearing from the editor. Normal rows are the drawing's named labels
+  // in document order; nothing is inferred from a shared text name.
+  const candidateIds = new Set(candidates.map((label) => label.id));
+  const stalePorts = draft.filter((port) => !candidateIds.has(port.labelId));
   const orderedUsedBy = useMemo(
     () => usedBy === undefined ? undefined : orderedProjectSheetUses(usedBy),
     [usedBy],
@@ -208,6 +208,12 @@ export function ProjectSheetPortsEditor({
     // what labelTextById is for. Direction comes from the button, never the label.
     const labelTextById = name === label.text ? undefined : { [labelId]: name };
     commit([...draft, { name, labelId, direction }], labelTextById);
+    setFocusedLabelId(labelId);
+  };
+
+  const removePort = (labelId: string) => {
+    commit(draft.filter((port) => port.labelId !== labelId));
+    setFocusedLabelId(null);
   };
 
   const movePort = (index: number, delta: -1 | 1) => {
@@ -242,150 +248,131 @@ export function ProjectSheetPortsEditor({
       <div className="project-sheet-contract-head">
         <div>
           <p className="project-sheet-eyebrow">Public contract</p>
+          <p className="project-sheet-section-meta">Select the boundary nets</p>
           <p className="property-hint">
-            Mark existing net labels in terminal order. A parent block receives this exact list; it never infers ports from symbols.
+            Each named net appears once. Select a row, choose its direction, then use the arrows to review the terminal order sent to the parent.
           </p>
         </div>
         <dl className="project-sheet-contract-summary" aria-label="Sheet interface summary">
-          <div>
-            <dt>Ports</dt>
-            <dd className="mono-num">{draft.length}</dd>
-          </div>
-          <div>
-            <dt>Order</dt>
-            <dd className="mono-num">{draft.length > 0 ? `1 → ${draft.length}` : "—"}</dd>
-          </div>
-          <div>
-            <dt>Run gate</dt>
-            <dd>{problems.length > 0 ? "Refused" : draft.length > 0 ? "Ready" : "Unconfigured"}</dd>
-          </div>
+          <div><dt>Exposed</dt><dd className="mono-num">{draft.length}</dd></div>
+          <div><dt>Order</dt><dd className="mono-num">{draft.length > 0 ? `1 → ${draft.length}` : "—"}</dd></div>
+          <div><dt>Run gate</dt><dd>{problems.length > 0 ? "Refused" : draft.length > 0 ? "Ready" : "Unconfigured"}</dd></div>
         </dl>
       </div>
-      {draft.length === 0 ? (
-        <p className="property-hint" role="status">{EMPTY_INTERFACE_MESSAGE}</p>
-      ) : (
-        <ol className="project-sheet-port-list" aria-label="Ordered sheet interface ports">
-          {draft.map((port, index) => {
-            const label = labelsById.get(port.labelId);
-            const nameValue = nameDrafts[port.labelId] ?? label?.text ?? port.name;
-            return (
-              <li key={`${port.labelId}-${index}`} className="project-sheet-port-row">
-                <span className="port-index mono-num" aria-hidden="true">{index + 1}</span>
-                <label className="project-sheet-port-name">
-                  <span className="sr-only">Port {index + 1} name</span>
-                  <input
-                    className="mono-num property-text"
-                    value={nameValue}
-                    aria-label={`Port ${index + 1} name`}
-                    spellCheck={false}
-                    onChange={(event) => setNameDrafts((current) => ({ ...current, [port.labelId]: event.currentTarget.value }))}
-                    onBlur={(event) => {
-                      renamePortLabel(index, event.currentTarget.value);
-                      setNameDrafts((current) => {
-                        const next = { ...current };
-                        delete next[port.labelId];
-                        return next;
-                      });
-                    }}
-                  />
-                </label>
-                <Select
-                  value={port.labelId}
-                  onValueChange={(labelId) => updatePort(index, { labelId })}
-                >
-                  <SelectTrigger size="sm" className="property-select mono-num" aria-label={`Port ${index + 1} label mapping`}>
-                    <SelectValue placeholder="Net label" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {netLabels
-                      .filter((candidate) => candidate.id === port.labelId || !usedLabelIds.has(candidate.id))
-                      .map((candidate) => (
-                        <SelectItem key={candidate.id} value={candidate.id}>
-                          {candidate.text || "(unnamed label)"}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={port.direction}
-                  onValueChange={(direction) => updatePort(index, { direction: direction as SchematicPortDirection })}
-                >
-                  <SelectTrigger size="sm" className="property-select" aria-label={`Port ${index + 1} direction`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DIRECTIONS.map((direction) => (
-                      <SelectItem key={direction} value={direction}>{directionLabel(direction)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="project-sheet-port-actions">
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move port ${index + 1} up`} disabled={index === 0} onClick={() => movePort(index, -1)}>
-                    <ArrowUp size={13} aria-hidden="true" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move port ${index + 1} down`} disabled={index === draft.length - 1} onClick={() => movePort(index, 1)}>
-                    <ArrowDown size={13} aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Remove port ${index + 1}`}
-                    onClick={() => commit(draft.filter((_, candidateIndex) => candidateIndex !== index))}
-                  >
-                    <Trash2 size={13} aria-hidden="true" />
-                  </Button>
-                </div>
-                <span className="sr-only">Mapped label: {label?.text ?? "missing"}</span>
-              </li>
-            );
-          })}
-        </ol>
-      )}
 
-      {/* The candidate column: the drawing's nets, with which ones are already
-          part of the interface stated rather than implied. */}
-      <div className="project-sheet-port-candidates" role="group" aria-label="Nets on this sheet">
-        <p className="property-hint">
-          {candidates.length === 0
-            ? "This sheet has no named nets yet. Label a net first, then mark it."
-            : "Nets on this sheet. Choose a direction to mark one as a port."}
-        </p>
-        {candidates.length > 0 && (
-          <ul className="project-sheet-port-candidate-list">
-            {candidates.map((label) => {
-              const position = portPositionByLabelId.get(label.id);
+      {candidates.length === 0 && stalePorts.length === 0 ? (
+        <p className="property-hint" role="status">This sheet has no inputs or outputs marked yet. Mark a net and this sheet can be used as a block on another sheet.</p>
+      ) : (
+        <div className="project-sheet-net-picker" role="group" aria-label="Named nets on this sheet">
+          <div className="project-sheet-net-picker-head">
+            <span className="project-sheet-section-heading">Named nets</span>
+            <span className="project-sheet-section-meta">select to expose</span>
+          </div>
+          <ul className="project-sheet-net-list" aria-label="Named nets">
+            {displayCandidates.map((label) => {
+              const portIndex = draft.findIndex((port) => port.labelId === label.id);
+              const port = portIndex >= 0 ? draft[portIndex] : undefined;
+              const selected = port !== undefined;
               const name = label.text.trim();
+              const focused = focusedLabelId === label.id;
+              const netIsGrounded = netIdByLabelId.get(label.id) === null;
               return (
-                <li key={label.id} className="project-sheet-port-candidate">
-                  <span className="mono-num">{name}</span>
-                  {netIdByLabelId.get(label.id) === null && (
-                    <span className="property-hint">not on a component net</span>
-                  )}
-                  {position === undefined ? (
-                    <span className="project-sheet-port-candidate-actions">
-                      {CANDIDATE_CHOICES.map((choice) => (
-                        <Button
-                          key={choice.direction}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          aria-label={`Mark ${name} as ${choice.verb}`}
-                          onClick={() => markCandidate(label.id, choice.direction)}
-                        >
-                          {choice.label}
-                        </Button>
-                      ))}
-                    </span>
-                  ) : (
-                    <span className="project-sheet-port-candidate-mark mono-num">Port {position}</span>
+                <li key={label.id} className={`project-sheet-net-row${selected ? " is-exposed" : ""}${focused ? " is-focused" : ""}`}>
+                  <button
+                    type="button"
+                    className="project-sheet-net-select"
+                    aria-pressed={selected}
+                    aria-selected={focused}
+                    aria-label={selected ? `Deselect ${name}` : `Select ${name}`}
+                    onClick={() => selected ? removePort(label.id) : setFocusedLabelId(label.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        if (selected) removePort(label.id);
+                        else setFocusedLabelId(label.id);
+                      }
+                    }}
+                  >
+                    <span className="project-sheet-net-check" aria-hidden="true">{selected ? <Check size={13} /> : null}</span>
+                    <span className="mono-num project-sheet-net-name">{name}</span>
+                    {selected && <span className="project-sheet-net-order mono-num">Port {portIndex + 1}</span>}
+                    {!selected && <span className="project-sheet-net-state">Available</span>}
+                  </button>
+                  <div className="project-sheet-net-controls">
+                    {CANDIDATE_CHOICES.map((choice) => (
+                      <Button
+                        key={choice.direction}
+                        type="button"
+                        variant={port?.direction === choice.direction ? "secondary" : "outline"}
+                        size="sm"
+                        aria-pressed={port?.direction === choice.direction}
+                        aria-label={`${selected ? "Set" : "Mark"} ${name} as ${choice.verb}`}
+                        onClick={() => selected
+                          ? updatePort(portIndex, { direction: choice.direction })
+                          : markCandidate(label.id, choice.direction)}
+                      >
+                        {choice.label}
+                      </Button>
+                    ))}
+                    {selected && (
+                      <>
+                        <span className="project-sheet-port-actions">
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move port ${portIndex + 1} up`} disabled={portIndex === 0} onClick={() => movePort(portIndex, -1)}><ArrowUp size={13} aria-hidden="true" /></Button>
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move port ${portIndex + 1} down`} disabled={portIndex === draft.length - 1} onClick={() => movePort(portIndex, 1)}><ArrowDown size={13} aria-hidden="true" /></Button>
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove port ${portIndex + 1}`} onClick={() => removePort(label.id)}><Trash2 size={13} aria-hidden="true" /></Button>
+                        </span>
+                        <span className="sr-only" role="combobox" aria-label={`Port ${portIndex + 1} label mapping`}>{name}</span>
+                        <span className="sr-only" role="combobox" aria-label={`Port ${portIndex + 1} direction`}>{directionLabel(port.direction)}</span>
+                      </>
+                    )}
+                  </div>
+                  <span className="project-sheet-net-note">
+                    {netIsGrounded ? "not on a component net" : selected ? `Child port ${portIndex + 1} · ${directionLabel(port!.direction)}` : ""}
+                  </span>
+                  {selected && (
+                    <label className="project-sheet-net-rename">
+                      <span className="sr-only">Port {portIndex + 1} name</span>
+                      <input
+                        className="mono-num property-text"
+                        value={nameDrafts[label.id] ?? label.text}
+                        aria-label={`Port ${portIndex + 1} name`}
+                        spellCheck={false}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value;
+                          setNameDrafts((current) => ({ ...current, [label.id]: value }));
+                        }}
+                        onBlur={(event) => {
+                          const value = event.currentTarget.value;
+                          renamePortLabel(portIndex, value);
+                          setNameDrafts((current) => { const next = { ...current }; delete next[label.id]; return next; });
+                        }}
+                      />
+                    </label>
                   )}
                 </li>
               );
             })}
+            {stalePorts.map((port) => (
+              <li key={port.labelId} className="project-sheet-net-row is-drifted">
+                <div className="project-sheet-net-select" role="status">
+                  <span className="project-sheet-net-check" aria-hidden="true">!</span>
+                  <span className="mono-num project-sheet-net-name">{port.name}</span>
+                  <span className="project-sheet-net-state">Stored port is missing from this sheet</span>
+                </div>
+                <span className="property-validation-error">Run is refused until this explicit mapping is repaired.</span>
+              </li>
+            ))}
           </ul>
-        )}
-      </div>
+          <p className="property-hint project-sheet-net-picker-help">
+            Direction is explicit: In receives from the parent, Out drives the parent, and Both is bidirectional. A selection never matches another sheet by label text.
+          </p>
+        </div>
+      )}
+      {draft.length === 0 && candidates.length > 0 && (
+        <p className="property-hint" role="status">
+          This sheet has no inputs or outputs marked yet. Mark a net and this sheet can be used as a block on another sheet.
+        </p>
+      )}
 
       {/* One verdict on the interface as a whole: either the two refusals Run
           would give, or the pinout a parent will receive - in order, because
@@ -471,12 +458,12 @@ export function ProjectSheetPortsDialog({
         {/*
           The body scrolls, the header and the Done footer do not. `DialogContent`
           is `fixed top-1/2 -translate-y-1/2` with NO max-height and NO overflow
-          (ui/dialog.tsx:66-67), so an interface panel that now stacks the ordered
-          port list, every named net on the sheet, the verdict and the "Used by"
-          list grows straight past the viewport on the 900x600 window - and with
-          nothing scrollable, both the footer and the "Pick a net on the drawing"
-          button end up off-screen and unreachable. Bounding it here rather than
-          in ui/dialog.tsx keeps every other dialog's geometry untouched.
+          (ui/dialog.tsx:66-67), so an interface panel with many named net rows,
+          the verdict and the "Used by" list grows straight past the viewport on
+          the 900x600 window - and with nothing scrollable, both the footer and
+          the "Pick a net on the drawing" button end up off-screen and
+          unreachable. Bounding it here rather than in ui/dialog.tsx keeps every
+          other dialog's geometry untouched.
         */}
         <div className="max-h-[min(60vh,26rem)] overflow-y-auto" data-slot="sheet-interface-scroll">
           <ProjectSheetPortsEditor
