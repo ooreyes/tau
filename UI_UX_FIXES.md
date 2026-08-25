@@ -45,7 +45,13 @@ and a fresh packaged-app Computer Use pass. A Sol `review-agent` verdict of
 
 ### Status - IN PROGRESS
 
-Lanes and evidence pending.
+Geometry lane landed as `e362cbc`: source artwork now derives from measurable
+segments. VPULSE has 5.385 centreline / 3.035 selected-stroke clearance from
+the polarity marks; pulsed-current artwork has 4.0 centreline / 1.65 selected
+clearance from its arrow and remains inside the source body. Pins and simulation
+semantics are unchanged. Orchestrator reran the full desktop suite (5,159
+passed / 9 skipped), typecheck, and design-system drift. Guidance/tutorial/tab
+lane and packaged visual evidence remain pending.
 
 ## Schematic follow-up: diagnostics, net routing, chrome, and tabs - 2026-08-24
 

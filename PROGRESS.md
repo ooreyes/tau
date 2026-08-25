@@ -24,7 +24,12 @@ has measured artwork clearance from polarity/current marks; and the whole
 schematic surface passes minimum-window, packaged-app, regression, accessibility,
 and Sol review gates.
 
-**Landed / proof / gates:** Pending.
+**Landed / proof / gates:** Geometry lane `e362cbc` landed. VPULSE-to-polarity
+centerline clearance is `sqrt(29)` (~5.385), leaving 3.035 units of painted
+gap at the selected 2.35 stroke; current-pulse-to-arrow leaves 1.65 selected
+gap and remains inside the radius-15 source body. Orchestrator proof: full
+desktop suite **285 files / 5,159 passed / 9 skipped**, typecheck, and
+design-system drift clean. Guidance/tutorial/tab lane pending.
 
 **Next step:** claim two disjoint Luna High lanes, integrate focused commits,
 then prove the result in browser and packaged desktop builds before Sol closure.
