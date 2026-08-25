@@ -136,6 +136,28 @@ export function linkedProjectSheetPaths(
   return paths;
 }
 
+/**
+ * Stable invalidation key for the asynchronous project-interface index. Do
+ * not include geometry or ordinary component values: dragging a resistor must
+ * not re-import every closed `.asc` in the project. Hierarchy links and public
+ * port declarations are the only document fields that can change the index.
+ */
+export function projectInterfaceSignature(document: {
+  components: readonly SchematicComponent[];
+  netLabels?: readonly { id: string; x?: number; y?: number; text: string; port?: SchematicPortDirection }[];
+  projectPorts?: readonly ProjectSheetPort[];
+}): string {
+  return JSON.stringify({
+    links: document.components.flatMap((component) => component.projectSubcircuit
+      ? [{ id: component.id, link: component.projectSubcircuit }]
+      : []),
+    labels: (document.netLabels ?? [])
+      .filter((label) => label.port !== undefined)
+      .map((label) => ({ id: label.id, text: label.text, port: label.port })),
+    projectPorts: document.projectPorts ?? [],
+  });
+}
+
 /** Validation result suitable for an inspector/store without throwing. */
 export interface ProjectSubcircuitValidationResult {
   ok: boolean;

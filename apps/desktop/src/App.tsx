@@ -31,6 +31,7 @@ import "./styles/schematicWorkspace20260824.css";
 import {
   canonicalProjectSheetPath,
   linkedProjectSheetPaths,
+  projectInterfaceSignature,
   projectRelativeSheetPath as relativeSheetPath,
   projectSheetInterfaceDrift,
   type ProjectSheetInterfaceEntry,
@@ -1031,6 +1032,29 @@ function App() {
    */
   const [sheetInterfaceIndex, setSheetInterfaceIndex] = useState<readonly ProjectSheetInterfaceEntry[]>([]);
   const [projectChildSheetPaths, setProjectChildSheetPaths] = useState<ReadonlySet<string>>(new Set());
+  const projectInterfaceScanSignature = useMemo(() => JSON.stringify({
+    activeId,
+    tabs: tabs.map((tab) => ({
+      id: tab.id,
+      filePath: tab.filePath,
+      signature: tab.id === activeId
+        ? projectInterfaceSignature(currentDocument)
+        : tab.doc
+          ? projectInterfaceSignature(tab.doc)
+          : null,
+    })),
+  }), [activeId, currentDocument, tabs]);
+  const projectFilePathSignature = useMemo(() => {
+    const paths: string[] = [];
+    const walk = (nodes: readonly ProjectNode[]) => {
+      for (const node of nodes) {
+        if (node.kind === "dir") walk(node.children ?? []);
+        else if (isProjectFile(node.name)) paths.push(node.path);
+      }
+    };
+    walk(projectTree);
+    return JSON.stringify(paths.sort());
+  }, [projectTree]);
 
   useEffect(() => {
     if (!projectRootPath) {
@@ -1137,7 +1161,7 @@ function App() {
     })();
 
     return () => { cancelled = true; };
-  }, [projectRootPath, projectTree, activeId, currentDocument, tabs]);
+  }, [projectRootPath, projectFilePathSignature, projectInterfaceScanSignature]);
 
   /*
    * Drift per linked instance, derived from that index.

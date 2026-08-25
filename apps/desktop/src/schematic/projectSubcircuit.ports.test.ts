@@ -7,6 +7,7 @@ import {
   linkedProjectSheetPaths,
   MAX_PROJECT_SUBCIRCUIT_PORTS,
   orderedProjectSheetUses,
+  projectInterfaceSignature,
   projectSheetInterfaceDrift,
   projectSheetPortsValidation,
   PROJECT_SPICE_TOKEN,
@@ -48,6 +49,36 @@ function sideFor(direction: SchematicPortDirection): PortSide {
 }
 
 describe("project sheet edge presentation", () => {
+  it("ignores geometry edits but invalidates hierarchy and interface edits", () => {
+    const document = {
+      components: [{
+        id: "x1",
+        kind: "subckt" as const,
+        x: 0,
+        y: 0,
+        rotation: 0 as const,
+        value: "Buck5V",
+        label: "X1",
+        projectSubcircuit: { sheetPath: "children/Buck5V.asc", model: "Buck5V", ports: ["VIN", "VOUT"] },
+      }],
+      netLabels: [{ id: "vin", x: 0, y: 0, text: "VIN", port: "In" as const }],
+      projectPorts: [{ name: "VIN", labelId: "vin", direction: "In" as const }],
+    };
+    expect(projectInterfaceSignature(document)).toBe(projectInterfaceSignature({
+      ...document,
+      components: [{ ...document.components[0], x: 320, y: 96 }],
+      netLabels: [{ ...document.netLabels[0], x: 320, y: 96 }],
+    }));
+    expect(projectInterfaceSignature(document)).not.toBe(projectInterfaceSignature({
+      ...document,
+      components: [{ ...document.components[0], projectSubcircuit: { ...document.components[0].projectSubcircuit, sheetPath: "children/Other.asc" } }],
+    }));
+    expect(projectInterfaceSignature(document)).not.toBe(projectInterfaceSignature({
+      ...document,
+      netLabels: [{ ...document.netLabels[0], port: "Out" as const }],
+    }));
+  });
+
   it("keeps a linked child classified after its parent tab closes", () => {
     const childPaths = linkedProjectSheetPaths([{
       document: {
