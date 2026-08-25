@@ -1,0 +1,64 @@
+{
+  "app": "Tau",
+  "version": 1,
+  "savedAt": "2026-08-24T00:00:00.000Z",
+  "components": [
+    {
+      "id": "logic-input",
+      "kind": "logicConstant",
+      "x": 0,
+      "y": 0,
+      "rotation": 0,
+      "value": "0",
+      "label": "LOGIC_IN",
+      "pinOverride": [
+        { "id": "p", "label": "+", "x": 0, "y": 0 },
+        { "id": "n", "label": "-", "x": 0, "y": 64 }
+      ]
+    },
+    {
+      "id": "logic-buffer",
+      "kind": "digitalGate",
+      "x": 96,
+      "y": 0,
+      "rotation": 0,
+      "value": "buf Vhigh=5 Vlow=0 Vt=2.5 Inputs=1",
+      "label": "BUF_OUT",
+      "pinOverride": [
+        { "id": "in1", "label": "1", "x": 64, "y": 0 },
+        { "id": "q", "label": "Q", "x": 128, "y": 0 }
+      ]
+    },
+    {
+      "id": "logic-load",
+      "kind": "resistor",
+      "x": 160,
+      "y": 32,
+      "rotation": 0,
+      "value": "1k",
+      "label": "R_LOGIC_LOAD",
+      "pinOverride": [
+        { "id": "a", "label": "A", "x": 128, "y": 0 },
+        { "id": "b", "label": "B", "x": 128, "y": 64 }
+      ]
+    },
+    {
+      "id": "ground-digital",
+      "kind": "ground",
+      "x": 0,
+      "y": 64,
+      "rotation": 0,
+      "value": "",
+      "label": ""
+    }
+  ],
+  "wires": [
+    { "id": "wire-logic-gate", "points": [{ "x": 0, "y": 0 }, { "x": 64, "y": 0 }] },
+    { "id": "wire-logic-ground", "points": [{ "x": 0, "y": 64 }, { "x": 128, "y": 64 }] }
+  ],
+  "probes": [],
+  "netLabels": [
+    { "id": "logic-output", "x": 128, "y": 0, "text": "LOGIC_OUT" }
+  ],
+  "directives": [".tran 1m 20m"]
+}
