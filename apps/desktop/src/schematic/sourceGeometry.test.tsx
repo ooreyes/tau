@@ -14,6 +14,7 @@ import {
   SOURCE_VOLTAGE_PULSE_SEGMENTS,
   sourceGroupClearance,
   sourcePolaritySegments,
+  sourceSegmentCircleClearance,
   sourceSegmentsPath,
 } from "./sourceArtworkGeometry";
 import type { ComponentKind } from "./types";
@@ -51,6 +52,32 @@ describe("independent source geometry parity", () => {
     expect(plainDc).not.toContain("data-sine-glyph");
   });
 
+  it.each([
+    {
+      label: "DC voltage source",
+      kind: "vsource" as const,
+      value: "5",
+      expectedPath: "M -4 -7 L 4 -7 M 0 -11 L 0 -3",
+    },
+    {
+      label: "sine voltage source",
+      kind: "vsource" as const,
+      value: "SINE(0 1 1k)",
+      expectedPath: "M 4 -7 L 12 -7 M 8 -11 L 8 -3",
+    },
+    {
+      label: "pulse voltage source",
+      kind: "vpulse" as const,
+      value: undefined,
+      expectedPath: "M 4 -7 L 12 -7 M 8 -11 L 8 -3",
+    },
+  ])("renders a true + mark for $label", ({ kind, value, expectedPath }) => {
+    const markup = renderToStaticMarkup(<svg><ComponentSymbol kind={kind} value={value} /></svg>);
+    const positivePath = markup.match(/<path[^>]*data-polarity-mark="positive"[^>]*d="([^"]+)"/)?.[1];
+    expect(positivePath).toBe(expectedPath);
+    expect(positivePath).not.toContain("L 12 -7 L 8 -3");
+  });
+
   it("keeps pulse voltage artwork clear of polarity marks at both stroke weights", () => {
     const marks = sourcePolaritySegments(8);
     const centerlineClearance = sourceGroupClearance(SOURCE_VOLTAGE_PULSE_SEGMENTS, [
@@ -71,11 +98,47 @@ describe("independent source geometry parity", () => {
     expect(centerlineClearance).toBeGreaterThanOrEqual(4);
     expect(centerlineClearance - 1.55).toBeGreaterThan(0);
     expect(centerlineClearance - 2.35).toBeGreaterThan(0);
-    for (const segment of SOURCE_CURRENT_PULSE_SEGMENTS) {
-      for (const point of [segment.a, segment.b]) {
-        expect(Math.hypot(point.x, point.y)).toBeLessThanOrEqual(SOURCE_CIRCLE_R);
-      }
-    }
+    const normalGap = Math.min(
+      ...SOURCE_CURRENT_PULSE_SEGMENTS.map((segment) =>
+        sourceSegmentCircleClearance(segment, SOURCE_CIRCLE_R, 1.55),
+      ),
+    );
+    const selectedGap = Math.min(
+      ...SOURCE_CURRENT_PULSE_SEGMENTS.map((segment) =>
+        sourceSegmentCircleClearance(segment, SOURCE_CIRCLE_R, 2.35),
+      ),
+    );
+    expect(normalGap).toBeCloseTo(2.048, 3);
+    expect(selectedGap).toBeCloseTo(1.248, 3);
+    expect(selectedGap).toBeGreaterThan(0);
+  });
+
+  it("keeps every voltage-pulse segment clear of its circle at both stroke weights", () => {
+    const normalGap = Math.min(
+      ...SOURCE_VOLTAGE_PULSE_SEGMENTS.map((segment) =>
+        sourceSegmentCircleClearance(segment, SOURCE_CIRCLE_R, 1.55),
+      ),
+    );
+    const selectedGap = Math.min(
+      ...SOURCE_VOLTAGE_PULSE_SEGMENTS.map((segment) =>
+        sourceSegmentCircleClearance(segment, SOURCE_CIRCLE_R, 2.35),
+      ),
+    );
+    expect(normalGap).toBeCloseTo(2.27, 2);
+    expect(selectedGap).toBeCloseTo(1.47, 2);
+    expect(selectedGap).toBeGreaterThan(0);
+  });
+
+  it("keeps contiguous pulse and current-arrow paths intact in rendered artwork", () => {
+    const voltageMarkup = renderToStaticMarkup(<svg><ComponentSymbol kind="vpulse" /></svg>);
+    expect(voltageMarkup).toContain(`d="${sourceSegmentsPath(SOURCE_VOLTAGE_PULSE_SEGMENTS)}"`);
+
+    const currentMarkup = renderToStaticMarkup(
+      <svg><ComponentSymbol kind="isource" value="PULSE(0 1m 0 1n 1n 5u 10u)" /></svg>,
+    );
+    expect(currentMarkup).toContain(`d="${sourceSegmentsPath(SOURCE_CURRENT_PULSE_SEGMENTS)}"`);
+    expect(currentMarkup).toContain(`d="${sourceSegmentsPath(SOURCE_CURRENT_ARROW_SEGMENTS.slice(0, 1))}"`);
+    expect(currentMarkup).toContain(`d="${sourceSegmentsPath(SOURCE_CURRENT_ARROW_SEGMENTS.slice(1))}"`);
   });
 });
 

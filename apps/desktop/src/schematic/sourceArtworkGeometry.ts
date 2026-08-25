@@ -12,8 +12,8 @@ export interface SourceSegment {
 
 /** The voltage pulse is offset left so its top step cannot cross the + mark. */
 export const SOURCE_VOLTAGE_PULSE_SEGMENTS: readonly SourceSegment[] = [
-  { a: { x: -12, y: 5 }, b: { x: -12, y: -5 } },
-  { a: { x: -12, y: -5 }, b: { x: -8, y: -5 } },
+  { a: { x: -10, y: 5 }, b: { x: -10, y: -5 } },
+  { a: { x: -10, y: -5 }, b: { x: -8, y: -5 } },
   { a: { x: -8, y: -5 }, b: { x: -8, y: 5 } },
   { a: { x: -8, y: 5 }, b: { x: -4, y: 5 } },
   { a: { x: -4, y: 5 }, b: { x: -4, y: -5 } },
@@ -22,12 +22,12 @@ export const SOURCE_VOLTAGE_PULSE_SEGMENTS: readonly SourceSegment[] = [
 
 /** Current pulse remains centred; its arrow is moved down to y = 0. */
 export const SOURCE_CURRENT_PULSE_SEGMENTS: readonly SourceSegment[] = [
-  { a: { x: -9, y: -4 }, b: { x: -9, y: -11 } },
-  { a: { x: -9, y: -11 }, b: { x: -2, y: -11 } },
-  { a: { x: -2, y: -11 }, b: { x: -2, y: -4 } },
-  { a: { x: -2, y: -4 }, b: { x: 5, y: -4 } },
-  { a: { x: 5, y: -4 }, b: { x: 5, y: -11 } },
-  { a: { x: 5, y: -11 }, b: { x: 9, y: -11 } },
+  { a: { x: -7, y: -4 }, b: { x: -7, y: -9 } },
+  { a: { x: -7, y: -9 }, b: { x: -2, y: -9 } },
+  { a: { x: -2, y: -9 }, b: { x: -2, y: -4 } },
+  { a: { x: -2, y: -4 }, b: { x: 2, y: -4 } },
+  { a: { x: 2, y: -4 }, b: { x: 2, y: -9 } },
+  { a: { x: 2, y: -9 }, b: { x: 7, y: -9 } },
 ];
 
 export const SOURCE_CURRENT_ARROW_SEGMENTS: readonly SourceSegment[] = [
@@ -52,10 +52,30 @@ export function sourcePolaritySegments(side = 0): {
 export function sourceSegmentsPath(segments: readonly SourceSegment[]): string {
   const first = segments[0];
   if (!first) return "";
-  return [
-    `M ${first.a.x} ${first.a.y}`,
-    ...segments.flatMap((segment) => [`L ${segment.b.x} ${segment.b.y}`]),
-  ].join(" ");
+  const commands = [`M ${first.a.x} ${first.a.y}`];
+  let previous = first;
+  for (const segment of segments) {
+    if (segment !== first && (segment.a.x !== previous.b.x || segment.a.y !== previous.b.y)) {
+      commands.push(`M ${segment.a.x} ${segment.a.y}`);
+    }
+    commands.push(`L ${segment.b.x} ${segment.b.y}`);
+    previous = segment;
+  }
+  return commands.join(" ");
+}
+
+/**
+ * Clearance from a closed circular body to a painted segment. The farthest
+ * point of a straight segment from the origin is one of its endpoints, so the
+ * endpoint maximum is the exact segment-to-circle clearance rather than an
+ * endpoint-only approximation.
+ */
+export function sourceSegmentCircleClearance(
+  segment: SourceSegment,
+  radius: number,
+  strokeExpansion = 0,
+): number {
+  return radius - Math.max(Math.hypot(segment.a.x, segment.a.y), Math.hypot(segment.b.x, segment.b.y)) - strokeExpansion;
 }
 
 function cross(a: SourcePoint, b: SourcePoint, c: SourcePoint): number {
