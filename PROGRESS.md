@@ -1,6 +1,6 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-24 (run `schematic-ship-20260824-3`)**
+**Status: DONE - 2026-08-24 (run `schematic-ship-20260824-3`)**
 
 Unit: **Schematic ship-readiness: preventive hierarchy guidance, unmistakable
 tabs, replayable first-run tutorial, and collision-free pulse-source artwork.**
@@ -24,15 +24,61 @@ has measured artwork clearance from polarity/current marks; and the whole
 schematic surface passes minimum-window, packaged-app, regression, accessibility,
 and Sol review gates.
 
-**Landed / proof / gates:** Geometry lane `e362cbc` landed. VPULSE-to-polarity
-centerline clearance is `sqrt(29)` (~5.385), leaving 3.035 units of painted
-gap at the selected 2.35 stroke; current-pulse-to-arrow leaves 1.65 selected
-gap and remains inside the radius-15 source body. Orchestrator proof: full
-desktop suite **285 files / 5,159 passed / 9 skipped**, typecheck, and
-design-system drift clean. Guidance/tutorial/tab lane pending.
+**Landed / proof / gates:** Luna High product commits `e362cbc`, `483c7f6`,
+`225636e`, `e31e589`, and `18f1a5e` landed. The hierarchy entry now teaches
+and preflights project membership before every transient path; the five-step
+guide is versioned, replayable, focus-safe, storage-failure-safe, and opaque at
+900x600; tabs have separated cells plus ROOT/CHILD state; synchronous duplicate
+runs are admitted only once; and independent-source SVGs preserve disjoint
+strokes. Selected-stroke source-circle clearance is 1.47 units for voltage
+pulse and 1.25 for current pulse, with the plus/minus, arrow, and waveform
+relationships covered by renderer regressions.
 
-**Next step:** claim two disjoint Luna High lanes, integrate focused commits,
-then prove the result in browser and packaged desktop builds before Sol closure.
+**Proof:** desktop full suite **287 files / 5,170 passed / 9 skipped**, desktop
+typecheck, design-system drift, production web build, Rust fmt/clippy (`-D
+warnings`), and Rust tests **115 passed / 42 ignored** all passed. The strict
+minimum-window gate is **14/14 at 900x600** across light/dark, including the
+settled hierarchy guide; it now requires the status bar outside explicitly
+resting schematic captures. A fresh Tauri release produced `Tau.app` and
+`Tau_1.0.0_aarch64.dmg`; codesign verification, DMG checksum, and packaged
+ngspice smoke (**336 samples, 0..5 V**) passed. Native Computer Use verified
+the ROOT/CHILD tab cells, all five tutorial steps, explicit named-net
+Input/Output/Bidirectional surface, replay affordance, and collision-free
+VPULSE glyph. Final Sol `review-agent` verdict: **No findings.**
+
+**Next step:** proceed to the already-recorded simulation-tab remediation; the
+schematic ship-readiness unit is closed.
+
+---
+
+## 2026-08-24 - schematic ship-readiness prevention and first-use guidance
+
+**What I did:** integrated the Luna High hierarchy-guidance and source-artwork
+lanes, closed two Sol review cycles, strengthened the minimum-window gate, and
+verified the current unsigned package. First use now explains the actual
+project-sheet contract before exposing the editor; all transient callers share
+the same hierarchy prerequisite; completion can be replayed; modal focus and
+blocked storage fail safely; tabs are physical cells; and pulse-source artwork
+has geometry-level selected-stroke clearance.
+
+**Files:** `apps/desktop/src/App.tsx`,
+`apps/desktop/src/components/HierarchyGuidanceDialog.tsx`,
+`apps/desktop/src/lib/hierarchyGuidance.ts`,
+`apps/desktop/src/schematic/sourceArtworkGeometry.ts`, their focused tests,
+`apps/desktop/src/styles/hierarchyGuidance.css`, tab styles,
+`scripts/min-window-dod.mjs`, `scripts/min-window-dod.test.mjs`, and the
+both-theme minimum-window screenshots.
+
+**Tests:** desktop 5,170 passed / 9 skipped; 14/14 minimum-window captures;
+typecheck; design drift; web build; Rust fmt, clippy, and 115 tests; Tauri
+release build; codesign/DMG verification; packaged ngspice smoke; native
+Computer Use; final Sol review `No findings.`
+
+**Parity items:** closes the user-directed schematic UX unit without weakening
+recursive hierarchy or model fail-closed behavior. Named-device fidelity and
+broad differential parity remain the independent Definition-of-Done walls.
+
+**Next step:** simulation-tab remediation already documented below.
 
 ---
 

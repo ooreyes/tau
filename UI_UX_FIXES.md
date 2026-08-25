@@ -43,15 +43,26 @@ design-system drift, web build, both-theme/minimum-window browser inspection,
 and a fresh packaged-app Computer Use pass. A Sol `review-agent` verdict of
 `No findings.` is required before DONE.
 
-### Status - IN PROGRESS
+### Status - DONE
 
-Geometry lane landed as `e362cbc`: source artwork now derives from measurable
-segments. VPULSE has 5.385 centreline / 3.035 selected-stroke clearance from
-the polarity marks; pulsed-current artwork has 4.0 centreline / 1.65 selected
-clearance from its arrow and remains inside the source body. Pins and simulation
-semantics are unchanged. Orchestrator reran the full desktop suite (5,159
-passed / 9 skipped), typecheck, and design-system drift. Guidance/tutorial/tab
-lane and packaged visual evidence remain pending.
+Luna High commits `e362cbc`, `483c7f6`, `225636e`, `e31e589`, and `18f1a5e`
+landed. Hierarchy prerequisites now guard every transient entry, the first Sheet
+interface gesture opens a five-step versioned tutorial, completion is replayable,
+and focus/storage failures are covered. Tabs use separated bordered cells with
+active and ROOT/CHILD state. Source paths preserve independent SVG strokes; the
+true plus mark and every pulse/mark combination have renderer regressions, and
+selected-stroke source-circle clearance is 1.47 units (voltage) / 1.25 units
+(current) without changing pins or simulation semantics.
+
+The final strict minimum-window gate passed **14/14 at 900x600** in light and
+dark, including tutorial persistence/replay, single-modal/focus, opaque resting
+surface, overflow, and mandatory status-bar checks outside resting schematics.
+Desktop typecheck, design drift, production web build, full frontend suite
+**5,170 passed / 9 skipped**, Rust fmt/clippy/tests, fresh Tauri app/DMG build,
+codesign, DMG checksum, and packaged ngspice smoke passed. Native Computer Use
+verified the current tabs, all five tutorial steps, explicit named-net
+Input/Output/Bidirectional editor, and VPULSE clearance. Final Sol
+`review-agent` verdict: **No findings.**
 
 ## Schematic follow-up: diagnostics, net routing, chrome, and tabs - 2026-08-24
 
