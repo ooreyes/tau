@@ -21,7 +21,12 @@ function storage(): Storage | null {
 }
 
 export function readHierarchyGuidanceState(): HierarchyGuidanceState {
-  const raw = storage()?.getItem(HIERARCHY_GUIDANCE_KEY);
+  let raw: string | null = null;
+  try {
+    raw = storage()?.getItem(HIERARCHY_GUIDANCE_KEY) ?? null;
+  } catch {
+    return { ...DEFAULT_HIERARCHY_GUIDANCE_STATE };
+  }
   if (!raw) return { ...DEFAULT_HIERARCHY_GUIDANCE_STATE };
   try {
     const value = JSON.parse(raw) as Partial<HierarchyGuidanceState>;

@@ -62,10 +62,12 @@ export function HierarchyGuidanceDialog({
   open,
   onOpenChange,
   onStart,
+  onCloseAutoFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStart: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const [step, setStep] = useState(0);
   useEffect(() => {
@@ -82,7 +84,7 @@ export function HierarchyGuidanceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="hierarchy-guidance-dialog" showCloseButton>
+      <DialogContent className="hierarchy-guidance-dialog" showCloseButton onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <div className="hierarchy-guidance-kicker">Sheet interface guide</div>
           <DialogTitle>Build a truthful boundary between schematics</DialogTitle>

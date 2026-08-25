@@ -42,4 +42,12 @@ describe("hierarchy guidance preference", () => {
     resetHierarchyGuidance();
     expect(readHierarchyGuidanceState()).toEqual(DEFAULT_HIERARCHY_GUIDANCE_STATE);
   });
+
+  it("fails open when storage denies reads", () => {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: { getItem: () => { throw new DOMException("blocked", "SecurityError"); } },
+    });
+    expect(readHierarchyGuidanceState()).toEqual(DEFAULT_HIERARCHY_GUIDANCE_STATE);
+  });
 });

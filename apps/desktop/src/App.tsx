@@ -772,6 +772,7 @@ function App() {
   const [simulationSetupOpen, setSimulationSetupOpen] = useState(false);
   const [projectSheetPortsOpen, setProjectSheetPortsOpen] = useState(false);
   const [hierarchyGuidanceOpen, setHierarchyGuidanceOpen] = useState(false);
+  const hierarchyGuidanceOpenerRef = useRef<HTMLElement | null>(null);
   const paletteMounted = useMountedOnceOpened(paletteOpen);
   const simulationSetupMounted = useMountedOnceOpened(simulationSetupOpen);
   const projectSheetPortsMounted = useMountedOnceOpened(projectSheetPortsOpen);
@@ -1437,11 +1438,22 @@ function App() {
   }, []);
 
   const openSheetInterface = useCallback(() => {
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const toolbarButton = document.querySelector<HTMLElement>('.editor-toolbar button[aria-label="Sheet interface"]');
+    hierarchyGuidanceOpenerRef.current = active?.isConnected ? active : toolbarButton;
     if (!readHierarchyGuidanceState().completed) {
       setHierarchyGuidanceOpen(true);
       return;
     }
     setProjectSheetPortsOpen(true);
+  }, []);
+
+  const restoreHierarchyGuidanceFocus = useCallback((event: Event) => {
+    event.preventDefault();
+    const fallback = document.querySelector<HTMLElement>('.editor-toolbar button[aria-label="Sheet interface"]');
+    const opener = hierarchyGuidanceOpenerRef.current;
+    (opener?.isConnected ? opener : fallback)?.focus();
+    hierarchyGuidanceOpenerRef.current = null;
   }, []);
 
   /*
@@ -2240,6 +2252,7 @@ function App() {
   );
 
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
+    if (refuseProjectHierarchyRun()) return;
     if (!beginBoundedRun()) return;
     const requestId = ++analysisRequestRef.current;
     // The span that is actually on screen, which is not always the document's.
@@ -2326,7 +2339,7 @@ function App() {
       if (transientAbortRef.current === controller) transientAbortRef.current = null;
       endBoundedRun();
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive, beginBoundedRun, endBoundedRun]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice, assertCurrentSimulationIntegrity, assertProjectHierarchyCanRun, nativeSchematic, projectHierarchyActive, beginBoundedRun, endBoundedRun, refuseProjectHierarchyRun]);
 
   // Pre-run guard (Fix 3): a step count big enough to genuinely stall the UI
   // for a while gets a confirmation instead of launching silently. Native is
@@ -5253,6 +5266,7 @@ function App() {
             open={hierarchyGuidanceOpen}
             onOpenChange={setHierarchyGuidanceOpen}
             onStart={() => setProjectSheetPortsOpen(true)}
+            onCloseAutoFocus={restoreHierarchyGuidanceFocus}
           />
         )}
         {simulationSetupMounted && (
@@ -5265,6 +5279,7 @@ function App() {
             usedBy={sheetUsedBy}
             interfaceDisabledReason={sheetInterfaceDisabledReason ?? undefined}
             onReplayGuidance={() => {
+              hierarchyGuidanceOpenerRef.current = document.querySelector<HTMLElement>('.editor-toolbar button[aria-label="Sheet interface"]');
               setProjectSheetPortsOpen(false);
               setHierarchyGuidanceOpen(true);
             }}

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HierarchyGuidanceDialog } from "./HierarchyGuidanceDialog";
 import { HIERARCHY_GUIDANCE_KEY, resetHierarchyGuidance } from "../lib/hierarchyGuidance";
@@ -39,5 +40,33 @@ describe("HierarchyGuidanceDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start with Sheet interface" }));
     expect(onStart).toHaveBeenCalledOnce();
     expect(JSON.parse(localStorage.getItem(HIERARCHY_GUIDANCE_KEY) ?? "null")).toMatchObject({ completed: true });
+  });
+
+  it("returns focus to a connected opener when Escape or close dismisses the guide", async () => {
+    const opener = document.createElement("button");
+    opener.type = "button";
+    opener.textContent = "Sheet interface opener";
+    document.body.append(opener);
+    opener.focus();
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <HierarchyGuidanceDialog
+          open={open}
+          onOpenChange={setOpen}
+          onStart={vi.fn()}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            opener.focus();
+          }}
+        />
+      );
+    }
+    render(
+      <Harness />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    opener.remove();
   });
 });

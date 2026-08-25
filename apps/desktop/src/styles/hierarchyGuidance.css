@@ -1,7 +1,13 @@
-.hierarchy-guidance-dialog {
+[data-slot="dialog-content"].hierarchy-guidance-dialog {
   max-width: min(620px, calc(100vw - var(--sp-8)));
   max-height: min(80vh, 38rem);
   overflow-y: auto;
+  /* Teaching copy must be a solid elevated surface at the minimum window;
+     the dialog scrim is not a substitute for legible text/background contrast. */
+  background: var(--panel-4);
+  box-shadow: var(--elev-pop);
+  opacity: 1 !important;
+  animation: none;
 }
 
 .hierarchy-guidance-kicker {

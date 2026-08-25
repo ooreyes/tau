@@ -230,7 +230,9 @@ async function audit(page, label) {
       unreachable: unreachable.slice(0, 20),
       essentials: {
         toolbar: inView(document.querySelector(".toolbar")),
-        statusbar: inView(document.querySelector(".statusbar")),
+        // StatusBar intentionally returns null in a resting schematic; when
+        // present (simulator/tool feedback), it must remain in view.
+        statusbar: !document.querySelector(".statusbar") || inView(document.querySelector(".statusbar")),
         run: inView(document.querySelector('button[aria-label="Run simulation"]')),
         settings: inView(document.querySelector('button[aria-label="Settings"]')),
       },
@@ -284,6 +286,7 @@ async function main() {
       localStorage.setItem("tau.local-ai.setup.v1", JSON.stringify({ dismissed: true }));
       localStorage.removeItem("tau.unsaved.recovery.v1");
       localStorage.removeItem("tau.schematic.v1");
+      localStorage.removeItem("tau.hierarchy.guidance.v1");
     } catch {
       /* ignore */
     }
@@ -304,6 +307,7 @@ async function main() {
         localStorage.setItem("tau.local-ai.setup.v1", JSON.stringify({ dismissed: true }));
         localStorage.removeItem("tau.unsaved.recovery.v1");
         localStorage.removeItem("tau.schematic.v1");
+        localStorage.removeItem("tau.hierarchy.guidance.v1");
       }, theme);
       // Freeze JS-driven current-flow motion as well as CSS animation. This is
       // both a reduced-motion product check and a deterministic visual proof:
@@ -335,6 +339,66 @@ async function main() {
       await page.screenshot({ path: path.join(outDir, `schematic-panels-${theme}-${minW}x${minH}.png`) });
       reports.push(await audit(page, `schematic-panels-${theme}`));
 
+      // The first hierarchy affordance is a short guide, not a second editor
+      // form. Keep this proof on the same project-backed sheet used by the
+      // rest of the minimum-window scenarios so the project prerequisite and
+      // the 900×600 reachability claim are exercised together.
+      await page.locator('.editor-toolbar button[aria-label="Sheet interface"]').click();
+      const guide = page.getByRole("dialog", { name: /Build a truthful boundary between schematics/ });
+      await guide.waitFor({ state: "visible", timeout: 10_000 });
+      await page.waitForTimeout(180);
+      const guidePaint = await guide.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return { backgroundColor: style.backgroundColor, opacity: style.opacity };
+      });
+      if (guidePaint.opacity !== "1" || guidePaint.backgroundColor === "rgba(0, 0, 0, 0)") {
+        throw new Error(`hierarchy guide did not settle to an opaque surface: ${JSON.stringify(guidePaint)}`);
+      }
+      if (await page.getByRole("dialog", { name: "Sheet interface" }).count() !== 0) {
+        throw new Error("hierarchy guide opened on top of a Sheet interface dialog");
+      }
+      await page.screenshot({ path: path.join(outDir, `hierarchy-guide-${theme}-${minW}x${minH}.png`) });
+      reports.push(await audit(page, `hierarchy-guide-${theme}`));
+      for (let step = 0; step < 4; step += 1) {
+        await guide.getByRole("button", { name: "Next" }).click();
+      }
+      await guide.getByRole("button", { name: "Start with Sheet interface" }).click();
+      const sheetInterface = page.getByRole("dialog", { name: "Sheet interface" });
+      await sheetInterface.waitFor({ state: "visible", timeout: 10_000 });
+      const completion = await page.evaluate(() => {
+        try {
+          return JSON.parse(localStorage.getItem("tau.hierarchy.guidance.v1") ?? "null");
+        } catch {
+          return null;
+        }
+      });
+      if (completion?.kind !== "tau.hierarchy.guidance.v1" || completion?.completed !== true) {
+        throw new Error("hierarchy guide did not persist its versioned completion envelope");
+      }
+
+      // Replay closes the editor before opening the guide; there must never be
+      // two Radix modal focus scopes competing at the window floor.
+      await sheetInterface.getByRole("button", { name: "Replay sheet interface guide" }).click();
+      await sheetInterface.waitFor({ state: "detached", timeout: 10_000 });
+      await guide.waitFor({ state: "visible", timeout: 10_000 });
+      await page.waitForTimeout(150);
+      const modalState = await page.evaluate(() => {
+        const contents = [...document.querySelectorAll('[data-slot="dialog-content"]')];
+        const guideContent = contents.find((content) => content.textContent?.includes("Sheet interface guide"));
+        return {
+          dialogs: contents.length,
+          sheetDialogs: contents.filter((content) => content.textContent?.includes("Mark the nets this sheet exposes")).length,
+          focusInsideGuide: Boolean(guideContent && guideContent.contains(document.activeElement)),
+        };
+      });
+      if (modalState.dialogs !== 1 || modalState.sheetDialogs !== 0 || !modalState.focusInsideGuide) {
+        throw new Error(`hierarchy replay modal/focus contract failed: ${JSON.stringify(modalState)}`);
+      }
+      await guide.getByRole("button", { name: "Close" }).click();
+      await page.locator('.editor-toolbar button[aria-label="Sheet interface"]').click();
+      await page.getByRole("dialog", { name: "Sheet interface" }).waitFor({ state: "visible", timeout: 10_000 });
+      await page.getByRole("dialog", { name: "Sheet interface" }).getByRole("button", { name: "Done" }).click();
+
       await page.locator('button[aria-label="Run simulation"]').first().click();
       await page.waitForSelector(".app-simulator", { timeout: 15_000 });
       await page.waitForSelector(".scope-svg .scope-trace, .scope-shell", { timeout: 15_000 }).catch(() => {});
@@ -342,7 +406,7 @@ async function main() {
       await page.screenshot({ path: path.join(outDir, `simulator-${theme}-${minW}x${minH}.png`) });
       reports.push(await audit(page, `simulator-${theme}`));
 
-      await page.locator('.toolbar button[aria-label="Settings"]:visible').click();
+      await page.locator('.activity-rail button[aria-label="Settings"]:visible').click();
       await page.getByRole("dialog", { name: "Settings" }).waitFor({ state: "visible", timeout: 10_000 });
       await page.waitForTimeout(150);
       await page.screenshot({ path: path.join(outDir, `dialog-${theme}-${minW}x${minH}.png`) });

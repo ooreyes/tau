@@ -57,6 +57,25 @@
     "dialogGeom": null
   },
   {
+    "label": "hierarchy-guide-light",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": {
+      "clientW": 622,
+      "scrollW": 622,
+      "overflowX": false
+    },
+    "editorToolbarScrollable": true,
+    "componentsRailOpen": true,
+    "dialogGeom": null
+  },
+  {
     "label": "simulator-light",
     "pageOverflowX": false,
     "unreachable": [],
@@ -149,6 +168,25 @@
   },
   {
     "label": "schematic-panels-dark",
+    "pageOverflowX": false,
+    "unreachable": [],
+    "essentials": {
+      "toolbar": true,
+      "statusbar": true,
+      "run": true,
+      "settings": true
+    },
+    "editorShell": {
+      "clientW": 622,
+      "scrollW": 622,
+      "overflowX": false
+    },
+    "editorToolbarScrollable": true,
+    "componentsRailOpen": true,
+    "dialogGeom": null
+  },
+  {
+    "label": "hierarchy-guide-dark",
     "pageOverflowX": false,
     "unreachable": [],
     "essentials": {
