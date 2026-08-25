@@ -1,5 +1,38 @@
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-24 (run `simulation-ee-20260824-4`)**
+
+Unit: **Electrical-engineering simulator: remove the drawer lip, replace the
+empty/error experience, and make real live V/I/P/node instrumentation the
+primary workflow.** The primary checkout is the orchestrator on
+`auto/ltspice-parity`; Luna workers own product code in isolated worktrees and
+Sol is the read-only closure reviewer.
+
+**Source:** Omar's three current screenshots, the packaged simulator, the
+`ds-bundle` results/plot references, `TAU_DESIGN_VISION.md`, `DESIGN_SYSTEM.md`,
+and Apple's current watchOS, chart, color, feedback, writing, and alert guidance.
+The screenshots prove the rounded drawer protrusion, a dead “NO ANALYSIS YET ·
+Errors” strip, and an overpainted red error slab. Native inspection also proves
+that Live/Window transport exists but the idle results surface neither explains
+signals nor reads as a serious EE instrument.
+
+**Acceptance:** remove the protruding drawer lip; show no Errors tab for clean or
+not-yet-run states; replace idle, warning, and failure states with glanceable,
+specific, actionable status modules using semantic color plus icon/text; expose
+real transient/node-voltage/component-current/power signal selection and honest
+live run state; make switch and digital-input actuation visibly update live
+plots through packaged ngspice; close the six recorded simulation-review defects;
+and pass both-theme 900x600/1280x800/1440x900, accessibility, regression, native
+engine, packaged-app, and Sol gates.
+
+**Next step:** assign independent Luna lanes from the common integration tip for
+the results/diagnostics shell and the live EE instrumentation path, integrate
+one commit at a time, then run strict visual and packaged-native proof.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: DONE - 2026-08-24 (run `schematic-ship-20260824-3`)**
 
 Unit: **Schematic ship-readiness: preventive hierarchy guidance, unmistakable

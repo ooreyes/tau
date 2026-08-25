@@ -8,6 +8,64 @@ Sources:
 - `/Users/omarreyes/Downloads/Untitled document.pdf` (2 pages)
 - `/Users/omarreyes/Downloads/edits-to-fix.pdf` (7 pages)
 
+## Electrical-engineering simulator and live instrumentation - 2026-08-24
+
+Run `simulation-ee-20260824-4` activates the `AGENTS.md` UI/UX fleet exception.
+The orchestrator owns this tracker, `PROGRESS.md`, integration, gates, and the
+only push. Luna workers use unique local-only worktrees; Sol reviews read-only.
+
+### Screenshot-backed contract
+
+- Remove the rounded drawer protrusion shown in screenshot 1. The collapsed or
+  idle results surface must form one flush structural edge, not a floating lip.
+- A clean or never-run circuit must not offer an `Errors` tab. It gets a useful
+  prepared-instrument state with an honest status, available V/I/P/node signal
+  actions, and a direct next step.
+- Warning and failure surfaces use specific, actionable titles; compact semantic
+  status color; coherent outline icons; and calm opaque hierarchy. Never wash a
+  whole results region red, never headline the generic word `Error`, and never
+  rely on color alone.
+- Apply the Apple Watch principles that transfer to a desktop instrument:
+  glanceable single-screen status, shallow hierarchy, one or two targeted
+  gestures, material only to express hierarchy, and meaningful background color
+  only when it communicates state. Keep Tau's dense graph/data planes opaque.
+
+### Engineering behavior contract
+
+- Live and Window modes are first-class, mutually clear run modes. Live streams
+  real packaged-ngspice samples, reports Running/Paused/Stopped truthfully, and
+  retains stopped history without claiming it is still live.
+- Engineers can add node voltage, component current, and component power traces
+  from the circuit or results surface. Trace cards name the expression, unit,
+  engine, run state, and visible-window measurements.
+- Closing/opening an interactive switch and changing a digital input during Live
+  changes subsequent plotted samples through the existing native alter/resume
+  boundary. No fake animation, preview solver, or renderer-side substitution.
+- Remediate every finding already recorded under “Simulation deep review”:
+  global/local analysis agreement, analysis-scoped telemetry, measurement-only
+  results, stopped-live copy, dynamic diagnostics labels, and honest full-run vs
+  visible/settled peak-to-peak language.
+
+### Required proof
+
+Focused tests must prove live switch and digital actuation, V/I/P/node signal
+selection, run-state transitions, empty/clean/warning/error semantics, no lip,
+all six recorded findings, and keyboard/VoiceOver names. Then run desktop
+typecheck/full tests, design drift, web build, strict light/dark screenshots at
+900x600, 1280x800, and 1440x900, Rust/native real-ngspice tests, a fresh Tauri
+package, and Computer Use against that exact bundle. Sol must return `No
+findings.` before DONE.
+
+### Status - IN PROGRESS
+
+Current evidence captured from the packaged app: the idle simulator exposes
+`Waveforms` plus a selected `Errors` tab whose body says `No analysis yet`; the
+schematic drawer shows `NO ANALYSIS YET · Errors 1` beneath a rounded protruding
+resize control; and the failure state is a broad red slab. The underlying code
+already contains a native live worker, retention/drop accounting, live scope,
+switch actuation, and multiple analysis engines, so this run will expose and
+correct the real system rather than inventing a second simulator.
+
 ## Schematic ship-readiness: prevention, tutorial, tabs, and symbols - 2026-08-24
 
 The active user-directed fleet run is `schematic-ship-20260824-3`. This section
