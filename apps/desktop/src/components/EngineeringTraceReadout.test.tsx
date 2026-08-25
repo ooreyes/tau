@@ -60,4 +60,18 @@ describe("EngineeringTraceReadout", () => {
     );
     expect(container.innerHTML).toBe("");
   });
+
+  it("labels full-run and computes peak-to-peak for the visible window", () => {
+    render(
+      <EngineeringTraceReadout
+        trace={{ id: "out", label: "V(out)", unit: "V", values: [0, 4, 1] }}
+        times={[0, 1, 2]}
+        visibleWindow={{ tMin: 1, tMax: 2 }}
+      />,
+    );
+    const readout = screen.getByRole("region", { name: "V(out) engineering readout" });
+    expect(within(readout).getByTitle("Full run peak to peak")).toBeTruthy();
+    expect(within(readout).getByText("Peak-to-peak (visible window)")).toBeTruthy();
+    expect(within(readout).getByText("3 V")).toBeTruthy();
+  });
 });

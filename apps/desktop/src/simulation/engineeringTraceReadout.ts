@@ -1,5 +1,5 @@
 import type { Trace, TraceUnit } from "./linearTransient";
-import { classifySignal, noiseFloorForUnit, traceStatistics, type SignalClassification } from "./measurementModel";
+import { classifySignal, noiseFloorForUnit, traceStatistics, windowedTraceStatistics, type SignalClassification } from "./measurementModel";
 
 export interface TraceReadoutCursor {
   /** Cursor position on the trace's horizontal time axis. */
@@ -23,6 +23,7 @@ export interface EngineeringTraceReadoutModel {
   rms: number;
   final: number;
   peakToPeak: number;
+  visibleWindow?: { tMin: number; tMax: number; peakToPeak: number };
   classification: SignalClassification;
   frequency?: number;
   period?: number;
@@ -75,6 +76,7 @@ export function buildEngineeringTraceReadout(
   trace: Pick<Trace, "id" | "label" | "unit" | "values">,
   times: readonly number[],
   cursor?: TraceReadoutCursor,
+  visibleWindow?: { tMin: number; tMax: number },
 ): EngineeringTraceReadoutModel | null {
   const statistics = traceStatistics(times, trace.values);
   if (!statistics) return null;
@@ -83,6 +85,9 @@ export function buildEngineeringTraceReadout(
     ? Number.isFinite(cursor.value)
       ? cursor.value!
       : interpolateTraceValue(times, trace.values, cursor.time)
+    : null;
+  const visibleStats = visibleWindow
+    ? windowedTraceStatistics(times, trace.values, visibleWindow.tMin, visibleWindow.tMax)
     : null;
 
   return {
@@ -95,6 +100,9 @@ export function buildEngineeringTraceReadout(
     rms: statistics.rms,
     final: statistics.final,
     peakToPeak: statistics.max - statistics.min,
+    visibleWindow: visibleStats && visibleWindow
+      ? { tMin: visibleWindow.tMin, tMax: visibleWindow.tMax, peakToPeak: visibleStats.max - visibleStats.min }
+      : undefined,
     classification,
     frequency: classification.frequency,
     period: classification.period,

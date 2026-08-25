@@ -1,0 +1,44 @@
+.live-instrument-actions {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+}
+
+.live-instrument-actions__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  color: var(--text);
+}
+
+.live-instrument-actions__heading svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.live-instrument-actions h2,
+.live-instrument-actions p {
+  margin: 0;
+}
+
+.live-instrument-actions h2 {
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+.live-instrument-actions p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+}
+
+.live-instrument-actions__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}

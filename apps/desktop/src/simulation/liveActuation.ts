@@ -82,7 +82,7 @@ import {
 } from "../engine/nativeLive";
 import { parsePotentiometerSpec, potentiometerLegs } from "../engine/potentiometerSpec";
 import { NON_ACTUABLE, isActuable, isDraggableWiper } from "../schematic/actuation";
-import { isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchClosed } from "../schematic/kindGroups";
+import { isSpdtThrowToNo, isStaticContactClosed, isStaticSwitchClosed, logicConstantVolts } from "../schematic/kindGroups";
 import type { LiveControlForm } from "../schematic/liveControls";
 import type { SchematicComponent } from "../schematic/types";
 import { formatEngineering, parseQuantity } from "./quantity";
@@ -126,7 +126,7 @@ export const CONTACT_OPEN_OHMS = "1e12";
  * resistors, and the order Tau sends them in is the order the real part moves
  * in. See {@link planLiveActuation} for why that is not a stylistic choice.
  */
-export type LiveAlterStepRole = "contact" | "break" | "make" | "track";
+export type LiveAlterStepRole = "contact" | "break" | "make" | "track" | "binary";
 
 export interface LiveAlterStep {
   /** Branded, so it can only have come out of the deck. */
@@ -374,6 +374,47 @@ export function planLiveActuation(
       "not-in-deck",
       `This ${component.kind} has no reference designator, so Tau cannot tell which device in the running deck is its contact. Give it a name and run again.`,
     );
+  }
+
+  if (component.kind === "logicConstant") {
+    let current: number;
+    let next: number;
+    try {
+      current = logicConstantVolts(component.value);
+      next = logicConstantVolts(nextValue);
+    } catch {
+      return refuse(
+        id,
+        "unreadable-value",
+        `${name} is not a valid binary logic constant, so Tau will not guess what to send to the running circuit.`,
+      );
+    }
+    if (current === next) return { kind: "unchanged", controlId: id };
+    // Source labels follow the same ownership/sanitisation rules as the deck
+    // emitter: `LOGIC-1` becomes `VLOGIC_m1`, while `VLOGIC-1` owns the V
+    // prefix and becomes `VLOGIC_m1`. Resolve every emitter-compatible
+    // spelling against the actual deck; never issue an alter for a guess.
+    const instance = [name, safeName(name), `V${safeName(name)}`]
+      .map((candidate) => resolveLiveInstance(deck, candidate))
+      .find((candidate): candidate is LiveInstanceName => candidate !== null) ?? null;
+    if (instance === null) {
+      return refuse(
+        id,
+        "not-in-deck",
+        `The running circuit has no voltage source for ${name} — this run started from a different version of the sheet. Run again to operate it.`,
+      );
+    }
+    return {
+      kind: "alter",
+      plan: {
+        controlId: id,
+        name,
+        form: "binary",
+        nextValue: String(next),
+        steps: [{ instance, value: String(next), role: "binary", subject: `${name} logic level` }],
+        intermediate: null,
+      },
+    };
   }
 
   return wiper

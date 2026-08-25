@@ -112,6 +112,9 @@ export interface LiveChannelRequest {
   vector: string;
   label: string;
   unit?: string;
+  componentId?: string;
+  powerRole?: "positive" | "negative" | "current";
+  hidden?: boolean;
 }
 
 export interface LiveStartRequest {
@@ -356,6 +359,9 @@ export function useLiveRun({
       index,
       label: channel.label,
       ...(channel.unit === undefined ? {} : { unit: channel.unit }),
+      ...(channel.componentId === undefined ? {} : { componentId: channel.componentId }),
+      ...(channel.powerRole === undefined ? {} : { powerRole: channel.powerRole }),
+      ...(channel.hidden === undefined ? {} : { hidden: channel.hidden }),
     })));
     setRetention(null);
     setTimeWindow(followingWindow(DEFAULT_LIVE_SPAN_SECONDS));

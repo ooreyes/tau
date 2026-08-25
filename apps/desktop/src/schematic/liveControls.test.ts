@@ -40,7 +40,7 @@ describe("isInteractiveSchematic", () => {
   });
 
   it("counts every hand-operable kind, and only those", () => {
-    for (const kind of ["switch", "pushButton", "spdt", "potentiometer"] as const) {
+    for (const kind of ["switch", "pushButton", "spdt", "potentiometer", "logicConstant"] as const) {
       expect(isInteractiveSchematic([part(kind, "")])).toBe(true);
     }
   });
@@ -90,6 +90,12 @@ describe("liveControls", () => {
       gesture: "drag",
       position: "62%",
     });
+    expect(liveControls([part("logicConstant", "1", "LOGIC-1")])[0]).toMatchObject({
+      form: "binary",
+      gesture: "toggle",
+      position: "1 · HIGH",
+    });
+    expect(liveControls([part("logicConstant", "0", "LOGIC-1")])[0].position).toBe("0 · LOW");
   });
 
   it("reports a centred wiper as 50% and its end stops as 0% and 100%", () => {

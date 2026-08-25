@@ -337,7 +337,7 @@ export function classifySignal(
   return { kind: "transient" };
 }
 
-const TERMINAL_PAIRS: ReadonlyArray<readonly [string, string]> = [
+export const TERMINAL_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["a", "b"],
   ["a", "k"],
   ["p", "n"],
@@ -348,7 +348,7 @@ const TERMINAL_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["q", "com"],
 ];
 
-function terminalPair(pins: Record<string, string>): readonly [string, string] | null {
+export function terminalPair(pins: Record<string, string>): readonly [string, string] | null {
   for (const [positive, negative] of TERMINAL_PAIRS) {
     if (pins[positive] !== undefined && pins[negative] !== undefined) return [pins[positive], pins[negative]];
   }

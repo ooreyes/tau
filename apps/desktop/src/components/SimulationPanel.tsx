@@ -182,6 +182,7 @@ import type { Viewport } from "../simulation/plotViewport";
 import { probeTraceOwners, visibleTransientTraces } from "../simulation/visibleTraces";
 import { AxisLimitFields } from "./AxisLimitFields";
 import { EngineeringTraceReadout } from "./EngineeringTraceReadout";
+import { LiveInstrumentActions } from "./LiveInstrumentActions";
 import { traceStatistics, windowedTraceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
 import { ENGINE_DESCRIPTIONS, ENGINE_LABELS, type EngineProvenance } from "../simulation/engineProvenance";
@@ -232,6 +233,8 @@ interface SimulationPanelProps {
   /** Active tab path when the schematic is disk-backed. */
   circuitFilePath?: string | null;
   isRunning: boolean;
+  /** True while the native continuous session owns the transport. */
+  liveRunning?: boolean;
   /** Fraction in [0, 1] while the web TS transient solver is reporting real
    *  progress; null before the first callback and for the whole run when
    *  native ngspice handles it (no progress channel - App.tsx/executeTransient
@@ -346,11 +349,14 @@ export function SimulationPanel({
   onStepSetupUiChange,
   onSchematicReadoutTime,
   liveSchematicPlayback = true,
+  liveRunning = false,
 }: SimulationPanelProps) {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const probes = useSchematic((s) => s.probes);
   const clearProbes = useSchematic((s) => s.clearProbes);
+  const startProbing = useSchematic((s) => s.startProbing);
+  const startAmmeter = useSchematic((s) => s.startAmmeter);
   const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
@@ -1219,6 +1225,14 @@ export function SimulationPanel({
           </Tooltip>
         )}
       </div>
+
+      {!activeResult && !isRunning && !liveRunning && (
+        <LiveInstrumentActions
+          onProbeNode={startProbing}
+          onMeasureCurrent={startAmmeter}
+          onInspectPower={startAmmeter}
+        />
+      )}
 
       {/*
         * The lamp and the state word moved to the drawer head, which is the
@@ -2461,6 +2475,7 @@ export function WaveformPlot({
                           <EngineeringTraceReadout
                             trace={{ ...trace, label: displayLabel }}
                             times={success ? success.times : []}
+                            visibleWindow={success ? { tMin: sharedX.xMin, tMax: sharedX.xMax } : undefined}
                             cursor={(() => {
                               if (!selected || !cursors || !cursorTool?.activeCursor) return undefined;
                               const time = cursorTool.activeCursor === "c1" ? cursors.x1 : cursors.x2;

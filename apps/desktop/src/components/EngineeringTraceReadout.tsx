@@ -10,6 +10,7 @@ export interface EngineeringTraceReadoutProps {
   trace: Pick<Trace, "id" | "label" | "unit" | "values">;
   times: readonly number[];
   cursor?: TraceReadoutCursor;
+  visibleWindow?: { tMin: number; tMax: number };
   /** Optional accessible name when the surrounding pane supplies more context. */
   ariaLabel?: string;
   className?: string;
@@ -57,10 +58,11 @@ export function EngineeringTraceReadout({
   trace,
   times,
   cursor,
+  visibleWindow,
   ariaLabel,
   className = "",
 }: EngineeringTraceReadoutProps) {
-  const model = buildEngineeringTraceReadout(trace, times, cursor);
+  const model = buildEngineeringTraceReadout(trace, times, cursor, visibleWindow);
   if (!model) return null;
   const value = (measurement: number) => formatEngineering(measurement, model.unit, 3);
   const periodic = model.classification.kind === "periodic";
@@ -83,7 +85,14 @@ export function EngineeringTraceReadout({
           value={value(primaryValue)}
           title={periodic ? "Root mean square" : "Final finite sample"}
         />
-        <ReadoutItem label="Peak-to-peak" value={value(model.peakToPeak)} title="Peak to peak" />
+        <ReadoutItem label="Peak-to-peak" value={value(model.peakToPeak)} title="Full run peak to peak" />
+        {model.visibleWindow && (
+          <ReadoutItem
+            label="Peak-to-peak (visible window)"
+            value={value(model.visibleWindow.peakToPeak)}
+            title={`Visible window ${model.visibleWindow.tMin}–${model.visibleWindow.tMax}`}
+          />
+        )}
         {model.frequency !== undefined && (
           <ReadoutItem label="Frequency" value={formatEngineering(model.frequency, "Hz", 3)} title="Estimated frequency" />
         )}

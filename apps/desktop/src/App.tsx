@@ -228,6 +228,8 @@ import { useSimulationPreferences } from "./lib/simulationPreferences";
 import { SHELL, SHELL_SEPARATORS, inspectorName } from "./components/shellContract";
 import { RunTransport } from "./components/RunTransport";
 import { LiveScopePane } from "./components/LiveScopePane";
+import { LivePowerPane } from "./components/LivePowerPane";
+import { orientedPowerPair } from "./simulation/livePower";
 import { useLiveRun, type LiveChannelRequest } from "./components/useLiveRun";
 import { formatSeconds, type LiveRunStatus } from "./simulation/liveRun";
 import { buildSpiceDeck, unresolvedSubcktMessage } from "./engine/spiceNetlist";
@@ -400,16 +402,56 @@ export function liveScopeChannelRequests(
   nets: readonly { id: string; isGround: boolean; pins: readonly { componentLabel: string }[] }[],
   probedNetIds: ReadonlySet<string>,
   limit: number = LIVE_MAX_CHANNELS,
+  probedBranches: readonly LiveChannelRequest[] = [],
 ): { channels: LiveChannelRequest[]; omitted: number } {
   const plottable = nets.filter((net) => !net.isGround);
   const probed = (net: { id: string }) => probedNetIds.has(net.id.toLowerCase());
-  const ordered = [...plottable.filter(probed), ...plottable.filter((net) => !probed(net))];
-  const channels = ordered.slice(0, Math.max(0, limit)).map((net) => ({
-    vector: `v(${net.id})`,
-    label: `V(${friendlyNetName(net)})`,
-    unit: "V",
-  }));
-  return { channels, omitted: ordered.length - channels.length };
+  const orderedNets = [...plottable.filter(probed), ...plottable.filter((net) => !probed(net))];
+  const grouped = new Map<string, LiveChannelRequest[]>();
+  const ungrouped: LiveChannelRequest[] = [];
+  for (const request of probedBranches) {
+    if (!request.componentId || !request.powerRole) {
+      ungrouped.push(request);
+      continue;
+    }
+    const group = grouped.get(request.componentId) ?? [];
+    group.push(request);
+    grouped.set(request.componentId, group);
+  }
+  const atomicGroups: LiveChannelRequest[][] = [];
+  const incompleteGroups: LiveChannelRequest[] = [];
+  let omitted = 0;
+  for (const group of grouped.values()) {
+    const roles = new Set(group.map((request) => request.powerRole));
+    if (roles.has("current") && roles.has("positive") && roles.has("negative")) atomicGroups.push(group);
+    else incompleteGroups.push(...group);
+  }
+  const orderedSingles = [
+    ...ungrouped,
+    ...incompleteGroups,
+    ...orderedNets.map((net) => ({
+      vector: `v(${net.id})`,
+      label: `V(${friendlyNetName(net)})`,
+      unit: "V",
+    })),
+  ];
+  const channels: LiveChannelRequest[] = [];
+  const cap = Math.max(0, limit);
+  for (const group of atomicGroups) {
+    if (channels.length + group.length > cap) {
+      omitted += group.length;
+      continue;
+    }
+    channels.push(...group);
+  }
+  for (const request of orderedSingles) {
+    if (channels.length >= cap) {
+      omitted += 1;
+      continue;
+    }
+    channels.push(request);
+  }
+  return { channels, omitted };
 }
 
 /**
@@ -1829,8 +1871,8 @@ function App() {
   // Tracks the transient result specifically - it's the only analysis kind
   // with per-timestep node/branch data to derive component readings from.
   const componentRows = useMemo<ComponentMeasurement[]>(
-    () => (analysis?.ok ? componentMeasurements(analysis) : []),
-    [analysis],
+    () => (lastRunKind === "tran" && analysis?.ok ? componentMeasurements(analysis) : []),
+    [analysis, lastRunKind],
   );
 
   /**
@@ -2437,7 +2479,50 @@ function App() {
     const probedNetIds = new Set(
       probes.map((probe) => probe.netId?.toLowerCase()).filter((id): id is string => Boolean(id)),
     );
-    const { channels, omitted } = liveScopeChannelRequests(deck.circuit.nets, probedNetIds);
+    const currentProbeIds = new Set(
+      probes.map((probe) => probe.componentId).filter((id): id is string => Boolean(id)),
+    );
+    // The deck's deviceCurrents list is authoritative. Passive R/C currents
+    // and semiconductor terminal currents do not share one `i(ref)` spelling;
+    // asking for a guessed branch can silently show the wrong vector (or no
+    // vector at all). Only publish an ammeter channel when the emitter saved
+    // the exact vector for this component.
+    const currentVectors = new Map(
+      deck.deviceCurrents
+        .filter((device) => !device.terminal && currentProbeIds.has(device.componentId))
+        .map((device) => [device.componentId, device.vector] as const),
+    );
+    const currentChannels: LiveChannelRequest[] = deck.circuit.components
+      .filter(({ component }) => currentProbeIds.has(component.id) && currentVectors.has(component.id))
+      .map(({ component }) => ({
+        vector: currentVectors.get(component.id)!,
+        label: `I(${component.label || component.id})`,
+        unit: "A",
+        componentId: component.id,
+        ...(orientedPowerPair(deck.circuit.components.find((entry) => entry.component.id === component.id)?.pins ?? {})
+          ? { powerRole: "current" as const }
+          : {}),
+      }));
+    const unsupportedCurrentCount = [...currentProbeIds].filter((id) => !currentVectors.has(id)).length;
+    if (unsupportedCurrentCount > 0) {
+      showNotice(`${unsupportedCurrentCount} selected component current${unsupportedCurrentCount === 1 ? " is" : "s are"} not published by this deck; Tau will not guess a branch vector. Use a voltage probe or a bounded run for that part.`);
+    }
+    const powerVoltageChannels: LiveChannelRequest[] = [];
+    for (const { component, pins } of deck.circuit.components) {
+      if (!currentProbeIds.has(component.id) || !currentVectors.has(component.id)) continue;
+      const pair = orientedPowerPair(pins);
+      if (!pair) continue;
+      powerVoltageChannels.push(
+        { vector: `v(${pair[0]})`, label: `V+(${component.label || component.id})`, unit: "V", componentId: component.id, powerRole: "positive", hidden: true },
+        { vector: `v(${pair[1]})`, label: `V-(${component.label || component.id})`, unit: "V", componentId: component.id, powerRole: "negative", hidden: true },
+      );
+    }
+    const { channels, omitted } = liveScopeChannelRequests(
+      deck.circuit.nets,
+      probedNetIds,
+      LIVE_MAX_CHANNELS,
+      [...currentChannels, ...powerVoltageChannels],
+    );
     if (channels.length === 0) {
       showNotice("This circuit has no node voltage to plot, so there is nothing to watch live.");
       return;
@@ -5132,15 +5217,46 @@ function App() {
                 */}
               {liveScopeShown && liveRun.ring && (
                 <div className="live-scope-host">
-                  <LiveScopePane
-                    key={liveRun.runKey}
-                    ring={liveRun.ring}
-                    channels={liveRun.channels}
-                    timeWindow={liveRun.timeWindow}
-                    onWindowChange={liveRun.setTimeWindow}
-                    status={liveRun.status}
-                    retention={liveRun.retention}
-                  />
+                  {liveRun.channels.some((channel) => (channel.unit ?? "V") === "V" && !channel.hidden) && (
+                    <LiveScopePane
+                      key={`${liveRun.runKey}-voltage`}
+                      ring={liveRun.ring}
+                      channels={liveRun.channels.filter((channel) => (channel.unit ?? "V") === "V" && !channel.hidden)}
+                      timeWindow={liveRun.timeWindow}
+                      onWindowChange={liveRun.setTimeWindow}
+                      status={liveRun.status}
+                      retention={liveRun.retention}
+                    />
+                  )}
+                  {liveRun.channels.some((channel) => channel.unit === "A") && (
+                    <LiveScopePane
+                      key={`${liveRun.runKey}-current`}
+                      ring={liveRun.ring}
+                      channels={liveRun.channels.filter((channel) => channel.unit === "A")}
+                      timeWindow={liveRun.timeWindow}
+                      onWindowChange={liveRun.setTimeWindow}
+                      status={liveRun.status}
+                      retention={liveRun.retention}
+                    />
+                  )}
+                  {[...new Set(liveRun.channels.filter((channel) => channel.powerRole === "current").map((channel) => channel.componentId).filter((id): id is string => Boolean(id)))].map((componentId) => {
+                    const current = liveRun.channels.find((channel) => channel.componentId === componentId && channel.powerRole === "current");
+                    const positive = liveRun.channels.find((channel) => channel.componentId === componentId && channel.powerRole === "positive");
+                    const negative = liveRun.channels.find((channel) => channel.componentId === componentId && channel.powerRole === "negative");
+                    if (!current || !positive || !negative) return null;
+                    return (
+                      <LivePowerPane
+                        key={`${liveRun.runKey}-power-${componentId}`}
+                        ring={liveRun.ring!}
+                        positiveChannel={positive}
+                        negativeChannel={negative}
+                        currentChannel={current}
+                        timeWindow={liveRun.timeWindow}
+                        onWindowChange={liveRun.setTimeWindow}
+                        status={liveRun.status}
+                      />
+                    );
+                  })}
                 </div>
               )}
               <Suspense fallback={null}>
@@ -5171,6 +5287,7 @@ function App() {
                     documentSignature={currentSignature}
                     circuitFilePath={activeFilePath}
                     isRunning={analysisRunning}
+                    liveRunning={liveRunning}
                     runProgress={runProgress}
                     onOptionsChange={overrideAnalysisOptions}
                     onResetOptions={resetAnalysisOptions}

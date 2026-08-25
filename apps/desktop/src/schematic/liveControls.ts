@@ -5,6 +5,7 @@ import {
   isDraggableWiper,
   wiperFraction,
 } from "./actuation";
+import { logicConstantVolts } from "./kindGroups";
 import type { ComponentKind, SchematicComponent } from "./types";
 
 /**
@@ -27,7 +28,7 @@ import type { ComponentKind, SchematicComponent } from "./types";
  */
 
 /** How the control is worked: a contact you click, or a tap you drag. */
-export type LiveControlForm = "contact" | "wiper";
+export type LiveControlForm = "contact" | "wiper" | "binary";
 
 export interface LiveControl {
   id: string;
@@ -69,6 +70,13 @@ export function isInteractiveSchematic(components: readonly Pick<SchematicCompon
 const UNNAMED = "This control";
 
 function positionText(component: Pick<SchematicComponent, "kind" | "value">): string {
+  if (component.kind === "logicConstant") {
+    try {
+      return logicConstantVolts(component.value) === 1 ? "1 · HIGH" : "0 · LOW";
+    } catch {
+      return "UNKNOWN";
+    }
+  }
   if (isDraggableWiper(component.kind)) {
     return `${Math.round(wiperFraction(component) * 100)}%`;
   }
@@ -91,12 +99,13 @@ export function liveControls(
   for (const component of components) {
     if (!isOperable(component.kind)) continue;
     const wiper = isDraggableWiper(component.kind);
+    const binary = component.kind === "logicConstant";
     controls.push({
       id: component.id,
       name: component.label?.trim() || UNNAMED,
       kind: component.kind,
-      form: wiper ? "wiper" : "contact",
-      gesture: wiper ? "drag" : contactActuation(component.kind)?.verb ?? "operate",
+      form: wiper ? "wiper" : binary ? "binary" : "contact",
+      gesture: wiper ? "drag" : binary ? "toggle" : contactActuation(component.kind)?.verb ?? "operate",
       position: positionText(component),
     });
   }

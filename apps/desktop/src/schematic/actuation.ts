@@ -1,5 +1,6 @@
 import { parsePotentiometerSpec } from "../engine/potentiometerSpec";
 import { decodeParams, encodeParams } from "./params";
+import { logicConstantVolts } from "./kindGroups";
 import { rotatePoint } from "./pins";
 import { WIPER_TRAVEL_X } from "./symbols";
 import type { ComponentKind, Rotation, SchematicComponent } from "./types";
@@ -80,7 +81,7 @@ export function contactActuation(kind: ComponentKind): ContactActuation | null {
 
 /** True when the reader can operate this part on the simulator canvas. */
 export function isActuable(kind: ComponentKind): boolean {
-  return kind in ACTUATION;
+  return kind === "logicConstant" || kind in ACTUATION;
 }
 
 /** Which of the two positions this value is sitting in. */
@@ -155,6 +156,14 @@ export function actuatedValue(
   component: Pick<SchematicComponent, "kind" | "value">,
   phase: ActuationPhase,
 ): string | null {
+  if (component.kind === "logicConstant") {
+    if (phase === "release") return null;
+    try {
+      return logicConstantVolts(component.value) === 1 ? "0" : "1";
+    } catch {
+      return null;
+    }
+  }
   const actuation = contactActuation(component.kind);
   if (!actuation) return null;
 
@@ -186,6 +195,7 @@ export function actuatedValue(
 
 /** Accessible name for the actuator, e.g. "Press S1" / "Toggle SW2". */
 export function actuationLabel(component: Pick<SchematicComponent, "kind" | "label">): string | null {
+  if (component.kind === "logicConstant") return `Toggle ${component.label || "logic constant"}`;
   if (isDraggableWiper(component.kind)) return `Drag the ${component.label || "potentiometer"} wiper`;
   const actuation = contactActuation(component.kind);
   if (!actuation) return null;

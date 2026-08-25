@@ -101,6 +101,16 @@ describe("contact actuation", () => {
     expect(actuationLabel(part("potentiometer", "10k", "RV1"))).toBe("Drag the RV1 wiper");
     expect(actuationLabel(part("resistor", "1k", "R1"))).toBeNull();
   });
+
+  it("toggles a binary logic constant without changing it on release", () => {
+    const low = part("logicConstant", "0", "LOGIC-1");
+    const high = part("logicConstant", "1", "LOGIC-1");
+    expect(isActuable("logicConstant")).toBe(true);
+    expect(actuatedValue(low, "press")).toBe("1");
+    expect(actuatedValue(high, "press")).toBe("0");
+    expect(actuatedValue(low, "release")).toBeNull();
+    expect(actuationLabel(low)).toBe("Toggle LOGIC-1");
+  });
 });
 
 describe("potentiometer wiper drag", () => {

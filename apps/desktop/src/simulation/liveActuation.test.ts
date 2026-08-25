@@ -92,6 +92,16 @@ const deckOf = (states: ControlStates = {}) =>
 
 const DECK = deckOf();
 
+const logicConstant = (value = "0"): SchematicComponent => part("logicConstant", "LOGIC-1", value, [
+  { id: "p", ...RAIL },
+  { id: "n", ...GND },
+]);
+
+const LOGIC_DECK = buildSpiceDeck({
+  components: [logicConstant(), part("ground", "", "", [{ id: "g", ...GND }])],
+  wires: [],
+}, { kind: "tran", stopTime: 0.002, steps: 200 });
+
 /** The value the emitter put on one of its own device lines, so a test can ask
  *  "is this the same circuit the deck describes" instead of restating a
  *  literal that could drift. */
@@ -165,6 +175,28 @@ const deferred = <T>() => {
 // ── each kind maps to the instance and value the emitter really produced ────
 
 describe("live actuation — what each operable kind needs from the deck", () => {
+  it("alters the deck-owned sanitized voltage source for a binary logic constant", () => {
+    const target = planLiveActuation(LOGIC_DECK, logicConstant(), "1");
+    expect(target).toMatchObject({
+      kind: "alter",
+      plan: {
+        form: "binary",
+        nextValue: "1",
+        steps: [{ value: "1", role: "binary", subject: "LOGIC-1 logic level" }],
+      },
+    });
+    const instance = target.kind === "alter" ? target.plan.steps[0]?.instance : null;
+    expect(instance).not.toBeNull();
+    expect(LOGIC_DECK.netlist).toContain(`\n${instance} `);
+    expect(LOGIC_DECK.netlist).toMatch(/\nVLOGIC_m1 .* DC 0/);
+  });
+
+  it("refuses a missing logic source instead of guessing an instance", () => {
+    const target = planLiveActuation({ netlist: ".title\n.end\n" }, logicConstant(), "1");
+    expect(target).toMatchObject({ kind: "refused", reason: "not-in-deck" });
+    expect(target.kind === "refused" ? target.failure.message : "").toMatch(/no voltage source/i);
+  });
+
   it("closes a switch by altering the one resistor the emitter wrote for it", () => {
     const next = actuatedValue(control("S1"), "press");
     expect(next).toBe("closed");

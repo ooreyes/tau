@@ -153,6 +153,10 @@ export interface LiveScopeChannel {
   unit?: string;
   /** Defaults to {@link LIVE_TRACE_COLORS} by position. */
   color?: string;
+  /** Optional role metadata for derived, separately-scaled instruments. */
+  componentId?: string;
+  powerRole?: "positive" | "negative" | "current";
+  hidden?: boolean;
 }
 
 export interface LiveScopePaneProps {
