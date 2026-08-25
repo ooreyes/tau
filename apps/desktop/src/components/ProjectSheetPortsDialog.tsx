@@ -281,15 +281,16 @@ export function ProjectSheetPortsEditor({
                   <button
                     type="button"
                     className="project-sheet-net-select"
-                    aria-pressed={selected}
-                    aria-selected={focused}
-                    aria-label={selected ? `Deselect ${name}` : `Select ${name}`}
-                    onClick={() => selected ? removePort(label.id) : setFocusedLabelId(label.id)}
+                    aria-pressed={selected || focused}
+                    aria-label={selected ? `Deselect ${name}` : focused ? `Selected ${name}; choose a direction` : `Select ${name}`}
+                    onClick={() => selected
+                      ? removePort(label.id)
+                      : setFocusedLabelId((current) => current === label.id ? null : label.id)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         if (selected) removePort(label.id);
-                        else setFocusedLabelId(label.id);
+                        else setFocusedLabelId((current) => current === label.id ? null : label.id);
                       }
                     }}
                   >
@@ -321,8 +322,6 @@ export function ProjectSheetPortsEditor({
                           <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move port ${portIndex + 1} down`} disabled={portIndex === draft.length - 1} onClick={() => movePort(portIndex, 1)}><ArrowDown size={13} aria-hidden="true" /></Button>
                           <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove port ${portIndex + 1}`} onClick={() => removePort(label.id)}><Trash2 size={13} aria-hidden="true" /></Button>
                         </span>
-                        <span className="sr-only" role="combobox" aria-label={`Port ${portIndex + 1} label mapping`}>{name}</span>
-                        <span className="sr-only" role="combobox" aria-label={`Port ${portIndex + 1} direction`}>{directionLabel(port.direction)}</span>
                       </>
                     )}
                   </div>

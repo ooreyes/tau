@@ -727,6 +727,32 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     expect(boundary.textContent).toContain("P_IN");
     expect(boundary.textContent).toContain("↔");
 
+    // Unnamed parent nodes stay distinct: the descriptor carries the derived
+    // net id, never a guessed name shared by every blank label.
+    useSchematic.setState({
+      wires: [],
+      netLabels: [
+        { id: "parent-blank-a", x: -48, y: -16, text: "" },
+        { id: "parent-blank-b", x: 48, y: 0, text: "" },
+        { id: "parent-blank-ground", x: -48, y: 16, text: "" },
+      ],
+    });
+    rerender(
+      <ComponentInspector
+        selected={useSchematic.getState().components[0]!}
+        projectFilePath="/project/root.sim"
+        sheetInterfaces={[okEntry("child.sim", [["IN", "In"], ["OUT", "Out"], ["GND", "BiDir"]])]}
+      />,
+    );
+    const blankBoundary = screen.getByRole("group", { name: "Confirmed sheet boundary" });
+    const blankRows = [...blankBoundary.querySelectorAll(".project-sheet-boundary-map-list li")]
+      .map((row) => row.textContent ?? "");
+    expect(blankRows.filter((row) => row.includes("unlabeled parent net") || row.includes("ground net"))).toHaveLength(3);
+    expect(new Set(blankRows.map((row) => {
+      const parts = row.split("·");
+      return parts[parts.length - 1]?.trim();
+    })).size).toBe(3);
+
     expect(useSchematic.getState().components[0].projectSubcircuit).toEqual({
       sheetPath: "child.sim",
       model: "Child",

@@ -28,8 +28,9 @@ describe("ProjectSheetPortsEditor", () => {
     expect(useSchematic.getState().projectPorts).toEqual([
       { name: "IN", labelId: "in-label", direction: "In" },
     ]);
-    expect(screen.getByRole("combobox", { name: "Port 1 label mapping" })).toBeTruthy();
-    expect(screen.getByRole("combobox", { name: "Port 1 direction" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Port 1 label mapping" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Port 1 direction" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Set IN as an input" })).toBeTruthy();
 
     const name = screen.getByRole("textbox", { name: "Port 1 name" });
     fireEvent.change(name, { target: { value: "INPUT" } });
@@ -92,8 +93,9 @@ describe("ProjectSheetPortsEditor", () => {
 
     const inRow = screen.getByRole("button", { name: "Select IN" });
     fireEvent.click(inRow);
-    expect(inRow.getAttribute("aria-selected")).toBe("true");
-    expect(inRow.getAttribute("aria-pressed")).toBe("false");
+    expect(inRow.getAttribute("aria-selected")).toBeNull();
+    expect(inRow.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Selected IN; choose a direction" })).toBeTruthy();
     // Choosing the electrical role is the only gesture that authors a port.
     fireEvent.click(screen.getByRole("button", { name: "Mark IN as an output" }));
     expect(useSchematic.getState().projectPorts).toEqual([
@@ -116,7 +118,8 @@ describe("ProjectSheetPortsEditor", () => {
     row.focus();
     expect(document.activeElement).toBe(row);
     fireEvent.keyDown(row, { key: "Enter" });
-    expect(row.getAttribute("aria-selected")).toBe("true");
+    expect(row.getAttribute("aria-selected")).toBeNull();
+    expect(row.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Mark OUT as an output" }));
     fireEvent.click(screen.getByRole("button", { name: "Mark IN as an input" }));
     expect(screen.getByRole("button", { name: "Move port 1 up" }).hasAttribute("disabled")).toBe(true);

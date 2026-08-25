@@ -2582,7 +2582,10 @@ function ProjectSubcircuitLinkEditor({
       const label = net
         ? netLabels.find((candidate) => netAtPoint(nets, wires, candidate)?.id === net.id)?.text.trim()
         : undefined;
-      return { index, childPort: link?.ports[index] ?? pin.label, parentNet: label || (net ? "unlabeled parent net" : "unconnected") };
+      const parentNet = net
+        ? `${label || (net.isGround ? "ground net" : "unlabeled parent net")} · ${net.id}`
+        : "unconnected";
+      return { index, childPort: link?.ports[index] ?? pin.label, parentNet };
     });
   }, [component, components, link?.ports, netLabels, wires]);
 
