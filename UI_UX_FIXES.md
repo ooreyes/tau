@@ -8,6 +8,41 @@ Sources:
 - `/Users/omarreyes/Downloads/Untitled document.pdf` (2 pages)
 - `/Users/omarreyes/Downloads/edits-to-fix.pdf` (7 pages)
 
+## Schematic follow-up: diagnostics, net routing, chrome, and tabs - 2026-08-24
+
+The active user-directed fleet run is `schematic-followup-20260824-2`. This
+section explicitly starts the `AGENTS.md` UI/UX fleet exception. The primary
+checkout owns integration and tracking. Product code is implemented only by
+Luna High workers in unique local-only worktrees; Sol is read-only reviewer.
+
+### Screenshot-backed acceptance
+
+- Diagnostics: child sheets with an explicit public interface must not be
+  condemned for lacking a standalone source/reference that arrives from their
+  parent. Genuine electrical and model refusals remain fail-closed. Long rows
+  wrap and remain readable beside the component library at the 900x600 floor.
+- Titlebar: Tau/document identity and Run/assistant controls share the same
+  vertical control line and bar insets as the centered mode landmark.
+- Sheet interface: named nets are the primary selectable objects. Selection is
+  unmistakable; each exposed net receives Input, Output, or Bidirectional;
+  order is explicit; and parent-sheet mappings state the child port and parent
+  net as one confirmed electrical boundary without implying name-based magic.
+- Sheet tabs: active, inactive, root, and child sheets are visually and
+  semantically distinguishable in both themes without hard-coded colors.
+
+### Evidence and gates
+
+Focused tests must cover child/root diagnostic semantics, drawer/rail geometry,
+titlebar alignment, net selection/direction/order/mapping, and sheet-tab state.
+Chrome verifies responsive geometry at 900x600 and Computer Use verifies the
+rebuilt packaged app. Then run desktop typecheck, full tests, web build, and
+design-system drift. A Sol `review-agent` pass must return `No findings.`
+before this run can be marked done.
+
+### Status - IN PROGRESS
+
+Worktrees and lane commits pending.
+
 ## Schematic workspace and multi-sheet projects - 2026-08-24
 
 The active user-directed fleet run is `schematic-redesign-20260824-1`. This

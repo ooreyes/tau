@@ -1,45 +1,29 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-24 (run `schematic-redesign-20260824-1`)**
+**Status: IN PROGRESS - 2026-08-24 (run `schematic-followup-20260824-2`)**
 
-Unit: **Schematic workspace visual and multi-sheet project redesign.** The
-primary checkout is the orchestrator on `auto/ltspice-parity`; Luna High workers
-own all implementation in isolated local-only worktrees, and Sol reviewers use
-the read-only `review-agent` contract. Simulation implementation was explicitly
-out of scope. A separate read-only simulation review followed the completed
-schematic run and is recorded in `UI_UX_FIXES.md`.
+Unit: **Schematic follow-up: diagnostics, titlebar alignment, sheet interfaces,
+and sheet tabs.** The primary checkout is the orchestrator on
+`auto/ltspice-parity`; Luna High workers own all implementation in isolated
+local-only worktrees, and Sol reviewers use the read-only `review-agent`
+contract.
 
-**Source:** Omar's two attached screenshots plus `TAU_DESIGN_VISION.md`,
-`DESIGN_SYSTEM.md`, and `REDESIGN.md`. Acceptance requires a centered schematic
-mode control and canvas-first work surface; compact project hierarchy; explicit,
-reviewable sheet interfaces and cross-sheet nets; both themes at 900x600 and
-1440x900; keyboard/focus coverage; no raw colors; and a complete 120 VAC to 5 V
-multi-sheet project proof.
+**Source:** Omar's five attached screenshots plus `TAU_DESIGN_VISION.md`,
+`DESIGN_SYSTEM.md`, and `REDESIGN.md`. Acceptance requires child sheets not to
+receive root-only source/reference errors; genuine fail-closed diagnostics to
+wrap clear of the component library; optically aligned titlebar side clusters;
+a selection-led Input/Output/Bidirectional sheet-boundary workflow with explicit
+parent-net mappings; and visibly distinct active/inactive/root/child sheet tabs.
 
-**Landed:** `1c89b41` preserves the multi-sheet project substrate and the exact
-120 VAC to 5 V proof; `061a226` through `82b2d4f` center and harden the titlebar
-mode control, clarify the ordered sheet contract and parent mappings, and close
-all seven findings from the Sol review cycle. The final Sol closure was **No
-findings**.
+**Landed:** Pending.
 
-**Proof:** Chrome measured the mode landmark at delta **0 px** from the viewport
-center at 1512 px and at the 900x600 minimum, with no horizontal overflow and
-Run still reachable. Packaged Computer Use verified the `Rectifier.sim`
-contract in order as `SEC1 In`, `SEC2 In`, `VBUS Out`. The rebuilt packaged app
-then ran the recursive USB supply through ngspice: **363,636 transferred
-samples** from 762,733 solver points, `VAC_IN` **119 V RMS / 60 Hz**, `VBUS`
-**13.3 V final**, and `VUSB` **4.95 V final**. The downsampling diagnostic
-states exactly what was retained and how to obtain full-rate output.
+**Proof:** Pending focused tests, Chrome 900x600 geometry, packaged Computer Use,
+full desktop gates, and Sol closure.
 
-**Gates:** desktop typecheck; **285 files / 5,146 tests passed, 9 skipped**; web
-build; design-system drift; Rust fmt/clippy; **115 native tests passed, 42
-ignored** plus **42/42** ignored real-ngspice tests with the bundled dylib;
-exact USB deck smoke; fresh unsigned `Tau.app` and
-`Tau_1.0.0_aarch64.dmg` build.
+**Gates:** Pending.
 
-**Next step:** fix the six simulation-review findings recorded in
-`UI_UX_FIXES.md` with Luna implementation and Sol review. Do not treat this
-read-only review as implementation authorization.
+**Next step:** integrate the two Luna High lanes, run gates, then request a
+read-only Sol review.
 
 ---
 
