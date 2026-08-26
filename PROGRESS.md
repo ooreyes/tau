@@ -1,6 +1,6 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-24 (run `simulation-ee-20260824-4`)**
+**Status: DONE - 2026-08-26 (run `simulation-ee-20260824-4`)**
 
 Unit: **Electrical-engineering simulator: remove the drawer lip, replace the
 empty/error experience, and make real live V/I/P/node instrumentation the
@@ -22,12 +22,31 @@ specific, actionable status modules using semantic color plus icon/text; expose
 real transient/node-voltage/component-current/power signal selection and honest
 live run state; make switch and digital-input actuation visibly update live
 plots through packaged ngspice; close the six recorded simulation-review defects;
-and pass both-theme 900x600/1280x800/1440x900, accessibility, regression, native
-engine, packaged-app, and Sol gates.
+and pass both-theme minimum-window, normal-window Chrome, accessibility,
+regression, native-engine, packaged-app, and Sol gates.
 
-**Next step:** assign independent Luna lanes from the common integration tip for
-the results/diagnostics shell and the live EE instrumentation path, integrate
-one commit at a time, then run strict visual and packaged-native proof.
+**Landed:** Luna High commits `b6d1730`, `721e382`, `246fab3`, `478491c`,
+`ca6c12d`, `d250557`, `fda4378`, and `b43f353` replaced the dead/error-heavy
+results shell with truthful idle/running/stopped/warning/failure states; removed
+the resize-handle lip; added real node-voltage, component-current, and
+component-power instruments; wired exact switch and 0/1 digital actuation into
+the native Live alter/resume path; and closed every Sol finding, including
+measurement-only output, mixed `Issues` labels, throttled reactive sample
+counts, failed-start truthfulness, and exact-baseline delta axes.
+
+**Proof / gates:** desktop typecheck; full suite **5,193 passed / 9 skipped**;
+design-system drift; production web build; strict minimum-window **14/14** in
+light/dark at 900x600; Rust fmt/clippy and **115 passed / 42 ignored** unit tests;
+real-ngspice switch, potentiometer, and XSPICE digital ignored tests; packaged
+fixture corpus **2/2** with native digital output **0 V -> 5 V**; fresh unsigned
+Tau.app/DMG build; codesign; DMG checksum; packaged ngspice smoke **336
+samples**; Chrome inspection; and Computer Use against the exact release bundle
+all passed. Final Sol `review-agent` verdict: **No findings.** No
+`FEATURE_PARITY.md` DoD checkbox changes: named-device fidelity and broad
+differential parity remain the product finish-line items.
+
+**Next step:** resume the highest-leverage open Definition-of-Done parity item;
+the simulator UI/UX and Live instrumentation unit is closed.
 
 ---
 

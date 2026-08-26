@@ -51,20 +51,38 @@ only push. Luna workers use unique local-only worktrees; Sol reviews read-only.
 Focused tests must prove live switch and digital actuation, V/I/P/node signal
 selection, run-state transitions, empty/clean/warning/error semantics, no lip,
 all six recorded findings, and keyboard/VoiceOver names. Then run desktop
-typecheck/full tests, design drift, web build, strict light/dark screenshots at
-900x600, 1280x800, and 1440x900, Rust/native real-ngspice tests, a fresh Tauri
-package, and Computer Use against that exact bundle. Sol must return `No
+typecheck/full tests, design drift, web build, strict light/dark minimum-window
+screenshots, normal-window Chrome inspection, Rust/native real-ngspice tests, a
+fresh Tauri package, and Computer Use against that exact bundle. Sol must return `No
 findings.` before DONE.
 
-### Status - IN PROGRESS
+### Status - DONE
 
-Current evidence captured from the packaged app: the idle simulator exposes
-`Waveforms` plus a selected `Errors` tab whose body says `No analysis yet`; the
-schematic drawer shows `NO ANALYSIS YET · Errors 1` beneath a rounded protruding
-resize control; and the failure state is a broad red slab. The underlying code
-already contains a native live worker, retention/drop accounting, live scope,
-switch actuation, and multiple analysis engines, so this run will expose and
-correct the real system rather than inventing a second simulator.
+Luna High commits `b6d1730`, `721e382`, `246fab3`, `478491c`, `ca6c12d`,
+`d250557`, `fda4378`, and `b43f353` landed. The results drawer is flush, clean
+states expose no Errors tab, and diagnostics use compact actionable modules with
+truthful `Errors` / `Warnings` / `Issues` labels. Live and Window share the
+App-owned analysis selection; measurement-only results remain visible; stopped
+history never claims it is still solving; and full-run versus visible-window
+measurements are labeled explicitly.
+
+Live instrumentation now renders separate V/A/W panes from engine-owned node
+and device-current vectors. Power uses terminal voltage and current without
+requesting invalid `v(0)` vectors. On-canvas switches and logic constants alter
+the exact deck-owned device/source while native ngspice is halted, then resume;
+the committed packaged fixtures prove switch and XSPICE digital paths, including
+digital output changing **0 V -> 5 V**. Live sample summaries update at the
+existing 100 ms render cadence, zero-sample stops and failed starts stay
+distinct, and near-flat axes use readable delta ticks whose displayed baseline
+is the exact baseline subtracted.
+
+Final proof: desktop full suite **5,193 passed / 9 skipped**, typecheck, design
+drift, production web build, minimum-window **14/14** both-theme 900x600,
+Rust fmt/clippy/tests, three real-ngspice Live mutation tests, packaged fixture
+corpus **2/2**, fresh unsigned Tau.app/DMG, codesign, valid DMG checksum,
+packaged engine smoke **336 samples**, Chrome inspection, and Computer Use on
+the exact bundle. The required Sol `review-agent` closure verdict was **No
+findings.**
 
 ## Schematic ship-readiness: prevention, tutorial, tabs, and symbols - 2026-08-24
 
