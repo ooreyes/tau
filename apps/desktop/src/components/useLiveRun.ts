@@ -420,10 +420,6 @@ export function useLiveRun({
       if (target && chunk && chunk.times.length > 0 && chunk.channels.length === target.channelCount) {
         try {
           target.pushChunk(chunk);
-          // App-level summaries read `target.length`; publish a lightweight
-          // reactive data clock without replacing the ring object or forcing a
-          // render for every individual native sample.
-          setSampleRevision((revision) => revision + 1);
         } catch (error) {
           // `pushChunk` throws on a non-monotonic frame rather than absorbing
           // it, because the ring's binary search would then answer plausible
@@ -440,6 +436,10 @@ export function useLiveRun({
       if (now - lastStatusAtRef.current < LIVE_STATUS_INTERVAL_MS) return;
       lastStatusAtRef.current = now;
       setRetention(frame.retention);
+      // Keep App-level summaries on the same 100 ms cadence as the status
+      // sentence. The scope has its own animation-frame clock; this revision
+      // only exists to make the mutable ring's count reactive in the shell.
+      setSampleRevision((revision) => revision + 1);
       setStatus({
         phase: "running",
         solvedCircuitTime: frame.solvedCircuitTime ?? target?.latestTime ?? 0,

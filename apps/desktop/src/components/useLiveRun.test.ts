@@ -10,6 +10,7 @@ import { resolveStopReason, useLiveRun, type LiveChannelRequest } from "./useLiv
 import type { LiveEnded, LiveEngineStopReason, LiveTelemetry } from "../engine/nativeLive";
 import { stopReasonFromEngine } from "../engine/nativeLive";
 import { POLL_INTERVAL_MS } from "../simulation/liveRun";
+import { LIVE_STATUS_INTERVAL_MS } from "./useLiveRun";
 
 /**
  * The one decision this hook makes that the modules underneath it could not.
@@ -266,7 +267,7 @@ describe("useLiveRun — the run the engine actually publishes", () => {
 
     expect(notices).toEqual([]);
     expect(view.result.current.running).toBe(true);
-    expect(view.result.current.sampleRevision).toBe(0);
+    const initialSampleRevision = view.result.current.sampleRevision;
     // The legend keeps the app's vocabulary even though the wire uses ngspice's.
     expect(view.result.current.channels).toEqual([
       { index: 0, label: "V(R1.C1)", unit: "V" },
@@ -281,6 +282,14 @@ describe("useLiveRun — the run the engine actually publishes", () => {
     expect(view.result.current.message).toBeNull();
     expect(view.result.current.status.phase).toBe("running");
     expect(view.result.current.ring?.length).toBe(6);
+    // Samples arrive every 20 ms, but the shell's reactive data clock shares
+    // the established 100 ms status cadence rather than rendering per poll.
+    // The first frame may publish the initial throttled update immediately;
+    // the next two 20 ms polls must not each force another shell render.
+    expect(view.result.current.sampleRevision).toBeLessThanOrEqual(initialSampleRevision + 1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LIVE_STATUS_INTERVAL_MS);
+    });
     expect(view.result.current.sampleRevision).toBeGreaterThan(0);
     expect(engine.energised).toBe(true);
 

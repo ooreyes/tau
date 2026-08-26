@@ -2034,7 +2034,7 @@ function App() {
   const resultsSummary = useMemo(() => {
     const liveSamples = liveRun.ring?.length ?? 0;
     if (liveRunning) return liveSamples > 0 ? `Live — ${liveSamples} samples` : "Live — collecting samples";
-    if (liveScopeShown && lastRunWasLive) {
+    if (liveScopeShown && lastRunWasLive && liveRun.status.phase === "stopped") {
       return liveSamples > 0
         ? `Stopped — ${liveSamples} retained live ${liveSamples === 1 ? "sample" : "samples"}`
         : "Stopped — no live samples were retained";
@@ -2047,7 +2047,7 @@ function App() {
       return `${formatEngineering(stopTime, "s", 2)} \u00b7 ${sampleCount} samples`;
     }
     return RUN_KIND_LABEL[lastRunKind];
-  }, [activeAnalysis, analysis, analysisRunning, lastRunKind, lastRunWasLive, liveRun.ring, liveRunning, liveScopeShown, liveSampleRevision]);
+  }, [activeAnalysis, analysis, analysisRunning, lastRunKind, lastRunWasLive, liveRun.ring, liveRun.status.phase, liveRunning, liveScopeShown, liveSampleRevision]);
 
   /**
    * What the floating inspector is describing.
@@ -5204,7 +5204,7 @@ function App() {
           <ResultsDrawer
             status={liveRunning
               ? "running"
-              : liveScopeShown && lastRunWasLive
+              : liveScopeShown && lastRunWasLive && liveRun.status.phase === "stopped"
                 ? "stopped"
                 : analysisRunning
                   ? "running"

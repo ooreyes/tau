@@ -51,6 +51,9 @@ const alter = vi.fn(async (_options: { instance: string; value: string }) => ({
   ok: true as const,
   value: { ...endedByUser().telemetry, running: true, stopReason: null },
 }));
+const liveStartFailure = vi.hoisted(() => ({
+  value: null as { kind: "start-failed"; message: string } | null,
+}));
 let onEndHook: ((outcome: { kind: "ended"; ended: ReturnType<typeof endedByUser> }) => void) | null = null;
 
 /**
@@ -102,6 +105,11 @@ vi.mock("./engine/nativeLive", async (importOriginal) => {
   return {
     ...actual,
     startLiveSession: vi.fn(async (options: { names?: readonly string[]; onEnd?: (o: never) => void }) => {
+      if (liveStartFailure.value) {
+        const failure = liveStartFailure.value;
+        liveStartFailure.value = null;
+        return { kind: "failed" as const, failure };
+      }
       onEndHook = options.onEnd as never;
       return {
         kind: "started" as const,
@@ -158,6 +166,7 @@ beforeEach(() => {
   halt.mockClear();
   alter.mockClear();
   runAcSweepSpy.mockClear();
+  liveStartFailure.value = null;
   onEndHook = null;
   useSchematic.getState().newCircuit();
   useProject.setState({
@@ -326,6 +335,20 @@ describe("App - Run becomes Stop, and leaving the simulator stops the run", () =
     fireEvent.click(screen.getByRole("button", { name: "Stop this run" }));
     await waitFor(() => expect(halt).toHaveBeenCalledTimes(1));
     await screen.findByRole("button", { name: "Run this circuit" });
+  });
+
+  it("does not present a refused live start as a stopped zero-sample run", async () => {
+    await openSimulator([]);
+    liveStartFailure.value = { kind: "start-failed", message: "native worker refused the deck" };
+
+    fireEvent.click(screen.getByRole("button", { name: "Run this circuit" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("Could not energise the circuit"),
+    );
+    const results = screen.getByRole("complementary", { name: "Results" });
+    expect(results.textContent).toContain("No analysis yet");
+    expect(results.textContent).not.toContain("Stopped");
   });
 
   /**

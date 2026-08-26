@@ -64,6 +64,27 @@ describe("PlotAxes - Y-axis title stays inside the viewBox", () => {
   });
 });
 
+describe("PlotAxes - relative Y baseline", () => {
+  it("subtracts the exact baseline shown in the delta caption", () => {
+    const { container } = renderAxes({
+      yMin: 12.34,
+      yMax: 12.36,
+      yTickRelativeTo: 12.345678,
+      yTickSignificantDigits: 4,
+    });
+    const yTitle = Array.from(container.querySelectorAll(".scope-axis-title")).find((title) =>
+      title.textContent?.includes("Δ from"),
+    );
+    expect(yTitle?.textContent).toContain("Δ from 12.35 V");
+
+    const yLabels = Array.from(container.querySelectorAll(".scope-tick"))
+      .filter((label) => label.getAttribute("y") !== String(HEIGHT - PAD + 14))
+      .map((label) => label.textContent);
+    expect(yLabels).toContain("-10 mV");
+    expect(yLabels).toContain("10 mV");
+  });
+});
+
 describe("PlotAxes - X tick label collision thinning", () => {
   it("thins crowded tick labels so none overlap, while keeping the first and last", () => {
     // A zoomed-in microsecond window: 12 ticks packed into a narrow x range,

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { computeAxisTicks, type AxisScale } from "../simulation/axisTicks";
-import { formatEngineering } from "../simulation/quantity";
+import { formatEngineering, parseQuantity } from "../simulation/quantity";
 
 /**
  * Shared scope chrome: gridlines AT the actual tick positions (not a fixed
@@ -78,11 +78,27 @@ export function PlotAxes({
   const innerW = width - pad * 2;
   const innerH = height - pad * 2;
   const xTicks = computeAxisTicks(xMin, xMax, { scale: xScale, unit: xUnit, targetCount: targetXTicks });
+  // The caption is the user's reference for a delta axis. Round the baseline
+  // once, then use that exact displayed value for the tick subtraction too;
+  // otherwise a caption such as "Δ from 12.35 V" can hide that the labels were
+  // actually calculated from 12.345678 V.
+  const yRelativeBaselineLabel = yTickRelativeTo === undefined
+    ? undefined
+    : formatEngineering(yTickRelativeTo, yUnit, 4);
+  const yRelativeBaseline = yRelativeBaselineLabel === undefined
+    ? undefined
+    : (() => {
+        try {
+          return parseQuantity(yRelativeBaselineLabel, yUnit);
+        } catch {
+          return yTickRelativeTo;
+        }
+      })();
   const yTicks = computeAxisTicks(yMin, yMax, {
     scale: yScale,
     unit: yUnit,
     targetCount: targetYTicks,
-    ...(yTickRelativeTo === undefined ? {} : { relativeTo: yTickRelativeTo }),
+    ...(yRelativeBaseline === undefined ? {} : { relativeTo: yRelativeBaseline }),
     ...(yTickSignificantDigits === undefined ? {} : { significantDigits: yTickSignificantDigits }),
   });
   const dualY =
@@ -208,7 +224,7 @@ export function PlotAxes({
           textAnchor="start"
         >
           {yUnit
-            ? `${yAxisTitle} (${yUnit})${yTickRelativeTo === undefined ? "" : ` · Δ from ${formatEngineering(yTickRelativeTo, yUnit, 4)}`}`
+            ? `${yAxisTitle} (${yUnit})${yRelativeBaselineLabel === undefined ? "" : ` · Δ from ${yRelativeBaselineLabel}`}`
             : yAxisTitle}
         </text>
       )}
