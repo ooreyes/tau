@@ -4190,18 +4190,21 @@ function App() {
     const previousComponents = pendingEnergise;
     setPendingEnergise(null);
     void (async () => {
-      // Only `components` is stale on the pre-toggle sheet; an actuation rewrites
-      // one component's value and touches nothing else, so the current wires,
-      // labels, params and directives are the right ones to build with.
-      await energiseCircuit(
-        { ...nativeSchematic, components: previousComponents },
-        previousComponents,
-      );
-      // Whether a solver is now listening cannot be read off React state this
-      // soon, but `actuate` answers it directly: a null target means no session.
-      // Only that case may fall back, and it must — otherwise a failed start
-      // leaves the reader with a moved switch and a plot of the old circuit.
-      if (actuateLiveRunRef.current() === "no-session") rerunAfterActuationRef.current();
+      {
+        // Only `components` is stale on the pre-toggle sheet; an actuation
+        // rewrites one component's value and touches nothing else, so the current
+        // wires, labels, params and directives are the right ones to build with.
+        await energiseCircuit(
+          { ...nativeSchematic, components: previousComponents },
+          previousComponents,
+        );
+        // Whether a solver is now listening cannot be read off React state this
+        // soon, but `actuate` answers it directly: a null target means no
+        // session. Only that case may fall back, and it must — otherwise a failed
+        // start leaves the reader with a moved switch above a plot of the circuit
+        // before it moved.
+        if (actuateLiveRunRef.current() === "no-session") rerunAfterActuationRef.current();
+      }
     })();
   }, [pendingEnergise, liveRun.plan.mode, nativeSchematic, energiseCircuit]);
 

@@ -72,6 +72,20 @@ const liveStartFailure = vi.hoisted(() => ({
  * is flat, which is the exact defect that path replaced.
  */
 const liveStartNetlists = vi.hoisted(() => ({ value: [] as string[] }));
+/**
+ * A latch that holds `startLiveSession` open.
+ *
+ * Starting a session is a round trip to the engine host, and the double-click
+ * case below is entirely about what happens INSIDE that round trip. With the
+ * default mock resolving in one microtask the window does not exist: React
+ * batches two synchronous clicks into a single effect pass and the second one
+ * never takes its own branch. Holding the start open is what makes the window
+ * real enough to click into.
+ */
+const liveStartGate = vi.hoisted(() => ({
+  armed: false,
+  release: null as null | (() => void),
+}));
 let onEndHook: ((outcome: { kind: "ended"; ended: ReturnType<typeof endedByUser> }) => void) | null = null;
 
 /**
@@ -124,6 +138,10 @@ vi.mock("./engine/nativeLive", async (importOriginal) => {
     ...actual,
     startLiveSession: vi.fn(async (options: { netlist?: string; names?: readonly string[]; onEnd?: (o: never) => void }) => {
       liveStartNetlists.value.push(options.netlist ?? "");
+      if (liveStartGate.armed) {
+        liveStartGate.armed = false;
+        await new Promise<void>((resolve) => { liveStartGate.release = resolve; });
+      }
       if (liveStartFailure.value) {
         const failure = liveStartFailure.value;
         liveStartFailure.value = null;
@@ -188,6 +206,8 @@ beforeEach(() => {
   runTransientSpy.mockClear();
   liveStartFailure.value = null;
   liveStartNetlists.value = [];
+  liveStartGate.armed = false;
+  liveStartGate.release = null;
   onEndHook = null;
   useSchematic.getState().newCircuit();
   useProject.setState({
@@ -736,6 +756,7 @@ describe("App - operating a control on an idle circuit energises it", () => {
     // The circuit is energised, so the transport offers to stop it.
     expect(screen.getByRole("button", { name: "Stop this run" })).toBeTruthy();
   });
+
 
   /**
    * The band has to say which of the three things is about to happen. Promising
