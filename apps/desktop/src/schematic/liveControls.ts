@@ -148,6 +148,29 @@ function capitalize(word: string): string {
 const LIVE_RERUN = "the running trace bends";
 
 /**
+ * What operating a control does to an IDLE circuit that the live engine can
+ * energise.
+ *
+ * Neither of the other two sentences is true there. "The transient re-runs"
+ * describes the re-solve from t = 0 that this replaced, and that re-solve is
+ * precisely what could never show the edge the reader had just made — closing a
+ * switch swapped a flat 0 V trace for a flat 5 V one and the step between them
+ * existed in no run. "The running trace bends" is not true either, because
+ * nothing is running yet. Naming both halves is the point: the click starts the
+ * circuit AND lands on it.
+ */
+const LIVE_ENERGISE = "the circuit starts running and the trace bends";
+
+/** What a control's consequence depends on: the run, not the selected mode. */
+export type LiveControlConsequence =
+  /** A solve is genuinely in flight; the alter lands on it. */
+  | "running"
+  /** Nothing is running, but this click will energise the circuit and then land. */
+  | "energises"
+  /** Nothing is running and nothing will be; the bounded analysis re-solves. */
+  | "re-runs";
+
+/**
  * One sentence naming the control and the consequence, or null when the
  * schematic has nothing to operate.
  *
@@ -156,19 +179,30 @@ const LIVE_RERUN = "the running trace bends";
  * stops naming them - the readouts beside it already do - and states the
  * consequence once.
  *
- * `energised` is what the consequence actually turns on, and it is the run's
- * real state rather than the transport's selected mode. An idle circuit still
- * re-solves the authored analysis - that carve-out is unchanged and is what
- * `App.liveControls.test.tsx`'s "operating a control keeps the result on
- * screen" case pins - and only a solve genuinely in flight bends instead.
+ * The consequence is the RUN's real state and capability, never the transport's
+ * selected mode. A solve in flight bends; an idle circuit the live engine can
+ * energise starts and then bends; and an idle circuit it cannot - an AC sweep, a
+ * project-hierarchy deck, a build with no desktop bridge - re-solves, which is
+ * the carve-out `App.liveControls.test.tsx`'s "operating a control keeps the
+ * result on screen" case pins.
+ *
+ * The boolean spelling is kept for callers that only know whether a run is in
+ * flight, because "is something running" is the question most of them have.
  */
 export function liveControlHint(
   controls: readonly LiveControl[],
   analysis: LiveAnalysis,
-  energised = false,
+  consequence: LiveControlConsequence | boolean = "re-runs",
 ): string | null {
   if (controls.length === 0) return null;
-  const rerun = energised ? LIVE_RERUN : RERUN[analysis];
+  const resolved: LiveControlConsequence =
+    consequence === true ? "running"
+    : consequence === false ? "re-runs"
+    : consequence;
+  const rerun =
+    resolved === "running" ? LIVE_RERUN
+    : resolved === "energises" ? LIVE_ENERGISE
+    : RERUN[analysis];
   if (controls.length === 1) {
     const only = controls[0];
     return `${capitalize(only.gesture)} ${only.name} on the circuit and ${rerun}.`;

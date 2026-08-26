@@ -11,6 +11,15 @@ vi.mock("./simulation/acSweep", async (importOriginal) => {
   } };
 });
 
+const runTransientSpy = vi.hoisted(() => vi.fn());
+vi.mock("./simulation/linearTransient", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./simulation/linearTransient")>();
+  return { ...actual, runTransientAnalysis: (...args: Parameters<typeof actual.runTransientAnalysis>) => {
+    runTransientSpy();
+    return actual.runTransientAnalysis(...args);
+  } };
+});
+
 // The same two mocks every App-level suite takes: keep the project store off
 // its in-memory workspace seeding, and keep the assistant's local-AI polling
 // out of a wiring test.
@@ -54,6 +63,15 @@ const alter = vi.fn(async (_options: { instance: string; value: string }) => ({
 const liveStartFailure = vi.hoisted(() => ({
   value: null as { kind: "start-failed"; message: string } | null,
 }));
+/**
+ * Every netlist handed to the live bridge, in order.
+ *
+ * Needed because the interesting property of the energise-on-actuation path is
+ * not that a session started, it is WHICH circuit it started from: a run built
+ * from the post-toggle sheet is born knowing the switch is closed and its trace
+ * is flat, which is the exact defect that path replaced.
+ */
+const liveStartNetlists = vi.hoisted(() => ({ value: [] as string[] }));
 let onEndHook: ((outcome: { kind: "ended"; ended: ReturnType<typeof endedByUser> }) => void) | null = null;
 
 /**
@@ -104,7 +122,8 @@ vi.mock("./engine/nativeLive", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./engine/nativeLive")>();
   return {
     ...actual,
-    startLiveSession: vi.fn(async (options: { names?: readonly string[]; onEnd?: (o: never) => void }) => {
+    startLiveSession: vi.fn(async (options: { netlist?: string; names?: readonly string[]; onEnd?: (o: never) => void }) => {
+      liveStartNetlists.value.push(options.netlist ?? "");
       if (liveStartFailure.value) {
         const failure = liveStartFailure.value;
         liveStartFailure.value = null;
@@ -166,7 +185,9 @@ beforeEach(() => {
   halt.mockClear();
   alter.mockClear();
   runAcSweepSpy.mockClear();
+  runTransientSpy.mockClear();
   liveStartFailure.value = null;
+  liveStartNetlists.value = [];
   onEndHook = null;
   useSchematic.getState().newCircuit();
   useProject.setState({
@@ -654,5 +675,148 @@ describe("App - an actuation re-solves the window the user chose", () => {
     await waitFor(() => expect(span()).toMatch(/^1 ms/), { timeout: 6000 });
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(span()).toMatch(/^1 ms/);
+  });
+});
+
+/**
+ * Operating a control on an IDLE circuit energises it and then throws the
+ * control on the running solver.
+ *
+ * This is the defect Omar reported: "we should be able to see a step up in
+ * voltage when the switch is closed, it shouldn't refresh." The old answer
+ * re-solved the whole window from t = 0 with the new value, which is correct
+ * physics and completely useless for the gesture — closing the switch took a
+ * flat 0 V trace off screen and put a flat 5 V trace in its place, and the step
+ * between them, the event the reader had just caused, existed in no run at all.
+ *
+ * The property that makes the difference is WHICH sheet the session starts from,
+ * so that is what these assert. Starting from the post-toggle sheet would pass a
+ * naive "did a session start and did an alter follow" test while producing the
+ * same flat trace as the re-solve.
+ *
+ * `__TAURI_INTERNALS__` is what `isNativeSpiceRuntime` probes. Without it there
+ * is no live engine and the fallback below is correct instead — which is why the
+ * default in this suite is left alone and only these cases opt in.
+ */
+describe("App - operating a control on an idle circuit energises it", () => {
+  const withDesktopBridge = () => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+  };
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  });
+
+  it("starts the run from the pre-toggle sheet, then alters it closed", async () => {
+    withDesktopBridge();
+    await openSimulator([], { components: SWITCHED, wires: SWITCHED_WIRES });
+    // No Run was pressed. The click on the switch is the whole gesture.
+    expect(liveStartNetlists.value).toHaveLength(0);
+
+    await throwContactOnCanvas();
+
+    await waitFor(() =>
+      expect(useSchematic.getState().components.find((c) => c.id === "s1")?.value).toContain("closed"));
+
+    // One session, started from the sheet as it was BEFORE the click: the
+    // contact resistor is still at its open value, so the trace opens at 0 V and
+    // has somewhere to step up FROM.
+    await waitFor(() => expect(liveStartNetlists.value).toHaveLength(1));
+    const started = liveStartNetlists.value[0]!;
+    const contact = started.split("\n").find((line) => /^R_S1\s/i.test(line));
+    expect(contact, `no R_S1 line in:\n${started}`).toBeTruthy();
+    expect(contact).toMatch(/1e12/);
+    expect(contact).not.toMatch(/\b1m\b/);
+
+    // …and the click then landed on that run. Same instance name and same value
+    // a restarted deck would have written, which is what makes the bent circuit
+    // and a re-run agree.
+    await waitFor(() => expect(alter).toHaveBeenCalledTimes(1));
+    expect(alter.mock.calls[0]![0]).toMatchObject({ instance: "R_S1", value: "1m" });
+
+    // The circuit is energised, so the transport offers to stop it.
+    expect(screen.getByRole("button", { name: "Stop this run" })).toBeTruthy();
+  });
+
+  /**
+   * The band has to say which of the three things is about to happen. Promising
+   * "the transient re-runs" here would tell the reader to expect the plot to
+   * blank and restart, which is precisely what no longer happens.
+   */
+  it("promises the circuit will start and bend, not re-run", async () => {
+    withDesktopBridge();
+    await openSimulator([], { components: SWITCHED, wires: SWITCHED_WIRES });
+    const band = screen.getByRole("group", { name: "Live controls" });
+    await waitFor(() => expect(band.textContent).toContain(
+      "Toggle S1 on the circuit and the circuit starts running and the trace bends.",
+    ));
+    expect(band.textContent).not.toContain("the transient re-runs");
+  });
+
+  /**
+   * A start the bridge refuses must not leave the reader with a moved switch and
+   * a plot of the circuit before it moved, and must not pretend an alter landed.
+   *
+   * This case keeps the faked bridge, so it can only speak to what reached the
+   * live engine — the bounded fallback that follows is asserted in the next case,
+   * where there is no bridge and the ordinary solver really runs. Asserting it
+   * here too would mean asserting against `invoke`'s absence, which is a fact
+   * about this harness rather than about Tau.
+   */
+  it("does not claim an alter when the live engine refuses to start", async () => {
+    withDesktopBridge();
+    await openSimulator([], { components: SWITCHED, wires: SWITCHED_WIRES });
+    liveStartFailure.value = { kind: "start-failed", message: "no engine here" };
+
+    await throwContactOnCanvas();
+    await waitFor(() =>
+      expect(useSchematic.getState().components.find((c) => c.id === "s1")?.value).toContain("closed"));
+
+    // It tried to energise, the bridge refused, nothing was altered, and the
+    // refusal is on screen rather than swallowed.
+    await waitFor(() => expect(liveStartNetlists.value).toHaveLength(1));
+    expect(alter).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.body.textContent).toContain("no engine here"));
+  });
+
+  /**
+   * With no desktop bridge there is no live engine, so the bounded re-solve is
+   * the right answer and must actually happen. This is the case the old
+   * behaviour covered everywhere, kept as the floor: a reader on a web build
+   * still gets a fresh answer for the switch they just threw.
+   */
+  it("re-solves, and never energises, when there is no live engine", async () => {
+    // Deliberately no `withDesktopBridge()`.
+    await openSimulator([], { components: SWITCHED, wires: SWITCHED_WIRES });
+    runTransientSpy.mockClear();
+
+    await throwContactOnCanvas();
+    await waitFor(() =>
+      expect(useSchematic.getState().components.find((c) => c.id === "s1")?.value).toContain("closed"));
+
+    await waitFor(() => expect(runTransientSpy).toHaveBeenCalled(), { timeout: 6000 });
+    expect(liveStartNetlists.value).toHaveLength(0);
+    expect(alter).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Only a transient has a trace an actuation can bend. Energising because
+   * somebody threw a switch while reading an AC sweep would answer a question
+   * they did not ask, so that carve-out keeps the re-solve.
+   */
+  it("does not energise when the reader is on an AC sweep", async () => {
+    withDesktopBridge();
+    await openSimulator([".ac dec 20 1 1meg"], { components: SWITCHED, wires: SWITCHED_WIRES });
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: /AC sweep/ }).getAttribute("aria-selected")).toBe("true"));
+
+    await throwContactOnCanvas();
+    await waitFor(() =>
+      expect(useSchematic.getState().components.find((c) => c.id === "s1")?.value).toContain("closed"));
+
+    // The whole carve-out, stated directly: no session was started and nothing
+    // was altered. Which bounded solver then answered is the re-solve path's
+    // business and is covered above.
+    expect(liveStartNetlists.value).toHaveLength(0);
+    expect(alter).not.toHaveBeenCalled();
   });
 });

@@ -350,6 +350,18 @@ const LARGE_RUN_NATIVE_STEPS = 500_000;
 const LIVE_HORIZON_OUTPUT_STEPS = 100_000_000;
 
 /**
+ * How far an actuation got, which is not the same question as whether it
+ * succeeded.
+ *
+ * `nothing-changed` means the sheet is identical and there was nothing to send.
+ * `no-session` means something moved but no solver was listening — the only case
+ * that may fall back to re-solving a bounded window. `reached-engine` means a
+ * command was issued (or named-refused, which is still an answer the reader
+ * gets), so re-solving on top of it would throw away the run it just bent.
+ */
+type LiveActuationReach = "nothing-changed" | "no-session" | "reached-engine";
+
+/**
  * How large a document still gets the deck-emitting half of the live
  * diagnostics pass (P3-14).
  *
@@ -1725,6 +1737,17 @@ function App() {
    * last received rather than against the start of the run.
    */
   const liveComponentsRef = useRef<SchematicComponent[]>([]);
+  /**
+   * The sheet as of the previous render pass.
+   *
+   * `Canvas`'s `onActuate` fires after the store has already committed the new
+   * value, so by the time App hears about it the old one is gone from
+   * `components`. `liveComponentsRef` cannot stand in: it is only synchronised
+   * while a live session exists, and the whole point here is the case where one
+   * does not.
+   */
+  const previousComponentsRef = useRef<SchematicComponent[]>([]);
+
   /** Read by the actuation effect, which must keep its original dependencies —
    *  adding `liveRunning` to them would re-fire it on every start and stop. */
   const liveRunningRef = useRef(liveRunning);
@@ -2458,50 +2481,33 @@ function App() {
   }, [effectiveAnalysisOptions]);
 
   /**
-   * What Run does from the transport, per the mode the user can see.
+   * Energise the circuit: build a deck for `schematic`, work out what can be
+   * plotted, and hand it to the live bridge.
    *
-   * WINDOW is the ordinary bounded transient, and it goes through
-   * `executeTransient` rather than `runAnalysis`: `runAnalysis` first awaits a
-   * project save, which is right for the header's Run (a deliberate "run my
-   * file") and wrong for a control the user may press repeatedly while tuning a
-   * span. The pre-run size guard stays, because a bounded run can still be
-   * enormous.
+   * Split out of `runFromTransport` so that operating a control on an IDLE
+   * circuit can start the same kind of run from the sheet as it was *before* the
+   * control moved. That distinction is the whole point of the split: a run
+   * started from the post-toggle sheet was born knowing the switch is closed, so
+   * its trace is flat and the reader never sees the edge they just made. A run
+   * started from the pre-toggle sheet and then altered acquires a genuine solver
+   * corner at the moment they threw it.
    *
-   * LIVE energises the circuit through the engine bridge and never touches the
-   * bounded path at all. Outside the desktop app that bridge answers
-   * `not-available`, which is reported as the capability absence it is — Tau
-   * does not quietly run a bounded transient instead and call it live.
+   * `syncComponents` is what `actuateLiveRun` later diffs the sheet against, so
+   * it must be the components THIS deck was built from rather than today's -
+   * handing it the current ones is how every subsequent change looks like no
+   * change and never reaches the solver.
    */
-  const runFromTransport = useCallback(async () => {
-    if (refuseProjectHierarchyRun()) return;
-    const plan = liveRun.plan;
-    setResultsRaise((n) => n + 1);
-    // The previous run's explanation stops describing anything the user is
-    // looking at the instant they press Run again — including when the last
-    // attempt was refused and the next one is a bounded run that cannot be.
-    liveRun.clearMessage();
-
-    if (plan.mode === "window") {
-      const options = enforceMinimumTransientSteps(
-        components,
-        {
-          ...effectiveAnalysisOptions,
-          stopTime: plan.stopTime,
-          ...(plan.startTime > 0 ? { startTime: plan.startTime } : {}),
-        },
-        isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS,
-      );
-      confirmLargeRunIfNeeded(options, () => { void executeTransient(options); });
-      return;
-    }
-
+  const energiseCircuit = useCallback(async (
+    schematic: typeof nativeSchematic,
+    syncComponents: SchematicComponent[],
+  ): Promise<void> => {
     let deck: ReturnType<typeof buildSpiceDeck>;
     try {
       assertCurrentSimulationIntegrity();
       assertProjectHierarchyCanRun();
       deck = projectHierarchyActive
-        ? nativeSchematic.buildDeck!({ kind: "tran", stopTime: liveHorizonSeconds, steps: LIVE_HORIZON_OUTPUT_STEPS })
-        : buildSpiceDeck(nativeSchematic, { kind: "tran", stopTime: liveHorizonSeconds, steps: LIVE_HORIZON_OUTPUT_STEPS });
+        ? schematic.buildDeck!({ kind: "tran", stopTime: liveHorizonSeconds, steps: LIVE_HORIZON_OUTPUT_STEPS })
+        : buildSpiceDeck(schematic, { kind: "tran", stopTime: liveHorizonSeconds, steps: LIVE_HORIZON_OUTPUT_STEPS });
     } catch (error) {
       showNotice(userFacingErrorMessage(error, "Tau could not build a deck for this circuit."));
       return;
@@ -2573,7 +2579,7 @@ function App() {
       const requestedSignalCount = channels.filter((channel) => !channel.powerGround).length;
       showNotice(`Watching ${requestedSignalCount} of ${requestedSignalCount + omitted} requested signals live — probe the ones you want to see.`);
     }
-    liveComponentsRef.current = components;
+    liveComponentsRef.current = syncComponents;
     // A new session is a new set of facts: no stop reason has been claimed for
     // it yet, and the intervals the LAST run's actuations disclosed are not in
     // the trace this one is about to draw.
@@ -2583,27 +2589,64 @@ function App() {
     setLastRunWasLive(true);
     await startLiveSession_({ netlist: deck.netlist, deck, channels });
   }, [
-    liveRun.plan,
-    liveRun.clearMessage,
-    components,
-    wires,
-    netLabels,
-    params,
-    directives,
-    ascForeignSymbols,
-    userModelLibraryTexts,
-    userModelLibraryNames,
     nativeSchematic,
     projectHierarchyActive,
     assertProjectHierarchyCanRun,
     probes,
-    effectiveAnalysisOptions,
     liveHorizonSeconds,
-    confirmLargeRunIfNeeded,
-    executeTransient,
     assertCurrentSimulationIntegrity,
     showNotice,
     startLiveSession_,
+  ]);
+
+  /**
+   * What Run does from the transport, per the mode the user can see.
+   *
+   * WINDOW is the ordinary bounded transient, and it goes through
+   * `executeTransient` rather than `runAnalysis`: `runAnalysis` first awaits a
+   * project save, which is right for the header's Run (a deliberate "run my
+   * file") and wrong for a control the user may press repeatedly while tuning a
+   * span. The pre-run size guard stays, because a bounded run can still be
+   * enormous.
+   *
+   * LIVE energises the circuit through the engine bridge and never touches the
+   * bounded path at all. Outside the desktop app that bridge answers
+   * `not-available`, which is reported as the capability absence it is — Tau
+   * does not quietly run a bounded transient instead and call it live.
+   */
+  const runFromTransport = useCallback(async () => {
+    if (refuseProjectHierarchyRun()) return;
+    const plan = liveRun.plan;
+    setResultsRaise((n) => n + 1);
+    // The previous run's explanation stops describing anything the user is
+    // looking at the instant they press Run again — including when the last
+    // attempt was refused and the next one is a bounded run that cannot be.
+    liveRun.clearMessage();
+
+    if (plan.mode === "window") {
+      const options = enforceMinimumTransientSteps(
+        components,
+        {
+          ...effectiveAnalysisOptions,
+          stopTime: plan.stopTime,
+          ...(plan.startTime > 0 ? { startTime: plan.startTime } : {}),
+        },
+        isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS,
+      );
+      confirmLargeRunIfNeeded(options, () => { void executeTransient(options); });
+      return;
+    }
+
+    await energiseCircuit(nativeSchematic, components);
+  }, [
+    liveRun.plan,
+    liveRun.clearMessage,
+    components,
+    nativeSchematic,
+    effectiveAnalysisOptions,
+    confirmLargeRunIfNeeded,
+    executeTransient,
+    energiseCircuit,
     refuseProjectHierarchyRun,
   ]);
 
@@ -3055,6 +3098,27 @@ function App() {
   );
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisMode>(preferredAnalysis);
   useEffect(() => setSelectedAnalysis(preferredAnalysis), [activeId, preferredAnalysis]);
+
+  /**
+   * Whether operating a control should ENERGISE the circuit rather than re-solve
+   * the window that has already finished.
+   *
+   * Three carve-outs, each because energising would be a worse answer here and
+   * not because it is awkward to do:
+   *
+   * - Only a transient has a trace an actuation can bend. Energising because
+   *   somebody threw a switch while reading an AC sweep would answer a question
+   *   they did not ask.
+   * - A project-hierarchy deck is built by `makeProjectDeckBuilder` from the
+   *   document rather than from a component list, so it cannot be given the
+   *   pre-toggle sheet. The run would be born knowing the new value, which is
+   *   the flat trace this whole path exists to avoid.
+   * - Without the desktop bridge there is no live engine. Tau does not quietly
+   *   run a bounded transient and call it live.
+   */
+  const actuationCanEnergise =
+    selectedAnalysis === "tran" && !projectHierarchyActive && isNativeSpiceRuntime();
+
   const stepDomain = useMemo(
     () => stepAnalysisDomain(pickAutoRunAnalysis(directives)?.kind),
     [directives],
@@ -3072,12 +3136,18 @@ function App() {
   const circuitIsInteractive = useMemo(() => isInteractiveSchematic(components), [components]);
   const circuitControls = useMemo(() => liveControls(components), [components]);
   const circuitControlsHint = useMemo(
-    // `liveRunning`, because the consequence genuinely differs: an energised
-    // circuit bends its running trace, an idle one re-solves the authored
-    // analysis. Promising a re-run while a solve is in flight would tell the
-    // reader to expect the plot to blank and restart, which it does not.
-    () => liveControlHint(circuitControls, selectedAnalysis === "step" ? "tran" : selectedAnalysis, liveRunning),
-    [circuitControls, selectedAnalysis, liveRunning],
+    // Three genuinely different consequences, so three sentences. A solve in
+    // flight bends its running trace. An idle circuit the live engine can
+    // energise starts running and then bends. Only an idle circuit it cannot
+    // energise re-solves — and promising a re-run in either of the other two
+    // cases would tell the reader to expect the plot to blank and restart,
+    // which it does not.
+    () => liveControlHint(
+      circuitControls,
+      selectedAnalysis === "step" ? "tran" : selectedAnalysis,
+      liveRunning ? "running" : actuationCanEnergise ? "energises" : "re-runs",
+    ),
+    [circuitControls, selectedAnalysis, liveRunning, actuationCanEnergise],
   );
 
   /**
@@ -4074,6 +4144,68 @@ function App() {
   const handleActuate = useCallback(() => { actuationPendingRef.current = true; }, []);
 
   /**
+   * Operating a control on an idle circuit energises it and then throws the
+   * control on the running solver, so the edge the reader just made appears in
+   * the trace as a corner.
+   *
+   * This replaces a re-solve from t = 0. The re-solve was not wrong about the
+   * physics — it answered the new circuit correctly — it just could never show
+   * the one thing the gesture was about. Closing a switch took a flat 0 V trace
+   * off screen and put a flat 5 V trace in its place; the step between them, the
+   * event the reader had caused, existed in no run at all.
+   *
+   * The order matters and is the whole trick. The session is started from the
+   * sheet as it was BEFORE the control moved, and the move is then sent as an
+   * `alter` against the run in flight. `liveActuation.ts` halts, alters the one
+   * device the emitter wrote, and resumes the same transient, so node voltages,
+   * capacitor charges and inductor fluxes all carry across and the solver meets
+   * the new conductance the way it meets any PWL edge: the first step after the
+   * change fails its truncation-error test, `h` shrinks, and the waveform gets a
+   * genuine corner. Starting from the post-toggle sheet instead would produce
+   * the same flat trace the re-solve did.
+   */
+  const [pendingEnergise, setPendingEnergise] = useState<SchematicComponent[] | null>(null);
+  const bendAfterActuationRef = useRef<(previousComponents: SchematicComponent[]) => void>(() => {});
+  bendAfterActuationRef.current = (previousComponents) => {
+    if (!actuationCanEnergise) {
+      rerunAfterActuationRef.current();
+      return;
+    }
+    // Selecting LIVE is deliberately done through the transport rather than
+    // behind it: the reader is getting a continuous run they did not press Run
+    // for, and the mode control is where that fact belongs.
+    //
+    // It also has to land before the session starts, because the plan is what
+    // carries the horizon. A WINDOW plan would bound this run to a span that
+    // free-runs past in microseconds, and the actuation would then arrive at a
+    // solver that had already stopped — a click that reaches nothing.
+    liveRun.setPlan(liveRun.livePlan);
+    setPendingEnergise(previousComponents);
+  };
+
+  useEffect(() => {
+    if (!pendingEnergise) return;
+    // Wait for the plan above to land, so `start` reads the continuous horizon.
+    if (liveRun.plan.mode !== "live") return;
+    const previousComponents = pendingEnergise;
+    setPendingEnergise(null);
+    void (async () => {
+      // Only `components` is stale on the pre-toggle sheet; an actuation rewrites
+      // one component's value and touches nothing else, so the current wires,
+      // labels, params and directives are the right ones to build with.
+      await energiseCircuit(
+        { ...nativeSchematic, components: previousComponents },
+        previousComponents,
+      );
+      // Whether a solver is now listening cannot be read off React state this
+      // soon, but `actuate` answers it directly: a null target means no session.
+      // Only that case may fall back, and it must — otherwise a failed start
+      // leaves the reader with a moved switch and a plot of the old circuit.
+      if (actuateLiveRunRef.current() === "no-session") rerunAfterActuationRef.current();
+    })();
+  }, [pendingEnergise, liveRun.plan.mode, nativeSchematic, energiseCircuit]);
+
+  /**
    * Operating a control while the circuit is energised, which is the payoff the
    * whole live path exists for: the solver is halted, the one device the emitter
    * wrote for this part is altered, and the SAME transient resumes, so the trace
@@ -4088,14 +4220,19 @@ function App() {
    * Held in a ref, like the re-solve above and for the same reason: the effect
    * that consumes it keeps its original dependencies.
    */
-  const actuateLiveRunRef = useRef<() => void>(() => {});
+  const actuateLiveRunRef = useRef<() => LiveActuationReach>(() => "nothing-changed");
   actuateLiveRunRef.current = () => {
     const previous = new Map(liveComponentsRef.current.map((part) => [part.id, part]));
     liveComponentsRef.current = components;
+    let reach: LiveActuationReach = "nothing-changed";
     for (const part of components) {
       if (!isActuable(part.kind) && !isDraggableWiper(part.kind)) continue;
       const before = previous.get(part.id);
       if (!before || before.value === part.value) continue;
+      // Something on the sheet did move. From here on "no session" and "nothing
+      // to do" are different answers, and the caller needs them apart: only the
+      // first one may fall back to re-solving the window.
+      if (reach === "nothing-changed") reach = "no-session";
       // The component goes in holding its OLD value and the new one is the
       // second argument, because that pair is what `planLiveActuation` reads:
       // it compares the two through the netlist emitter's own readers to decide
@@ -4106,7 +4243,10 @@ function App() {
         { id: part.id, kind: part.kind, label: part.label, value: before.value },
         part.value,
       );
+      // `actuate` answers null only when no session exists at all, so this is
+      // the honest signal that the click has not reached any solver.
       if (!target) continue;
+      reach = "reached-engine";
       if (target.kind === "refused") {
         showNotice(target.failure.message);
         // Nothing reached the running circuit, so any interval this control
@@ -4120,6 +4260,7 @@ function App() {
       if (target.kind === "alter") noteActuationDisclosure(target.plan.controlId, target.plan.intermediate);
       else noteActuationDisclosure(target.controlId, null);
     }
+    return reach;
   };
 
   /**
@@ -4137,12 +4278,19 @@ function App() {
   };
 
   useEffect(() => {
+    // Read before the write: on the pass that an actuation triggers, this still
+    // holds the sheet as it was before the control moved, which is what the
+    // energise path has to build its deck from.
+    const previousComponents = previousComponentsRef.current;
+    previousComponentsRef.current = components;
     if (actuationPendingRef.current) {
       actuationPendingRef.current = false;
-      // A live run absorbs the change; an idle one re-solves. Both keep what is
-      // on screen, which is the promise the live-controls band makes.
+      // A live run absorbs the change; an idle one energises and is then bent,
+      // falling back to a re-solve where energising is not the right answer.
+      // Every branch keeps what is on screen, which is the promise the
+      // live-controls band makes.
       if (liveRunningRef.current) actuateLiveRunRef.current();
-      else rerunAfterActuationRef.current();
+      else bendAfterActuationRef.current(previousComponents);
       return;
     }
     liveEditRef.current();
