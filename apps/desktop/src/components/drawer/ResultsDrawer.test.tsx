@@ -116,6 +116,19 @@ describe("results drawer - the readout that survives a collapse", () => {
     fireEvent.click(screen.getByRole("button", { name: "Stop simulation" }));
     expect(onStop).toHaveBeenCalledTimes(1);
   });
+
+  it("states that retained live history is stopped, never idle", () => {
+    renderDrawer({
+      status: "stopped",
+      statusLine: "Stopped — 42 retained live samples",
+      waveforms: <div>Live history</div>,
+    });
+    const status = screen.getByRole("status");
+    expect(status.textContent).toContain("Stopped");
+    expect(status.textContent).toContain("42 retained live samples");
+    expect(status.textContent).not.toContain("NO ANALYSIS YET");
+    expect(status.textContent).not.toContain("No analysis yet");
+  });
 });
 
 describe("results drawer - heights", () => {

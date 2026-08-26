@@ -204,6 +204,8 @@ export interface ComputeAxisTicksOptions {
   scale?: AxisScale;
   targetCount?: number;
   unit?: string;
+  /** Optional display cap for scopes whose samples carry solver residue. */
+  significantDigits?: number;
 }
 
 /**
@@ -220,7 +222,9 @@ export function computeAxisTicks(min: number, max: number, opts: ComputeAxisTick
   if (!Number.isFinite(min) || !Number.isFinite(max)) return [];
 
   const raw = scale === "log" ? logTicks(min, max, targetCount) : niceTicks(min, max, targetCount);
-  const significantDigits = tickSignificantDigits(raw);
+  const significantDigits = opts.significantDigits === undefined
+    ? tickSignificantDigits(raw)
+    : Math.max(3, Math.min(9, Math.trunc(opts.significantDigits)));
   const seen = new Set<number>();
   const ticks: AxisTick[] = [];
   const EPS = 1e-6;

@@ -2027,6 +2027,11 @@ function App() {
    * render before its label is correct cannot be collapsed.
    */
   const resultsSummary = useMemo(() => {
+    const liveSamples = liveRun.ring?.length ?? 0;
+    if (liveRunning) return liveSamples > 0 ? `Live — ${liveSamples} samples` : "Live — collecting samples";
+    if (liveScopeShown && lastRunWasLive && liveSamples > 0) {
+      return `Stopped — ${liveSamples} retained live ${liveSamples === 1 ? "sample" : "samples"}`;
+    }
     if (analysisRunning) return undefined;
     if (!activeAnalysis) return undefined;
     if (!activeAnalysis.ok) return activeAnalysis.message ?? RUN_KIND_LABEL[lastRunKind];
@@ -2035,7 +2040,7 @@ function App() {
       return `${formatEngineering(stopTime, "s", 2)} \u00b7 ${sampleCount} samples`;
     }
     return RUN_KIND_LABEL[lastRunKind];
-  }, [activeAnalysis, analysis, analysisRunning, lastRunKind]);
+  }, [activeAnalysis, analysis, analysisRunning, lastRunKind, lastRunWasLive, liveRun.ring, liveRunning, liveScopeShown]);
 
   /**
    * What the floating inspector is describing.
@@ -5173,7 +5178,13 @@ function App() {
           */}
         {activeProjectFile && (mode === "simulator" || diagnosticsOpen) && (
           <ResultsDrawer
-            status={analysisRunning ? "running" : activeAnalysis ? (activeAnalysis.ok ? "complete" : "error") : "idle"}
+            status={liveRunning
+              ? "running"
+              : liveScopeShown && lastRunWasLive && (liveRun.ring?.length ?? 0) > 0
+                ? "stopped"
+                : analysisRunning
+                  ? "running"
+                  : activeAnalysis ? (activeAnalysis.ok ? "complete" : "error") : "idle"}
             statusLine={resultsSummary}
             onStop={stopAnalysis}
             /* Two independent reasons to raise the drawer - a run finishing and
@@ -5309,6 +5320,7 @@ function App() {
                     circuitFilePath={activeFilePath}
                     isRunning={analysisRunning}
                     liveRunning={liveRunning}
+                    liveHistorySamples={liveScopeShown ? liveRun.ring?.length ?? 0 : 0}
                     runProgress={runProgress}
                     onOptionsChange={overrideAnalysisOptions}
                     onResetOptions={resetAnalysisOptions}

@@ -157,6 +157,19 @@ function frameClock() {
 }
 
 describe("live scope geometry", () => {
+  it("keeps near-constant voltage tick labels concise", () => {
+    stubLayout(FALLBACK_WIDTH);
+    const ring = new LiveSampleRing({ channelCount: 1, capacity: 16 });
+    ring.push(0, [4.999998]);
+    ring.push(DEFAULT_LIVE_SPAN_SECONDS, [5.000002]);
+
+    const { container } = render(<Harness ring={ring} status={stopped(DEFAULT_LIVE_SPAN_SECONDS)} />);
+    const yLabels = Array.from(container.querySelectorAll<SVGTextElement>('.scope-tick[text-anchor="end"]'));
+    expect(yLabels.length).toBeGreaterThan(0);
+    expect(yLabels.every((label) => !/999|00000/.test(label.textContent ?? ""))).toBe(true);
+    expect(yLabels.every((label) => (label.textContent ?? "").length <= 8)).toBe(true);
+  });
+
   it("pins the newest sample to the right edge while following", () => {
     stubLayout(940);
     const { container } = render(<Harness ring={rampRing(200)} status={running(DEFAULT_LIVE_SPAN_SECONDS)} />);

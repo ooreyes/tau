@@ -207,7 +207,7 @@ interface TabSpec {
 
 export interface ResultsDrawerProps {
   /** Run lamp state, shared with the toolbar's transport indicator. */
-  status: "idle" | "running" | "complete" | "error";
+  status: "idle" | "running" | "stopped" | "complete" | "error";
   /** One line of run facts, e.g. "30 ms · 3001 samples". Peek reads this. */
   statusLine?: string;
   /** Shown while a run is in flight, so Stop is reachable from the results. */
@@ -282,6 +282,7 @@ export interface ResultsDrawerProps {
 const STATUS_TEXT: Record<ResultsDrawerProps["status"], string> = {
   idle: "No analysis yet",
   running: "Running",
+  stopped: "Stopped",
   complete: "Complete",
   error: "Error",
 };

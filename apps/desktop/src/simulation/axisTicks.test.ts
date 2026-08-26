@@ -191,6 +191,17 @@ describe("formatTickLabel", () => {
 });
 
 describe("computeAxisTicks", () => {
+  it("allows a live scope to cap solver-residue precision", () => {
+    const ticks = computeAxisTicks(4.999998, 5.000002, {
+      unit: "V",
+      targetCount: 5,
+      significantDigits: 4,
+    });
+    expect(ticks.length).toBeGreaterThan(0);
+    expect(ticks.every((tick) => !/999|00000/.test(tick.label))).toBe(true);
+    expect(ticks.every((tick) => tick.label.endsWith("V"))).toBe(true);
+  });
+
   it("returns ticks sorted by fraction, all within [0,1]", () => {
     const ticks = computeAxisTicks(-5, 5, { unit: "V", targetCount: 5 });
     expect(ticks.length).toBeGreaterThan(0);

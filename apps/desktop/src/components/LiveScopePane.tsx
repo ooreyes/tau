@@ -724,6 +724,10 @@ export function LiveScopePane({
             yAxisTitle={axisUnit === "A" ? "Current" : axisUnit === "W" ? "Power" : "Voltage"}
             targetXTicks={targetXTicks}
             targetYTicks={targetYTicks}
+            // Native live values often carry tiny numerical residue. Keep the
+            // instrument labels at human precision instead of printing a
+            // solver artifact such as 4.999998 V at the left edge.
+            yTickSignificantDigits={4}
           />
           <ScopeClip id={clipId} width={plotWidth} height={height} pad={PLOT_PAD}>
             {geometry.traces.map((trace) => (

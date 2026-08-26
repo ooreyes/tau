@@ -32,6 +32,8 @@ export interface PlotAxesProps {
    *  `axisTicks.pickTickCount`) so labels don't collide at small sizes. */
   targetXTicks?: number;
   targetYTicks?: number;
+  /** Optional Y label precision cap for live/steady instrument scopes. */
+  yTickSignificantDigits?: number;
   /** Suppress the bottom x-axis tick row (e.g. a stacked pane that isn't the
    *  bottom-most one shares its x-axis with the pane below it). */
   showXTicks?: boolean;
@@ -62,6 +64,7 @@ export function PlotAxes({
   yAxisTitle = "Value",
   targetXTicks = 5,
   targetYTicks = 5,
+  yTickSignificantDigits,
   showXTicks = true,
   y2Min,
   y2Max,
@@ -71,7 +74,12 @@ export function PlotAxes({
   const innerW = width - pad * 2;
   const innerH = height - pad * 2;
   const xTicks = computeAxisTicks(xMin, xMax, { scale: xScale, unit: xUnit, targetCount: targetXTicks });
-  const yTicks = computeAxisTicks(yMin, yMax, { scale: yScale, unit: yUnit, targetCount: targetYTicks });
+  const yTicks = computeAxisTicks(yMin, yMax, {
+    scale: yScale,
+    unit: yUnit,
+    targetCount: targetYTicks,
+    ...(yTickSignificantDigits === undefined ? {} : { significantDigits: yTickSignificantDigits }),
+  });
   const dualY =
     y2Min !== undefined
     && y2Max !== undefined

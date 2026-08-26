@@ -238,6 +238,8 @@ interface SimulationPanelProps {
   isRunning: boolean;
   /** True while the native continuous session owns the transport. */
   liveRunning?: boolean;
+  /** Number of samples retained by the most recent live session. */
+  liveHistorySamples?: number;
   /** Fraction in [0, 1] while the web TS transient solver is reporting real
    *  progress; null before the first callback and for the whole run when
    *  native ngspice handles it (no progress channel - App.tsx/executeTransient
@@ -355,6 +357,7 @@ export function SimulationPanel({
   onSchematicReadoutTime,
   liveSchematicPlayback = true,
   liveRunning = false,
+  liveHistorySamples = 0,
 }: SimulationPanelProps) {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -971,7 +974,12 @@ export function SimulationPanel({
     : mode === "step" && stepDomain === "dc"
       ? (dcStepFamily ? { ok: dcStepFamily.ok, ...(stepResult?.engine ? { engine: stepResult.engine } : {}) } : stepResult)
     : stepResult;
-  const runStatus = isRunning ? "running" : activeResult ? (activeResult.ok ? "complete" : "error") : "idle";
+  const hasLiveHistory = liveHistorySamples > 0;
+  const runStatus = isRunning || liveRunning
+    ? "running"
+    : hasLiveHistory
+      ? "stopped"
+      : activeResult ? (activeResult.ok ? "complete" : "error") : "idle";
   // Read off the displayed result, not off the runtime: the two engines model
   // different circuits, so a number is only meaningful next to the name of the
   // solver that produced it. Absent while running or idle - there is no result
@@ -984,7 +992,9 @@ export function SimulationPanel({
       // collapsed away. What is left is what only makes sense next to the
       // plots - the size of the circuit and what the run cost.
       ? `${result.stats.netCount} nets · ${result.stats.componentCount} parts${lastRunDurationMs !== null ? ` · ${formatElapsed(lastRunDurationMs)} elapsed` : ""}`
-      : runStatus === "error"
+      : runStatus === "stopped"
+        ? `Stopped — showing ${liveHistorySamples} retained live ${liveHistorySamples === 1 ? "sample" : "samples"}.`
+        : runStatus === "error"
         ? "Simulation failed - details below"
         : runStatus === "idle"
           ? "No analysis yet — press Run"
