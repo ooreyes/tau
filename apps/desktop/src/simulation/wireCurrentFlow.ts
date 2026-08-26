@@ -687,3 +687,165 @@ export function flowDotsForWires(
 ): FlowDot[] {
   return flowFieldForWires(...args).dots;
 }
+
+// ---------------------------------------------------------------------------
+// Flow streams: the same reading, described once instead of re-placed per frame
+// ---------------------------------------------------------------------------
+
+/**
+ * A wire segment's current, described as an animation the renderer can hand to
+ * CSS and then forget about.
+ *
+ * {@link flowFieldForWires} answers "where is every dot *right now*", which
+ * obliges its caller to ask again on every animation frame. That coupling was
+ * the whole bug: the caller's data identity changes thirty times a second
+ * during a live scrub, the React effect that owned the frame loop was torn down
+ * and rebuilt just as often, and it never survived long enough to accumulate
+ * the 33 ms its own cadence gate demanded. Measured on the switched divider,
+ * the dots travelled 3.4 px/s against an intended 46, updating about six times
+ * a second.
+ *
+ * A stream describes the motion instead of sampling it: a path, how far apart
+ * the dots sit, and how long one dot takes to reach the next one's place. The
+ * renderer draws one stroked path per segment with a dashed pattern and lets
+ * the compositor slide it, so the motion is smooth at the display's own
+ * refresh rate and costs nothing per frame — and, decisively, it keeps moving
+ * smoothly even while React is busy rebuilding the readouts around it.
+ *
+ * The numbers are the same numbers. `segmentFlowCurrents` still does the solve
+ * and nothing here invents, interpolates, or normalises a current.
+ */
+export interface FlowStream {
+  /** The flow segment's id, stable across frames. */
+  id: string;
+  /** Path data for the segment polyline. */
+  d: string;
+  /**
+   * How many dot-gaps fit along the segment.
+   *
+   * Rendered as the path's `pathLength`, which is what lets every segment share
+   * one keyframe: with the path's own length declared as `dotGaps`, one gap is
+   * exactly 1 unit, so the dash pattern is `0 1` and the travel is 0 → −1 no
+   * matter how long the wire actually is. A whole number of gaps also means the
+   * pattern tiles the segment exactly, so one period returns an identical
+   * picture and the loop has no visible seam.
+   */
+  dotGaps: number;
+  /** Seconds for a dot to advance one gap, i.e. one animation period. */
+  periodSeconds: number;
+  /** +1 travels points[0] → last, −1 travels the other way. */
+  direction: 1 | -1;
+  opacity: number;
+  /** The static direction marker, unchanged in meaning from {@link FlowArrow}. */
+  arrow: FlowArrow;
+}
+
+/** Nominal gap between dots along a wire, in px. */
+export const FLOW_DOT_SPACING_PX = 24;
+
+/** Dots per segment ceiling, so a long rail does not become a solid line. */
+export const FLOW_MAX_DOT_GAPS = 16;
+
+/**
+ * Dot travel in px/s at the bottom and top of the magnitude scale.
+ *
+ * The old range was 9…69 px/s, which put the switched divider's 5 mA at 46 px/s
+ * — a dot crossing one 24 px gap every half second. Read as an instrument that
+ * is a crawl, and it was the second half of Omar's "slow and sluggish": the
+ * frame rate was one problem and the speed was the other. 27…164 px/s puts the
+ * same 5 mA at about 106 px/s, brisk enough to read as flowing current, while
+ * the floor still creeps rather than freezing.
+ *
+ * The span is what carries the information, so it is stated as an explicit
+ * floor plus span rather than derived: {@link flowMagnitude} is monotonic in
+ * amps across six decades and that ordering is the point of the whole scale.
+ */
+export const FLOW_SPEED_FLOOR_PX_S = 27;
+export const FLOW_SPEED_SPAN_PX_S = 137;
+
+/**
+ * Magnitude quantisation, in steps across the whole scale.
+ *
+ * A live scrub republishes currents thirty times a second, and an animation
+ * whose duration is rewritten on every one of those updates reads as jitter
+ * rather than as motion. Rounding the magnitude to 1/32 of the scale means the
+ * duration changes only when the current changes by something a reader could
+ * actually see, so the dots hold a steady speed through a settled stretch of
+ * waveform and visibly change speed when the current does.
+ */
+export const FLOW_MAGNITUDE_STEPS = 32;
+
+/** {@link flowMagnitude}, rounded to a step the animation can hold steady. */
+export function quantizeFlowMagnitude(magnitude: number): number {
+  if (!(magnitude > 0)) return 0;
+  return Math.round(magnitude * FLOW_MAGNITUDE_STEPS) / FLOW_MAGNITUDE_STEPS;
+}
+
+/** Dot travel in px/s for a magnitude from {@link flowMagnitude}. */
+export function flowSpeedPxPerSecond(magnitude: number): number {
+  return FLOW_SPEED_FLOOR_PX_S + magnitude * FLOW_SPEED_SPAN_PX_S;
+}
+
+/** `M x y L x y …` for a polyline. */
+function pathData(points: readonly Point[]): string {
+  return points
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+    .join(" ");
+}
+
+/**
+ * Describe every segment's current as a {@link FlowStream}.
+ *
+ * Takes segments rather than wires so the caller can memoise the structural
+ * split — {@link flowSegments} depends only on the drawing, and rebuilding it
+ * alongside each readout update was pure waste.
+ */
+export function flowStreamsForWires(
+  segments: readonly FlowSegment[],
+  pins: PinIndex,
+  currents: ReadonlyMap<string, number>,
+  terminals: TerminalCurrents = new Map(),
+  labelPoints: readonly { x: number; y: number }[] = [],
+): FlowStream[] {
+  const solved = segmentFlowCurrents(segments, pins, currents, terminals, labelPoints);
+  const out: FlowStream[] = [];
+  for (const segment of segments) {
+    const { lengths, total } = measure(segment.points);
+    if (total <= 1) continue;
+    const signed = solved.get(segment.id) ?? 0;
+    const magnitude = quantizeFlowMagnitude(flowMagnitude(signed));
+    if (magnitude <= 0) continue;
+    const direction: 1 | -1 = signed >= 0 ? 1 : -1;
+    const dotGaps = Math.min(
+      FLOW_MAX_DOT_GAPS,
+      Math.max(1, Math.round(total / FLOW_DOT_SPACING_PX)),
+    );
+    const gapPx = total / dotGaps;
+    const periodSeconds = gapPx / flowSpeedPxPerSecond(magnitude);
+
+    // One arrowhead per segment at the midpoint, tangent to the path there —
+    // the same marker `flowFieldForWires` places, and for the same reason: a
+    // 2.8 px dot's direction is only legible through motion, which fails a
+    // paused frame, a screenshot, and anyone who asked not to see movement.
+    const mid = total / 2;
+    const ahead = posAt(segment.points, lengths, total, Math.min(total, mid + 1));
+    const behind = posAt(segment.points, lengths, total, Math.max(0, mid - 1));
+    const angle = Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * (180 / Math.PI);
+    const opacity = Math.min(1, 0.45 + magnitude * 0.85);
+
+    out.push({
+      id: segment.id,
+      d: pathData(segment.points),
+      dotGaps,
+      periodSeconds,
+      direction,
+      opacity,
+      arrow: {
+        ...posAt(segment.points, lengths, total, mid),
+        angle: direction >= 0 ? angle : angle + 180,
+        opacity,
+      },
+    });
+  }
+  return out;
+}

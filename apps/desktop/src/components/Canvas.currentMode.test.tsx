@@ -13,7 +13,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 
 import { Canvas } from "./Canvas";
-import { FLOW_UPDATE_INTERVAL_MS, flowUpdateDeltaSeconds } from "./OpCurrentFlowLayer";
+import {
+  FLOW_DOT_SPACING_PX,
+  FLOW_SPEED_FLOOR_PX_S,
+  flowSpeedPxPerSecond,
+  flowMagnitude,
+  quantizeFlowMagnitude,
+} from "../simulation/wireCurrentFlow";
 import { useSchematic } from "../store/useSchematic";
 import { runOperatingPoint } from "../simulation/operatingPoint";
 import { extractCircuit } from "../schematic/netlist";
@@ -66,12 +72,60 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("Current Mode animation cadence", () => {
-  it("caps expensive field updates at 30 Hz while preserving elapsed motion", () => {
-    expect(flowUpdateDeltaSeconds(FLOW_UPDATE_INTERVAL_MS - 0.01)).toBeNull();
-    expect(flowUpdateDeltaSeconds(FLOW_UPDATE_INTERVAL_MS)).toBeCloseTo(1 / 30);
-    // A hidden/resumed window cannot advance the reading by an unbounded jump.
-    expect(flowUpdateDeltaSeconds(500)).toBeCloseTo(0.064);
+describe("Current Mode animation model", () => {
+  /**
+   * There is deliberately no frame cadence to pin any more. The dots are a
+   * `stroke-dashoffset` animation, so the browser paces them at the display's
+   * own refresh rate and no JS runs per frame. The old 30 Hz gate is gone
+   * because owning it was the bug: its dependencies were rebuilt ~30x/second by
+   * the schematic readout, the loop was torn down that often, and it never
+   * survived long enough to clear its own 33 ms threshold — measured 3.4 px/s
+   * against an intended 46. What is worth pinning instead is that speed still
+   * means amps, and that it is now legible.
+   */
+  const speedAt = (amps: number) =>
+    flowSpeedPxPerSecond(quantizeFlowMagnitude(flowMagnitude(amps)));
+
+  it("keeps dot speed monotonic in amps across the whole scale", () => {
+    // Never slower for more current, anywhere. Below 1 µA the magnitude scale
+    // is documented as pinned to its floor, so those decades tie rather than
+    // ordering - which is why this is non-decreasing and the strict ordering is
+    // asserted separately over the band that actually resolves.
+    const decades = [1e-12, 1e-9, 1e-6, 1e-3, 1e-2, 1e-1, 1, 10];
+    const speeds = decades.map(speedAt);
+    for (let i = 1; i < speeds.length; i += 1) {
+      expect(speeds[i], `${decades[i]} A must not be slower than ${decades[i - 1]} A`)
+        .toBeGreaterThanOrEqual(speeds[i - 1]);
+    }
+  });
+
+  it("resolves every decade from the floor at 1 µA up to 1 A", () => {
+    // This is the property the absolute scale exists for: a 100 Ω loop and a
+    // 1 MΩ loop must not animate identically. Ties here would put four decades
+    // of Ohm's law back on one speed.
+    const decades = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1];
+    const speeds = decades.map(speedAt);
+    for (let i = 1; i < speeds.length; i += 1) {
+      expect(speeds[i], `${decades[i]} A must be faster than ${decades[i - 1]} A`)
+        .toBeGreaterThan(speeds[i - 1]);
+    }
+  });
+
+  it("moves a 5 mA branch fast enough to read as flowing current", () => {
+    // The switched-divider fixture's load current. At the old 9 + mag*60 map
+    // this was 46 px/s — about 2.2 dots past a point per second, which reads as
+    // a crawl. One dot-gap per ~0.23 s is the bar.
+    const speed = flowSpeedPxPerSecond(quantizeFlowMagnitude(flowMagnitude(5e-3)));
+    expect(speed).toBeGreaterThan(90);
+    expect(FLOW_DOT_SPACING_PX / speed).toBeLessThan(0.3);
+  });
+
+  it("never freezes a current it has decided to show", () => {
+    // A picoamp is below the floor and draws nothing at all; anything the layer
+    // does draw has to move, or it reads as a broken visualiser.
+    expect(flowMagnitude(1e-13)).toBe(0);
+    expect(flowSpeedPxPerSecond(quantizeFlowMagnitude(flowMagnitude(1e-9))))
+      .toBeGreaterThanOrEqual(FLOW_SPEED_FLOOR_PX_S);
   });
 });
 
@@ -145,31 +199,48 @@ describe("Canvas - reduced motion", () => {
     }));
   };
 
-  it("still shows the flow layer, but does not animate it", async () => {
-    // The movement is a JS rAF loop, so a CSS media query cannot stop it —
-    // honouring the preference has to mean not scheduling frames. The dots
-    // must still be drawn: hiding the data would punish the preference.
+  /**
+   * These two used to sample `cx`/`cy` across a `setTimeout` and assert the dots
+   * had (or had not) moved. That could only ever work while a JS loop owned the
+   * motion, and it was a timing race even then. The motion is now a CSS
+   * animation, which jsdom does not run, so the honest contract to pin is the
+   * one the component actually decides: whether it hands the browser an
+   * animation to play at all, and how fast.
+   */
+  const dots = () => [...document.querySelectorAll<SVGPathElement>(".flow-layer .flow-dot")];
+
+  it("still draws the flow layer, but hands it no animation", async () => {
+    // The dots must still be drawn: hiding the reading would punish the
+    // preference. Direction stays legible from the static arrowheads.
     mockReducedMotion(true);
     render(<Canvas op={okOp()} interactive={false} currentVisualizer />);
     await waitFor(() => expect(document.querySelector(".flow-layer")).not.toBeNull());
 
-    const at = () => [...document.querySelectorAll(".flow-layer .flow-dot")]
-      .map((d) => `${d.getAttribute("cx")},${d.getAttribute("cy")}`).join("|");
-    const first = at();
-    expect(first.length).toBeGreaterThan(0);
-    await new Promise((r) => setTimeout(r, 250));
-    expect(at(), "dots moved despite prefers-reduced-motion").toBe(first);
+    expect(dots().length).toBeGreaterThan(0);
+    for (const dot of dots()) {
+      expect(dot.style.animation, "animated despite prefers-reduced-motion").toBe("none");
+      expect(dot.style.animationDuration).toBe("");
+    }
+    expect(document.querySelectorAll(".flow-layer .flow-arrow").length).toBeGreaterThan(0);
   });
 
   it("animates normally when the preference is not set", async () => {
     mockReducedMotion(false);
     render(<Canvas op={okOp()} interactive={false} currentVisualizer />);
     await waitFor(() => expect(document.querySelector(".flow-layer")).not.toBeNull());
-    const at = () => [...document.querySelectorAll(".flow-layer .flow-dot")]
-      .map((d) => `${d.getAttribute("cx")},${d.getAttribute("cy")}`).join("|");
-    const first = at();
-    await new Promise((r) => setTimeout(r, 250));
-    expect(at()).not.toBe(first);
+
+    expect(dots().length).toBeGreaterThan(0);
+    for (const dot of dots()) {
+      expect(dot.style.animation).toBe("");
+      // A finite, positive period, and the dash geometry the keyframe is
+      // written against - without `pathLength` the shared 0 -> -1 travel would
+      // mean a different distance on every wire.
+      const seconds = Number.parseFloat(dot.style.animationDuration);
+      expect(Number.isFinite(seconds)).toBe(true);
+      expect(seconds).toBeGreaterThan(0);
+      expect(Number(dot.getAttribute("pathLength"))).toBeGreaterThanOrEqual(1);
+      expect(["normal", "reverse"]).toContain(dot.style.animationDirection);
+    }
   });
 });
 

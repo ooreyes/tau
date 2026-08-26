@@ -3083,11 +3083,51 @@ body {
   color: var(--faint);
 }
 
-/* Current-mode flow overlay: real branch currents only, never invented. */
+/* Current-mode flow overlay: real branch currents only, never invented.
+
+   Each segment is ONE stroked path, not a run of circles: a zero-length dash
+   with a round linecap draws a dot, so `0 1` repeated along the wire is the
+   whole dot train, and sliding the offset by one gap animates it. The path
+   declares `pathLength` as its gap count, which is what makes one gap exactly
+   1 unit here and lets every segment - whatever its real length - share the
+   single keyframe below. Only `animation-duration` and `animation-direction`
+   are per-segment, and those come from the measured current.
+
+   This is deliberately not a JS animation. The previous rAF loop was coupled to
+   React's render cycle through its effect dependencies and was torn down ~30x a
+   second, which froze the dots outright; letting the compositor own the motion
+   is what decouples it from a busy main thread. */
 .flow-layer .flow-dot {
-  fill: var(--trace-green);
-  stroke: none;
+  fill: none;
+  stroke: var(--trace-green);
+  /* Matches the 2.8px radius the circles used, so the dot size is unchanged. */
+  stroke-width: 5.6px;
+  stroke-linecap: round;
+  stroke-dasharray: 0 1;
   pointer-events: none;
+  animation: tau-flow-dash linear infinite;
+}
+
+/* One gap of travel. Negative offset moves the pattern along the path from
+   points[0] toward the last point, which is the positive current direction;
+   `animation-direction: reverse` carries the negative one. A whole number of
+   gaps spans the segment, so one period lands on an identical picture and the
+   loop has no visible seam. */
+@keyframes tau-flow-dash {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+
+/* Belt and braces with the inline `animation: none` the layer sets: a reader who
+   asked not to see movement gets none even if that component is bypassed. */
+@media (prefers-reduced-motion: reduce) {
+  .flow-layer .flow-dot {
+    animation: none;
+  }
 }
 
 /* Static direction marker. Deliberately quieter than the dots - it is there so
