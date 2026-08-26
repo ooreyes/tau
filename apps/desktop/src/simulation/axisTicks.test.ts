@@ -202,6 +202,18 @@ describe("computeAxisTicks", () => {
     expect(ticks.every((tick) => tick.label.endsWith("V"))).toBe(true);
   });
 
+  it("formats a near-constant trace as distinct truthful offsets", () => {
+    const ticks = computeAxisTicks(4.999998, 5.000002, {
+      unit: "V",
+      targetCount: 5,
+      significantDigits: 4,
+      relativeTo: 5,
+    });
+    expect(new Set(ticks.map((tick) => tick.label)).size).toBe(ticks.length);
+    expect(ticks.map((tick) => tick.label)).toContain("0 V");
+    expect(ticks.every((tick) => tick.label.length <= 8)).toBe(true);
+  });
+
   it("returns ticks sorted by fraction, all within [0,1]", () => {
     const ticks = computeAxisTicks(-5, 5, { unit: "V", targetCount: 5 });
     expect(ticks.length).toBeGreaterThan(0);

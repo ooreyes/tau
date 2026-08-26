@@ -728,6 +728,16 @@ export function LiveScopePane({
             // instrument labels at human precision instead of printing a
             // solver artifact such as 4.999998 V at the left edge.
             yTickSignificantDigits={4}
+            // A settled live trace can carry solver residue at the sixth
+            // decimal (for example 4.999998–5.000002 V). Absolute four-digit
+            // labels all round to "5 V", so render a truthful delta from the
+            // visible centre instead: concise, distinct, and explicit about
+            // the baseline in the axis caption.
+            yTickRelativeTo={(() => {
+              const centre = (yBounds.min + yBounds.max) / 2;
+              const span = yBounds.max - yBounds.min;
+              return Number.isFinite(centre) && Math.abs(centre) > 0 && span / Math.abs(centre) < 1e-3 ? centre : undefined;
+            })()}
           />
           <ScopeClip id={clipId} width={plotWidth} height={height} pad={PLOT_PAD}>
             {geometry.traces.map((trace) => (

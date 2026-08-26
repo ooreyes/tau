@@ -168,6 +168,8 @@ describe("live scope geometry", () => {
     expect(yLabels.length).toBeGreaterThan(0);
     expect(yLabels.every((label) => !/999|00000/.test(label.textContent ?? ""))).toBe(true);
     expect(yLabels.every((label) => (label.textContent ?? "").length <= 8)).toBe(true);
+    expect(new Set(yLabels.map((label) => label.textContent)).size).toBe(yLabels.length);
+    expect(Array.from(container.querySelectorAll(".scope-axis-title")).some((title) => title.textContent?.includes("Δ from"))).toBe(true);
   });
 
   it("pins the newest sample to the right edge while following", () => {

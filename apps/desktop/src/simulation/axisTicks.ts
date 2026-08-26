@@ -206,6 +206,8 @@ export interface ComputeAxisTicksOptions {
   unit?: string;
   /** Optional display cap for scopes whose samples carry solver residue. */
   significantDigits?: number;
+  /** Optional truthful offset baseline for a near-constant instrument trace. */
+  relativeTo?: number;
 }
 
 /**
@@ -237,7 +239,11 @@ export function computeAxisTicks(min: number, max: number, opts: ComputeAxisTick
     ticks.push({
       value,
       frac: Math.min(1, Math.max(0, frac)),
-      label: formatTickLabel(value, unit, significantDigits),
+      label: formatTickLabel(
+        opts.relativeTo !== undefined ? value - opts.relativeTo : value,
+        unit,
+        significantDigits,
+      ),
       isZero: Math.abs(value) < 1e-15 * Math.max(1, Math.abs(max - min)),
     });
   }

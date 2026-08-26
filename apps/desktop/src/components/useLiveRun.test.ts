@@ -266,6 +266,7 @@ describe("useLiveRun — the run the engine actually publishes", () => {
 
     expect(notices).toEqual([]);
     expect(view.result.current.running).toBe(true);
+    expect(view.result.current.sampleRevision).toBe(0);
     // The legend keeps the app's vocabulary even though the wire uses ngspice's.
     expect(view.result.current.channels).toEqual([
       { index: 0, label: "V(R1.C1)", unit: "V" },
@@ -280,6 +281,7 @@ describe("useLiveRun — the run the engine actually publishes", () => {
     expect(view.result.current.message).toBeNull();
     expect(view.result.current.status.phase).toBe("running");
     expect(view.result.current.ring?.length).toBe(6);
+    expect(view.result.current.sampleRevision).toBeGreaterThan(0);
     expect(engine.energised).toBe(true);
 
     await act(async () => {

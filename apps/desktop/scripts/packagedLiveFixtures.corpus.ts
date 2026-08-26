@@ -1,6 +1,8 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
 import { resolveLiveInstance } from "../src/engine/nativeLive";
@@ -11,6 +13,7 @@ import type { SchematicDocument } from "../src/store/useSchematic";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const FIXTURE_ROOT = join(REPO_ROOT, "fixtures", "packaged-qa");
+const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
 
 function loadFixture(name: string): SchematicDocument {
   const path = join(FIXTURE_ROOT, name, `${name}.sim`);
@@ -49,6 +52,31 @@ function component(document: SchematicDocument, label: string): ActuableComponen
   return found;
 }
 
+/** Run the same transient deck through real ngspice and read its extrema.
+ * The planner test above proves the alter target; this proves that target
+ * changes the solved output rather than merely changing a schematic value. */
+function nativeDigitalOutput(netlist: string, name: string): { min: number; max: number } {
+  const scaffolded = `${netlist.replace(/^\s*\.end\s*$/mi, "")}
+.control
+run
+meas tran tau_out_min min v(logic_out) from=0 to=20m
+meas tran tau_out_max max v(logic_out) from=0 to=20m
+.endc
+.end
+`;
+  const cirPath = join(tmpdir(), `tau-packaged-live-${name}.cir`);
+  writeFileSync(cirPath, scaffolded);
+  const run = spawnSync("ngspice", ["-b", cirPath], { encoding: "utf8", timeout: 120_000 });
+  const output = `${run.stdout}\n${run.stderr}`;
+  expect(run.status, output).toBe(0);
+  const value = (label: string): number => {
+    const match = new RegExp(`^${label}\\s*=\\s*(-?[\\d.]+(?:e[-+]?\\d+)?)`, "im").exec(output);
+    expect(match, `${label} missing from ngspice output:\n${output}`).not.toBeNull();
+    return Number(match![1]);
+  };
+  return { min: value("tau_out_min"), max: value("tau_out_max") };
+}
+
 describe("packaged Live QA fixtures", () => {
   it("opens the switched divider, emits its static resistor, and plans the exact alter", () => {
     const document = loadFixture("live-switched-divider");
@@ -80,7 +108,7 @@ describe("packaged Live QA fixtures", () => {
     expect(target.kind === "alter" ? target.plan.steps[0]?.instance : null).toBe("R_SW_DIV");
   });
 
-  it("opens the digital path, emits a real gate, and plans the exact logic alter", () => {
+  it.skipIf(!haveNgspice)("opens the digital path, emits a real gate, and plans an alter that changes its solved output", () => {
     const document = loadFixture("live-digital-path");
     const deck = transientDeck(document);
     const logicPart = component(document, "LOGIC_IN");
@@ -108,5 +136,18 @@ describe("packaged Live QA fixtures", () => {
       },
     });
     expect(target.kind === "alter" ? target.plan.steps[0]?.instance : null).toBe("VLOGIC_IN");
+
+    const low = nativeDigitalOutput(deck.netlist, "low");
+    const actuationValue = target.kind === "alter" ? target.plan.steps[0]?.value : null;
+    expect(actuationValue).toBe("1");
+    const highDeck = deck.netlist.replace(
+      /^(VLOGIC_IN\s+\S+\s+\S+\s+DC\s+)0\s*$/m,
+      (_line, prefix: string) => `${prefix}${actuationValue}`,
+    );
+    expect(highDeck).not.toBe(deck.netlist);
+    const high = nativeDigitalOutput(highDeck, "high");
+    expect(low.max).toBeLessThan(0.01);
+    expect(high.min).toBeGreaterThan(4.9);
+    expect(high.min - low.max).toBeGreaterThan(4.9);
   });
 });

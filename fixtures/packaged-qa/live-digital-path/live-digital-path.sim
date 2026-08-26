@@ -22,7 +22,7 @@
       "x": 96,
       "y": 0,
       "rotation": 0,
-      "value": "buf Vhigh=5 Vlow=0 Vt=2.5 Inputs=1",
+      "value": "buf Vhigh=5 Vlow=0 Vt=0.5 Inputs=1",
       "label": "BUF_OUT",
       "pinOverride": [
         { "id": "in1", "label": "1", "x": 64, "y": 0 },

@@ -109,7 +109,7 @@ import {
   diagnosticsVisibleCount,
   useDiagnosticsSeverityPolicy,
 } from "./lib/diagnosticsHealth";
-import { ResultsDrawer, type DrawerCover } from "./components/drawer/ResultsDrawer";
+import { ResultsDrawer, type DiagnosticsTabLabel, type DrawerCover } from "./components/drawer/ResultsDrawer";
 import { SelectionInspector } from "./components/inspector/SelectionInspector";
 import { ConfirmDialog, UnsavedChangesDialog } from "./components/ui/confirm";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
@@ -1707,7 +1707,12 @@ function App() {
     authoredDirective: authoredTranDirective,
     onNotice: showNotice,
   });
-  const { start: startLiveSession_, stop: stopLiveRun, actuate: actuateLiveRun } = liveRun;
+  const {
+    start: startLiveSession_,
+    stop: stopLiveRun,
+    actuate: actuateLiveRun,
+    sampleRevision: liveSampleRevision,
+  } = liveRun;
   const liveRunning = liveRun.running;
   /**
    * The circuit as it stood the last time the running deck was synchronised
@@ -2029,8 +2034,10 @@ function App() {
   const resultsSummary = useMemo(() => {
     const liveSamples = liveRun.ring?.length ?? 0;
     if (liveRunning) return liveSamples > 0 ? `Live — ${liveSamples} samples` : "Live — collecting samples";
-    if (liveScopeShown && lastRunWasLive && liveSamples > 0) {
-      return `Stopped — ${liveSamples} retained live ${liveSamples === 1 ? "sample" : "samples"}`;
+    if (liveScopeShown && lastRunWasLive) {
+      return liveSamples > 0
+        ? `Stopped — ${liveSamples} retained live ${liveSamples === 1 ? "sample" : "samples"}`
+        : "Stopped — no live samples were retained";
     }
     if (analysisRunning) return undefined;
     if (!activeAnalysis) return undefined;
@@ -2040,7 +2047,7 @@ function App() {
       return `${formatEngineering(stopTime, "s", 2)} \u00b7 ${sampleCount} samples`;
     }
     return RUN_KIND_LABEL[lastRunKind];
-  }, [activeAnalysis, analysis, analysisRunning, lastRunKind, lastRunWasLive, liveRun.ring, liveRunning, liveScopeShown]);
+  }, [activeAnalysis, analysis, analysisRunning, lastRunKind, lastRunWasLive, liveRun.ring, liveRunning, liveScopeShown, liveSampleRevision]);
 
   /**
    * What the floating inspector is describing.
@@ -2259,6 +2266,23 @@ function App() {
       ? ("error" as const)
       : ("warning" as const);
     return { text: String(count), tone };
+  }, [analysisRunning, diagnosticMerge, severityPolicy]);
+
+  /**
+   * Keep the drawer tab's noun aligned with the rows it actually exposes.
+   * Mixed production diagnostics are neither an Errors-only nor a Warnings-only
+   * list; calling them Issues prevents the tab from hiding one severity behind
+   * the other. The severity policy is applied here so an errors-only reader
+   * does not get a label for warnings that are intentionally hidden.
+   */
+  const diagnosticsLabel = useMemo<DiagnosticsTabLabel | undefined>(() => {
+    if (analysisRunning) return undefined;
+    const hasErrors = diagnosticMerge.errorCount > 0 || diagnosticMerge.hasError;
+    const hasWarnings = severityPolicy !== "errors-only" && diagnosticMerge.warningCount > 0;
+    if (hasErrors && hasWarnings) return "Issues";
+    if (hasErrors) return "Errors";
+    if (hasWarnings) return "Warnings";
+    return undefined;
   }, [analysisRunning, diagnosticMerge, severityPolicy]);
 
   /**
@@ -5180,7 +5204,7 @@ function App() {
           <ResultsDrawer
             status={liveRunning
               ? "running"
-              : liveScopeShown && lastRunWasLive && (liveRun.ring?.length ?? 0) > 0
+              : liveScopeShown && lastRunWasLive
                 ? "stopped"
                 : analysisRunning
                   ? "running"
@@ -5200,6 +5224,7 @@ function App() {
                button "brings up" a drawer showing waveforms. */
             preferredTab={diagnosticsOpen || mode !== "simulator" ? "errors" : "waveforms"}
             errorBadge={diagnosticsBadge}
+            diagnosticsLabel={diagnosticsLabel}
             badgeRaiseKey={diagnosticsRaiseKey}
             /* The errors surface exists only while the lamp says so - in the
                simulator too, where the drawer stays but its Errors tab does not.

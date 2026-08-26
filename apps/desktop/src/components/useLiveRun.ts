@@ -153,6 +153,12 @@ export interface LiveRunController {
    * thirty times a second and throw away the zoom the user had just set.
    */
   runKey: number;
+  /**
+   * Reactive data clock for consumers that read the mutable ring directly.
+   * The ring intentionally keeps stable identity while samples arrive, so a
+   * summary must key its render from this revision rather than from `ring`.
+   */
+  sampleRevision: number;
   /** The engine's own sentence when a run ended for something `StopReason` has
    *  no word for, or a named bridge failure. `null` when the model's own stop
    *  reason already says it. */
@@ -202,6 +208,7 @@ export function useLiveRun({
   const [timeWindow, setTimeWindow] = useState<TimeWindow>(() =>
     followingWindow(DEFAULT_LIVE_SPAN_SECONDS));
   const [runKey, setRunKey] = useState(0);
+  const [sampleRevision, setSampleRevision] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -243,6 +250,10 @@ export function useLiveRun({
     queueRef.current?.cancelPending();
     queueRef.current = null;
     setRunning(false);
+    // A final poll can arrive inside the status throttle window. Advance the
+    // data clock on every terminal outcome so consumers render the last ring
+    // contents, including a legitimate zero-sample stopped run.
+    setSampleRevision((revision) => revision + 1);
     if (outcome.kind === "failed") {
       // A named bridge failure is not a StopReason and must not be dressed as
       // one. The run is over, the phase goes back to idle, and the engine's own
@@ -273,6 +284,7 @@ export function useLiveRun({
   const start = useCallback(async (request: LiveStartRequest) => {
     if (sessionRef.current) return;
     setMessage(null);
+    setSampleRevision(0);
     intentRef.current = null;
     // So the first frame of this run publishes immediately instead of being
     // swallowed by the previous run's throttle window.
@@ -408,6 +420,10 @@ export function useLiveRun({
       if (target && chunk && chunk.times.length > 0 && chunk.channels.length === target.channelCount) {
         try {
           target.pushChunk(chunk);
+          // App-level summaries read `target.length`; publish a lightweight
+          // reactive data clock without replacing the ring object or forcing a
+          // render for every individual native sample.
+          setSampleRevision((revision) => revision + 1);
         } catch (error) {
           // `pushChunk` throws on a non-monotonic frame rather than absorbing
           // it, because the ring's binary search would then answer plausible
@@ -471,6 +487,7 @@ export function useLiveRun({
     timeWindow,
     setTimeWindow,
     runKey,
+    sampleRevision,
     message,
     clearMessage,
     start,

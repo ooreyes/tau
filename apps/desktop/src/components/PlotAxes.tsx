@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { computeAxisTicks, type AxisScale } from "../simulation/axisTicks";
+import { formatEngineering } from "../simulation/quantity";
 
 /**
  * Shared scope chrome: gridlines AT the actual tick positions (not a fixed
@@ -34,6 +35,8 @@ export interface PlotAxesProps {
   targetYTicks?: number;
   /** Optional Y label precision cap for live/steady instrument scopes. */
   yTickSignificantDigits?: number;
+  /** Optional truthful offset baseline for near-constant live voltages. */
+  yTickRelativeTo?: number;
   /** Suppress the bottom x-axis tick row (e.g. a stacked pane that isn't the
    *  bottom-most one shares its x-axis with the pane below it). */
   showXTicks?: boolean;
@@ -65,6 +68,7 @@ export function PlotAxes({
   targetXTicks = 5,
   targetYTicks = 5,
   yTickSignificantDigits,
+  yTickRelativeTo,
   showXTicks = true,
   y2Min,
   y2Max,
@@ -78,6 +82,7 @@ export function PlotAxes({
     scale: yScale,
     unit: yUnit,
     targetCount: targetYTicks,
+    ...(yTickRelativeTo === undefined ? {} : { relativeTo: yTickRelativeTo }),
     ...(yTickSignificantDigits === undefined ? {} : { significantDigits: yTickSignificantDigits }),
   });
   const dualY =
@@ -202,7 +207,9 @@ export function PlotAxes({
           y={Math.max(10, pad - 8)}
           textAnchor="start"
         >
-          {yUnit ? `${yAxisTitle} (${yUnit})` : yAxisTitle}
+          {yUnit
+            ? `${yAxisTitle} (${yUnit})${yTickRelativeTo === undefined ? "" : ` · Δ from ${formatEngineering(yTickRelativeTo, yUnit, 4)}`}`
+            : yAxisTitle}
         </text>
       )}
       {dualY && y2AxisTitle && (
