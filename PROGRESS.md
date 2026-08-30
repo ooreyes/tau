@@ -1,5 +1,29 @@
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-30 (run `simulation-instrument-20260830-1`)**
+
+Unit: **Begin the simulation redesign with Apple Watch-style engineering trace
+readouts, while removing repeated waveform-statistics work from ordinary React
+renders.**
+
+**Source:** Omar's direction to follow the latest design version and prefer the
+Apple Watch language over the existing white layouts; the current simulator;
+`.claude/skills/tau-instrument-aesthetic/references/images/04-instrument-cluster.png`
+and `05-complications-large.png`; the latest `ds-bundle` plot/readout contracts;
+`TAU_DESIGN_VISION.md`; and `DESIGN_SYSTEM.md`.
+
+**Acceptance:** replace the boxed form-like per-trace measurement table with a
+data-first instrument module (dominant mono value, attached subordinate unit,
+small tracked label, semantic classification, compact secondary metric strip,
+details only on demand); preserve exact measurement/cursor semantics; memoize
+the waveform readout model so unrelated card interactions do not rescan samples;
+hold at 900x600 and 1440x900 in both themes; and prove the visual delta with
+screenshots shared in chat plus focused/full regression and design-system gates.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: DONE - 2026-08-26 (run `simulation-ee-20260824-4`)**
 
 Unit: **Electrical-engineering simulator: remove the drawer lip, replace the
