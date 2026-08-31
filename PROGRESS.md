@@ -1,5 +1,27 @@
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-30 (run `simulation-identity-20260830-4`)**
+
+Unit: **Remove redundant single-channel identity from the measurement readout
+while preserving explicit labels wherever a pane truly contains multiple
+signals.**
+
+**Source:** Omar's request to keep simplifying the simulator in Apple Watch
+instrument language; the preceding compact channel-header unit; the focused
+stacked V(in)/V(out) screenshots; and `DESIGN_SYSTEM.md`'s hierarchy/noise
+rules.
+
+**Acceptance:** a one-trace dashboard card names its signal in the card/channel
+chrome but does not repeat it inside the adjacent readout; classification and
+accessible readout name remain; multi-trace panes keep per-readout identity;
+the O(samples) memoization contract remains intact; both themes and all official
+viewports show no alignment regression; and focused/full frontend, typecheck,
+build, design-system, and minimum-window gates pass.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: DONE - 2026-08-30 (run `simulation-channels-20260830-3`)**
 
 Unit: **Turn each waveform trace's form-like selection row into a compact
