@@ -1,6 +1,6 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-30 (run `simulation-cursors-20260830-2`)**
+**Status: DONE - 2026-08-30 (run `simulation-cursors-20260830-2`)**
 
 Unit: **Make waveform cursor controls behave like concise engineering
 instrumentation instead of an always-open form.**
@@ -16,6 +16,28 @@ the interval cursor in one action; preserve existing remove/reactivate behavior
 and accessibility names; verify focused behavior plus the full frontend suite;
 and capture both-theme simulator evidence at the official desktop and minimum
 window sizes.
+
+**Landed:** Pan is now the genuinely quiet default: no empty exact-coordinate
+form is mounted until C1 or C2 is armed. `+C2` explicitly adds and activates the
+interval cursor in one click even when `WaveformPlot` is embedded outside the
+main panel. Existing active-C2 removal returns to C1, interpolation, keyboard,
+touch, and exact engineering input behavior remain intact. The focused visual
+runner asserts the Pan/C1 disclosure contract, captures a dedicated active-C1
+frame, and waits out incidental recovery confirmation to keep minimum-size
+evidence unobscured.
+
+**Proof / gates:** focused waveform interaction **118/118**; full frontend
+**5,203 passed / 9 skipped**; typecheck; production web build; design-system
+drift **50/50**; minimum-window **16/16** across both themes at 900×600; local
+browser preview with zero console errors; and 18 simulator Pan/C1/readout frames
+across light/dark at 1440×900, 1280×720, and 900×600 under
+`screenshots/simulation-cursors-20260830-2/`. Visual inspection confirmed no
+overflow in the active cursor row. No Definition-of-Done checkbox changes:
+named-device fidelity and broad differential parity remain open.
+
+**Next step:** continue reducing per-trace control chrome: make the channel
+identity, plot tools, and measurement mode read as one compact scope header,
+especially when several EE signals are stacked.
 
 ---
 
@@ -19533,3 +19555,17 @@ evidence is kept in full here.
   and 12 focused simulator frames. Named-device and broad differential DoD
   items remain open; simulator workflow redesign continues with trace/cursor
   interaction chrome next.
+
+- 2026-08-30 - Continued the EE simulator redesign by making cursor controls
+  progressive instead of form-like. Pan mode no longer mounts empty `At time`
+  and `At value` editors; C1/C2 reveals them only when exact placement is
+  relevant, and `+C2` now explicitly adds and activates the interval cursor in
+  one action. Focused screenshots gained an asserted Pan state plus a dedicated
+  active-C1 state at all three official viewports in both themes; the runner
+  also waits out incidental recovery toast lifetime so 900×600 evidence is no
+  longer obscured. Files: `SimulationPanel.tsx`, its main/axes tests,
+  `design-shot.mjs`, focused screenshots, and parity/log records. Evidence:
+  118/118 focused, 5,203 frontend tests passed / nine skipped, typecheck,
+  production build, design-system drift 50/50, minimum-window 16/16, and a
+  clean local browser console. Named-device and broad differential DoD items
+  remain open; the next simulator unit is compact multi-signal channel chrome.

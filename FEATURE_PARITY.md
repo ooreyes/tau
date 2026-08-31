@@ -1515,7 +1515,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   instead of hard-coding volts. Exact-time fields and plot movement share the
   same fractions. Regression coverage includes zoom-aware pointer mapping,
   touch/mouse control wiring, palette application, unit propagation, and the
-  real SimulationPanel activation path.
+  real SimulationPanel activation path. **Cursor apparatus progressive
+  disclosure (2026-08-30):** Pan mode no longer reserves two empty form fields
+  under every selected trace. Exact `At time` / `At value` entry appears only
+  while C1 or C2 is armed, and `+C2` both adds and activates the interval cursor
+  in one action. Focused component tests cover Pan → C1 and add/activate/remove
+  behavior; the focused visual pipeline now refuses leaked Pan fields and
+  captures the active C1 state in both themes at 1440×900, 1280×720, and the
+  900×600 minimum.
 - ✅ **Overlay an LTspice `.raw` reference on the scope** (the acceptance-test
   overlay) — **Ref .raw** button loads a `.raw`, `buildReferenceOverlay`
   (`simulation/rawOverlay.ts`, 4 tests) matches its variables to the plotted Tau

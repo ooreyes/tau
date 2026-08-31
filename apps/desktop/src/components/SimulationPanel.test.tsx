@@ -793,6 +793,8 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     // The second cursor exists to measure an interval, and is added on demand.
     fireEvent.click(screen.getByRole("button", { name: "Add a second cursor to V(out)" }));
     expect(document.querySelectorAll(".transient-cursor")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Remove cursor 2 from V(out)" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("textbox", { name: "Move cursor C2 on V(out) to a time" })).toBeTruthy();
 
     // Clicking the active C2 again takes it back off the plot.
     fireEvent.click(screen.getByRole("button", { name: "Remove cursor 2 from V(out)" }));
@@ -1960,10 +1962,14 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     expect(document.querySelector(".trace-seek__note")?.textContent).toMatch(/never reaches/i);
   });
 
-  it("does not paint idle seek fields as invalid before the user types", () => {
+  it("keeps exact seek fields out of Pan mode, then reveals clean fields for C1", () => {
     renderTwoTracePanel();
     selectOutTrace();
 
+    expect(screen.queryByText("At time")).toBeNull();
+    expect(screen.queryByText("At value")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
     const time = screen.getByRole("textbox", { name: "Move cursor C1 on V(out) to a time" });
     const value = screen.getByRole("textbox", { name: "Move cursor C1 to where V(out) equals a value" });
     expect(time.getAttribute("aria-invalid")).toBe("false");

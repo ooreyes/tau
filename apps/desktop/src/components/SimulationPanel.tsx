@@ -2453,7 +2453,11 @@ export function WaveformPlot({
                                         : "Add a second cursor to measure an interval"}
                                       onClick={() => {
                                         setActiveTraceId(trace.id);
-                                        if (!on) { cursorTool.onSecondCursorChange?.(true); return; }
+                                        if (!on) {
+                                          cursorTool.onSecondCursorChange?.(true);
+                                          cursorTool.onActiveCursorChange("c2");
+                                          return;
+                                        }
                                         if (active) { cursorTool.onSecondCursorChange?.(false); return; }
                                         cursorTool.onActiveCursorChange("c2");
                                       }}
@@ -2465,7 +2469,7 @@ export function WaveformPlot({
                               </div>
                             )}
                           </div>
-                          {selected && cursorTool && success && success.times.length > 1 && (
+                          {selected && cursorTool?.activeCursor && success && success.times.length > 1 && (
                             <TraceSeekFields
                               trace={trace}
                               label={displayLabel}
@@ -2475,11 +2479,8 @@ export function WaveformPlot({
                                 : null}
                               activeCursor={cursorTool.activeCursor}
                               onSeek={(fraction) => {
-                                // Typing a coordinate is itself a request to
-                                // place a cursor, so default to C1 rather than
-                                // silently doing nothing in Pan mode.
-                                const target = cursorTool.activeCursor ?? "c1";
-                                if (cursorTool.activeCursor === null) cursorTool.onActiveCursorChange(target);
+                                const target = cursorTool.activeCursor;
+                                if (!target) return;
                                 cursorTool.onCursorFractionChange(target, fraction);
                               }}
                             />
@@ -7356,7 +7357,7 @@ function TraceSeekFields({
   times: readonly number[];
   /** Current position of the cursor being driven, for nearest-crossing choice. */
   cursorX: number | null;
-  activeCursor: TransientCursorId | null;
+  activeCursor: TransientCursorId;
   onSeek: (fraction: number) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
@@ -7364,7 +7365,7 @@ function TraceSeekFields({
   // different trace.
   useEffect(() => setNote(null), [trace.id, times]);
 
-  const cursorLabel = (activeCursor ?? "c1").toUpperCase();
+  const cursorLabel = activeCursor.toUpperCase();
   const valueUnit = trace.unit || "V";
 
   // Both boxes read the cursor, so dragging updates the pair together. "At

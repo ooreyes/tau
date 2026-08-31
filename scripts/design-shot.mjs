@@ -33,6 +33,8 @@
  *                still runs in-browser, so this should show REAL traces, not
  *                a degraded/error state. If it ever shows an error state in
  *                web mode, that's a regression worth flagging, not expected.
+ *   simulator-cursor - focused-mode proof that C1 reveals exact coordinate
+ *                entry only after the engineer arms a cursor.
  *   dialog     - the settings panel open (gear icon in the toolbar).
  *   command    - the "Add component" command palette open (Cmd/Ctrl+K).
  *
@@ -312,6 +314,13 @@ async function shootViewport(page, viewport, theme) {
   if (await recoveryDialog.waitFor({ state: "visible", timeout: 2_000 }).then(() => true, () => false)) {
     await recoveryDialog.getByRole("button", { name: "Discard" }).click();
     await recoveryDialog.waitFor({ state: "detached", timeout: STATE_TIMEOUT_MS });
+    // The recovery dialog is incidental setup state, and its confirmation
+    // toast otherwise masks the exact controls these screenshots are meant to
+    // prove at 900x600. Wait for the real toast lifetime rather than hiding it
+    // with test-only CSS so the captured app remains production-faithful.
+    await page.getByRole("region", { name: "Notifications alt+T" })
+      .getByText("Discarded unsaved recovery copy.", { exact: true })
+      .waitFor({ state: "hidden", timeout: 8_000 });
   }
   const explorer = page.getByRole(SHELL.explorer.role, { name: SHELL.explorer.name });
   await explorer.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
@@ -394,7 +403,16 @@ async function shootViewport(page, viewport, theme) {
       .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
     await page.waitForSelector(".scope-svg .scope-trace, .scope-shell", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
     await page.waitForTimeout(300);
+    if (await page.getByText("At time", { exact: true }).count()) {
+      throw new Error("Pan mode exposed exact cursor seek fields before a cursor was armed");
+    }
     await page.screenshot({ path: path.join(outDir, `simulator-${theme}-${viewport.name}.png`), fullPage: true });
+    const cursorOneButton = page.getByRole("button", { name: /^Glide cursor 1 on / }).first();
+    await cursorOneButton.click();
+    await page.getByText("At time", { exact: true }).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+    await page.getByText("At value", { exact: true }).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(outDir, `simulator-cursor-${theme}-${viewport.name}.png`), fullPage: true });
     await page.locator(".plotter").evaluate((element) => { element.scrollTop = element.scrollHeight; });
     await page.waitForTimeout(150);
     await page.screenshot({ path: path.join(outDir, `simulator-readout-${theme}-${viewport.name}.png`), fullPage: true });

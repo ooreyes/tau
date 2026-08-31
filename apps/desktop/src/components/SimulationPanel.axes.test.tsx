@@ -112,6 +112,32 @@ describe("WaveformPlot (TRAN) - real tick axes", () => {
     expect(container.querySelectorAll(".cursor-trace-point")).toHaveLength(2);
   });
 
+  it("adds and activates C2 in one action for an embedded waveform plot", () => {
+    const result = makeTranResult();
+    const onActiveCursorChange = vi.fn();
+    const onSecondCursorChange = vi.fn();
+    render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={defaultLayout(["n1"])}
+        cursors={{ x1: 0.0015, x2: null }}
+        cursorTool={{
+          activeCursor: null,
+          secondCursorOn: false,
+          onActiveCursorChange,
+          onSecondCursorChange,
+          onCursorFractionChange: vi.fn(),
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add a second cursor to V(out)" }));
+    expect(onSecondCursorChange).toHaveBeenCalledWith(true);
+    expect(onActiveCursorChange).toHaveBeenCalledWith("c2");
+  });
+
   it("renders multiple x and y tick labels with units, not just corner min/max", () => {
     const result = makeTranResult();
     const { container } = render(
