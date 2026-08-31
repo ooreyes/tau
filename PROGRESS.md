@@ -1,5 +1,27 @@
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-30 (run `simulation-channels-20260830-3`)**
+
+Unit: **Turn each waveform trace's form-like selection row into a compact
+scope-channel header that stays legible when an EE stacks several signals.**
+
+**Source:** Omar's request to keep redesigning around the Apple Watch language;
+the preceding trace-readout and cursor-disclosure units; visual evidence at all
+three official viewports; `DESIGN_SYSTEM.md`; and the watch instrument/large-
+complication reference hierarchy already recorded in this run.
+
+**Acceptance:** remove the wide input-like treatment and full-card selection
+wash from the trace row; preserve a clear, accessible active-channel state,
+colour control, Pan/C1/C2 modes, window-stat gesture, and 24 px target floor;
+reduce vertical/control density without hiding engineering function; prove the
+stacked V(in)/V(out) result in both themes at 1440×900, 1280×720, and 900×600;
+and pass focused/full frontend, typecheck, build, design-system, and minimum-
+window gates.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: DONE - 2026-08-30 (run `simulation-cursors-20260830-2`)**
 
 Unit: **Make waveform cursor controls behave like concise engineering
