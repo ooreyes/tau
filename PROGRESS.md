@@ -1,5 +1,26 @@
 ## HEARTBEAT
 
+**Status: IN PROGRESS - 2026-08-30 (run `simulation-cursors-20260830-2`)**
+
+Unit: **Make waveform cursor controls behave like concise engineering
+instrumentation instead of an always-open form.**
+
+**Source:** Omar's direction to continue the Apple Watch-led simulator redesign;
+the just-landed data-first trace readout; the current waveform interaction
+workflow; `DESIGN_SYSTEM.md`; and the watch complication/instrument reference
+plates already recorded by the preceding unit.
+
+**Acceptance:** keep exact time/value cursor entry hidden while a pane is in Pan
+mode; reveal it immediately when C1 or C2 is active; make `+C2` add and activate
+the interval cursor in one action; preserve existing remove/reactivate behavior
+and accessibility names; verify focused behavior plus the full frontend suite;
+and capture both-theme simulator evidence at the official desktop and minimum
+window sizes.
+
+---
+
+## HEARTBEAT (previous)
+
 **Status: DONE - 2026-08-30 (run `simulation-instrument-20260830-1`)**
 
 Unit: **Begin the simulation redesign with Apple Watch-style engineering trace
