@@ -11,6 +11,7 @@
  * Usage:
  *   node scripts/design-shot.mjs [label]
  *   pnpm design:shot [label]        # from repo root
+ *   TAU_DESIGN_SIMULATOR_ONLY=1 node scripts/design-shot.mjs [label]
  *
  * `label` defaults to an ISO timestamp. Output goes to
  * `screenshots/<label>/<state>-<width>x<height>.png`.
@@ -67,6 +68,7 @@ if (!/^\d+$/.test(devPortText) || Number(devPortText) < 1024 || Number(devPortTe
 const DEV_PORT = Number(devPortText);
 const DEV_URL = `http://localhost:${DEV_PORT}`;
 const FORCE_OWN_SERVER = process.env.TAU_DESIGN_FORCE_SERVER === "1";
+const SIMULATOR_ONLY = process.env.TAU_DESIGN_SIMULATOR_ONLY === "1";
 const NAV_TIMEOUT_MS = 15_000;
 const SERVER_READY_TIMEOUT_MS = 45_000;
 const STATE_TIMEOUT_MS = 15_000;
@@ -378,6 +380,26 @@ async function shootViewport(page, viewport, theme) {
     .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `inspector-${theme}-${viewport.name}.png`), fullPage: true });
+
+  // Focused visual work should not be blocked by an unrelated story later in
+  // this all-state pipeline. This mode still uses the exact imported RC
+  // circuit and public Run control above; it simply captures the simulator at
+  // every official viewport before returning. The second frame scrolls the
+  // real plotter so below-plot measurement redesigns are visible evidence.
+  if (SIMULATOR_ONLY) {
+    const focusedRunButton = page.getByRole("button", { name: SHELL_CONTROLS.transportRun }).first();
+    await focusedRunButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+    await focusedRunButton.click();
+    await page.getByRole(SHELL.circuitOverview.role, { name: SHELL.circuitOverview.name })
+      .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+    await page.waitForSelector(".scope-svg .scope-trace, .scope-shell", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(outDir, `simulator-${theme}-${viewport.name}.png`), fullPage: true });
+    await page.locator(".plotter").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(outDir, `simulator-readout-${theme}-${viewport.name}.png`), fullPage: true });
+    return;
+  }
 
   // --- model: compatible exact-part chooser on a real power MOSFET --------
   await page.evaluate(

@@ -1,6 +1,6 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-30 (run `simulation-instrument-20260830-1`)**
+**Status: DONE - 2026-08-30 (run `simulation-instrument-20260830-1`)**
 
 Unit: **Begin the simulation redesign with Apple Watch-style engineering trace
 readouts, while removing repeated waveform-statistics work from ordinary React
@@ -19,6 +19,28 @@ details only on demand); preserve exact measurement/cursor semantics; memoize
 the waveform readout model so unrelated card interactions do not rescan samples;
 hold at 900x600 and 1440x900 in both themes; and prove the visual delta with
 screenshots shared in chat plus focused/full regression and design-system gates.
+
+**Landed:** `EngineeringTraceReadout` now memoizes its O(samples) model and
+renders the Apple Watch value-block hierarchy: trace-coloured dominant mono
+mantissa, attached quieter SI unit, micro identity/classification, a compact
+P-P / visible P-P / frequency strip, and full statistics behind one disclosure.
+The nested boxed spec table is gone. The minimum-window gate now captures the
+reachable scrolled readout, and `design-shot.mjs` has a focused simulator mode
+that produces waveform + readout evidence without depending on unrelated
+inspector/model stories.
+
+**Proof / gates:** focused readout/model **10/10**; full frontend **5,202 passed /
+9 skipped**; typecheck; production web build; design-system drift **50/50**;
+minimum-window **16/16** across both themes at 900x600; and 12 focused simulator
+waveform/readout frames across light/dark at 1440x900, 1280x720, and 900x600
+under `screenshots/simulation-instrument-20260830-1/`. Visual inspection caught
+and closed the first-pass visible-window/Frequency label collision. No
+Definition-of-Done checkbox changes: named-device fidelity and broad
+differential parity remain open.
+
+**Next step:** continue the EE simulator-workflow review from the dominant
+waveform surface outward: reduce selection/control chrome around each trace and
+make cursor/time/value interaction read as one coherent instrument channel.
 
 ---
 
@@ -19472,3 +19494,21 @@ evidence is kept in full here.
   image. Native interaction remains blocked by the locked Mac; the autobuilder
   remains disabled. Named-device 48.1% and the still-incomplete broad matrix
   keep Tau not shippable.
+
+- 2026-08-30 - Began the simulator redesign from an EE's primary result-reading
+  workflow. Replaced each waveform's boxed, form-like statistic table with an
+  Apple Watch-derived engineering module: dominant trace-coloured RMS/final
+  mantissa, attached subordinate unit, micro identity/state, compact P-P /
+  visible P-P / frequency strip, and full values on demand. Memoized the
+  waveform readout model so unrelated selection/presentation rerenders do not
+  rescan samples; a Proxy regression proves zero additional sample reads. The
+  first visual pass exposed a narrow-pane label collision, which was fixed and
+  re-shot. Added focused simulator waveform/readout capture at 1440×900,
+  1280×720, and 900×600 in both themes plus a scrolled-readout state to the
+  minimum-window audit. Files: `EngineeringTraceReadout.tsx` and test,
+  `App.css`, `design-shot.mjs`, `min-window-dod.mjs`, screenshots, parity/log
+  records. Evidence: 10/10 focused, 5,202 frontend tests passed / nine skipped,
+  typecheck, production build, design-system drift 50/50, minimum-window 16/16,
+  and 12 focused simulator frames. Named-device and broad differential DoD
+  items remain open; simulator workflow redesign continues with trace/cursor
+  interaction chrome next.

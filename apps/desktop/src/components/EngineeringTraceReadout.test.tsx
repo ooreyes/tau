@@ -7,9 +7,9 @@ afterEach(cleanup);
 
 describe("EngineeringTraceReadout", () => {
   it("keeps the transient final and peak-to-peak values primary, with detail on demand", () => {
-    render(
+    const { container } = render(
       <EngineeringTraceReadout
-        trace={{ id: "out", label: "V(out)", unit: "V", values: [-2, 2, 0] }}
+        trace={{ id: "out", label: "V(out)", unit: "V", color: "var(--trace-cyan)", values: [-2, 2, 0] }}
         times={[0, 1, 2]}
         cursor={{ time: 0.5, value: 125e-3, label: "C1" }}
       />,
@@ -26,6 +26,10 @@ describe("EngineeringTraceReadout", () => {
     expect(within(disclosure!).getByText("RMS")).toBeTruthy();
     expect(within(disclosure!).getByText("C1")).toBeTruthy();
     expect(within(disclosure!).getByText("125 mV @ 500 ms")).toBeTruthy();
+    expect(container.querySelector(".engineering-trace-readout__hero-mantissa")?.textContent).toBe("0");
+    expect(container.querySelector(".engineering-trace-readout__hero-unit")?.textContent).toBe("V");
+    expect(container.querySelector(".engineering-trace-readout")?.getAttribute("style"))
+      .toContain("--trace-color: var(--trace-cyan)");
   });
 
   it("uses RMS as the primary value and keeps frequency visible for periodic signals", () => {
@@ -71,7 +75,28 @@ describe("EngineeringTraceReadout", () => {
     );
     const readout = screen.getByRole("region", { name: "V(out) engineering readout" });
     expect(within(readout).getByTitle("Full run peak to peak")).toBeTruthy();
-    expect(within(readout).getByText("Peak-to-peak (visible window)")).toBeTruthy();
+    expect(within(readout).getByText("Visible P-P")).toBeTruthy();
     expect(within(readout).getByText("3 V")).toBeTruthy();
+  });
+
+  it("does not rescan waveform samples for an unrelated presentation rerender", () => {
+    let sampleReads = 0;
+    const values = new Proxy([-2, 2, 0], {
+      get(target, property, receiver) {
+        if (/^\d+$/.test(String(property))) sampleReads += 1;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const times = [0, 1, 2];
+    const trace = { id: "out", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values };
+    const { rerender } = render(
+      <EngineeringTraceReadout trace={trace} times={times} className="before" />,
+    );
+    const readsAfterFirstRender = sampleReads;
+    expect(readsAfterFirstRender).toBeGreaterThan(0);
+
+    rerender(<EngineeringTraceReadout trace={trace} times={times} className="after" />);
+
+    expect(sampleReads).toBe(readsAfterFirstRender);
   });
 });

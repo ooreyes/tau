@@ -1322,6 +1322,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   clears the preceding document's manual override. The cycle-density mapping,
   runtime cap, human-duration input, provenance/reset, App workspace import
   path, and two-button Run/Stop transport have regression coverage.
+  **Apple Watch trace-readout redesign (2026-08-30):** the per-trace result is
+  now a borderless data-first instrument module instead of a nested form-like
+  spec table: trace identity and classification stay micro, RMS/final is the
+  dominant mono value in the trace's own probe colour, the attached SI unit is
+  subordinate, and P-P / visible P-P / frequency form one glance strip with
+  full statistics still disclosed on demand. `useMemo` keys the O(samples)
+  readout model to waveform/cursor/window inputs, and a Proxy regression proves
+  unrelated presentation rerenders do not reread samples. The focused design
+  pipeline captures waveform + scrolled-readout frames in both themes at
+  1440×900, 1280×720, and 900×600; the minimum-window audit now proves that
+  below-plot state directly (16/16).
 - 🟡 Bode (AC mag/phase) — **magnitude + phase now both plotted** (`AcPlot`): a
   second log-frequency sub-plot draws each trace's `phaseDeg` on a 45°-snapped
   degrees axis below the dB magnitude, matching LTspice's dual Bode. Shared

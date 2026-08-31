@@ -2329,19 +2329,19 @@ body {
   font: 500 var(--fs-micro) var(--font-ui);
 }
 
-/* Per-trace spec table under a plot. Stacked rows (label left, value+unit
-   right, hairline separators) instead of the old three-track grid: the grid's
-   hard px minimums exceeded a half-width dashboard card and painted UNDER the
-   neighboring card. A column of rows has no minimum wider than its card, so
-   each readout stays contained in - and moves with - its own card. */
+/* Apple Watch complication language applied to a real engineering trace:
+   identity and state whisper, the trustworthy number dominates, and its unit
+   stays attached at a subordinate scale. This is intentionally not another
+   boxed card inside the already-bounded dashboard card. */
 .engineering-trace-readout {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--sp-1) var(--sp-3) var(--sp-1);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-sm);
-  background: var(--panel-3);
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+  padding: var(--sp-3) var(--sp-2) var(--sp-1);
+  border-top: 1px solid var(--border-subtle);
+  background: transparent;
 }
 
 .engineering-trace-readout__header {
@@ -2350,15 +2350,14 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sp-2);
-  padding: 7px 0 8px;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
 .engineering-trace-readout__name {
   max-width: 100%;
   overflow: hidden;
-  color: var(--text);
-  font: 600 var(--fs-label) var(--font-mono);
+  color: var(--muted);
+  font: 600 var(--fs-caption) var(--font-mono);
+  letter-spacing: var(--tracking-wide);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2367,19 +2366,68 @@ body {
   display: inline-flex !important;
   color: var(--muted);
   font: 500 var(--fs-micro) var(--font-mono);
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
+.engineering-trace-readout__classification--steady,
+.engineering-trace-readout__classification--settled {
+  color: var(--success);
+}
+
+.engineering-trace-readout__classification--transient,
 .engineering-trace-readout__classification--periodic {
-  color: var(--accent);
+  color: var(--signal);
+}
+
+.engineering-trace-readout__hero {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.engineering-trace-readout__hero-label {
+  color: var(--muted);
+  font: 600 var(--fs-micro) var(--font-ui);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.engineering-trace-readout__hero-value {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+  color: var(--trace-color, var(--text));
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.engineering-trace-readout__hero-mantissa {
+  font-size: var(--fs-display);
+  font-weight: 600;
+}
+
+.engineering-trace-readout__hero-unit {
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  font-weight: 510;
 }
 
 .engineering-trace-readout__metrics,
 .engineering-trace-readout__primary-metrics {
   min-width: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: var(--sp-2) var(--sp-4);
   margin: 0;
+}
+
+.engineering-trace-readout__primary-metrics {
+  padding-bottom: var(--sp-1);
 }
 
 .engineering-trace-readout__details {
@@ -2401,28 +2449,25 @@ body {
 }
 
 .engineering-trace-readout__details[open] .engineering-trace-readout__metrics {
-  padding-bottom: var(--sp-1);
+  padding: var(--sp-1) 0 var(--sp-2);
 }
 
 .engineering-trace-readout__item {
   min-width: 0;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-2);
-  padding: 7px 0;
-}
-
-.engineering-trace-readout__item + .engineering-trace-readout__item {
-  border-top: 1px solid var(--border-subtle);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
 }
 
 .engineering-trace-readout__item dt {
   color: var(--muted);
   font: 600 var(--fs-micro) var(--font-ui);
+  line-height: 1.25;
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .engineering-trace-readout__item dd {
@@ -2430,11 +2475,15 @@ body {
   margin: 0;
   overflow: hidden;
   color: var(--text);
-  font: 600 var(--fs-label) var(--font-mono);
+  font: 550 var(--fs-body) var(--font-mono);
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: right;
+  text-align: left;
+}
+
+.engineering-trace-readout__item--cursor dd {
+  color: var(--trace-color, var(--text));
 }
 
 /* Trace-legend swatches read as small indicator lamps (OP-1 style), not thin

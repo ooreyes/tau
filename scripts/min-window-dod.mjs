@@ -10,6 +10,8 @@
  *   - Settings sheet fits inside the viewport (scrolls internally)
  *   - editor-shell does not widen past its budget (toolbar scrolls instead)
  *   - no interactive control is clipped without a scroll ancestor
+ *   - the simulator's below-plot engineering readout remains reachable and
+ *     gets its own visual proof instead of sitting below the first screenshot
  *
  * Does NOT claim §10 design-system full adoption.
  *
@@ -412,6 +414,17 @@ async function main() {
       await page.waitForTimeout(350);
       await page.screenshot({ path: path.join(outDir, `simulator-${theme}-${minW}x${minH}.png`) });
       reports.push(await audit(page, `simulator-${theme}`));
+
+      // The minimum-height simulator intentionally gives the waveform most of
+      // the first viewport; its Apple Watch-style numeric readout sits just
+      // below it in the same real scroll container. Capture that reachable
+      // state too, or the visual gate can stay green while never looking at
+      // the measurement surface a redesign actually changed.
+      const plotter = page.locator(".plotter");
+      await plotter.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: path.join(outDir, `simulator-readout-${theme}-${minW}x${minH}.png`) });
+      reports.push(await audit(page, `simulator-readout-${theme}`));
 
       await page.locator('.activity-rail button[aria-label="Settings"]:visible').click();
       await page.getByRole("dialog", { name: "Settings" }).waitFor({ state: "visible", timeout: 10_000 });

@@ -1,3 +1,4 @@
+import { useMemo, type CSSProperties } from "react";
 import { formatEngineering } from "../simulation/quantity";
 import {
   buildEngineeringTraceReadout,
@@ -7,13 +8,41 @@ import {
 import type { Trace } from "../simulation/linearTransient";
 
 export interface EngineeringTraceReadoutProps {
-  trace: Pick<Trace, "id" | "label" | "unit" | "values">;
+  trace: Pick<Trace, "id" | "label" | "unit" | "values"> & Partial<Pick<Trace, "color">>;
   times: readonly number[];
   cursor?: TraceReadoutCursor;
   visibleWindow?: { tMin: number; tMax: number };
   /** Optional accessible name when the surrounding pane supplies more context. */
   ariaLabel?: string;
   className?: string;
+}
+
+interface EngineeringValueParts {
+  mantissa: string;
+  unit: string;
+}
+
+/** Keep the formatter as the precision authority while giving the attached SI
+ * unit its own subordinate type role. `formatEngineering` always separates
+ * mantissa and unit with its final space; unitless and unavailable values do
+ * not fabricate one. */
+function splitEngineeringValue(formatted: string): EngineeringValueParts {
+  const separator = formatted.lastIndexOf(" ");
+  if (separator <= 0) return { mantissa: formatted, unit: "" };
+  return {
+    mantissa: formatted.slice(0, separator),
+    unit: formatted.slice(separator + 1),
+  };
+}
+
+function HeroValue({ formatted }: { formatted: string }) {
+  const { mantissa, unit } = splitEngineeringValue(formatted);
+  return (
+    <span className="engineering-trace-readout__hero-value" aria-label={formatted}>
+      <span className="engineering-trace-readout__hero-mantissa">{mantissa}</span>
+      {unit && <span className="engineering-trace-readout__hero-unit">{unit}</span>}
+    </span>
+  );
 }
 
 interface ReadoutItemProps {
@@ -62,7 +91,21 @@ export function EngineeringTraceReadout({
   ariaLabel,
   className = "",
 }: EngineeringTraceReadoutProps) {
-  const model = buildEngineeringTraceReadout(trace, times, cursor, visibleWindow);
+  const model = useMemo(
+    () => buildEngineeringTraceReadout(trace, times, cursor, visibleWindow),
+    [
+      trace.id,
+      trace.label,
+      trace.unit,
+      trace.values,
+      times,
+      cursor?.label,
+      cursor?.time,
+      cursor?.value,
+      visibleWindow?.tMin,
+      visibleWindow?.tMax,
+    ],
+  );
   if (!model) return null;
   const value = (measurement: number) => formatEngineering(measurement, model.unit, 3);
   const periodic = model.classification.kind === "periodic";
@@ -73,24 +116,23 @@ export function EngineeringTraceReadout({
     <section
       className={`engineering-trace-readout ${className}`.trim()}
       aria-label={ariaLabel ?? `${model.label} engineering readout`}
+      style={trace.color ? ({ "--trace-color": trace.color } as CSSProperties) : undefined}
     >
       <header className="engineering-trace-readout__header">
         <strong className="engineering-trace-readout__name">{model.label}</strong>
         <Classification model={model} />
       </header>
+      <div className="engineering-trace-readout__hero">
+        <span className="engineering-trace-readout__hero-label">{primaryLabel}</span>
+        <HeroValue formatted={value(primaryValue)} />
+      </div>
       <dl className="engineering-trace-readout__primary-metrics">
-        <ReadoutItem
-          className="engineering-trace-readout__item--primary"
-          label={primaryLabel}
-          value={value(primaryValue)}
-          title={periodic ? "Root mean square" : "Final finite sample"}
-        />
         <ReadoutItem label="Peak-to-peak" value={value(model.peakToPeak)} title="Full run peak to peak" />
         {model.visibleWindow && (
           <ReadoutItem
-            label="Peak-to-peak (visible window)"
+            label="Visible P-P"
             value={value(model.visibleWindow.peakToPeak)}
-            title={`Visible window ${model.visibleWindow.tMin}–${model.visibleWindow.tMax}`}
+            title={`Peak-to-peak in visible window ${model.visibleWindow.tMin}–${model.visibleWindow.tMax}`}
           />
         )}
         {model.frequency !== undefined && (
