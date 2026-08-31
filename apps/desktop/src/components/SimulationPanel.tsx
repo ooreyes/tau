@@ -2493,6 +2493,7 @@ export function WaveformPlot({
                           <EngineeringTraceReadout
                             trace={{ ...trace, label: displayLabel }}
                             times={success ? success.times : []}
+                            showIdentity={paneTraces.length > 1}
                             visibleWindow={success ? { tMin: sharedX.xMin, tMax: sharedX.xMax } : undefined}
                             cursor={(() => {
                               if (!selected || !cursors || !cursorTool?.activeCursor) return undefined;

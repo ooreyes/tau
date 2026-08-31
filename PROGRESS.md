@@ -1,6 +1,6 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-30 (run `simulation-identity-20260830-4`)**
+**Status: DONE - 2026-08-30 (run `simulation-identity-20260830-4`)**
 
 Unit: **Remove redundant single-channel identity from the measurement readout
 while preserving explicit labels wherever a pane truly contains multiple
@@ -17,6 +17,26 @@ accessible readout name remain; multi-trace panes keep per-readout identity;
 the O(samples) memoization contract remains intact; both themes and all official
 viewports show no alignment regression; and focused/full frontend, typecheck,
 build, design-system, and minimum-window gates pass.
+
+**Landed:** `EngineeringTraceReadout` now accepts an explicit visual-identity
+policy without changing its accessible region name or measurement model. The
+waveform viewer hides that extra label only when the surrounding pane has one
+trace; a shared multi-trace pane retains every signal label. Classification is
+right-aligned in the quiet single-channel header, so the glance hierarchy moves
+directly from channel identity to periodic/transient state to the dominant
+number. Memoization keys and all cursor/statistic behavior are unchanged.
+
+**Proof / gates:** focused readout/viewer **95/95**; full frontend **5,206 passed
+/ 9 skipped**; typecheck; production web build; design-system drift **50/50**;
+minimum-window **16/16** across both themes at 900×600; and 18 asserted simulator
+Pan/C1/readout frames across light/dark at 1440×900, 1280×720, and 900×600 under
+`screenshots/simulation-identity-20260830-4/`. Four representative frames were
+visually inspected with no alignment regression. No Definition-of-Done checkbox
+changes: named-device fidelity and broad differential parity remain open.
+
+**Next step:** replace the dashboard card's cryptic `M` / `Full` / `½` layout
+labels with compact, self-explanatory instrument controls without increasing
+header weight.
 
 ---
 
@@ -19649,3 +19669,15 @@ evidence is kept in full here.
   both-theme simulator frames. Named-device and broad differential DoD items
   remain open; next is removing duplicate single-channel identity without
   weakening true multi-trace selection.
+
+- 2026-08-30 - Made waveform readout identity context-aware. The normal
+  one-signal dashboard card no longer says V(in)/V(out) a third time inside the
+  measurement module; its periodic/transient classification and accessible
+  signal-specific region name remain. Shared multi-trace panes deliberately
+  retain each visible identity. Files: `EngineeringTraceReadout.tsx` and test,
+  `SimulationPanel.tsx` and test, `App.css`, `design-shot.mjs`, focused
+  screenshots, and parity/log records. Evidence: 95/95 focused, 5,206 frontend
+  tests passed / nine skipped, typecheck, production build, design-system drift
+  50/50, minimum-window 16/16, and 18 both-theme simulator frames. Named-device
+  and broad differential DoD items remain open; the next simulator target is
+  the cryptic M/Full/½ dashboard-card chrome.

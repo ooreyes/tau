@@ -407,6 +407,9 @@ async function shootViewport(page, viewport, theme) {
     if (await channelRows.count() < 2) {
       throw new Error("focused simulator did not render the stacked V(in)/V(out) scope channels");
     }
+    if (await page.locator(".engineering-trace-readout__name").count()) {
+      throw new Error("single-channel cards repeated signal identity inside their measurement readouts");
+    }
     const channelChrome = await channelRows.filter({ has: page.locator("[aria-pressed='true'].trace-interaction__select") })
       .first()
       .evaluate((element) => {

@@ -12,6 +12,8 @@ export interface EngineeringTraceReadoutProps {
   times: readonly number[];
   cursor?: TraceReadoutCursor;
   visibleWindow?: { tMin: number; tMax: number };
+  /** The containing channel/card may already own the visible signal name. */
+  showIdentity?: boolean;
   /** Optional accessible name when the surrounding pane supplies more context. */
   ariaLabel?: string;
   className?: string;
@@ -88,6 +90,7 @@ export function EngineeringTraceReadout({
   times,
   cursor,
   visibleWindow,
+  showIdentity = true,
   ariaLabel,
   className = "",
 }: EngineeringTraceReadoutProps) {
@@ -118,8 +121,8 @@ export function EngineeringTraceReadout({
       aria-label={ariaLabel ?? `${model.label} engineering readout`}
       style={trace.color ? ({ "--trace-color": trace.color } as CSSProperties) : undefined}
     >
-      <header className="engineering-trace-readout__header">
-        <strong className="engineering-trace-readout__name">{model.label}</strong>
+      <header className={`engineering-trace-readout__header${showIdentity ? "" : " engineering-trace-readout__header--classification-only"}`}>
+        {showIdentity && <strong className="engineering-trace-readout__name">{model.label}</strong>}
         <Classification model={model} />
       </header>
       <div className="engineering-trace-readout__hero">

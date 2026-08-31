@@ -55,6 +55,21 @@ describe("EngineeringTraceReadout", () => {
     expect(within(disclosure).getByText("Period")).toBeTruthy();
   });
 
+  it("can defer visible identity to its single-channel pane without losing context", () => {
+    render(
+      <EngineeringTraceReadout
+        trace={{ id: "out", label: "V(out)", unit: "V", values: [0, 1, 0] }}
+        times={[0, 0.5, 1]}
+        showIdentity={false}
+      />,
+    );
+
+    const readout = screen.getByRole("region", { name: "V(out) engineering readout" });
+    expect(within(readout).queryByText("V(out)")).toBeNull();
+    expect(within(readout).getByText("Transient")).toBeTruthy();
+    expect(readout.querySelector(".engineering-trace-readout__header--classification-only")).toBeTruthy();
+  });
+
   it("renders nothing for an unavailable trace", () => {
     const { container } = render(
       <EngineeringTraceReadout

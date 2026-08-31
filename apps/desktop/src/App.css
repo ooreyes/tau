@@ -2367,6 +2367,10 @@ body {
   gap: var(--sp-2);
 }
 
+.engineering-trace-readout__header--classification-only {
+  justify-content: flex-end;
+}
+
 .engineering-trace-readout__name {
   max-width: 100%;
   overflow: hidden;

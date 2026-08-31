@@ -1862,6 +1862,35 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     expect(screen.getByRole("button", { name: "Pan V(in) plot" }).getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("shows readout identity only when several traces share the same pane", () => {
+    const result = twoTraceResult();
+    seedProbes();
+    const { unmount } = render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={[
+          { id: "out", traceIds: ["n1"] },
+          { id: "in", traceIds: ["n2"] },
+        ]}
+      />,
+    );
+    expect(document.querySelectorAll(".engineering-trace-readout__name")).toHaveLength(0);
+
+    unmount();
+    render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={defaultLayout(["n1", "n2"])}
+      />,
+    );
+    expect([...document.querySelectorAll(".engineering-trace-readout__name")].map((node) => node.textContent))
+      .toEqual(["V(out)", "V(in)"]);
+  });
+
   it("does not put the swatch row in the document for a merely-selected trace", () => {
     renderTwoTracePanel();
     selectOutTrace();

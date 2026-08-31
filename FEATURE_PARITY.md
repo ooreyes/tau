@@ -1339,7 +1339,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   compact segmented mode control, and the colour target now meets the 24 px
   interaction floor. The focused screenshot gate asserts two stacked channels,
   transparent selection chrome, zero label border, and target geometry before
-  capturing all three viewports in both themes.
+  capturing all three viewports in both themes. **Context-aware identity
+  (2026-08-30):** ordinary one-signal cards no longer repeat the signal name a
+  third time inside the measurement module; the readout keeps its periodic /
+  transient classification and accessible signal-specific region name. When a
+  pane genuinely combines multiple signals, each readout still renders its own
+  visible identity. Focused component/wiring tests and the screenshot gate
+  assert both branches.
 - 🟡 Bode (AC mag/phase) — **magnitude + phase now both plotted** (`AcPlot`): a
   second log-frequency sub-plot draws each trace's `phaseDeg` on a 45°-snapped
   degrees axis below the dB magnitude, matching LTspice's dual Bode. Shared
