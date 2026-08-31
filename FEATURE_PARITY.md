@@ -1332,7 +1332,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   unrelated presentation rerenders do not reread samples. The focused design
   pipeline captures waveform + scrolled-readout frames in both themes at
   1440×900, 1280×720, and 900×600; the minimum-window audit now proves that
-  below-plot state directly (16/16).
+  below-plot state directly (16/16). **Compact scope-channel header
+  (2026-08-30):** the selected trace no longer looks like a wide text input or
+  washes the full measurement surface in selection colour. Signal identity is
+  a borderless mono channel label with a single active hairline; Pan/C1/C2 is a
+  compact segmented mode control, and the colour target now meets the 24 px
+  interaction floor. The focused screenshot gate asserts two stacked channels,
+  transparent selection chrome, zero label border, and target geometry before
+  capturing all three viewports in both themes.
 - 🟡 Bode (AC mag/phase) — **magnitude + phase now both plotted** (`AcPlot`): a
   second log-frequency sub-plot draws each trace's `phaseDeg` on a 45°-snapped
   degrees axis below the dB magnitude, matching LTspice's dual Bode. Shared

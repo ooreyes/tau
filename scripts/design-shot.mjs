@@ -403,6 +403,45 @@ async function shootViewport(page, viewport, theme) {
       .waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
     await page.waitForSelector(".scope-svg .scope-trace, .scope-shell", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
     await page.waitForTimeout(300);
+    const channelRows = page.locator(".trace-interaction");
+    if (await channelRows.count() < 2) {
+      throw new Error("focused simulator did not render the stacked V(in)/V(out) scope channels");
+    }
+    const channelChrome = await channelRows.filter({ has: page.locator("[aria-pressed='true'].trace-interaction__select") })
+      .first()
+      .evaluate((element) => {
+        const row = getComputedStyle(element);
+        const select = element.querySelector(".trace-interaction__select");
+        const swatch = element.querySelector(".trace-interaction__swatch");
+        const mode = element.querySelector(".trace-interaction__cursors button");
+        if (!(select instanceof HTMLElement) || !(swatch instanceof HTMLElement) || !(mode instanceof HTMLElement)) return null;
+        const selectStyle = getComputedStyle(select);
+        const swatchRect = swatch.getBoundingClientRect();
+        const modeRect = mode.getBoundingClientRect();
+        return {
+          rowBackground: row.backgroundColor,
+          selectBorder: Math.max(
+            Number.parseFloat(selectStyle.borderTopWidth),
+            Number.parseFloat(selectStyle.borderRightWidth),
+            Number.parseFloat(selectStyle.borderBottomWidth),
+            Number.parseFloat(selectStyle.borderLeftWidth),
+          ),
+          swatchWidth: swatchRect.width,
+          swatchHeight: swatchRect.height,
+          modeWidth: modeRect.width,
+          modeHeight: modeRect.height,
+        };
+      });
+    if (!channelChrome) throw new Error("focused simulator active-channel chrome was incomplete");
+    if (channelChrome.rowBackground !== "rgba(0, 0, 0, 0)" || channelChrome.selectBorder !== 0) {
+      throw new Error(`scope channel regressed to form chrome (${JSON.stringify(channelChrome)})`);
+    }
+    if (
+      channelChrome.swatchWidth < 24 || channelChrome.swatchHeight < 24 ||
+      channelChrome.modeWidth < 24 || channelChrome.modeHeight < 24
+    ) {
+      throw new Error(`scope channel control fell below the 24 px target floor (${JSON.stringify(channelChrome)})`);
+    }
     if (await page.getByText("At time", { exact: true }).count()) {
       throw new Error("Pan mode exposed exact cursor seek fields before a cursor was armed");
     }
@@ -657,7 +696,18 @@ async function main() {
     exitCode = 1;
     console.error(`[design-shot] FAILED: ${error instanceof Error ? error.message : error}`);
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      // System Chrome has occasionally finished every capture but stalled its
+      // DevTools close handshake, leaving this otherwise-complete verifier and
+      // its Vite child alive. Bound cleanup so a written, asserted screenshot
+      // set cannot turn into a hung CI/local QA run.
+      let closeTimer;
+      await Promise.race([
+        browser.close(),
+        new Promise((resolve) => { closeTimer = setTimeout(resolve, 5_000); }),
+      ]);
+      clearTimeout(closeTimer);
+    }
     killProcessGroup(child);
   }
   process.exit(exitCode);

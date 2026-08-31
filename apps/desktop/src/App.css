@@ -2077,51 +2077,50 @@ body {
   color: var(--muted);
 }
 
-/* A trace is an interactive instrument channel, not a passive legend row.
-   Selecting it makes C1/C2 glide over that exact series. The color chip
-   beside the name opens the validated color-safe palette in a popover
-   (see .trace-color-popover) rather than showing it always. All colors
-   remain token-backed. */
+/* A trace is an interactive scope channel, not a selected form row. Its data
+   surface already lives inside DashboardCard, so selection is carried by the
+   channel label + Pan/C1/C2 state instead of another tinted box. The color
+   chip opens the validated palette in a popover (see .trace-color-popover).
+   All colors remain token-backed. */
 .trace-interaction {
   min-width: 0;
-  padding: var(--sp-1);
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
+  padding: var(--sp-1) 0 0;
+  border: 0;
+  border-radius: 0;
 }
 
 .trace-interaction.selected {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
+  background: transparent;
 }
 
 .trace-interaction__toolbar {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: 0 0 var(--sp-1);
-}
-
-.trace-interaction__select,
-.trace-interaction__cursors button {
-  min-height: 28px;
-  appearance: none;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--muted);
-  background: var(--panel-3);
-  font: 600 var(--fs-caption) var(--font-ui);
-  cursor: pointer;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-1) var(--sp-1);
 }
 
 .trace-interaction__select {
   min-width: 0;
+  min-height: var(--control-hit-compact);
   flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: 0 var(--sp-2);
+  padding: 0 var(--sp-1);
+  appearance: none;
+  border: 0;
+  border-radius: var(--r-xs);
+  color: var(--muted);
+  background: transparent;
+  font: 600 var(--fs-caption) var(--font-ui);
   text-align: left;
+  cursor: pointer;
+}
+
+.trace-interaction__select:hover {
+  background: var(--accent-soft);
 }
 
 /* The chip beside the trace name IS the recolor affordance - clicking it
@@ -2132,8 +2131,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: var(--control-hit-compact);
+  height: var(--control-hit-compact);
   padding: 0;
   border: 1px solid transparent;
   border-radius: 50%;
@@ -2167,28 +2166,44 @@ body {
   white-space: nowrap;
 }
 
-.trace-interaction__select[aria-pressed="true"],
-.trace-interaction__cursors button[aria-pressed="true"] {
-  color: var(--accent);
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
+.trace-interaction__select[aria-pressed="true"] {
+  color: var(--text);
+  box-shadow: inset 0 -1px 0 var(--accent-line);
 }
 
 .trace-interaction__cursors {
   flex: none;
   display: inline-flex;
   overflow: hidden;
-  border-radius: var(--r-sm);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: var(--panel-3);
 }
 
 .trace-interaction__cursors button {
-  min-width: 34px;
+  min-width: 32px;
+  min-height: var(--control-hit-compact);
   padding: 0 var(--sp-2);
-  border-radius: 0;
+  appearance: none;
+  border: 0;
+  border-radius: var(--r-xs);
+  color: var(--muted);
+  background: transparent;
+  font: 600 var(--fs-caption) var(--font-ui);
+  cursor: pointer;
 }
 
-.trace-interaction__cursors button + button {
-  margin-left: -1px;
+.trace-interaction__cursors button:hover {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+.trace-interaction__cursors button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 
 .window-avg-rms {

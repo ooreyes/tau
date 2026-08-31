@@ -1,6 +1,6 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-30 (run `simulation-channels-20260830-3`)**
+**Status: DONE - 2026-08-30 (run `simulation-channels-20260830-3`)**
 
 Unit: **Turn each waveform trace's form-like selection row into a compact
 scope-channel header that stays legible when an EE stacks several signals.**
@@ -17,6 +17,29 @@ reduce vertical/control density without hiding engineering function; prove the
 stacked V(in)/V(out) result in both themes at 1440×900, 1280×720, and 900×600;
 and pass focused/full frontend, typecheck, build, design-system, and minimum-
 window gates.
+
+**Landed:** the selected channel no longer paints another rounded/tinted card
+inside its dashboard card, and the signal label no longer impersonates a text
+field. A borderless mono label with an active hairline now leads into a compact
+Pan/C1/C2 segmented mode control. Colour and mode targets meet the 24 px floor;
+selection, palette, Ctrl/⌘ window statistics, right-click math, and cursor
+behavior are unchanged. The focused design runner now asserts that both stacked
+channels exist, active selection is transparent, the label has zero border, and
+every compact target remains usable. Its Chrome close is bounded so a completed
+visual run cannot strand the verifier and Vite child.
+
+**Proof / gates:** focused SimulationPanel **88/88**; full frontend **5,204
+passed / 9 skipped**; typecheck; production web build; design-system drift
+**50/50**; minimum-window **16/16** across both themes at 900×600; and 18 clean
+Pan/C1/readout simulator frames across light/dark at 1440×900, 1280×720, and
+900×600 under `screenshots/simulation-channels-20260830-3/`. Six representative
+frames were visually inspected with no overlap, clipping, or lost active state.
+No Definition-of-Done checkbox changes: named-device fidelity and broad
+differential parity remain open.
+
+**Next step:** remove the remaining repeated single-channel identity by merging
+colour/activation with the dashboard-card heading while keeping an inline
+channel switcher only for genuine multi-trace panes.
 
 ---
 
@@ -19591,3 +19614,16 @@ evidence is kept in full here.
   production build, design-system drift 50/50, minimum-window 16/16, and a
   clean local browser console. Named-device and broad differential DoD items
   remain open; the next simulator unit is compact multi-signal channel chrome.
+
+- 2026-08-30 - Replaced the waveform legend's input-like trace row and full-card
+  selection wash with compact scope-channel chrome: a borderless mono channel
+  label, one active hairline, a restrained Pan/C1/C2 segment, and 24 px colour/
+  mode targets. The two-channel visual gate now measures those invariants before
+  every focused capture, and the screenshot runner has bounded Chrome cleanup
+  after a completed run. Files: `App.css`, `SimulationPanel.test.tsx`,
+  `design-shot.mjs`, focused screenshots, and parity/log records. Evidence:
+  88/88 focused, 5,204 frontend tests passed / nine skipped, typecheck,
+  production build, design-system drift 50/50, minimum-window 16/16, and 18
+  both-theme simulator frames. Named-device and broad differential DoD items
+  remain open; next is removing duplicate single-channel identity without
+  weakening true multi-trace selection.

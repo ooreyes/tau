@@ -1846,6 +1846,22 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     );
   }
 
+  it("keeps exactly one scope channel active while preserving every channel control", () => {
+    renderTwoTracePanel();
+
+    const out = screen.getByRole("button", { name: "Select V(out) for cursor measurement" });
+    const input = screen.getByRole("button", { name: "Select V(in) for cursor measurement" });
+    expect(out.getAttribute("aria-pressed")).toBe("true");
+    expect(input.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Change V(out) colour" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pan V(out) plot" })).toBeTruthy();
+
+    fireEvent.click(input);
+    expect(out.getAttribute("aria-pressed")).toBe("false");
+    expect(input.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Pan V(in) plot" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("does not put the swatch row in the document for a merely-selected trace", () => {
     renderTwoTracePanel();
     selectOutTrace();
